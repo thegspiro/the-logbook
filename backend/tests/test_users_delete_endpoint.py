@@ -19,6 +19,7 @@ from fastapi import HTTPException
 
 from app.api.v1.endpoints import users as users_endpoint
 from app.models.user import UserStatus
+from app.services.instructor_erasure import InstructorErasure
 from app.services.member_files import FileRemoval, MemberFiles
 from app.services.user_deletion_service import ApplicantRecordRemoval
 from tests.fake_request import fake_request
@@ -106,6 +107,13 @@ class TestDeleteUserHard:
             users_endpoint,
             "enqueue_pending_file_deletions",
             MagicMock(return_value=[]),
+        )
+        # The instructor-name step has its own database-backed tests in
+        # test_instructor_erasure.py.
+        monkeypatch.setattr(
+            users_endpoint,
+            "replace_instructor_name",
+            AsyncMock(return_value=InstructorErasure()),
         )
         monkeypatch.setattr(
             users_endpoint,

@@ -365,6 +365,9 @@ screens adapt:
   requirement analysis and the **Historical Import** preview (where a long
   email address now wraps). The three My Training tables and the import preview
   also become cards on a tablet with the side navigation open.
+
+  ![Expiring Certifications on a 390px phone: each certification is a card led by the member's name, with its certification, expiry date and days left labelled beneath](./images/10-30-expiring-certs-phone.png)
+
 - **The competency heat-map stays a grid** _(2026-11-20)_: on a phone it
   scrolls both ways inside its own box, with the member column pinned on the
   left and the skill names pinned along the top, and a fading edge with a

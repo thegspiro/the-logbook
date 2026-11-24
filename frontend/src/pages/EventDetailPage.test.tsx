@@ -1290,7 +1290,7 @@ describe('EventDetailPage', () => {
       certification_number_prefix: 'PUMP-',
       issuing_agency: 'State Academy',
       expiration_months: 24,
-      // Not carried by a template.
+      // Carried since the owner decision of 2026-11-23.
       category_id: 'cat-1',
       program_id: 'prog-1',
       requirement_id: 'req-1',
@@ -1317,6 +1317,15 @@ describe('EventDetailPage', () => {
       certification_number_prefix: 'PUMP-',
       issuing_agency: 'State Academy',
       expiration_months: 24,
+      category_id: 'cat-1',
+      program_id: 'prog-1',
+      phase_id: null,
+      requirement_id: 'req-1',
+      attendance_requirement_ids: ['att-1'],
+      counts_toward_certification: true,
+      auto_create_records: true,
+      require_completion_confirmation: true,
+      approval_deadline_days: 7,
     };
 
     beforeEach(() => {
@@ -1345,7 +1354,7 @@ describe('EventDetailPage', () => {
       await user.click(await screen.findByRole('button', { name: 'Save Template' }));
     };
 
-    it("saves the training details the card reported, and nothing outside the owner's list", async () => {
+    it("saves the training details the card reported, in the owner's list", async () => {
       mockReportedSession = session;
       await saveAsTemplate();
 

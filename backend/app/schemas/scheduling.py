@@ -893,6 +893,20 @@ class MemberHoursYear(BaseModel):
     months: List[MemberHoursMonth]
 
 
+class MemberPositionTotals(BaseModel):
+    """A member's credited department shifts in one position.
+
+    ``position`` is the seat they held (``driver``, ``officer``, a
+    department's own seat), or None for shifts with no seat recorded. Outside
+    agencies' hours are not positions; they are ``external_*`` on the totals.
+    """
+
+    position: Optional[str] = None
+    shifts: int = 0
+    hours: float = 0.0
+    calls: int = 0
+
+
 class MemberHoursHistoryResponse(BaseModel):
     """A member's own year of shift hours and calls, month by month.
 
@@ -930,6 +944,10 @@ class MemberHoursHistoryResponse(BaseModel):
     #: Past view of My Shifts can show any year, or all time, in the figures the
     #: Hours tab shows, from one request.
     history: List[MemberHoursMonth] = Field(default_factory=list)
+    #: Credited department shifts by the position held, in the selected year
+    #: and over all time; most hours first.
+    positions: List[MemberPositionTotals] = Field(default_factory=list)
+    all_time_positions: List[MemberPositionTotals] = Field(default_factory=list)
 
 
 class MemberDepartmentShift(UTCResponseBase):

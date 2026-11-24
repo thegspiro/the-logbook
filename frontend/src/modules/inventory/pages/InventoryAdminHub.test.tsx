@@ -198,7 +198,7 @@ describe('InventoryAdminHub', () => {
     const user = userEvent.setup();
     renderWithRouter(<InventoryAdminHub />);
     const area = await screen.findByRole('tab', { name: 'Requests & Approvals' });
-    await waitFor(() => expect(area).toHaveAccessibleDescription(expect.stringContaining('2 need attention')));
+    await waitFor(() => expect(area).toHaveAccessibleDescription(/2 need attention/));
 
     await user.click(area);
     const reorder = await screen.findByRole('link', { name: /Reorder Requests/ });
@@ -334,12 +334,10 @@ describe('InventoryAdminHub', () => {
     // maintenance_due_count 7, overdue_checkouts 3 in the summary.
     await waitFor(() =>
       expect(screen.getByRole('tab', { name: 'Readiness & Compliance' })).toHaveAccessibleDescription(
-        expect.stringContaining('7 need attention')
+        /7 need attention/
       )
     );
-    expect(screen.getByRole('tab', { name: 'Issuance & Members' })).toHaveAccessibleDescription(
-      expect.stringContaining('3 need attention')
-    );
+    expect(screen.getByRole('tab', { name: 'Issuance & Members' })).toHaveAccessibleDescription(/3 need attention/);
   });
 
   it('prompts to finish setup and names what is still missing', async () => {

@@ -1,9 +1,84 @@
 # Security Review — Auth & Session Lifecycle
 
-**Prefix:** `AUTH` · **Iteration:** 01 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-01 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-05 (pass 7), 2026-10-12 (pass 8, watchdog pickup), 2026-10-14 (pass 9, watchdog pickup), 2026-10-18 (pass 10, watchdog pickup), 2026-10-22 (pass 11, watchdog pickup), 2026-10-25 (pass 12, watchdog pickup), 2026-10-28 (pass 13), 2026-10-31 (pass 14, watchdog pickup), 2026-11-04 (pass 15, watchdog pickup), 2026-11-15 (pass 16, watchdog pickup) · **PR:** #1804 (pass 1), #1929 (pass 2), #2133 (pass 3), #2389 (pass 4), #2536 (pass 5), #2593 (pass 6), #2924 (pass 7 — the header's own "this PR" placeholder was never filled in after merge; corrected here the way pass 7 corrected pass 6's), #3096 (pass 8, corrected here the same way), #3210 (pass 9, corrected here the same way), #3397 (pass 10, corrected here the same way), #3556 (pass 11, corrected here the same way), #3684 (pass 12, corrected here the same way), #3802 (pass 13, corrected here the same way), #3870 (pass 14), #4021 (pass 15, corrected here the same way), pass 16 (this PR)
+**Prefix:** `AUTH` · **Iteration:** 01 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-01 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-05 (pass 7), 2026-10-12 (pass 8, watchdog pickup), 2026-10-14 (pass 9, watchdog pickup), 2026-10-18 (pass 10, watchdog pickup), 2026-10-22 (pass 11, watchdog pickup), 2026-10-25 (pass 12, watchdog pickup), 2026-10-28 (pass 13), 2026-10-31 (pass 14, watchdog pickup), 2026-11-04 (pass 15, watchdog pickup), 2026-11-15 (pass 16, watchdog pickup), 2026-11-23 (pass 17, watchdog pickup) · **PR:** #1804 (pass 1), #1929 (pass 2), #2133 (pass 3), #2389 (pass 4), #2536 (pass 5), #2593 (pass 6), #2924 (pass 7 — the header's own "this PR" placeholder was never filled in after merge; corrected here the way pass 7 corrected pass 6's), #3096 (pass 8, corrected here the same way), #3210 (pass 9, corrected here the same way), #3397 (pass 10, corrected here the same way), #3556 (pass 11, corrected here the same way), #3684 (pass 12, corrected here the same way), #3802 (pass 13, corrected here the same way), #3870 (pass 14), #4021 (pass 15, corrected here the same way), #4332 (pass 16, corrected here the same way), pass 17 (this PR)
 
 Passes are recorded in this one file rather than a new `AUTH<n>-01-*.md` per
 lap, matching what passes 2 and 3 already did here. Newest pass first.
+
+---
+
+## Pass 17 (2026-11-23, watchdog pickup) — 0 fixed, 0 new findings; true zero-delta pass, all 18 tracked files byte-identical
+
+Watchdog pickup — the dedicated `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) remains unreachable (confirmed via
+`ListAgents`, "No reachable agents"). Step 0: a fresh `list_pull_requests`
+(state=open) found zero `claude/security-review-*` heads. PR #4616
+(Feature 00, Cross-cutting baseline, pass 18) had just merged — it also
+reset the whole 35-row rotation table to `⬜` for a new lap and then
+immediately re-marked row 00 `✅` for its own pass in the same commit, so
+row 01 (this feature) was the next `⬜` row on a freshly pulled `main`.
+
+**Baseline:** `ac2391db7` (PR #4332's merge, pass 16). **Head:** current
+`main`. 1279 commits between baseline and head. **All 18 of this feature's
+tracked files are byte-identical to pass 16** — confirmed with an
+individual `git diff` (not `--stat`, and not a count) against every one of
+the 18 paths, each returning zero lines: `auth.py`, `auth_service.py`,
+`mfa_service.py`, `oauth_service.py`, `dependencies.py`,
+`passkey_service.py`, `models/passkey.py`, `core/security.py`,
+`schemas/auth.py`, `consent_service.py`, `suspicious_ip.py`,
+`apiClient.ts`, `authService.ts`, `authStore.ts`, `utils/passkeys.ts`,
+`PasskeySettingsCard.tsx`, `StepUpContext.tsx`, `utils/stepUp.ts`. A
+further sweep of the full 1279-commit diff for any auth/mfa/oauth/passkey/
+webauthn/stepup/lockout-named file outside this list found only
+`training_sessions.py` and its frontend siblings — unrelated "session" as
+in a scheduled training session, Feature 17's own scope, not this
+feature's. No brand-new auth-adjacent file was added this lap either
+(`git diff --diff-filter=A` against the same keyword set: no hits).
+
+### Route inventory — re-enumerated by AST, not assumed unchanged
+
+**Still 38 routes** (`grep -c '^@router\.' auth.py`), identical to pass 16
+— unsurprising given the file is byte-identical, but counted directly
+rather than inferred from that fact, per Step 3.
+
+### Standing items — reconfirmed
+
+- **AUTH-23** and the other previously-closed items (AUTH-15, AUTH-17,
+  AUTH-21, AUTH-22) remain closed; nothing in this lap's zero-delta touches
+  any of them.
+- **AUTH-4** (informational, unbounded roster query, accepted app-wide
+  pattern) remains accepted and unchanged.
+- **The 2-head Alembic fork pass 16 flagged as pre-existing and
+  out-of-scope (`9d044fc1d81b`, `611204dcf8d1`) is resolved.**
+  `python3 scripts/validate_migrations.py --strict` now reports a single
+  head (`e3b8d61f4a27`), confirmed directly — the same resolution Feature
+  00's own pass 18 recorded for the chain generally. The 9 pre-existing
+  `shift_completion`/`shift_refresh_utc_tagging` test failures pass 16
+  attributed to that fork are gone from this pass's run for the same
+  reason.
+
+**0 fixed, 0 new findings.**
+
+### Completion gate (pass 17)
+
+| Check                                                                                                                                                                                                    | Result                                                                                           |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `flake8 app/ tests/ alembic/` (7.4.1)                                                                                                                                                                    | ✅ 0 violations                                                                                  |
+| `black --check app/ tests/ alembic/` (26.10.1)                                                                                                                                                           | ✅ clean, 3436 files unchanged                                                                   |
+| `isort --check-only app/ tests/ alembic/` (9.0.2)                                                                                                                                                        | ✅ clean                                                                                         |
+| `python3 scripts/validate_migrations.py --strict`                                                                                                                                                        | ✅ single head `e3b8d61f4a27`                                                                    |
+| Scoped backend tests (`-k "auth or mfa or oauth or consent or suspicious_ip or dependencies or permission or authentik or password or security_notification or stepup or kiosk or passkey or webauthn"`) | ✅ 1742 passed, 2 pre-existing environment-only skips (`pywebpush`, Docker registry), 0 failures |
+| `cd frontend && npm run typecheck`                                                                                                                                                                       | ✅ 0 errors                                                                                      |
+| `cd frontend && npm run lint`                                                                                                                                                                            | ✅ 0 errors, 0 warnings                                                                          |
+
+Backend linters were installed fresh at CI's pinned versions
+(`flake8==7.4.1 black==26.10.1 isort==9.0.2 flake8-pytest-style==2.2.0`,
+matching `requirements.txt`'s Code Quality block and `.github/workflows/ci.yml`).
+
+No guard test added this pass: nothing changed in scope and nothing newly
+found to guard against.
+
+Rotation row 01 moves to `✅`.
 
 ---
 

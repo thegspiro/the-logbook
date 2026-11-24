@@ -176,10 +176,43 @@ for it.
 
 - **"Email the membership that seats are open"** — built 2026-11-20 as
   **Email members** on the crew card; see "Open-seat email" below.
-- **"Coordinator approves self sign-ups."** A claimed seat is taken at once.
-  An approval step needs a pending state on the seat and a reviewer's screen.
+- **"Coordinator approves self sign-ups."** — built 2026-11-23 as a
+  per-template setting; see "Self sign-up approval" below.
 - **"Message crew"** on the night. The existing event reminders reach a
   night's RSVPs, which every seat holder has.
+
+### Self sign-up approval (owner decisions of 2026-11-23)
+
+**Coordinator approves self sign-ups** is a template setting, copied to each
+night it schedules and changeable in **Edit this night**. While it is on,
+**Sign me up** reads **Ask for this seat**. The seat stays open, so several
+members can ask for the same one. Approving one member declines the others.
+The night's organizer and alternate are emailed each request ("Event officer
+duties"), and the member is emailed the answer ("Event changes and
+cancellations"). A request nobody answers is declined when the night starts,
+by the `apparatus_seat_request_lapse` task every 15 minutes. Choices made
+without a ruling:
+
+- **One waiting request per member per night.** A member who wants a
+  different seat withdraws the first request. This matches the one seat per
+  night a member can hold.
+- **The organizer and alternate are told only if they hold
+  `apparatus_events.manage`**, because only they can answer. Failing both,
+  the event's creator is told, if they hold it. When nobody qualifies, the
+  request still waits on the crew card and in the nights list, with no
+  email. Nights scheduled from a template make the person who scheduled them
+  the organizer.
+- **No bell notification.** Email is the channel of record (pitfall #18), and
+  the crew card and nights list show what is waiting.
+- **Switching approval off leaves waiting requests decidable.** They stay on
+  the card for the coordinator. A member who then signs up takes the seat at
+  once, and anyone waiting on that seat is declined.
+- **Lapsing has up to 15 minutes of delay.** Approval is refused from the
+  night's start, so a late answer is never possible, but the "not answered"
+  email can arrive up to a quarter of an hour after the start.
+- **At most once, not at least once.** Each request is closed and committed
+  before its email goes out. A crash between the two loses that member's
+  email; the request is gone from the card either way (pitfall #36).
 
 ### Boundaries chosen without a ruling
 
@@ -294,7 +327,8 @@ taken; each is listed so the owner can confirm or reverse it.
   remain for the notices no template covers (a question, an answer, a moved
   session, an expiry).
 - **Which training notices a member cannot switch off** _(chosen
-  2026-11-21; confirmed by the owner 2026-11-23)_. A training notice is sent under the
+  2026-11-21; confirmed, and extended to meetings, by owner decision
+  2026-11-23)_. A training notice is sent under the
   required _Changes to your training record_ kind when it changes how the
   member's attendance is graded: the expiry (the session counts as missed), a
   moved start (the approval is cleared and, unanswered, expires as a miss) and
@@ -302,8 +336,11 @@ taken; each is listed so the owner can confirm or reverse it.
   these went under the optional _Training and certification reminders_, so a
   member who had turned reminders off learned of a charged miss only from the
   bell. A **void** stays optional: its session was cancelled or deleted, so
-  nothing is graded and the cap slot is freed. Meeting notices are unchanged
-  (`EVENT_CHANGES`, optional, as above). `member_record_email_kind` on
+  nothing is graded and the cap slot is freed. ✅ **Meetings follow, owner
+  decision 2026-11-23:** the meeting workflow's expiry, moved-start and
+  decider-question emails now go under the same required kind, since each can
+  end in a charged absence on the minutes; its decision and void emails stay
+  under the optional _Event changes_. `member_record_email_kind` on
   `WorkflowSpec` holds the choice.
 
 ## Elections — Voter Rules by Member Type (Owner Decisions, 2026-11-13)
@@ -420,9 +457,10 @@ owner 2026-11-23:** every answer below.
   (a year by default), so an evaluation drafted after that reads no for a
   request that once had one.
 - **A voided request is listed, and counted only as voided.** Cancelling or
-  deleting a session voids its pending requests
+  deleting a session voids its pending and approved requests
   (`attendance_waiver_service.void_pending_for_events`, called from
-  `EventService`); an approved or denied request is kept. The history shows a
+  `EventService`; approved ones too since the owner decision of 2026-11-23);
+  a denied request is kept. The history shows a
   voided request and that it was voided, and the summary counts it under
   `voided` rather than as approved or denied.
 - **Deciders are named by their current name**, or "a former member" when the
@@ -976,6 +1014,21 @@ read-only roster with filters, not a form. Not converted, and still listed in
 reports, eligibility, outside apparatus, notifications, platoons, and the
 defaults cards under the footer's Save Settings).
 
+**Rolled out further on 2026-11-23** (training batch E, part 1): the
+requirement editor, opened from Training Admin's requirements page and from
+Programs' Requirements tab, and the skill template builder. The same rules
+apply. A new requirement or template is created only once every flagged field
+is fixed. An edited requirement saved for everyone saves the rest; a refused
+target keeps the stored type and target together, and a save for new members
+only, which makes a new copy, saves whole or not at all. An edited template
+saves its settings and keeps the stored sheet while any section or criterion
+is flagged, because the sheet is replaced whole on every save; Publish stays
+refused until every error is fixed. Default taken: the builder's sheet rules
+the API does not enforce (a checklist step with no item, a statement with no
+text, a deduction with no points to come off) still hold the sheet back on
+Save, not only on Publish, as they did before; making them Publish-only would
+let a draft store steps that score nothing, and is the owner's to decide.
+
 **Rolled out further on 2026-11-23** (training batch E, part 2): the course
 library's Add / Edit Course, External Training's Add and Edit Provider, and
 Record Crew Training. The same rules apply. Adding a course or a provider and
@@ -983,6 +1036,15 @@ recording crew training create nothing until every flagged field is fixed;
 crew training now flags every open problem at once instead of one banner at a
 time. Editing a course or a provider saves the rest and keeps a refused field
 flagged. An edited provider's cleared description is now saved as cleared.
+
+**Rolled out further on 2026-11-23** (training batch E, PR 3): Training ›
+Enhancements' four create dialogs (recertification pathway, competency matrix,
+instructor qualification, multi-agency exercise). The same rules apply: a
+missing value is named on its field, not in a toast, and nothing is created
+until it is fixed. The Training Waivers tab was looked at and left: it is a
+read-only list. Creating a training waiver happens on Members › Waivers'
+Create Waiver tab, which is not converted yet and is listed in
+`docs/FORMS_REVIEW_2026-11-05.md`.
 
 **Owner decision (2026-11-06), forms review F-6 — leaving a half-filled form.**
 Two of the three options, and not the third:
@@ -1882,8 +1944,9 @@ without a ruling:
   Outreach Impact counts by, so the two pages cannot disagree (pitfall #29). An
   apparatus night whose template uses a non-public type (business meeting,
   other) is therefore not on the Overview, though it stays on Apparatus Events.
-  Widening the rule would change Outreach Impact's counts too. "Tagged with a
-  CRR activity" joins the rule when Phase 3 adds activities.
+  Widening the rule would change Outreach Impact's counts too. Activities can
+  be recorded only on events the rule already counts, so it did not need
+  widening for CRR (part 3, 2026-11-23).
 - **"Closed out" is attendance finalized**, per the 2026-11-20 decision
   (completion on finalize). An event with a headcount but no finalize still
   shows as waiting; a draft never does.
@@ -1892,22 +1955,96 @@ without a ruling:
 - **New outreach event opens the ordinary event form** without a type preset;
   the form takes a template, not a type, from its address.
 
-Decided for later phases, not yet built:
+### CRR Activity Tracking — Owner Decisions (2026-11-22)
 
-- **Location data for CRR activities comes from a ZIP list bundled with the
-  app** (owner decision, 2026-11-21) — offline, so it works on Unraid and
-  air-gapped installs, and no ZIP code leaves the server.
-- **CRR activity tracking**, recordable both as an event and as a lightweight
-  log entry. A department-configurable catalogue (smoke and CO alarm installs,
-  home safety surveys, car seat inspections, extinguisher training, hands-only
-  CPR, Stop the Bleed, fall prevention, school programs), each activity tagged
-  by risk and by priority population, both lists configurable. Location starts
-  at a ZIP code that fills in city and state; an "add more detail" choice adds
-  the full address and resident contact, always encrypted at rest.
-- **Juvenile firesetter intervention** is a separate option a department
-  enables, shown as coming soon (pitfall #19: marked not yet in effect, with no
-  stored switch).
-- **CRR goals** — yearly targets per measure.
+Answers to the Phase 3 plan's questions, as they will be built:
+
+| Question                                  | Decision                                                                                                                                                                                                    |
+| ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Who records activities                    | The Community Outreach Team, and anyone holding `events.manage`                                                                                                                                             |
+| Who sees a resident's address and contact | The Community Outreach Manager and above; everyone else sees ZIP, city, state and counts                                                                                                                    |
+| How long resident details are kept        | Cleared automatically after a period the department sets, 24 months by default; the ZIP code is kept for audit                                                                                              |
+| Default counts                            | As listed in `app/services/crr_catalogue_defaults.py`                                                                                                                                                       |
+| Admin Hours                               | Each activity type credits a category the department chooses; with none chosen it follows the Public Education mapping. An activity attached to an event does not credit again, its attendance already does |
+| Repeat-visit lookup                       | Later                                                                                                                                                                                                       |
+| ZIP lookup                                | On when the department's own address is in the US; new entries start with the department's city and state                                                                                                   |
+| ZIP data                                  | GeoNames' US postal codes (CC BY 4.0), bundled; credit with a link in the app footer                                                                                                                        |
+
+**Part 1 — the catalogue (built 2026-11-22).** Events Settings → CRR
+Catalogue: activity types, their counts, and risk and priority-population
+tags, each department's own copy of the defaults, seeded the first time the
+catalogue is read. A built-in row is retired, never deleted. Managed with
+`events.manage`. The ZIP lookup (`GET /crr/zip-lookup/{zip}`) and its bundled
+data ship with it. Juvenile firesetter intervention shows as "Coming soon" with
+nothing stored.
+
+**Part 2 — activity logging (built 2026-11-22).** Events → CRR Activities
+(`/events/crr-activities`, also the hub's CRR Activities tab), a "Record an
+activity" card on an outreach event's page, and a link from the Outreach
+Overview. Two new permissions: `crr.record`, granted to the Community Outreach
+Team position and alongside every seeded `events.manage`, and
+`crr.view_contact`, granted to the Public Outreach position, the chief ranks
+and the president. The migration grants both to stored positions (pitfall #23).
+Boundaries drawn without a ruling:
+
+- **The screen records and deletes; it does not edit.** An activity's type,
+  event, time and members are fixed once recorded, because the members' Admin
+  Hours entries are written from them. `PATCH /crr/activities/{id}` changes
+  counts, tags, place, notes and resident details, but no screen calls it yet;
+  to correct an activity, delete it (which removes the hours it credited) and
+  record it again.
+- **Notes are treated as resident details.** They are encrypted, shown only
+  with `crr.view_contact`, and cleared with the details, because free text is
+  where a resident's name or condition turns up.
+- **Clearing is a daily task** (03:55 UTC). It clears address, name, phone,
+  email and notes on activities older than the period, keeps ZIP, city, state,
+  county and counts, and stamps the activity so the page says the details were
+  cleared. An activity that never held details is left unstamped. Details cannot
+  be added back to a cleared activity.
+- **Reading resident details is audited** (`crr.resident_details_viewed`, with
+  activity ids and no content), once per list or detail response that shows any.
+- **The event card shows to `crr.record` or `events.manage`** on an outreach
+  event that is not cancelled — the same rule a save is checked against.
+- **A member credited 0 minutes is recorded as taking part** but credits no
+  time.
+
+**Part 3 — Outreach Impact breakdowns (built 2026-11-23).** A Community risk
+reduction section on Outreach Impact, and on its print page. Owner decisions
+of 2026-11-23:
+
+| Question                       | Decision                                                                         |
+| ------------------------------ | -------------------------------------------------------------------------------- |
+| Which period                   | The page's own switch, with its comparison against the previous period           |
+| What a risk or population sums | Activities and each count's total; an activity counts under every tag it carries |
+| How ZIP codes are shown        | A list, and a street map from OpenStreetMap's tiles                              |
+| Export                         | Screen and print page only; the CSV stays the events list                        |
+
+Boundaries drawn without a ruling:
+
+- **The map loads only when someone presses Show map.** Opening it makes the
+  viewer's browser fetch tiles from `tile.openstreetmap.org`, which tells
+  OpenStreetMap the area being viewed; nothing else is sent. The CSP allows
+  that one host for images, and `tests/test_csp_map_tiles.py` holds the nginx
+  configs and the map to it. An air-gapped install sees the circles over a
+  blank background. OpenStreetMap's tile usage policy suits a department's
+  occasional use; a department that wants heavy use, or no outside contact,
+  needs a self-hosted tile server, which is not built.
+- **A circle sits at each ZIP code's centre,** sized by activities. It is not
+  a boundary shape: GeoNames gives a point per ZIP, and ZIP boundaries are
+  large data the app does not bundle.
+- **The print page has the tables, not the map.** A street map does not print
+  reliably.
+- **"Events with CRR activities count as outreach" changes nothing**, so the
+  shared outreach rule is not widened: an activity can only be recorded on an
+  event that already counts.
+- **Retired types, counts and tags still appear** when they have activity in
+  the period.
+
+Still to build: yearly goals per count (phase 4).
+
+**The footer credit is hidden on a phone,** with the rest of its line: a link
+on every page's footer would be a tap target under 44px on every route. The
+ZIP field carries a plain-text credit that a phone shows.
 
 ## Outreach Events — Edges Left by the 2026-11-20 Changes (All Closed)
 
@@ -4984,11 +5121,26 @@ recorded here rather than built.
    and the credit waits. This also corrects the claim above: re-approval did
    **not** restate the credit (the ledger's idempotency skipped the new
    figure); it does now, through the same restating calculation. Covered by
-   `tests/test_shift_report_credit_restatement.py`. **Residual:** (a) the
-   ledger's numeric reversal never reopens a completed requirement, so an
-   edit that lowers hours below a target the report had met restates the
-   value and percentage but leaves the requirement completed (common to every
-   feed that restates, including a re-finalized training session); (b) the
+   `tests/test_shift_report_credit_restatement.py`. **Residual:** (a) ✅
+   **resolved, owner decision 2026-11-23 ("lowered hours reopen a completed
+   program requirement").** A correction that takes a member below a
+   requirement they had completed — a shift report edited, a training session
+   re-finalized, a credited record voided — moves the requirement back to in
+   progress and clears `completed_at`
+   (`TrainingProgramService._reopen_if_below_target`), and the training
+   officers get the **Program Requirement Reopened** email (migration
+   `bfb747c095c3`) and a bell notice, once per reopening. **Nothing else is
+   changed:** certificates already issued stand, the enrollment stays
+   completed (the rollup's own reopen is skipped for these corrections, where
+   before this change it reopened a completed enrollment whose average fell),
+   and a phase the member advanced to is kept; the notice says so. A drop
+   that stays at or above the target changes nothing, and a later restore
+   completes the requirement again. _Defaults taken:_ only a COMPLETED row
+   reopens — VERIFIED and WAIVED are an officer's decision and stand; a
+   requirement with no numeric target (a certification, a checklist) is never
+   reopened this way; the officers told are those holding a training-officer
+   role, with no SMS. Tests: `tests/test_program_requirement_reopen.py`.
+   (b) the
    edit and the restatement share one request and session but not one
    database transaction, because the shared progress updater commits per
    requirement, as it does on approval; (c) competency is not stepped back
@@ -5793,9 +5945,11 @@ owner.
 
 Still open, each the owner's call:
 
-- The member response still carries the cohort's creator id
-  (`created_by`). It is not displayed, but it is sent. The cohort's `notes`
-  are no longer sent to a roster member (stripped 2026-11-04,
+- ~~The member response still carries the cohort's creator id
+  (`created_by`). It is not displayed, but it is sent.~~ ✅ **Resolved
+  2026-11-23.** `created_by` and `generated_by` are blanked for a roster
+  member (`_build_detail`, `tests/test_course_cohort.py`). The cohort's
+  `notes` are no longer sent to a roster member (stripped 2026-11-04,
   `course_cohorts.py`): they are the training officers' own remarks.
 - `is_roster_member` admits a withdrawn member, while `/mine` lists only
   active ones.
@@ -9174,8 +9328,10 @@ single-page form. What it changes, and what it leaves:
 - **A single session created from Training Admin is announced to chat
   integrations.** It is created through `POST /events`, which tells connected
   chat integrations (Slack, Discord, Teams) about a new event; the old
-  `POST /training/sessions` path did not. A series, through
-  `/events/recurring`, is not announced, from either screen.
+  `POST /training/sessions` path did not. ~~A series, through
+  `/events/recurring`, is not announced, from either screen.~~ ✅ Since
+  2026-11-23 a series is announced once, by its first occurrence
+  (`tests/test_recurring_event_chat_announcement.py`).
 - **On a finalized event, only "Counts toward attendance" can change among
   the training details.** The rest of Training Info is drawn locked; reopen
   attendance to change it. The event's own fields keep the finalized-event
@@ -9194,27 +9350,47 @@ single-page form. What it changes, and what it leaves:
   `event_templates.training_details`, and picking it fills Training Info as
   well as the event. The Event Templates editor has a Training Details
   section for them, and Save as Template on a Training event saves its
-  session's. Still not carried, because they were not in the owner's list:
+  session's. ~~Still not carried, because they were not in the owner's list:
   the category, program, phase and requirement links, Counts toward
   attendance, and the completion settings (counts toward certification,
   auto-create records, completion sign-off and its deadline); they start on
-  their defaults. A template whose library course is no longer in the Course
+  their defaults.~~ **Resolved 2026-11-23 (owner decision, "Templates keep
+  more fields"):** a Training template now also keeps the category, program
+  and phase, the requirement link, Counts toward attendance and the
+  completion and sign-off settings. Each linked id is checked to be the
+  department's when saved; applying the template drops any category,
+  program, phase or requirement no longer active (or a phase no longer in
+  its program), with a note, rather than refusing the create
+  (`tests/test_event_template_training_details.py`,
+  `trainingDetailsModel.test.ts`, `CreateTrainingSessionPage.test.tsx`).
+  **Still true:** Save as Template from a library-course event stores the
+  session's hours as typed (`manual`), so a later change to the course's
+  hours does not reach the template. A template whose library course is no longer in the Course
   Library opens on No course yet, and one whose lead instructor is no longer
   a current member opens with Lead instructor empty, each with a note on
   Training Info. The entry below still applies to an event made from a
   template: a library-course template saved with a blank instructor or
   expiry gets the course's.
-- **A template's lead instructor survives that member's anonymisation, as a
-  training session's instructor does.** `training_details` holds the
-  instructor's member id and name as JSON, and neither
-  `member_anonymization_service.py` nor `user_deletion_service.py` touches
-  it — nor `training_sessions.instructor`, the free-text name a session
-  stores beside its `instructor_id`, which has the same gap and was not
-  recorded before. Neither carries a foreign key, so a removed member leaves
-  a dangling id, which applying the template clears. Scrubbing both on
-  anonymisation is a change to the anonymisation service, left for an owner
-  decision. A department-template export writes `training_details` as null,
-  so neither the name nor an org-local course id leaves the installation.
+- ~~**A template's lead instructor survives that member's anonymisation, as a
+  training session's instructor does.**~~ **Resolved 2026-11-23** (owner
+  decision of that date). Anonymisation and permanent delete replace the
+  member's name with "Former member" in `event_templates.training_details`
+  (its `instructor_id` cleared), in `training_sessions.instructor` wherever
+  `instructor_id` is the member, and in each attendee's
+  `training_records.instructor` that still holds the name the session copied
+  onto it (`app.services.instructor_erasure`). "Former member" rather than a
+  blank keeps those records off the NFPA completeness report's
+  missing-instructor list. Migration `9c41e7b2d5a3` applied the same rule to
+  members anonymised before. **Not covered:** members permanently deleted
+  before 2026-11-23 (the delete cleared the sessions' `instructor_id`, so
+  nothing links their name back to them), a record written before
+  `source_event_id` existed, and a record or session whose instructor was
+  typed as free text with no `instructor_id`. The original entry read:
+  `training_details` holds the instructor's member id and name as JSON, and
+  neither `member_anonymization_service.py` nor `user_deletion_service.py`
+  touched it, nor `training_sessions.instructor`. A department-template
+  export writes `training_details` as null, so neither the name nor an
+  org-local course id leaves the installation.
 - **Under a library course, a blank Lead Instructor or Expiration is saved
   as the course's.** The backend reads `null` for those two as "use the
   course's value", on create and on edit, so an officer cannot clear either
@@ -9227,6 +9403,20 @@ single-page form. What it changes, and what it leaves:
   confirms.~~ **Resolved 2026-11-11:** the header leaves Create Session out
   for a viewer without `events.manage`, as the approved mockup draws it, and
   the Sessions tab still shows its notice naming the permission.
+- **A training manager can read a draft Training event's session, but not
+  the draft itself** (2026-11-23). `GET /training/sessions/by-event/{id}` now
+  answers `training.manage` for a draft whose type is Training, so the
+  session no longer reads as "No training details" to the officer who
+  administers it. **Default taken:** `GET /events/{id}` and the events list
+  still hide every draft from a caller without `events.manage`, as ADV-5 set
+  them, so a training manager without it cannot open a draft Training event
+  to see that session. Showing them the draft is a wider visibility change,
+  left for an owner decision (`tests/test_draft_event_side_paths.py`).
+- **The training-session calendar lists draft events' sessions.**
+  `GET /training/sessions/calendar` filters cancelled events but not drafts,
+  so any member can see a draft Training event's title and time there, which
+  `GET /events/{id}` hides from them (ADV-5). Found on 2026-11-23 and left
+  for its own change, since it alters what the calendar shows.
 
 ## Events — Attendance-Lock Refusals (2026-09-30)
 
@@ -9257,7 +9447,7 @@ same screen, and left as they are:
   start or end with seconds, or one in the hour repeated when clocks fall back,
   can move by those seconds or by an hour on its first save. A finalized
   event's times are locked, never resent, and not checked by the form either.
-- **A series save from an open occurrence can be refused for a field nobody
+- ~~**A series save from an open occurrence can be refused for a field nobody
   touched.** "This and all future events" writes the edited occurrence's type,
   category and check-in rules onto every later occurrence,
   and moves every occurrence when the form's restatement of its times, which
@@ -9273,7 +9463,15 @@ same screen, and left as they are:
   location, capacity or RSVP deadline) clears that field on later open
   occurrences too, and a later finalized occurrence that has a category refuses
   the save. A save from a finalized occurrence leaves all of these fields out
-  and is not affected.
+  and is not affected.~~
+  ✅ **Resolved 2026-11-23.** The edit page now sends a series save only the
+  fields that differ from the occurrence it loaded, and the three timing
+  fields together or not at all, so an untouched field neither refuses the
+  save nor clears later occurrences (`onlyChangedSeriesFields`,
+  `EventEditPage.test.tsx`). **Still true:** a stored start or end with
+  seconds differs from the form's minute, so it is sent and moves the series
+  by those seconds, as above; and training details are sent as the form has
+  them.
 - ~~**Reminder and validation markers an earlier series save copied are still
   there.**~~ ✅ **Resolved (owner decision 2026-11-01: clear with a migration,
   based on each row's schedule; built 2026-11-05).** Migration
@@ -11231,11 +11429,15 @@ item but the first was confirmed by the owner 2026-11-23. Documents
 on session waiver requests (PDF, JPEG, PNG or HEIC, 10 MB each, three per
 request, kept 365 days) shipped with these gaps, each the narrower choice:
 
-- **A filed document cannot be removed by the member.** Once filed it stays
-  until the retention task deletes it. A member who filed the wrong file can
-  withdraw a pending request and ask again; the withdrawn request's documents
-  then age out with it. Allowing removal would have needed a rule for removing
-  the last document under a `required` policy, which nothing decided.
+- ~~**A filed document cannot be removed by the member.**~~ ✅ **Owner
+  decision 2026-11-23: it can, while the request is pending.** The request
+  page offers a remove button on each document to its member
+  (`DELETE /training/waivers/requests/{id}/attachments/{attachment_id}`,
+  submitter only, by entry id, a repeat changing nothing). Under a `required`
+  policy the last document cannot be removed: the member files the right one
+  first. The file is deleted after the commit through the shared reference
+  check (`member_files.remove_unreferenced_files`), and the removal is audited
+  by id.
 - **The uploader's filename is not kept at all**, not only hidden from
   downloads: a doctor's note's name can say what it is about. A decider sees
   `waiver-attachment-1.pdf`, its type, size and date.
@@ -11275,10 +11477,13 @@ deleting an event) and the moved-start one.
   asked for requests to be voided "as the training workflow does", but the
   training workflow voided nothing. A pending request is now voided (its slot
   freed, the deciders' prompts archived, the member told in the app), for both
-  workflows. An **approved** request is kept: the model already keeps an
-  approved request as the member's record when its event is deleted. So an
-  approval for a meeting that was then cancelled still counts toward the
-  member's cap. Voiding approved requests as well would give the waiver back.
+  workflows. ~~An **approved** request is kept, so an approval for a meeting
+  that was then cancelled still counts toward the member's cap.~~ ✅ **Owner
+  decision 2026-11-23: cancelling gives the waiver back.** An approved request
+  is voided too, for both workflows: it stops counting toward the cap, a
+  meeting waiver it wrote comes off the minutes record, and the member is
+  emailed. A denied request is still kept, and every voided row still
+  outlives a deleted event.
 - **A member on a leave of absence that covers the meeting cannot ask**
   ("on_leave"): the voting tally already excludes such a meeting, so there is
   nothing to excuse.
@@ -11307,13 +11512,19 @@ deleting an event) and the moved-start one.
   2026-11-21 the member always gets seven days from that notice to answer
   (`expires_at_for` reads `reconfirm_requested_at`); before, a start fixed
   more than eight days after the session expired the request on the next
-  hourly sweep and charged the meeting as missed. **For the owner:** whether a
-  correction to a session already held — or one that keeps the same local
-  date, such as 19:00 fixed to 19:30 — should reopen the decision at all. Not
-  reopening it would change the 2026-11-13 decision, so it was not done here.
-- **`idx_meeting_attendees_meeting` is now a prefix of the new unique
-  `(meeting_id, user_id)` index** and could be dropped; it was left to keep
-  the migration to what the feature needs.
+  hourly sweep and charged the meeting as missed. ~~**For the owner:** whether
+  a correction to a session already held — or one that keeps the same local
+  date, such as 19:00 fixed to 19:30 — should reopen the decision at all.~~ ✅
+  **Owner decision 2026-11-23: it does not.** An approved request keeps its
+  decision (and a meeting waiver stays on the minutes) when the session had
+  already started when its start was changed, or when the new start is on the
+  same local date; only its snapshot follows the event. Any other move reopens
+  it as before, and a pending request still goes back to the member on any
+  move (`_correction_keeps_decision`).
+- ~~**`idx_meeting_attendees_meeting` is now a prefix of the new unique
+  `(meeting_id, user_id)` index** and could be dropped.~~ ✅ Resolved
+  2026-11-23: `b37218495d33` drops it wherever another index leads on
+  `meeting_id` (otherwise MySQL needs it for the foreign key, and it stays).
 
 ## Training — Shift Evaluations: What the 2026-11-13 Review Left Open
 
@@ -11419,9 +11630,16 @@ beyond the feature.
   get a 500** rather than the duplicate-name 400.~~ Resolved 2026-11-14: a
   create or rename whose commit meets the per-department unique key now rolls
   back and returns the same duplicate-name 400 the up-front check gives.
-- **A preceptor-link submission that collides with an officer creating the
+- ~~**A preceptor-link submission that collides with an officer creating the
   same evaluation** retries once; the retry keeps the link marked used but
-  loses the submitting device's address and browser from the record.
+  loses the submitting device's address and browser from the record.~~
+  Resolved 2026-11-23 (owner-approved fix). The entry understated it: the
+  retry's rollback expired the link, so `submit()` failed reading it after
+  the evaluation had already been saved, and the link was left open and
+  unlinked. `ShiftEvaluationLinkService.submit` now keeps the link's id before
+  the save, reloads it by that id, and sets `used_at`, `submitted_ip` and
+  `submitted_user_agent` again when the rollback took them back. Test:
+  `TestACollisionWithAnOfficer` in `tests/test_shift_evaluation_links.py`.
 - ~~**Restoring a pending outside shift approves it**, without approve's
   pending-only check (it still needs `scheduling.manage`).~~ Resolved
   2026-11-14: restore now applies only to a rejected entry and answers 400
@@ -11478,9 +11696,13 @@ each case; confirmed by the owner 2026-11-23):
   `user_anonymized` audit event). A later permanent delete of the anonymised
   member collects these kept entries again, which is the one retry path.
   `remove_member_attachments` and the applicant-document step drop the row
-  whatever happens to the file; this step does not, because anonymisation
-  refuses to run twice and a dropped reference would leave a file nothing
-  could find again. Nothing else retries these: retention
+  whatever happens to the file, and since 2026-11-23 (batch A item 1) queue a
+  file that would not delete on `pending_file_deletions` in the same
+  transaction, for the hourly sweep (`member_anonymization`, counted as
+  `attendance_waiver_files_queued` / `applicant_files_queued`). This step
+  keeps its entry instead, because anonymisation refuses to run twice and the
+  entry is how a later permanent delete finds the file. Nothing else retries
+  these kept entries: retention
   (`attachment_retention_days`) is opt-in and covers self-report certificates
   only, so a department that has not set it keeps the file until someone
   removes it by hand.
@@ -11565,11 +11787,33 @@ each case; confirmed by the owner 2026-11-23):
   lost 204 must not show the member a failure. **Still open:** a legacy index
   without `?expected_id=` keeps the old behaviour and is deprecated; the
   shipped screens send the id whenever the entry has one.
-- **File names on path-less entries survive anonymisation.** The
-  anonymisation step relabels only entries naming a stored file, so a
-  `{"file_name": ...}` entry with no `file_path` (what the 2026-11-20
-  migration made of the old bare strings) keeps the uploader's filename, which
-  can be the member's name, on their submissions and records.
+- ~~**File names on path-less entries survive anonymisation.**~~ **Resolved
+  2026-11-23** (batch A item 2): a `{"file_name": ...}` entry with no
+  `file_path` gets the same neutral label as a stored one (`certificate` on a
+  submission, `attachment` on a record, a plausible extension kept).
+  Migration `1f3a6c2d9e40` relabelled the entries of members anonymised
+  before; the names it replaced cannot be recovered.
+- ~~**Anonymisation turned excused meetings into absences.**~~ **Resolved
+  2026-11-23** (batch A item 3): it cleared `meeting_attendees.waiver_reason`,
+  which every attendance reader takes as the excusal. It now writes the
+  standard `Excused: approved request` with no category in its place.
+  Migration `1f3a6c2d9e40` restored the wording on rows of members anonymised
+  before, where `waiver_granted_at` or `waiver_request_id` shows a waiver.
+- ~~**Three workflows deleted training rows and left their files.**~~
+  **Resolved 2026-11-23** (batch A item 4): `void_event_records` deleting a
+  never-credited record, the historical import undo deleting imported records
+  and its drills' events, and a member deleting a submission now queue the
+  files those rows named on `pending_file_deletions` in the delete's own
+  transaction (`event_records_voided`, `historical_import_undone`,
+  `submission_deleted`). The submission delete processes its rows right after
+  the commit; the other two leave them to the hourly sweep. A file another row
+  still names is kept.
+- **Deleting an event leaves its attachment files.** `EventService.delete_event`
+  and the series delete remove the row and every `events.attachments` file it
+  named stays on the volume, named by nothing. Found while closing the drill
+  undo above, which now queues them for the drills it deletes; the ordinary
+  event delete was out of that change's scope. Open for an owner decision on
+  whether event deletes should queue their files the same way.
 - ~~**A training record's own uploaded file has no removal route.**~~
   **Resolved 2026-11-21** (owner decision 2026-11-21, (d)):
   `DELETE /training/records/{id}/attachments/{entry}` and a Remove button in

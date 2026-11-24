@@ -26,6 +26,8 @@ docs
 wiki
 # The YouTube video tool: never part of the application
 video-production
+# The documentation site: its own image, built by docs-site/Dockerfile
+docs-site
 static
 scripts
 unraid

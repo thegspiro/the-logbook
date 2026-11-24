@@ -132,6 +132,7 @@ from app.schemas.attendance_waiver import (
     POLICY_SECTION,
     AttendanceWaiverPolicy,
     CapPeriod,
+    QueueState,
     policy_from_settings,
 )
 from app.services.attendance_waiver_email_service import (
@@ -238,10 +239,11 @@ class WorkflowSpec:
     # The kind for a member's notice that changes how their attendance is
     # graded: the expiry (the session now counts as missed), a moved start
     # (the approval is cleared and, unanswered, expires as a miss) and a
-    # decider's question (unanswered, it expires as a miss). For training this
-    # is the required record-changes kind, the one the decision email already
-    # uses, so a member who turned training reminders off is still told
-    # (CLAUDE.md pitfall #18). A void is not one: its session is not held.
+    # decider's question (unanswered, it expires as a miss). For both
+    # workflows this is the required record-changes kind (for training the one
+    # the decision email already uses), so a member who turned reminders or
+    # event changes off is still told (CLAUDE.md pitfall #18; owner, 2026-11-23
+    # for meetings). A void is not one: its session is not held.
     member_record_email_kind: EmailKind
     # Whether a request may carry documents. Only training has the upload
     # routes and the retention sweep; a meeting policy cannot ask for them.
@@ -280,7 +282,9 @@ MEETING_SPEC = WorkflowSpec(
     member_fallback_url="/events",
     decider_email_kind=EmailKind.EVENT_DUTIES,
     member_email_kind=EmailKind.EVENT_CHANGES,
-    member_record_email_kind=EmailKind.EVENT_CHANGES,
+    # Owner decision 2026-11-23: required, as for training, because each of
+    # these notices can end in a charged absence on the minutes.
+    member_record_email_kind=EmailKind.TRAINING_RECORD_CHANGES,
     takes_documents=False,
 )
 
@@ -740,26 +744,11 @@ class AttendanceWaiverService:
             return refuse(code, f"Only a {noun} can be excused.")
         if event.is_cancelled:
             return refuse("cancelled", f"This {noun} was cancelled.")
-        if self.workflow == TRAINING_WORKFLOW:
-            if member.compliance_exempt:
-                return refuse(
-                    "exempt",
-                    "You are exempt from training requirements, so this session "
-                    "does not count against you.",
-                )
-            if not await self._counting_requirements(org_id, member, event):
-                return refuse(
-                    "not_counted",
-                    "This session does not count toward an attendance "
-                    "requirement that applies to you.",
-                )
-        else:
-            if await self._on_leave(org_id, member.id, session_day):
-                return refuse(
-                    "on_leave",
-                    "You are on a leave of absence that covers this meeting, so "
-                    "it does not count against you.",
-                )
+        not_counted = await self._not_counted_refusal(
+            org_id, member, event, session_day
+        )
+        if not_counted is not None:
+            return refuse(*not_counted)
         if existing is not None:
             return refuse(
                 "already_requested",
@@ -793,6 +782,38 @@ class AttendanceWaiverService:
             return refuse("no_decider", undecidable)
         result.allowed = True
         return result
+
+    async def _not_counted_refusal(
+        self, org_id: str, member: User, event: Event, session_day: date
+    ) -> Optional[Tuple[str, str]]:
+        """Why the session does not count against the member, as (code,
+        message), or None.
+
+        Shared by a new request (``_assess``) and a moved session's
+        confirmation (``_reconfirm_refusal``), so neither can skip a refusal
+        the other makes. ``member.positions`` must be loaded.
+        """
+        if self.workflow == TRAINING_WORKFLOW:
+            if member.compliance_exempt:
+                return (
+                    "exempt",
+                    "You are exempt from training requirements, so this session "
+                    "does not count against you.",
+                )
+            if not await self._counting_requirements(org_id, member, event):
+                return (
+                    "not_counted",
+                    "This session does not count toward an attendance "
+                    "requirement that applies to you.",
+                )
+            return None
+        if await self._on_leave(org_id, member.id, session_day):
+            return (
+                "on_leave",
+                "You are on a leave of absence that covers this meeting, so "
+                "it does not count against you.",
+            )
+        return None
 
     async def _no_decider_refusal(
         self, org_id: str, member_id: str, policy: AttendanceWaiverPolicy
@@ -1468,7 +1489,8 @@ class AttendanceWaiverService:
         (``reconfirm_requested_at``). The request then goes back to its
         deciders for a fresh decision. What the new date may have changed is
         checked again, in the eligibility wording: a member now checked in,
-        or (for a meeting) on leave or already excused by the Secretary, has
+        exempt from training or no longer graded by the session (training),
+        or on leave or already excused by the Secretary (a meeting), has
         nothing to excuse and is told to withdraw instead. The deadline and
         the cap are not: the member asked in time, and the cap is enforced
         when the request is approved.
@@ -1519,7 +1541,10 @@ class AttendanceWaiverService:
     ) -> Optional[str]:
         """Why the moved session no longer needs a waiver, or None.
 
-        The part of ``_assess`` a new date can change, in its wording.
+        The part of ``_assess`` a new date can change, in its wording, through
+        the same ``_not_counted_refusal`` a new request gets: an exemption or
+        a requirement link that changed since the request was made refuses
+        here too (2026-11-20 review).
         """
         noun = self.spec.session_noun
         event: Optional[Event] = None
@@ -1536,13 +1561,12 @@ class AttendanceWaiverService:
             return f"This {noun} no longer exists."
         if event.is_cancelled:
             return f"This {noun} was cancelled."
-        if self.workflow == MEETING_WORKFLOW and await self._on_leave(
-            org_id, request.user_id, request.session_date
-        ):
-            return (
-                "You are on a leave of absence that covers this meeting, so "
-                "it does not count against you."
-            )
+        member = await self._member(org_id, request.user_id)
+        not_counted = await self._not_counted_refusal(
+            org_id, member, event, request.session_date
+        )
+        if not_counted is not None:
+            return not_counted[1]
         if await self._checked_in(org_id, request.user_id, event.id):
             return f"You checked in to this {noun}, so it already counts as attended."
         if self.workflow == MEETING_WORKFLOW and await self._meeting_waived(
@@ -1860,8 +1884,14 @@ class AttendanceWaiverService:
         status: Optional[AttendanceWaiverStatus] = None,
         skip: int = 0,
         limit: int = 50,
+        state: Optional[QueueState] = None,
     ) -> Tuple[List[AttendanceWaiverRequest], int]:
-        """The requests ``actor`` may decide or has decided, newest first."""
+        """The requests ``actor`` may decide or has decided, newest first.
+
+        ``state`` "pending" or "decided" (every other status) splits the queue
+        here, so each list's ``total`` and pages count only its own rows; a
+        client dropping pending rows from an unfiltered page came up short.
+        """
         org_id = str(organization_id)
         policy = await self.get_policy(org_id)
         pool = await self._pool(org_id, policy)
@@ -1873,6 +1903,14 @@ class AttendanceWaiverService:
         ]
         if status is not None:
             conditions.append(AttendanceWaiverRequest.status == status)
+        if state == "pending":
+            conditions.append(
+                AttendanceWaiverRequest.status == AttendanceWaiverStatus.PENDING
+            )
+        elif state == "decided":
+            conditions.append(
+                AttendanceWaiverRequest.status != AttendanceWaiverStatus.PENDING
+            )
         total = (
             await self.db.execute(
                 select(func.count(AttendanceWaiverRequest.id)).where(*conditions)
@@ -2005,6 +2043,13 @@ class AttendanceWaiverService:
                     and r.status == AttendanceWaiverStatus.PENDING
                     and policy.attachment != "off"
                     and len(files.get(str(r.id), [])) < MAX_ATTACHMENTS,
+                    # The removal route's own rule (owner decision
+                    # 2026-11-23): the member, while pending, and never the
+                    # last document a policy requires.
+                    "can_remove_attachment": own
+                    and r.status == AttendanceWaiverStatus.PENDING
+                    and len(files.get(str(r.id), []))
+                    > (1 if policy.attachment == "required" else 0),
                     "attachments": [
                         {
                             "id": str(f.id),
@@ -2968,11 +3013,28 @@ async def _unapply_meeting_waiver(
     return len(attendees)
 
 
+def _correction_keeps_decision(
+    request: AttendanceWaiverRequest, event: Event, tz: ZoneInfo, now: datetime
+) -> bool:
+    """Whether a moved start leaves an approval as it is (owner decision,
+    2026-11-23): the session had already started when the start was changed,
+    so the edit corrects the record of a session that was held, or the new
+    start keeps the session's local date. Either way the member's reason for
+    missing it still holds. Any other move reopens the request.
+    """
+    if _utc(request.event_start_snapshot) <= now:
+        return True
+    return local_date(event.start_datetime, tz) == request.session_date
+
+
 async def reconfirm_for_rescheduled_events(
     db: AsyncSession, org_id: str, event_ids: Sequence[str]
 ) -> List[MemberNotice]:
     """Send every pending or approved request for a moved session back to its
-    member (owner decision, 2026-11-13).
+    member (owner decision, 2026-11-13), except an approval the move does not
+    unsettle: a correction to a session already held, or a new start on the
+    same local date, keeps it and only updates its snapshot
+    (``_correction_keeps_decision``, owner decision 2026-11-23).
 
     For every path that changes an event's start, inside the caller's
     transaction (it commits) while it holds the events exclusively; like
@@ -3044,6 +3106,15 @@ async def reconfirm_for_rescheduled_events(
         spec = SPECS[request.workflow]
         noun = spec.session_noun
         was = request.status
+        if was == AttendanceWaiverStatus.APPROVED and _correction_keeps_decision(
+            request, event, tz, now
+        ):
+            # Only the snapshot follows the event, so a second run for the
+            # same edit finds nothing moved (pitfall #36).
+            request.event_title_snapshot = (event.title or spec.default_title)[:255]
+            request.event_start_snapshot = _utc(event.start_datetime)
+            request.session_date = local_date(event.start_datetime, tz)
+            continue
         old_date = request.session_date
         old_when = _when_label(request.event_start_snapshot, tz)
         new_when = _when_label(event.start_datetime, tz)
@@ -3243,15 +3314,20 @@ async def _settle_member_notice(
 async def void_pending_for_events(
     db: AsyncSession, org_id: str, event_ids: Sequence[str], cause: str
 ) -> List[MemberNotice]:
-    """Void every pending request, of either workflow, for these events.
+    """Void every pending or approved request, of either workflow, for these
+    events.
 
     For the event's cancellation or deletion, inside the caller's
-    transaction (it commits) while it holds the events exclusively. A pending
+    transaction (it commits) while it holds the events exclusively. The
     request is about a session that will not now be held, so there is nothing
-    left to decide: it is voided, which frees its slot, its deciders' prompts
-    are archived and the member is told: in the app now, and by email once
-    the caller commits, through the returned notices and
-    ``send_member_notices`` (CLAUDE.md pitfall #18). An approved or denied
+    left to decide or excuse: it is voided, which frees its slot. An approved
+    one also gives the waiver back (owner decision 2026-11-23): it stops
+    counting toward the cap, which counts approved requests only, and a
+    meeting waiver it wrote comes off the minutes record. Its deciders'
+    prompts are archived and the member is told: in the app now, and by email
+    once the caller commits, through the returned notices and
+    ``send_member_notices`` (CLAUDE.md pitfall #18). A second run finds
+    nothing left to void, so it owes no second notice (pitfall #36). A denied
     request is the member's record and is kept (the row outlives the event,
     see the model). ``cause`` is "cancelled" or "deleted", for the log and the
     notice.
@@ -3266,7 +3342,12 @@ async def void_pending_for_events(
                 .where(
                     AttendanceWaiverRequest.organization_id == org_id,
                     AttendanceWaiverRequest.event_id.in_(ids),
-                    AttendanceWaiverRequest.status == AttendanceWaiverStatus.PENDING,
+                    AttendanceWaiverRequest.status.in_(
+                        [
+                            AttendanceWaiverStatus.PENDING,
+                            AttendanceWaiverStatus.APPROVED,
+                        ]
+                    ),
                 )
                 .with_for_update()
                 .execution_options(populate_existing=True)
@@ -3278,13 +3359,22 @@ async def void_pending_for_events(
     notices: List[MemberNotice] = []
     for request in pending:
         spec = SPECS[request.workflow]
+        was_approved = request.status == AttendanceWaiverStatus.APPROVED
+        if was_approved and request.workflow == MEETING_WORKFLOW:
+            await _unapply_meeting_waiver(db, org_id, request)
         subject = f"Waiver request closed — {request.event_title_snapshot}"
-        sentence = (
+        sentences = [
             f"Your request to be excused from "
             f'"{request.event_title_snapshot}" on '
             f"{_day_label(request.session_date)} was closed: the "
             f"{spec.session_noun} was {cause}."
-        )
+        ]
+        if was_approved:
+            sentences.append(
+                "It had been approved; since nothing is held, it no longer "
+                "counts toward your limit of waivers."
+            )
+        sentence = " ".join(sentences)
         logged = AttendanceWaiverService._action(
             request,
             AttendanceWaiverAction.VOIDED,
@@ -3296,13 +3386,16 @@ async def void_pending_for_events(
                 request_id=str(request.id),
                 workflow=request.workflow,
                 subject=subject,
-                sentences=(sentence,),
+                sentences=tuple(sentences),
                 action_id=str(logged.id),
             )
         )
         request.status = AttendanceWaiverStatus.VOIDED
         request.live_key = None
         request.info_requested_at = None
+        # A voided request waits on nobody; left set, the row still read as
+        # "member to confirm" and kept the reconfirm expiry candidate.
+        request.reconfirm_requested_at = None
         db.add(logged)
         db.add(
             NotificationLog(
@@ -3327,6 +3420,11 @@ async def void_pending_for_events(
             event_data={
                 **AttendanceWaiverService._ids(request),
                 "cause": cause,
+                "previous_status": (
+                    AttendanceWaiverStatus.APPROVED.value
+                    if was_approved
+                    else AttendanceWaiverStatus.PENDING.value
+                ),
             },
         )
     if pending:

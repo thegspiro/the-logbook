@@ -18,7 +18,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from fastapi import HTTPException
 from pydantic import ValidationError
-from sqlalchemy import select, text
+from sqlalchemy import bindparam, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -1153,3 +1153,47 @@ class TestTheLeadInstructorIsACurrentMember:
                 event_id,
                 training_details=TrainingSessionDetailsUpdate(instructor_id=former),
             )
+
+    async def _series_naming(self, db, dept, user_id, *, from_index):
+        ids = await TestASeries()._series(db, dept, {})
+        await db.execute(
+            text(
+                "UPDATE training_sessions SET instructor_id = :u "
+                "WHERE event_id IN :ids"
+            ).bindparams(bindparam("ids", expanding=True)),
+            {"u": user_id, "ids": ids[from_index:]},
+        )
+        await _retire(db, user_id)
+        return ids
+
+    async def test_a_series_edit_cannot_spread_a_former_member_to_other_sessions(
+        self, db_session, dept
+    ):
+        """One later session naming a member who has left let the series edit
+        put them on every occurrence, as if each already named them."""
+        owen = await _insert_user(db_session, dept["org"], "Owen")
+        ids = await self._series_naming(db_session, dept, owen, from_index=3)
+
+        with pytest.raises(ValueError, match="Only current members"):
+            await TestASeries()._edit_future(
+                db_session,
+                dept,
+                ids[2],
+                TrainingSessionDetailsUpdate(instructor_id=owen),
+            )
+
+    async def test_a_series_edit_keeps_a_former_member_every_session_names(
+        self, db_session, dept
+    ):
+        owen = await _insert_user(db_session, dept["org"], "Owen")
+        ids = await self._series_naming(db_session, dept, owen, from_index=2)
+
+        await TestASeries()._edit_future(
+            db_session,
+            dept,
+            ids[2],
+            TrainingSessionDetailsUpdate(instructor_id=owen, credit_hours=1.5),
+        )
+
+        for event_id in ids[2:]:
+            assert (await _session(db_session, event_id))["credit_hours"] == 1.5

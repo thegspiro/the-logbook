@@ -167,7 +167,8 @@ describe('SkillTemplateBuilderPage', () => {
       const saveButtons = screen.getAllByRole('button', { name: /save|create template/i });
       await user.click(saveButtons[saveButtons.length - 1] as HTMLElement);
 
-      expect(screen.getByText(/Scored steps need a max points value/i)).toBeInTheDocument();
+      // Said on the step itself as well as in the summary at the top.
+      expect(screen.getByPlaceholderText('3')).toHaveAccessibleDescription(/Scored steps need a max points value/i);
       expect(mockCreateTemplate).not.toHaveBeenCalled();
     });
 
@@ -192,7 +193,7 @@ describe('SkillTemplateBuilderPage', () => {
       const mainSaveButton = saveButtons[saveButtons.length - 1] as HTMLElement;
       await user.click(mainSaveButton);
 
-      expect(screen.getByText(/template name is required/i)).toBeInTheDocument();
+      expect(screen.getByLabelText(/^Template Name/)).toHaveAccessibleDescription(/Give the template a name/i);
     });
 
     it('should show validation errors when section name is empty', async () => {
@@ -622,7 +623,7 @@ describe('SkillTemplateBuilderPage', () => {
       await save(user);
 
       expect(mockCreateTemplate).not.toHaveBeenCalled();
-      expect(screen.getByText(/no step on this template earns any/i)).toBeInTheDocument();
+      expect(scoreEffect()).toHaveAccessibleDescription(/no step on this template earns any/i);
     });
 
     it('drops a penalty left behind when the step stops deducting', async () => {

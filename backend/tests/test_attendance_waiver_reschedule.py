@@ -25,7 +25,7 @@ from types import SimpleNamespace
 import pytest
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy import select
+from sqlalchemy import select, update
 
 from app.api.dependencies import get_current_user, get_request_enabled_modules
 from app.api.v1.api import api_router
@@ -41,6 +41,7 @@ from app.models.attendance_waiver import (
 from app.models.event import Event, EventRSVP, RSVPStatus
 from app.models.meeting import MeetingAttendee
 from app.models.notification import NotificationLog
+from app.models.training import TrainingRequirement
 from app.models.user import MemberLeaveOfAbsence
 from app.schemas.event import EventUpdate
 from app.services import attendance_waiver_service as engine
@@ -230,6 +231,62 @@ class TestTheMove:
         assert AttendanceWaiverAction.APPROVED in kinds
         assert AttendanceWaiverAction.RESCHEDULED in kinds
 
+    # Owner decision 2026-11-23: a move that keeps the local date, or a
+    # correction made once the session has been held, leaves a decision as it
+    # is; only the snapshot follows the event.
+    async def test_a_same_day_move_keeps_an_approval(self, db_session, dept, outbox):
+        request = await _submit(db_session, dept)
+        await _training(db_session).approve(dept.org, dept.officer, request.id)
+        outbox.clear()
+        before = await _notices(db_session, request.id, MEMBER_UPDATE_CATEGORY)
+        later = DRILL + timedelta(minutes=30)
+        await _move(db_session, dept, dept.drill, start=later)
+
+        row = await _row(db_session, request.id)
+        assert row.status == AttendanceWaiverStatus.APPROVED
+        assert row.decided_by == dept.ids["officer"]
+        assert row.reconfirm_requested_at is None
+        assert engine._utc(row.event_start_snapshot) == later
+        assert row.session_date == date(2030, 1, 10)
+        kinds = [a.action for a in await _actions(db_session, request.id)]
+        assert AttendanceWaiverAction.RESCHEDULED not in kinds
+        after = await _notices(db_session, request.id, MEMBER_UPDATE_CATEGORY)
+        assert len(after) == len(before)
+        assert outbox == []
+
+        # Running it again for the same move writes nothing (pitfall #36).
+        assert (
+            await engine.reconfirm_for_rescheduled_events(
+                db_session, dept.org, [dept.drill]
+            )
+            == []
+        )
+
+    async def test_a_correction_after_the_session_keeps_an_approval(
+        self, db_session, dept, monkeypatch
+    ):
+        request = await _submit(db_session, dept)
+        await _training(db_session).approve(dept.org, dept.officer, request.id)
+        monkeypatch.setattr(engine, "_now", lambda: DRILL + timedelta(days=2))
+        corrected = DRILL + timedelta(days=1)
+        await _move(db_session, dept, dept.drill, start=corrected)
+
+        row = await _row(db_session, request.id)
+        assert row.status == AttendanceWaiverStatus.APPROVED
+        assert row.reconfirm_requested_at is None
+        assert row.session_date == date(2030, 1, 11)
+        assert engine._utc(row.event_start_snapshot) == corrected
+
+    async def test_a_same_day_move_still_reopens_a_pending_request(
+        self, db_session, dept
+    ):
+        request = await _submit(db_session, dept)
+        await _move(db_session, dept, dept.drill, start=DRILL + timedelta(minutes=30))
+
+        row = await _row(db_session, request.id)
+        assert row.status == AttendanceWaiverStatus.PENDING
+        assert row.reconfirm_requested_at is not None
+
     async def test_a_denied_request_is_left_alone(self, db_session, dept):
         request = await _submit(db_session, dept)
         await _training(db_session).deny(dept.org, dept.officer, request.id)
@@ -400,6 +457,43 @@ class TestConfirm:
             await _training(db_session).confirm(dept.org, dept.member, request.id)
         assert (await _row(db_session, request.id)).reconfirm_requested_at
 
+    # 2026-11-20 review: confirming skipped the refusals a new request gets
+    # for a member exempt from training, or a session no longer counted.
+    async def test_an_exemption_since_the_request_refuses(self, db_session, dept):
+        request = await _submit(db_session, dept)
+        await _move(db_session, dept, dept.drill)
+        dept.member.compliance_exempt = True
+        await db_session.flush()
+        with pytest.raises(ValueError, match="exempt.*Withdraw"):
+            await _training(db_session).confirm(dept.org, dept.member, request.id)
+        assert (await _row(db_session, request.id)).reconfirm_requested_at
+
+    async def test_a_session_no_longer_counted_refuses(self, db_session, dept):
+        request = await _submit(db_session, dept)
+        await _move(db_session, dept, dept.drill)
+        await db_session.execute(
+            update(TrainingRequirement)
+            .where(TrainingRequirement.organization_id == dept.org)
+            .values(active=False)
+        )
+        await db_session.flush()
+        with pytest.raises(ValueError, match="does not count.*Withdraw"):
+            await _training(db_session).confirm(dept.org, dept.member, request.id)
+        assert (await _row(db_session, request.id)).reconfirm_requested_at
+
+    # 2026-11-20 review: a void left the flag set, so a voided row still read
+    # as waiting on the member (and stayed open on the reconfirm clock).
+    async def test_voiding_clears_the_wait(self, db_session, dept):
+        request = await _submit(db_session, dept)
+        await _move(db_session, dept, dept.drill)
+        assert (await _row(db_session, request.id)).reconfirm_requested_at
+        await engine.void_pending_for_events(
+            db_session, dept.org, [dept.drill], "cancelled"
+        )
+        voided = await _row(db_session, request.id)
+        assert voided.status == AttendanceWaiverStatus.VOIDED
+        assert voided.reconfirm_requested_at is None
+
     async def test_withdrawing_declines_it(self, db_session, dept):
         request = await _submit(db_session, dept)
         await _move(db_session, dept, dept.drill)
@@ -455,6 +549,18 @@ class TestMeetings:
         assert row.status == AttendanceWaiverStatus.PENDING
         assert row.reconfirm_requested_at is not None
 
+    async def test_a_same_day_move_leaves_the_waiver_on_the_minutes(
+        self, db_session, dept
+    ):
+        minutes, request = await self._approved(db_session, dept)
+        await _move(db_session, dept, dept.meeting, start=DRILL + timedelta(minutes=30))
+
+        attendee = await self._attendee(db_session, minutes, dept.ids["member"])
+        assert attendee.waiver_request_id == request.id
+        assert attendee.excused is True
+        row = await _row(db_session, request.id)
+        assert row.status == AttendanceWaiverStatus.APPROVED
+
     async def test_a_late_correction_gives_the_member_a_full_week(
         self, db_session, dept, monkeypatch
     ):
@@ -465,7 +571,14 @@ class TestMeetings:
         overdue when it was asked, and the next hourly sweep closed it as a
         missed meeting before the member could answer.
         """
-        minutes, request = await self._approved(db_session, dept)
+        # A pending request: an approved one on a held meeting keeps its
+        # decision since the owner decision of 2026-11-23.
+        await make_minutes_record(
+            db_session, dept.org, dept.ids["secretary"], event_id=dept.meeting
+        )
+        request = await _meetings(db_session).submit(
+            dept.org, dept.member, dept.meeting, None, None
+        )
         later = DRILL + timedelta(days=20)
         monkeypatch.setattr(engine, "_now", lambda: later)
 

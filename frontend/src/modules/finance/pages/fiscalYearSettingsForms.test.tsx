@@ -126,7 +126,9 @@ const refusal = (status: number, detail: string) => ({ response: { status, data:
 /** The field's accessible description, which is where its error is read out. */
 const expectFlagged = (control: HTMLElement, message: string) => {
   expect(control).toHaveAttribute('aria-invalid', 'true');
-  expect(control).toHaveAccessibleDescription(expect.stringContaining(message));
+  // A substring match, as expect.stringContaining was; jest-dom 8 types the
+  // argument as string | RegExp, so the message is escaped into a pattern.
+  expect(control).toHaveAccessibleDescription(new RegExp(message.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
 };
 
 beforeEach(() => {
@@ -288,7 +290,7 @@ describe('the budget category dialog', () => {
 
     const access = within(dialog).getByRole('combobox', { name: 'Who can charge these lines' });
     await waitFor(() => expect(access).toHaveAttribute('aria-invalid', 'true'));
-    expect(access).toHaveAccessibleDescription(expect.stringContaining('Choose who can charge these lines.'));
+    expect(access).toHaveAccessibleDescription(/Choose who can charge these lines\./);
     expect(access).toHaveFocus();
     expect(within(dialog).queryByRole('alert')).not.toBeInTheDocument();
   });

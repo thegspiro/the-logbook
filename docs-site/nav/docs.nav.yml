@@ -1,0 +1,9 @@
+# Staged as build/content/docs/.nav.yml by build.sh. docs/training is its own
+# top-level tab, so it is left out of this one.
+nav:
+  - README.md
+  - "*.md"
+  - Deployment by platform: deployment
+  - Security policies: policies
+  - Security testing: security
+  - Change history: changelog

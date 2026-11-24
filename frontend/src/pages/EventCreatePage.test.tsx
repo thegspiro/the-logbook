@@ -413,7 +413,7 @@ describe('EventCreatePage templates', () => {
       name: 'CPR Renewal — Two-year recertification (Training)',
     });
     expect(await picker()).toHaveAccessibleDescription(
-      'Pick a template to pre-fill common settings, or start blank. A Training template opens the step-by-step form and fills its training details.'
+      'Pick a template to pre-fill common settings, or start blank. A Training template opens the step-by-step form and fills its training details, links and completion settings.'
     );
     fireEvent.change(await picker(), { target: { value: (option as HTMLOptionElement).value } });
 

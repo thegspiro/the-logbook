@@ -12,6 +12,7 @@
 import type { EventTemplateTrainingDetails, EventTrainingDetails, EventTrainingDetailsUpdate } from '../../types/event';
 import type { TrainingCourse, TrainingType } from '../../types/training';
 import type { TrainingSessionResponse } from '../../services/api';
+import type { TrainingLinkageData } from '../../hooks/useTrainingLinkageData';
 import { TRAINING_TYPE_LABELS } from '../../constants/enums';
 import { localToUTC } from '../../utils/dateFormatting';
 import { blankToNull, numberOrNull } from '../../utils/formValues';
@@ -462,16 +463,18 @@ export const toUpdatePayload = (
 });
 
 /**
- * The training details a Training template saves (owner decision
- * 2026-11-20): the course, training type, credit hours and their source, lead
- * instructor and certification settings, and nothing else. Category, program,
- * requirement, attendance links and the completion settings are not carried.
+ * The training details a Training template saves: the course, training type,
+ * credit hours and their source, lead instructor and certification settings
+ * (owner decision 2026-11-20), and since 2026-11-23 the category, program and
+ * phase, the requirement link, Counts toward attendance and the completion and
+ * sign-off settings.
  *
  * The backend's EventTemplateTrainingDetails (schemas/event.py) settles the
  * same shape and is the authority: this builds the request the same way, and
  * must not refuse anything that accepts. 'course' hours keep the figure the
  * form holds, so the template can still be saved, and applied, without the
- * Course Library.
+ * Course Library. The approval deadline goes only with sign-off, as the
+ * backend settles it, so the default is sent without.
  */
 export const toTemplateTrainingDetails = (value: TrainingDetailsForm): EventTemplateTrainingDetails => {
   const hours = value.credit_hours_source === 'duration' ? undefined : toNumber(value.credit_hours);
@@ -489,8 +492,22 @@ export const toTemplateTrainingDetails = (value: TrainingDetailsForm): EventTemp
     certification_number_prefix: value.issues_certification ? value.certification_number_prefix.trim() || null : null,
     issuing_agency: value.issues_certification ? value.issuing_agency.trim() || null : null,
     expiration_months: value.issues_certification ? (toNumber(value.expiration_months) ?? null) : null,
+    category_id: value.category_id || null,
+    program_id: value.program_id || null,
+    phase_id: value.phase_id || null,
+    requirement_id: value.requirement_id || null,
+    attendance_requirement_ids: [...new Set(value.attendance_requirement_ids)],
+    counts_toward_certification: value.counts_toward_certification,
+    auto_create_records: value.auto_create_records,
+    require_completion_confirmation: value.require_completion_confirmation,
+    approval_deadline_days: value.require_completion_confirmation
+      ? (toNumber(value.approval_deadline_days) ?? DEFAULT_APPROVAL_DEADLINE_DAYS)
+      : DEFAULT_APPROVAL_DEADLINE_DAYS,
   };
 };
+
+/** The backend's default sign-off deadline (`TrainingSessionAttach`). */
+const DEFAULT_APPROVAL_DEADLINE_DAYS = 7;
 
 const COURSE_MODES: readonly CourseMode[] = ['none', 'library', 'oneoff'];
 const HOURS_SOURCES: readonly CreditHoursSource[] = ['duration', 'course', 'manual'];
@@ -503,6 +520,8 @@ const HOURS_SOURCES: readonly CreditHoursSource[] = ['duration', 'course', 'manu
  */
 export const fromTemplateTrainingDetails = (details: EventTemplateTrainingDetails): TrainingDetailsForm => {
   const mode = COURSE_MODES.includes(details.course_mode) ? details.course_mode : 'none';
+  const signOff = details.require_completion_confirmation === true;
+  const deadline = details.approval_deadline_days;
   const source = HOURS_SOURCES.includes(details.credit_hours_source) ? details.credit_hours_source : 'duration';
   const hours = typeof details.credit_hours === 'number' ? String(details.credit_hours) : '';
   const issues = details.issues_certification === true;
@@ -525,6 +544,19 @@ export const fromTemplateTrainingDetails = (details: EventTemplateTrainingDetail
     certification_number_prefix: issues ? (details.certification_number_prefix ?? '') : '',
     issuing_agency: issues ? (details.issuing_agency ?? '') : '',
     expiration_months: issues && details.expiration_months ? String(details.expiration_months) : '',
+    // Absent from a template saved before 2026-11-23: the session defaults.
+    category_id: details.category_id ?? '',
+    program_id: details.program_id ?? '',
+    phase_id: details.phase_id ?? '',
+    requirement_id: details.requirement_id ?? '',
+    attendance_requirement_ids: Array.isArray(details.attendance_requirement_ids)
+      ? details.attendance_requirement_ids.filter((id): id is string => typeof id === 'string')
+      : [],
+    counts_toward_certification: details.counts_toward_certification !== false,
+    auto_create_records: details.auto_create_records !== false,
+    require_completion_confirmation: signOff,
+    approval_deadline_days:
+      signOff && typeof deadline === 'number' ? String(deadline) : DEFAULT_TRAINING_DETAILS.approval_deadline_days,
   };
 };
 
@@ -532,6 +564,98 @@ export const TEMPLATE_COURSE_GONE_NOTE =
   "This template's course is no longer in the Course Library, so the session starts on No course yet.";
 export const TEMPLATE_INSTRUCTOR_GONE_NOTE =
   "This template's lead instructor is no longer a current member, so Lead instructor starts empty.";
+export const TEMPLATE_CATEGORY_GONE_NOTE = "This template's category is no longer offered, so Category starts empty.";
+export const TEMPLATE_PROGRAM_GONE_NOTE =
+  "This template's program is no longer active, so Program and Phase start empty.";
+export const TEMPLATE_PHASE_GONE_NOTE = "This template's phase is no longer in its program, so Phase starts empty.";
+export const TEMPLATE_REQUIREMENT_GONE_NOTE =
+  "This template's requirement is no longer active, so Requirement starts empty.";
+export const templateAttendanceGoneNote = (count: number): string =>
+  count === 1
+    ? "One of this template's Counts toward attendance requirements is no longer active, so it is left unticked."
+    : `${count} of this template's Counts toward attendance requirements are no longer active, so they are left unticked.`;
+
+/**
+ * What the department still offers, for the links a template names: active
+ * categories, active programs, the template program's phases and active
+ * requirements. A list left undefined failed to load and is skipped.
+ */
+export interface TemplateLinkageLists {
+  categories?: readonly { id: string }[] | undefined;
+  programs?: readonly { id: string }[] | undefined;
+  /** The phases of the template's program. */
+  phases?: readonly { id: string }[] | undefined;
+  requirements?: readonly { id: string }[] | undefined;
+}
+
+const listed = (list: readonly { id: string }[], id: string): boolean => list.some((item) => item.id === id);
+
+/**
+ * The lists `useTrainingLinkageData` loaded for *programId*, each left
+ * undefined unless its request succeeded: a failed load is empty, and taking
+ * it as "nothing is offered" would drop every link a template names.
+ */
+export const templateLinkageLists = (data: TrainingLinkageData, programId: string): TemplateLinkageLists => {
+  const loaded = data.loaded;
+  if (!loaded) return {};
+  return {
+    categories: loaded.categories ? data.categories : undefined,
+    programs: loaded.programs ? data.programs : undefined,
+    phases: programId && loaded.phasesFor === programId ? data.phases : undefined,
+    requirements: loaded.requirements ? data.requirements : undefined,
+  };
+};
+
+/**
+ * The links a template names, checked against what is still offered (owner
+ * decision 2026-11-23). None carries a foreign key, so a category or
+ * requirement can be deactivated, a program retired and a phase removed
+ * after the template was saved; each is dropped with a note rather than
+ * sent to a create that would refuse it. Only a link still as seeded is
+ * touched, as for the course.
+ */
+const reconcileTemplateLinks = (
+  value: TrainingDetailsForm,
+  seeded: TrainingDetailsForm,
+  lists: TemplateLinkageLists
+): { value: TrainingDetailsForm; notes: string[] } => {
+  let next = value;
+  const notes: string[] = [];
+  const untouched = (key: 'category_id' | 'program_id' | 'phase_id' | 'requirement_id') =>
+    seeded[key] !== '' && value[key] === seeded[key];
+
+  if (lists.categories && untouched('category_id') && !listed(lists.categories, value.category_id)) {
+    next = { ...next, category_id: '' };
+    notes.push(TEMPLATE_CATEGORY_GONE_NOTE);
+  }
+  let programGone = false;
+  if (lists.programs && untouched('program_id') && !listed(lists.programs, value.program_id)) {
+    programGone = true;
+    next = { ...next, program_id: '', ...(untouched('phase_id') ? { phase_id: '' } : {}) };
+    notes.push(TEMPLATE_PROGRAM_GONE_NOTE);
+  }
+  if (!programGone && lists.phases && untouched('phase_id') && !listed(lists.phases, value.phase_id)) {
+    next = { ...next, phase_id: '' };
+    notes.push(TEMPLATE_PHASE_GONE_NOTE);
+  }
+  if (lists.requirements && untouched('requirement_id') && !listed(lists.requirements, value.requirement_id)) {
+    next = { ...next, requirement_id: '' };
+    notes.push(TEMPLATE_REQUIREMENT_GONE_NOTE);
+  }
+  const attendanceUntouched =
+    value.attendance_requirement_ids.length === seeded.attendance_requirement_ids.length &&
+    value.attendance_requirement_ids.every((id, i) => id === seeded.attendance_requirement_ids[i]);
+  if (lists.requirements && attendanceUntouched) {
+    const requirements = lists.requirements;
+    const kept = value.attendance_requirement_ids.filter((id) => listed(requirements, id));
+    const dropped = value.attendance_requirement_ids.length - kept.length;
+    if (dropped > 0) {
+      next = { ...next, attendance_requirement_ids: kept };
+      notes.push(templateAttendanceGoneNote(dropped));
+    }
+  }
+  return { value: next, notes };
+};
 
 /**
  * A template's training details checked against the Course Library and the
@@ -544,9 +668,12 @@ export const TEMPLATE_INSTRUCTOR_GONE_NOTE =
  * - a listed course whose hours follow it gets its current figure, or follows
  *   the event's length if it has none;
  * - an instructor who names no current member is cleared, with a note; a
- *   current one's name is refreshed. A name with no member id is kept.
+ *   current one's name is refreshed. A name with no member id is kept;
+ * - a category, program, phase or requirement no longer offered is dropped,
+ *   with a note (`linkage`, see reconcileTemplateLinks).
  *
- * `courses` or `members` undefined means that list failed to load: that part
+ * `courses`, `members` or a `linkage` list undefined means that list failed
+ * to load: that part
  * is skipped, so a network blip never drops the template's choice (event
  * create still refuses a former instructor, under Lead instructor).
  *
@@ -558,7 +685,8 @@ export const reconcileTemplateTraining = (
   value: TrainingDetailsForm,
   seeded: TrainingDetailsForm,
   courses: readonly TrainingCourse[] | undefined,
-  members: readonly InstructorOption[] | undefined
+  members: readonly InstructorOption[] | undefined,
+  linkage: TemplateLinkageLists = {}
 ): { value: TrainingDetailsForm; notes: string[] } => {
   let next = value;
   const notes: string[] = [];
@@ -603,7 +731,8 @@ export const reconcileTemplateTraining = (
       next = { ...next, instructor: member.name };
     }
   }
-  return { value: next, notes };
+  const links = reconcileTemplateLinks(next, seeded, linkage);
+  return { value: links.value, notes: [...notes, ...links.notes] };
 };
 
 /**

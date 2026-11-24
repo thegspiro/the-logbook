@@ -594,10 +594,17 @@ async def get_my_training_summary(
     # renew ASAP" for a department that switched certification status off.
     # The requirement still reports itself as unmet, with its progress bar, so
     # what the member loses is the reason rather than the fact.
+    # ``expiry_date`` goes with them: it is the date the card reads as
+    # "Expired (Mar 14, 2026)" or "On file (Expires ...)", which is the
+    # certification status by another name. The explicit flag tells the card
+    # the status was withheld, so it shows the bare count rather than reading
+    # a withheld date as "Not recorded".
     if not is_officer and not visibility.get("show_certification_status", True):
         for detail in requirements_detail + optional_detail:
             detail.pop("cert_expired", None)
             detail.pop("blocks_activity", None)
+            detail.pop("expiry_date", None)
+            detail["certification_status_hidden"] = True
 
     # The *summary* (an average compliance percentage) is the core stat and
     # always goes back. The per-requirement breakdown is what

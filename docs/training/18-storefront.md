@@ -134,6 +134,10 @@ that is not an email address, is named under its own field, and a list at the
 top (**Fix these before saving the settings**) links to each. Nothing is saved
 until all of them are fixed. Leaving the page with unsaved changes asks first.
 
+![Store Settings after Save settings with a sales tax of 150: the list Fix these before saving the settings at the top of the form, linking to Sales tax (%) with the range it accepts](./images/18-09-store-settings-fix-these.png)
+
+![The Pricing and delivery section of Store Settings with Sales tax (%) at 150, flagged with the range it accepts: a percentage from 0 to 100, or empty for no tax](./images/18-10-store-settings-tax-flagged.png)
+
 ### Identity
 
 The **Storefront** section holds:
