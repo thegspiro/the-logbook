@@ -133,6 +133,17 @@ export const DEMO_MFA_GRACE_CREDENTIALS = {
 };
 
 /**
+ * A member whose leave is in progress today, for "Your leave" on Leave
+ * Requests. Shots marked `auth: "onleave"` sign in as this account. Must
+ * match BACKLOG_01_LEAVE_MEMBER in seed_demo_data.py, whose
+ * seed_backlog_01_leave_badges dates his leaves from today on every seed.
+ */
+export const DEMO_ON_LEAVE_CREDENTIALS = {
+  username: "rduarte",
+  password: "DemoMember!2026",
+};
+
+/**
  * A firefighter who runs a shift: its Shift Officer, without
  * scheduling.manage, which every officer rank in the demo holds. Shots marked
  * `auth: "shiftofficer"` sign in as this account. Must match
@@ -1849,6 +1860,160 @@ async function rawApiFromPage(page, method, path, body) {
 // sign-offs for their own length, and their cleanup puts the setting back --
 // held here because a cleanup receives only its page.
 let practicalSkillsRestore = null;
+
+// Leave requests are opt-in, and switching them on adds Leave Requests to the
+// sidebar of every page, so the demo keeps them off and the four leave-request
+// shots switch them on for their own length. The settings are the
+// administrator's to change, so a shot signed in as a member does it through
+// lookupPage. Held here because a cleanup receives only its page.
+let leaveRequestsRestore = null;
+
+function withLeaveRequestsOn(prepare) {
+  return async (page, helpers) => {
+    const admin = await helpers.lookupPage();
+    const current = await apiFromPage(
+      admin,
+      "GET",
+      "/users/leaves-of-absence/settings",
+    );
+    if (current.status !== 200) {
+      throw new Error(`reading the leave settings returned ${current.status}`);
+    }
+    if (!current.body.requests_enabled) {
+      const { available_positions: _positions, ...settings } = current.body;
+      const switched = await apiFromPage(
+        admin,
+        "PUT",
+        "/users/leaves-of-absence/settings",
+        { ...settings, requests_enabled: true },
+      );
+      if (switched.status !== 200) {
+        throw new Error(
+          `turning leave requests on returned ${switched.status}`,
+        );
+      }
+      leaveRequestsRestore = { admin, settings };
+      // The page read the setting when it mounted.
+      await page.reload({ waitUntil: "domcontentloaded" });
+      await page.waitForTimeout(1_500);
+    }
+    if (prepare) await prepare(page, helpers);
+  };
+}
+
+async function restoreLeaveRequests() {
+  const held = leaveRequestsRestore;
+  leaveRequestsRestore = null;
+  if (!held) return;
+  const restored = await apiFromPage(
+    held.admin,
+    "PUT",
+    "/users/leaves-of-absence/settings",
+    held.settings,
+  );
+  if (restored.status !== 200) {
+    throw new Error(
+      `turning leave requests off again returned ${restored.status}`,
+    );
+  }
+}
+
+/**
+ * Answer My Training's summary with the real response, changed by `edit`.
+ * The requirement cards are the live component; only the requirements they
+ * are given differ. Used where the state pictured would otherwise need new
+ * requirements seeded department-wide, which would add columns to the
+ * compliance matrix and rows to every requirement list other shots picture.
+ */
+function routeMyTrainingSummary(edit) {
+  return async (page) => {
+    await page.route(
+      /\/api\/v1\/training\/module-config\/my-training(\?.*)?$/,
+      async (route) => {
+        const response = await route.fetch();
+        const body = await response.json();
+        await route.fulfill({ response, json: edit(body) });
+      },
+    );
+  };
+}
+
+/** A requirement card's fields that every mocked card shares. */
+function mockRequirement(fields) {
+  return {
+    description: "",
+    days_until_due: null,
+    due_date: null,
+    waived_months: 0,
+    blocks_activity: false,
+    ...fields,
+  };
+}
+
+/**
+ * A leave request filed by a member in their own session, for the length of
+ * one shot. A pending request puts Leave Requests, with a count, in the
+ * sidebar of every officer who decides leave and of the member, whether
+ * requests are switched on or not, so none is left pending between shots:
+ * each shot files the one it pictures and withdraws it in cleanup, before
+ * requests are switched off again. `page` signed in as the member already is
+ * used as it is; otherwise the member signs in in a context of their own.
+ */
+let leaveRequestFiled = null;
+
+async function fileLeaveRequest(page, credentials, body) {
+  let memberPage = page;
+  let context = null;
+  if (!credentials.samePage) {
+    context = await page.context().browser().newContext();
+    memberPage = await context.newPage();
+    await memberPage.goto(new URL("/login", page.url()).toString(), {
+      waitUntil: "domcontentloaded",
+    });
+    if ((await passwordSignIn(memberPage, credentials)) !== "in") {
+      throw new Error(`${credentials.username} did not sign in`);
+    }
+  }
+  const filed = await rawApiFromPage(
+    memberPage,
+    "POST",
+    "/users/leave-requests",
+    body,
+  );
+  if (filed.status !== 201 && filed.status !== 200) {
+    throw new Error(`filing the leave request returned ${filed.status}`);
+  }
+  leaveRequestFiled = { memberPage, context, id: filed.body.id };
+  return filed.body;
+}
+
+async function withdrawLeaveRequest() {
+  const filed = leaveRequestFiled;
+  leaveRequestFiled = null;
+  if (!filed) return;
+  try {
+    const withdrawn = await rawApiFromPage(
+      filed.memberPage,
+      "POST",
+      `/users/leave-requests/${filed.id}/withdraw`,
+      {},
+    );
+    if (withdrawn.status !== 200) {
+      throw new Error(
+        `withdrawing the leave request returned ${withdrawn.status}`,
+      );
+    }
+  } finally {
+    if (filed.context) await filed.context.close();
+  }
+}
+
+/** A calendar date this many days from today, in the department's zone. */
+function departmentDate(days) {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/New_York",
+  }).format(new Date(Date.now() + days * 86_400_000));
+}
 
 /** Store Settings with a sales tax over 100 typed and saved: refused, unsaved. */
 async function flagStoreTaxRate(page) {
@@ -9524,6 +9689,196 @@ export const SHOTS = [
 
   // ── 02 Training ─────────────────────────────────────────────────────
   {
+    // A new profile typed in, not saved: priority 10, the same as Line
+    // Officers, so the tie warning shows, with one requirement ticked under
+    // Required and another under Optional. Cancel discards it.
+    id: "08-124-profile-priority-tie-warning",
+    doc: "08-admin-reports.md",
+    line: 2773,
+    anchor: "__placed-by-hand-08-124__",
+    alt: "A new compliance profile being filled in: Priority 10 with the amber warning that Line Officers also has priority 10 and which profile grades a member who matches both, and the Required and Optional requirement lists with one ticked in each",
+    route: "/training/compliance-config?tab=profiles",
+    viewport: { width: 1440, height: 2600 },
+    expect: "also has priority 10",
+    selector: "div.card:has(#compliance-priority)",
+    prepare: async (page) => {
+      await page
+        .getByRole("button", { name: "Add Profile" })
+        .first()
+        .click({ timeout: 20_000 });
+      await page.locator("#compliance-profile-name").fill("Drivers");
+      await page.locator("#compliance-priority").fill("10");
+      const pick = async (list, name) => {
+        await page
+          .locator(`div:has(> label:text-is('${list}'))`)
+          .locator("label")
+          .filter({ hasText: name })
+          .first()
+          .locator("input[type='checkbox']")
+          .check();
+      };
+      await pick(
+        "Required Training Requirements",
+        "Annual Minimum Training Hours",
+      );
+      await pick("Optional Requirements", "CPR Certification Current");
+      await page.getByText("also has priority 10").waitFor();
+      await page.mouse.move(0, 0);
+      await page.waitForTimeout(400);
+    },
+    cleanup: async (page) => {
+      await page
+        .locator("div.card:has(#compliance-priority)")
+        .getByRole("button", { name: "Cancel" })
+        .click();
+    },
+  },
+  {
+    // Nothing is created: the officer starter is chosen and the dialog is
+    // left open with no rank ticked, so Create and open builder is greyed.
+    id: "02-147-evaluation-officer-starter",
+    doc: "02-training.md",
+    line: 5720,
+    anchor: "__placed-by-hand-02-147__",
+    alt: "The New template dialog with Annual Evaluation with Officer Sections chosen as the starter: the Officer ranks tick boxes, none ticked yet, and Create and open builder greyed out until one is",
+    route: "/reports/evaluations",
+    viewport: { width: 1440, height: 1800 },
+    expect: "Officer ranks",
+    selector: '[data-testid="modal-panel"]',
+    prepare: async (page) => {
+      await page
+        .getByRole("button", { name: "New template", exact: true })
+        .first()
+        .click({ timeout: 20_000 });
+      await page
+        .locator("#template-starter")
+        .selectOption({ label: "Annual Evaluation with Officer Sections" });
+      await page.getByText("Officer ranks", { exact: true }).waitFor();
+      await page.mouse.move(0, 0);
+      await page.waitForTimeout(500);
+    },
+    cleanup: async (page) => {
+      await page.keyboard.press("Escape");
+      const discard = page.getByRole("button", { name: "Discard changes" });
+      if (await discard.count()) await discard.click();
+    },
+  },
+  {
+    // The demo member's own hours requirement: the monthly average leads,
+    // the total sits beneath it. Real data, no mock.
+    id: "02-148-requirement-card-hours-average",
+    doc: "02-training.md",
+    line: 210,
+    anchor: "__placed-by-hand-02-148__",
+    alt: "An hours requirement card on My Training: Annual Minimum Training Hours leading with the monthly average against the monthly pace needed, the total in hours on the line beneath, and its progress bar",
+    route: "/training/my-training",
+    auth: "member",
+    expect: "hrs/mo avg",
+    selector: "div.card:has-text('hrs/mo avg')",
+  },
+  {
+    // Three certification requirements in their three states. Mocked: the
+    // demo department has one certification requirement, and seeding two more
+    // would add them to every requirement list and matrix other shots show.
+    id: "02-149-requirement-card-certification-states",
+    doc: "02-training.md",
+    line: 222,
+    anchor: "__placed-by-hand-02-149__",
+    alt: "Three certification requirement cards on My Training: Expired with the date it lapsed and Expired — Renew ASAP, Not recorded with its No certification on file warning, and On file with the date it expires",
+    route: "/training/my-training",
+    auth: "member",
+    expect: "Not recorded",
+    selector: "div.card-secondary:has(h2:text-is('Training Requirements'))",
+    beforeNavigate: routeMyTrainingSummary((body) => {
+      const today = new Date();
+      const iso = (days) =>
+        new Date(today.getTime() + days * 86_400_000)
+          .toISOString()
+          .slice(0, 10);
+      return {
+        ...body,
+        leaves_of_absence: [],
+        requirements_detail: [
+          mockRequirement({
+            id: "mock-cert-on-file",
+            name: "CPR / BLS Provider",
+            requirement_type: "certification",
+            frequency: "biennial",
+            required_hours: 1,
+            completed_hours: 1,
+            progress_percentage: 100,
+            is_met: true,
+            expiry_date: iso(410),
+          }),
+          mockRequirement({
+            id: "mock-cert-expired",
+            name: "Hazmat Operations",
+            requirement_type: "certification",
+            frequency: "annual",
+            required_hours: 1,
+            completed_hours: 0,
+            progress_percentage: 0,
+            is_met: false,
+            cert_expired: true,
+            blocks_activity: true,
+            expiry_date: iso(-23),
+          }),
+          mockRequirement({
+            id: "mock-cert-missing",
+            name: "Driver Operator — Pumper",
+            requirement_type: "certification",
+            frequency: "one_time",
+            required_hours: 1,
+            completed_hours: 0,
+            progress_percentage: 0,
+            is_met: false,
+            blocks_activity: true,
+            expiry_date: null,
+          }),
+        ],
+        optional_requirements_detail: [],
+      };
+    }),
+  },
+  {
+    // The Optional group, with one optional requirement met and one not.
+    // Mocked: no seeded compliance profile lists optional requirements.
+    id: "02-150-optional-requirements-group",
+    doc: "02-training.md",
+    line: 229,
+    anchor: "__placed-by-hand-02-150__",
+    alt: "The Optional group under Training Requirements on My Training: the line saying the department lists these and they do not count toward compliance, and two cards with the Optional badge, one complete and one reading Not required for compliance",
+    route: "/training/my-training",
+    auth: "member",
+    expect: "Not required for compliance",
+    selector: "div.mt-4:has(> h3:text-is('Optional'))",
+    beforeNavigate: routeMyTrainingSummary((body) => ({
+      ...body,
+      optional_requirements_detail: [
+        mockRequirement({
+          id: "mock-optional-open",
+          name: "Rope Rescue Awareness",
+          requirement_type: "courses",
+          frequency: "one_time",
+          required_hours: 1,
+          completed_hours: 0,
+          progress_percentage: 0,
+          is_met: false,
+        }),
+        mockRequirement({
+          id: "mock-optional-met",
+          name: "Wildland Fire Behavior (S-190)",
+          requirement_type: "courses",
+          frequency: "one_time",
+          required_hours: 1,
+          completed_hours: 1,
+          progress_percentage: 100,
+          is_met: true,
+        }),
+      ],
+    })),
+  },
+  {
     // This year's review for Ingrid Solberg (seed_backlog_02_evaluations),
     // drafted on the template version with a calibration step, which shows
     // Assign while pending. The dialog is opened and nothing is chosen.
@@ -14461,14 +14816,149 @@ export const SHOTS = [
     // Schedule event action, a next step and a part-done checklist. Viewport,
     // not full page: the drawer is fixed to the viewport, and a full-page
     // capture would photograph the page scrolled behind it.
-    id: "04-99-event-request-drawer",
+    id: "04-102-event-request-page",
     doc: "04-events-meetings.md",
-    line: 2357,
-    anchor: "A request in progress open in the drawer",
-    alt: "A request in progress open in the drawer: the Schedule event, Email requester and More buttons under its title, the next step, and a part-done checklist",
+    line: 2994,
+    anchor: "An outreach request on its own page",
+    alt: "An outreach request on its own page: All requests above the title, the Schedule event, Email requester and More buttons, the next step, and a part-done checklist",
     route: "/events/admin?tab=requests",
     expect: "Next:",
     prepare: clickByName(/^Maple Street HOA/),
+  },
+  {
+    // The pre-K tour's close-out (seed_backlog_04_outreach_closeout): note,
+    // Engine 1, two materials and photos taken with consent. Both this and
+    // 04-107 answer one placeholder, which was replaced by hand, since
+    // apply_placeholders fills one image per placeholder.
+    id: "04-106-outreach-closeout",
+    doc: "04-events-meetings.md",
+    line: 3236,
+    anchor: "the **How it went** card on an outreach",
+    alt: "The How it went card on the pre-K station tour: the outcome note, Engine 1 ticked under Apparatus that attended, two materials handed out with their counts, and Photos taken, with the host's consent chosen",
+    route: "/events",
+    expect: "Apparatus that attended",
+    allowEmptyState:
+      '"No photos were taken" is one of the Photos choices, not an empty card.',
+    selector: "section[aria-labelledby='event-closeout-heading']",
+    prepare: async (page, helpers) => {
+      await openFirstFromApi(
+        "/events?limit=500",
+        (id) => `/events/${id}`,
+        "events",
+        (event) => event.title === "Pre-K station tour",
+      )(page, helpers);
+      await page
+        .locator("section[aria-labelledby='event-closeout-heading']")
+        .getByText("Junior firefighter helmets")
+        .or(
+          page
+            .locator("section[aria-labelledby='event-closeout-heading'] input")
+            .first(),
+        )
+        .first()
+        .waitFor({ timeout: 20_000 });
+      await page.waitForTimeout(500);
+    },
+  },
+  {
+    id: "04-107-materials-handed-out",
+    doc: "04-events-meetings.md",
+    line: 3237,
+    anchor: "**Materials handed out** card on",
+    alt: "The Materials handed out card on Outreach Impact for this year: each item recorded at an event's close-out with the total handed out",
+    route: "/events/admin?tab=community",
+    expect: "Materials handed out",
+    selector: "section[aria-labelledby='ce-materials-heading']",
+  },
+  {
+    // The seeder's own outreach event, made directly with no request behind
+    // it, its sheet three of five filled (seed_backlog_04_volunteer_staffing).
+    id: "04-105-event-volunteer-staffing",
+    doc: "04-events-meetings.md",
+    line: 3080,
+    anchor:
+      "**Volunteer staffing** card on an outreach event with an open sheet",
+    alt: "The Volunteer staffing card on an outreach event created directly: 3 of 5 signed up, each role with how many it needs and has, and the members who signed up with the role each took",
+    route: "/events",
+    expect: "3 of 5 signed up",
+    selector: "section[aria-labelledby='event-staffing-heading']",
+    prepare: openFirstFromApi(
+      "/events?limit=500",
+      (id) => `/events/${id}`,
+      "events",
+      (event) => event.title === "Library fire safety story hour",
+    ),
+  },
+  {
+    // Two types carry a role preset (seed_backlog_04_type_role_preset):
+    // Station Tour shows its summary, and Fire Safety Demo is opened for
+    // editing so Add a role, Clear preset and Save roles are on screen. Clear
+    // preset only renders on a type that has a preset. Opened, never saved.
+    id: "04-104-type-role-preset",
+    doc: "04-events-meetings.md",
+    line: 2862,
+    anchor: "with one type reading",
+    alt: "Event settings, Public Requests, Types & roles: Station Tour reading Usually needs 2 × Tour Guide, 1 × Greeter, and Fire Safety Demo open for editing with its Demonstrator and Educator rows, Add a role, Cancel, Clear preset and Save roles",
+    route: "/events/admin?tab=settings",
+    expect: "Usually needs 2 × Tour Guide, 1 × Greeter",
+    allowEmptyState:
+      '"No role preset" labels the types that have none, beside the two that do.',
+    selector:
+      "div.space-y-6:has(> div > h2:text-is('Request Types')) > div.space-y-2",
+    prepare: async (page) => {
+      const nav = page.getByRole("navigation", {
+        name: "Event settings sections",
+      });
+      await nav
+        .getByRole("button", { name: /^Public Requests/ })
+        .first()
+        .click({ timeout: 20_000 });
+      await page
+        .getByRole("button", { name: /^Types & roles/ })
+        .first()
+        .click({ timeout: 15_000 });
+      await page
+        .getByRole("button", {
+          name: "Edit the roles a Fire Safety Demo usually needs",
+        })
+        .click({ timeout: 15_000 });
+      await page
+        .getByRole("button", { name: "Clear preset" })
+        .waitFor({ timeout: 10_000 });
+      await page.mouse.move(0, 0);
+      await page.waitForTimeout(400);
+    },
+  },
+  {
+    // A phone request typed in, with no email: the confirmation box is
+    // unticked and greyed because it has nowhere to send. Never saved; the
+    // cleanup discards it. Tall enough that the panel shows from How it came
+    // in to the confirmation box without scrolling.
+    id: "04-103-new-request-dialog",
+    doc: "04-events-meetings.md",
+    line: 3041,
+    anchor: "dialog with **How it came in** set",
+    alt: "The New request dialog with How it came in set to Phone call, a requester name and phone filled in and no email, so Email the requester a confirmation is unticked and greyed with the line Needs an email address",
+    route: "/events/admin?tab=requests",
+    viewport: { width: 1440, height: 2200 },
+    expect: "Needs an email address",
+    selector: '[data-testid="modal-panel"]',
+    prepare: async (page) => {
+      await page
+        .getByRole("button", { name: "New request", exact: true })
+        .first()
+        .click({ timeout: 20_000 });
+      await page.locator("#new-request-source").selectOption("phone");
+      await page.locator("#new-request-name").fill("Marisol Vega");
+      await page.locator("#new-request-phone").fill("(703) 555-0182");
+      await page.mouse.move(0, 0);
+      await page.waitForTimeout(400);
+    },
+    cleanup: async (page) => {
+      await page.keyboard.press("Escape");
+      const discard = page.getByRole("button", { name: "Discard changes" });
+      if (await discard.count()) await discard.click();
+    },
   },
   {
     // The outreach report on its default period, This year. The seeder's
@@ -28435,6 +28925,146 @@ export const SHOTS = [
       await page.waitForTimeout(500);
     },
     selector: "div.card:has(> div > h2:text-is('Leave of Absence'))",
+  },
+  {
+    // Bram Hollis's request, filed in his own session for this shot and
+    // withdrawn in cleanup. The box is opened and nothing is typed or sent.
+    id: "01-59-leave-request-ask-question",
+    doc: "01-membership.md",
+    line: 2440,
+    anchor: "`01-59-leave-request-ask-question.png`",
+    alt: "Leave Requests as an approver: Bram Hollis's request under To decide with Ask a question open, the Your question to the member box and Send question",
+    route: "/members/leave-requests",
+    expect: "Your question to the member",
+    selector:
+      "section[aria-labelledby='to-decide-heading'] li:has-text('Bram Hollis')",
+    cleanup: async () => {
+      try {
+        await withdrawLeaveRequest();
+      } finally {
+        await restoreLeaveRequests();
+      }
+    },
+    prepare: withLeaveRequestsOn(async (page) => {
+      await fileLeaveRequest(
+        page,
+        { username: "bhollis", password: "DemoMember!2026" },
+        {
+          leave_type: "personal",
+          start_date: departmentDate(30),
+          end_date: departmentDate(37),
+          reason: "Family wedding out of state.",
+        },
+      );
+      await page.reload({ waitUntil: "domcontentloaded" });
+      const card = page
+        .locator("section[aria-labelledby='to-decide-heading'] li")
+        .filter({ hasText: "Bram Hollis" });
+      await card
+        .getByRole("button", { name: "Ask a question" })
+        .click({ timeout: 20_000 });
+      await card.getByText("Your question to the member").waitFor();
+      await page.mouse.move(0, 0);
+      await page.waitForTimeout(400);
+    }),
+  },
+  {
+    // The second member's request, filed for this shot, with the
+    // administrator's changed dates waiting on their answer. Neither button
+    // is pressed; cleanup withdraws it.
+    id: "01-60-leave-request-changed-dates",
+    doc: "01-membership.md",
+    line: 2443,
+    anchor: "`01-60-leave-request-changed-dates.png`",
+    alt: "A member's own leave request with the approver's changed dates proposed, the note explaining them, and Accept these dates and Keep my dates",
+    route: "/members/leave-requests",
+    auth: "second-member",
+    expect: "Accept these dates",
+    selector: "li:has(button:text-is('Accept these dates'))",
+    prepare: withLeaveRequestsOn(async (page, { lookupPage }) => {
+      const filed = await fileLeaveRequest(
+        page,
+        { samePage: true },
+        {
+          leave_type: "leave_of_absence",
+          start_date: departmentDate(60),
+          end_date: departmentDate(69),
+          reason: "Visiting family abroad.",
+        },
+      );
+      const proposed = await apiFromPage(
+        await lookupPage(),
+        "POST",
+        `/users/leave-requests/${filed.id}/changes`,
+        {
+          start_date: departmentDate(62),
+          end_date: departmentDate(69),
+          note: "Starting two days later keeps the weekend crew covered.",
+        },
+      );
+      if (proposed.status !== 200) {
+        throw new Error(`proposing changed dates returned ${proposed.status}`);
+      }
+      await page.reload({ waitUntil: "domcontentloaded" });
+      await page
+        .getByRole("button", { name: "Accept these dates" })
+        .waitFor({ timeout: 20_000 });
+    }),
+    cleanup: async () => {
+      try {
+        await withdrawLeaveRequest();
+      } finally {
+        await restoreLeaveRequests();
+      }
+    },
+  },
+  {
+    // Rafael Duarte, whose leave is in progress. A first day back is typed
+    // and End my leave is not pressed, so the leave keeps its dates.
+    id: "01-61-leave-back-early",
+    doc: "01-membership.md",
+    line: 2445,
+    anchor: "`01-61-leave-back-early.png`",
+    alt: "Your leave on Leave Requests for a member whose leave is in progress: its dates, I’m back early opened to Your first day back filled in three days from now, and End my leave",
+    route: "/members/leave-requests",
+    auth: "onleave",
+    expect: "Your first day back",
+    selector: "section[aria-labelledby='current-leave-heading']",
+    cleanup: restoreLeaveRequests,
+    prepare: withLeaveRequestsOn(async (page) => {
+      const day = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000);
+      // The department's calendar day, not the machine's.
+      const iso = new Intl.DateTimeFormat("en-CA", {
+        timeZone: "America/New_York",
+      }).format(day);
+      await page
+        .getByRole("button", { name: "I’m back early" })
+        .first()
+        .click({ timeout: 20_000 });
+      const field = page.locator("input[id^='first-day-back-']").first();
+      await field.waitFor({ timeout: 10_000 });
+      await field.fill(iso);
+      await field.blur();
+      await page.waitForTimeout(400);
+    }),
+  },
+  {
+    id: "01-62-leave-escalation-setting",
+    doc: "01-membership.md",
+    line: 2446,
+    anchor: "`01-62-leave-escalation-setting.png`",
+    alt: "Members Admin, Settings, Leave of Absence with leave requests on: the approver positions, how they decide, and Tell the Chief about a request still undecided after this many days set to 21",
+    route: "/members/admin/settings/leave",
+    viewport: { width: 1440, height: 1700 },
+    expect: { selector: "#leave-escalation-days" },
+    cleanup: restoreLeaveRequests,
+    prepare: withLeaveRequestsOn(async (page) => {
+      await page.locator("#leave-escalation-days").waitFor({ timeout: 20_000 });
+      const value = await page.locator("#leave-escalation-days").inputValue();
+      if (value !== "21") {
+        throw new Error(`the escalation is ${value} days, not the 21 pictured`);
+      }
+    }),
   },
   {
     id: "01-58-member-class-status",

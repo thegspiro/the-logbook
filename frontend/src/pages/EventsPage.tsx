@@ -285,6 +285,10 @@ export const EventsPage: React.FC = () => {
   const navigate = useNavigate();
   const { checkPermission } = useAuthStore();
   const canManage = checkPermission('events.manage');
+  // Drafts are asked for by anyone who may see some: an events manager sees
+  // every draft, a training manager Training drafts (the server decides
+  // which, draft_visibility.py).
+  const seesDrafts = canManage || checkPermission('training.manage');
   const tz = useTimezone();
 
   // Fetch event templates on mount for quick-create dropdown
@@ -390,7 +394,7 @@ export const EventsPage: React.FC = () => {
           const data = await eventService.getEvents({
             start_after: range.start,
             start_before: range.end,
-            include_drafts: canManage,
+            include_drafts: seesDrafts,
             limit: 500,
           });
           const end = new Date(range.end).getTime();
@@ -398,8 +402,8 @@ export const EventsPage: React.FC = () => {
           return;
         }
         const params = showPastEvents
-          ? { end_before: new Date().toISOString(), include_drafts: canManage }
-          : { end_after: new Date().toISOString(), include_drafts: canManage };
+          ? { end_before: new Date().toISOString(), include_drafts: seesDrafts }
+          : { end_after: new Date().toISOString(), include_drafts: seesDrafts };
         const data = await eventService.getEvents(params);
         setEvents(data);
       } catch (err: unknown) {
@@ -415,7 +419,7 @@ export const EventsPage: React.FC = () => {
         if (!background) setLoading(false);
       }
     },
-    [showPastEvents, canManage, nextThirtyDays, tz]
+    [showPastEvents, seesDrafts, nextThirtyDays, tz]
   );
 
   /** Upcoming, Past and the chip's clear all leave the dashboard's window. */

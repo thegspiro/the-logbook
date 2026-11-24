@@ -997,13 +997,15 @@ department's location list and another event already has it at that time,
 saving is refused. The message names up to three of the clashing events.
 Choose another room or time.
 
-**Drafts.** A draft is visible only to officers who can manage events. When it
+**Drafts.** A draft is visible only to officers who can manage events, and,
+_(2026-11-23)_ for a Training event, to training managers. When it
 is ready, open it and select **Publish**. Editing and saving a draft keeps it a
 draft; before 2026-10-26 the edit form did not know the event was a draft, and
 saving it published it. _(2026-11-15)_ Nobody can check in to a draft, by QR
 code, NFC tag, kiosk or self check-in, and its QR code does not work until it
 is published. Its folder and training session stay hidden from anyone who
-cannot manage events.
+cannot see the draft, and the training calendar leaves it out for them too.
+Only an officer who can manage events can publish it.
 
 _(2026-11-15)_ Nobody can check in to a draft: a QR scan, an NFC tap and a
 kiosk all refuse it with "Cannot check in to an unpublished event", and its QR
@@ -2901,11 +2903,7 @@ scheduling and communication.
      request of that type, or for an outreach event you created yourself; you
      can still change the roles before opening the sheet.
 
-   > **Screenshot needed** (`04-104-type-role-preset.png`): **Types & roles**
-   > with one type reading "Usually needs 2 × Tour Guide, 1 × Greeter" and
-   > another open for editing, showing **Add a role**, **Clear preset** and
-   > **Save roles**.
-
+   ![Event settings, Public Requests, Types & roles: Station Tour reading Usually needs 2 × Tour Guide, 1 × Greeter, and Fire Safety Demo open for editing with its Demonstrator and Educator rows, Add a role, Cancel, Clear preset and Save roles](./images/04-104-type-role-preset.png)
 4. Under **Handling** (**Request Handling**), set:
    - **Default Coordinator** — the member assigned every new request. The
      list shows each member's rank by name ("Jordan Avery — Firefighter").
@@ -3038,11 +3036,7 @@ On the request's page you can also:
    the requester gave no email, **Contact** reads **No email given**, and
    **Email requester** offers their phone number instead.
 
-![A request in progress open in the drawer: the Schedule event, Email requester and More buttons under its title, the next step, and a part-done checklist](./images/04-99-event-request-drawer.png)
-
-> **Screenshot needed** (`04-102-event-request-page.png`, replacing the drawer
-> above): the request on its own page, with **All requests** above the title, the **Schedule event**, **Email
-> requester** and **More** buttons, the next step and a part-done checklist.
+![An outreach request on its own page: All requests above the title, the Schedule event, Email requester and More buttons, the next step, and a part-done checklist](./images/04-102-event-request-page.png)
 
 > **Send the requester their status link yourself.** Neither the confirmation
 > screen nor the default acknowledgement email gives the requester the status
@@ -3089,10 +3083,7 @@ How it differs from a public submission:
   requester** is refused. The coordinator's own emails still go. Call them,
   or copy the status link and send it another way.
 
-> **Screenshot needed** (`04-103-new-request-dialog.png`): the **New request**
-> dialog with **How it came in** set
-> to Phone call, a name and phone filled in, and the confirmation box
-> unticked because no email was given.
+![The New request dialog with How it came in set to Phone call, a requester name and phone filled in and no email, so Email the requester a confirmation is unticked and greyed with the line Needs an email address](./images/04-103-new-request-dialog.png)
 
 ### Volunteers for an outreach event you created yourself _(2026-11-21)_
 
@@ -3129,9 +3120,7 @@ is on Open Shifts.
   **Cancel Entire Series** and deleting a series do the same for every
   occurrence that had a sheet _(2026-11-21)_.
 
-> **Screenshot needed** (`04-105-event-volunteer-staffing.png`): the
-> **Volunteer staffing** card on an outreach event with an open sheet: "3 of 5 signed up", each role's count and the names of
-> the members who signed up.
+![The Volunteer staffing card on an outreach event created directly: 3 of 5 signed up, each role with how many it needs and has, and the members who signed up with the role each took](./images/04-105-event-volunteer-staffing.png)
 
 ### The CRR Catalogue
 
@@ -3387,11 +3376,9 @@ you chose, in its own card under the figures, and **Export CSV** gains three
 columns: **Materials handed out**, **Photos** and **Outcome**. The printed
 summary does not include them.
 
-> **Screenshot needed** (`04-106-outreach-closeout.png` and
-> `04-107-materials-handed-out.png`): the **How it went** card on an outreach
-> event, with an outcome note, one apparatus ticked, two materials and **Photos taken, with
-> the host's consent** chosen; and the **Materials handed out** card on
-> Outreach Impact.
+![The How it went card on the pre-K station tour: the outcome note, Engine 1 ticked under Apparatus that attended, two materials handed out with their counts, and Photos taken, with the host's consent chosen](./images/04-106-outreach-closeout.png)
+
+![The Materials handed out card on Outreach Impact for this year: each item recorded at an event's close-out with the total handed out](./images/04-107-materials-handed-out.png)
 
 #### Feedback from requesters
 

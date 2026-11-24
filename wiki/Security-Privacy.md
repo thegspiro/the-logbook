@@ -70,20 +70,22 @@ Departments must keep operational history long after a member departs, but
 nothing requires keeping the _person_ attached to it. Anonymization separates
 the two.
 
-| Scrubbed                                                                                                                                                                                | Retained                                                        |
-| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
-| Names, username, email (replaced with per-member tokens), phone, mobile, address, date of birth, photo                                                                                  | Training completions, certifications, instructor qualifications |
-| Emergency contacts, notification preferences, referral/interest free text                                                                                                               | Attendance counts, service hours, shift assignments             |
-| Credentials, MFA secret and backup codes, OAuth linkage, password-reset and calendar-feed tokens                                                                                        | Property custody, checkouts, departure clearance                |
-| Sessions and password history (rows deleted)                                                                                                                                            | Dues and financial records                                      |
-| Body measurements / size preferences (rows deleted)                                                                                                                                     | Screening status and dates, as compliance proof                 |
-| Medical screening content — results, notes, provider name                                                                                                                               | Leave types and date ranges (compliance denominators)           |
-| Free-text reasons on leaves, training waivers, shift time-off, meeting waivers                                                                                                          | Meeting attendance (present/excused)                            |
-| RSVP dietary restrictions, accessibility needs, notes                                                                                                                                   | RSVP attendance and check-in times                              |
-| Duplicated identity copies in external-provider mappings; candidate photos                                                                                                              | Candidate names on ballots (official election records)          |
-| The applicant-era prospect record: PII block, notes, interviews, documents, activity-log values and step notes; its public status token is rotated                                      | Pipeline stage history                                          |
-| Certificate files uploaded with self-reported training, and their copies on the member's training records (the submission and record rows stay; a file another row still names is kept) |                                                                 |
-| Files uploaded to the member's training records themselves, by an officer or the member _(2026-11-20)_ (the record rows stay; a file another row still names is kept)                   |                                                                 |
+| Scrubbed                                                                                                                                                                                | Retained                                                                                         |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| Names, username, email (replaced with per-member tokens), phone, mobile, address, date of birth, photo                                                                                  | Training completions, certifications, instructor qualifications                                  |
+| Emergency contacts, notification preferences, referral/interest free text                                                                                                               | Attendance counts, service hours, shift assignments                                              |
+| Credentials, MFA secret and backup codes, OAuth linkage, password-reset and calendar-feed tokens                                                                                        | Property custody, checkouts, departure clearance                                                 |
+| Sessions and password history (rows deleted)                                                                                                                                            | Dues and financial records                                                                       |
+| Body measurements / size preferences (rows deleted)                                                                                                                                     | Screening status and dates, as compliance proof                                                  |
+| Medical screening content — results, notes, provider name                                                                                                                               | Leave types and date ranges (compliance denominators)                                            |
+| Free-text reasons on leaves, training waivers, shift time-off, meeting waivers                                                                                                          | Meeting attendance (present/excused)                                                             |
+| RSVP dietary restrictions, accessibility needs, notes                                                                                                                                   | RSVP attendance and check-in times                                                               |
+| Duplicated identity copies in external-provider mappings; candidate photos                                                                                                              | Candidate names on ballots (official election records)                                           |
+| The applicant-era prospect record: PII block, notes, interviews, documents, activity-log values and step notes; its public status token is rotated                                      | Pipeline stage history                                                                           |
+| Certificate files uploaded with self-reported training, and their copies on the member's training records (the submission and record rows stay; a file another row still names is kept) |                                                                                                  |
+| Files uploaded to the member's training records themselves, by an officer or the member _(2026-11-20)_ (the record rows stay; a file another row still names is kept)                   |                                                                                                  |
+| The home address and stated reason for leaving on the member's separation letters _(2026-11-23)_                                                                                        | The letters themselves, with the property list and values (what is owed for unreturned property) |
+| The member's personal Member Files folder, its sub-folders and documents, files included _(2026-11-23)_ (a file another row still names is kept)                                        |                                                                                                  |
 
 **Never touched:**
 
@@ -96,6 +98,13 @@ the two.
 
 Preconditions: the member must already be departed (soft-deleted, or in a
 dropped/archived status). Deactivate or archive first.
+
+A **permanent delete** treats stored Documents the same way _(2026-11-23,
+LIFE-11)_: separation letters are redacted and kept, and the personal Member
+Files folder is deleted. A personal document that cannot be deleted (one
+catalogued in History, or a receipt a submitted finance record relies on)
+refuses the anonymisation (400) or the delete (409) with nothing changed;
+remove it from that record first.
 
 > Because the org-scoped unique indexes on username, email, and membership
 > number forbid a constant placeholder, each anonymized member receives a

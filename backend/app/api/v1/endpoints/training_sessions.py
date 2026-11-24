@@ -21,10 +21,11 @@ from app.api.dependencies import (
     require_permission,
     user_has_permission,
 )
+from app.api.draft_visibility import can_see_draft_of_type, event_visible_clause
 from app.core.audit import log_audit_event
 from app.core.database import get_db
 from app.core.utils import safe_error_detail
-from app.models.event import Event, EventType
+from app.models.event import Event
 from app.models.training import TrainingApproval, TrainingSession
 from app.models.user import User
 from app.schemas.training_session import (
@@ -292,10 +293,9 @@ async def get_training_session_by_event(
     if not training_session:
         return None
 
-    # A draft event's session is hidden from a non-organizer, as the event
-    # itself is (ADV-5): the same null an event with no session answers. A
-    # training manager administers every Training event, drafts included, so
-    # a Training draft's session is theirs to read too.
+    # A draft event's session is hidden from a caller who may not see the
+    # draft (draft_visibility), as the event itself is (ADV-5): the same null an
+    # event with no session answers. The type is read only for a draft.
     if not user_has_permission(current_user, "events.manage"):
         in_org = (
             Event.id == str(event_id),
@@ -305,12 +305,10 @@ async def get_training_session_by_event(
             await db.execute(select(Event.is_draft).where(*in_org))
         ).scalar_one_or_none()
         if is_draft:
-            if not user_has_permission(current_user, "training.manage"):
-                return None
             event_type = (
                 await db.execute(select(Event.event_type).where(*in_org))
             ).scalar_one_or_none()
-            if event_type != EventType.TRAINING:
+            if not can_see_draft_of_type(event_type, current_user):
                 return None
 
     return await _session_payload(service, training_session)
@@ -778,6 +776,9 @@ async def list_training_sessions_calendar(
     but can be filtered by hall coordinators via the events endpoint's
     `exclude_event_types=training` parameter.
 
+    A draft event's session is listed only to a caller who may see the draft:
+    `events.manage`, or `training.manage` for a Training event.
+
     **Authentication required**
     """
     query = (
@@ -787,6 +788,11 @@ async def list_training_sessions_calendar(
         .where(Event.is_cancelled == False)  # noqa: E712
         .options(selectinload(TrainingSession.event))
     )
+    # A draft's title and time are for those who may see the draft itself
+    # (owner decision 2026-11-23), the same rule GET /events/{id} applies.
+    visible = event_visible_clause(current_user)
+    if visible is not None:
+        query = query.where(visible)
 
     if start_after:
         query = query.where(Event.start_datetime >= start_after)

@@ -146,6 +146,10 @@ async def paypal_inbound_webhook(
             "match_status": event.status.value if event.status else None,
             "matched_order_id": event.matched_order_id,
         },
+        # No acting user to infer it from: without this the record is
+        # missing from the department's own audit views (same fix as
+        # zeffy_webhook.py's own log_audit_event call).
+        organization_id=str(integration.organization_id),
     )
 
     return {
