@@ -485,6 +485,10 @@ ROUTES_OPEN_BY_DESIGN = {
         "Locations stand-in when Facilities is off"
     ),
     "/apparatus-basic": "the stand-in served when Apparatus is off",
+    "/embed/history/:token": (
+        "the History widget, framed on the department's own website with no "
+        "session; the API it reads checks the History module itself"
+    ),
 }
 
 
