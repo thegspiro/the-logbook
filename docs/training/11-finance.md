@@ -1116,6 +1116,7 @@ The request now links to the report, and the report links back. Once the report 
 ### Editing and Cancelling
 
 - **Editing:** A purchase request can only be edited while in **Draft** or **Submitted** status. Once it reaches Pending Approval, it cannot be modified.
+- **What the edit form shows** _(2026-11-22)_: **Fiscal Year** and **Budget** open on the year and budget line the request was saved with, once their lists have loaded. Before 2026-11-22 the **Budget** picker on a linked request read **No budget linked**, though the link was kept and saving did not remove it. If someone "fixed" that by choosing a line, check the request is on the line it should be.
 - **Cancelling:** A request can be cancelled from any status except **Paid** or **Reimbursed**. If an approved, ordered, or received request is cancelled, the encumbrance is released back to the budget.
 
 ### Edge Cases
@@ -2282,6 +2283,7 @@ work differently from what they may say.
   category deletes its budgets, or that a category cannot be switched off.
 - **Older QuickBooks exports may differ for evening payments.** Exports once
   used the server's date rather than the department's.
+- **Editing a request no longer shows No budget linked** _(2026-11-22)_. An older recording may show **No budget linked** on a request that had a line; the form now shows the line the request is on.
 - **At one time nobody could approve anything**, because no position held
   approval rights. The Treasurer position now has them.
 

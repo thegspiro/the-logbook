@@ -1,5 +1,39 @@
 # Screenshot currency
 
+## Queued by the November 22 – 23 documentation pass
+
+Source: [CHANGE_AUDIT_2026-11](../CHANGE_AUDIT_2026-11.md#change-audit-november-22--23-2026).
+Nothing was captured by this pass. Numbers continue after the ids the open
+November 21 – 22 pass (#4568) reserves; check them against `images/` before
+saving.
+
+| Guide | Screen | Action |
+| --- | --- | --- |
+| 02 | Evaluation **Review history** card below **Last review**, three entries on two forms, each with its grade | Create `02-163-evaluation-review-history` |
+| 02 | The self-evaluation comparison card with two **Far apart** items | Create `02-164-evaluation-self-comparison` |
+| 02 | A Goals item being written: two goals with target dates and **Add a goal** | Create `02-165-evaluation-goals-list` |
+| 02 | `02-146-evaluation-period-results` (queued by #4568) | Widen the request: also show **Download signed PDFs** and **Grades by evaluator** |
+| 02 | `02-145-evaluation-last-review` (queued by #4568) | Widen the request: show a goal with its **Target:** date |
+| 02 | `02-66-compliance-matrix`: a certification cell now reads **On file** / **Expired** / **Not recorded** with its date | **Replace**; update the caption and the manifest text ("Nothing on file", "No date on record") |
+| 02 | `02-65-print-compliance`: certification columns print a short expiry under the mark, and the key has a new line | **Replace** |
+| 04 | An outreach event's page as an ordinary member: the **Volunteer** card with two roles, the "What would you like to do?" menu and **Sign me up** | Create `04-109-event-volunteer-signup` |
+| 04 | Page 2 of circulated (unapproved) minutes as a PDF: DRAFT across the page, the report number in the header | Create `04-110-minutes-pdf-draft` |
+| 04 | `04-105-event-volunteer-staffing` (queued by an earlier pass) | Widen the request: include **Email the Membership**, **Last sent** and the organizer's own **Sign me up** |
+| 08 | A report on the Reports page with **Add signature lines to PDF** ticked beside CSV and PDF | Create `08-125-report-signature-lines` |
+| 08 | The last page of that PDF: Prepared by / Reviewed by / Approved by lines | Create `08-126-report-pdf-signature-block` |
+| 01 | **Leave Requests → Calendar**: a month with a recorded leave, a "(requested)" entry, a "… covers …" stand-in, and the key | Create `01-68-leave-calendar` |
+| 01 | **Export leave records** card with From, To and **Download CSV** | Create `01-69-leave-export` |
+| 01 | Approver cover with "You decide leave requests and you are on leave …" and **Use these dates** | Create `01-70-leave-cover-prompt` |
+| 18 | Window form with Opens and Closes filled and both "… automatically at the scheduled time" boxes ticked | Create `18-10-window-auto-open-close` |
+| 18 | Status changes row with **Preview** and **Cancellation**, the cancellation email open | Create `18-11-preview-cancellation` |
+| 18 | `18-04-my-orders-unpaid`: the Zelle handle was clipped at its card's edge (#4573) | **Replace** |
+| 19 | `19-07-member-payment-method` | Check for the same clipping |
+| 14 | The emailed ballot: #4562 added a mocked `/elections/ballot/lookup` fixture, so it can now be captured with fake data | Optional `14-35-emailed-ballot`; if captured, drop guide 14's note on why there is no picture |
+| 07 | `07-06-form-builder`: the "One submission per person" box now sits beside its label's first line (#4574) | Check |
+| wiki | `Module-Training`'s "[SCREENSHOT NEEDED]" for the Compliance Matrix print page | When captured, show the expiry dates |
+
+**Made wrong by this range:** `02-66`, `02-65`, `18-04`.
+
 ## Queued by the November 21 – 22 documentation pass
 
 Source: [CHANGE_AUDIT_2026-11](../CHANGE_AUDIT_2026-11.md#change-audit-november-21--22-2026).

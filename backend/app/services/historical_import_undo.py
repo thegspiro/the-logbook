@@ -1086,7 +1086,8 @@ class HistoricalImportUndoService:
 
     async def _forget_created_members(self, record: HistoricalImport) -> None:
         """Point decisions that named a removed member back at "create", so a
-        recommit makes them again instead of failing on a missing member."""
+        recommit makes them again instead of failing on a missing member, with
+        the name the reviewer typed when the import created them."""
         stored = (
             record.member_mappings if isinstance(record.member_mappings, dict) else {}
         )
@@ -1116,7 +1117,14 @@ class HistoricalImportUndoService:
                 and value.get("action") == "map"
                 and str(value.get("user_id")) not in present
             ):
-                changed[key] = {"action": "create"}
+                changed[key] = {
+                    "action": "create",
+                    **{
+                        field: value[field]
+                        for field in ("first_name", "last_name")
+                        if value.get(field)
+                    },
+                }
         record.member_mappings = changed
 
 

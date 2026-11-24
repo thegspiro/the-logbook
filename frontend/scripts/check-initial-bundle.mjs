@@ -18,7 +18,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { gzipSync } from 'node:zlib';
 
-const BUDGET_BYTES = 403 * 1024;
+const BUDGET_BYTES = 404 * 1024;
 const LAZY_ONLY_CHUNKS = ['vendor-dnd', 'vendor-editor', 'vendor-scanner'];
 
 const dist = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'dist');

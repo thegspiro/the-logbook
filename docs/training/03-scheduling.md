@@ -533,6 +533,14 @@ your schedule."_
 2. Select **Sign Up** on a shift.
 3. Choose the **Position**, then select **Confirm Sign Up**.
 
+**An outreach sheet asks for a role, not a seat** _(2026-11-22)_. Opening an
+outreach sheet from the calendar shows "Sign yourself up for this outreach
+event": pick the role you will do (tour guide, educator) and sign up. It
+replaces the per-seat **Sign myself up** the panel used to offer, which the
+server refused because it named no role. The same control is on the event's
+own page. See the events guide,
+[Signing up to volunteer at an outreach event](./04-events-meetings.md#signing-up-to-volunteer-at-an-outreach-event-2026-11-22).
+
 You see **Signed up for shift**, and the shift appears on **My Shifts**,
 where you can confirm it.
 
@@ -1275,6 +1283,11 @@ confirm.
 ## Shift Swap Requests
 
 A swap starts from the shift you are giving up.
+
+**A swap on an outreach sheet moves the RSVP too** _(2026-11-23)_. When the
+shift is a volunteer role at an outreach event, the member who takes the seat
+becomes the event's RSVP and the member who gave it up is taken off, so the
+event's volunteer list matches the roster.
 
 1. Go to **My Shifts** and stay on **Upcoming**. The **Swap** button only
    appears on shifts that have not happened yet.
@@ -2619,6 +2632,14 @@ the same on both. See
 > For full details on leave adjustments, see
 > [Membership > Leave of Absence](./01-membership.md#leave-of-absence) and
 > [Training > Compliance Matrix](./02-training.md#compliance-matrix).
+
+**Who is away this month** _(2026-11-22)_. Officers who manage leave can see
+the whole department's leave on one month's calendar: **Leave Requests →
+Calendar** shows who is on recorded leave and whose request is still waiting
+(marked **(requested)**), which is worth checking before you build next
+month's schedule. **Export leave records** under it downloads the same records
+as a CSV. See
+[Membership > Leave of Absence](./01-membership.md#leave-of-absence).
 
 ---
 
@@ -5050,6 +5071,12 @@ so a wrong click no longer means discarding the draft and its other decisions.
 A match of 90% or more is joined without asking and has nothing to undo.
 
 ![A draft import's Shifts tab: the proposed E-1 shift on August 7, a 75% match for the shift already on the schedule, answered Add to that shift and now reading "You chose to add these members to that shift." with an Undo link](./images/03-139-history-import-existing-undo.png)
+
+**Every outside-agency entry on the Shifts tab** _(2026-11-22)_. Rows on
+another agency's unit are listed under **Outside-agency hours** at the bottom
+of the **Shifts** tab, 50 to a page, with page buttons once there are more
+than 50. Before, the list stopped at the first 200 and sent you to the
+**Rows** tab for the rest.
 
 **Remembered decisions.** Departments usually import over several files from the
 same old system. Once an import is committed, its member, unit and position

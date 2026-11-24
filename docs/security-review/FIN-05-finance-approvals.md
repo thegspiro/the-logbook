@@ -1,8 +1,96 @@
 # Security Review 05 — Finance & Approvals
 
-**Prefix:** `FIN` · **Iteration:** 05 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-05 (pass 7), 2026-10-12 (pass 8), 2026-10-14 (pass 9, [#3225](https://github.com/thegspiro/the-logbook/pull/3225)), 2026-10-18 (pass 10), 2026-10-22 (pass 11), 2026-10-25 (pass 12), 2026-10-28 (pass 13), 2026-10-31 (pass 14), 2026-11-04 (pass 15), 2026-11-18 (pass 16) · **PR:** [#1809](https://github.com/thegspiro/the-logbook/pull/1809) (pass 1)
+**Prefix:** `FIN` · **Iteration:** 05 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-05 (pass 7), 2026-10-12 (pass 8), 2026-10-14 (pass 9, [#3225](https://github.com/thegspiro/the-logbook/pull/3225)), 2026-10-18 (pass 10), 2026-10-22 (pass 11), 2026-10-25 (pass 12), 2026-10-28 (pass 13), 2026-10-31 (pass 14), 2026-11-04 (pass 15), 2026-11-18 (pass 16), 2026-11-24 (pass 17) · **PR:** [#1809](https://github.com/thegspiro/the-logbook/pull/1809) (pass 1)
 
 ---
+
+## Pass 17 (2026-11-24) — backend byte-identical to pass 16; frontend-only touch-target/reflow polish and two correctness fixes (former-member approver labeling, a stale-select data-binding bug) — 0 fixed, 0 new findings
+
+**Watchdog pickup.** The dedicated `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) remains unreachable (`ListAgents`, "No
+reachable agents"). A fresh `list_pull_requests` (state `open`) returned no
+`claude/security-review-*` head; PR #4654 (Feature 04, Storefront &
+payments, pass 17) had just merged (`6eacdd048`). Row 05 was the next `⬜`
+row.
+
+**Branch-name deviation**, as every watchdog-run pass this lap has recorded:
+this session's environment restricts pushes to its own assigned branch,
+`claude/friendly-babbage-2isqey`, rather than a freely-chosen
+`claude/security-review-finance-approvals` name.
+
+**Baseline:** `2f46fb26f` (PR #4430's merge, pass 16's own head). 1169
+commits since then.
+
+**Backend: zero delta, confirmed by `git diff --numstat`, not a stat count
+of zero.** Every tracked backend file — `finance.py`, `finance_service.py`,
+`public/finance_approvals.py`, `quickbooks_online.py`,
+`quickbooks_online_client.py`, `quickbooks_sync_service.py`, `models/
+finance.py`, `schemas/finance.py`, `finance_second_approval.py`,
+`finance_approval_notifications.py`, `finance_budget_request_notifications.py`,
+`finance_approver_matching.py`, `finance_budget_request_service.py` —
+produces an empty diff against the baseline. A sweep for any unclaimed new
+finance/quickbooks/budget/dues/advance/expense/approval-named file added
+anywhere in the tree in that window (`git diff --diff-filter=A`) found none.
+Route count re-enumerated by AST: **150 routes** in `finance.py`, unchanged
+from pass 16.
+
+**Frontend: 19 files changed under `modules/finance/`, all read.** Two are
+real behavior changes, both correctness fixes with no security effect; the
+rest are the repo-wide reflow/touch-target polish already reviewed
+generically in other features' passes this lap (wrapping a cell's value and
+sub-line in one `min-w-0` div per Pitfall #39, touch-target spacing).
+
+- **`useApproverOptions.ts` / `ApprovalStepDialog.tsx`** — the approver
+  picker now marks a former member `former: !isActiveAccount(u.status)`
+  (correctly using Pitfall #32's mechanism, not a literal status check) and
+  the dialog filters former members out of new selections while keeping a
+  step's already-named former member visible, labeled "(former member)".
+  This is cosmetic only: it changes who the dropdown **offers**, not who the
+  backend **accepts** — `authorize_step_actor`/`may_reach_step`
+  (`finance_approver_matching.py`, re-confirmed unchanged this pass) already
+  re-derive `_is_active_member_of` server-side on every approve/deny call,
+  independent of what the picker showed when the step was configured.
+- **`PurchaseRequestFormPage.tsx`** — the fiscal-year and budget `<select>`
+  elements are now explicitly `value`-controlled. Before, `reset()` on edit
+  wrote the saved value into a select whose options had not loaded yet, the
+  browser silently fell back to the first option, and nothing re-wrote the
+  correct value once the real options arrived — the same class of bug
+  CLAUDE.md Pitfall #38 documents being caught by
+  `finance-purchase-request-draft.spec.ts`. A data-correctness bug (a
+  request could silently save against the wrong fiscal year or budget line),
+  not an authorization or tenancy issue — the fiscal year/budget options
+  themselves are still the caller's own org's list, unchanged.
+
+**Standing items — re-confirmed, not re-asserted.** FIN-30 (LOW,
+`list_dues_payments` unbounded) remains the owner's 2026-10-05 "leave as is"
+decision in `KNOWN_LIMITATIONS.md`, re-checked: `finance_service.py`'s
+`list_dues_payments` is unchanged. FIN8-05-1 (budget-request decide
+separation-of-duties) is resolved (`KNOWN_LIMITATIONS.md`, 2026-10-26) and
+`decide_request`'s guard is still present, unchanged. No code change this
+pass, so no new guard test.
+
+**0 fixed, 0 new findings.**
+
+### Completion gate (pass 17)
+
+| Check                                                                                                                                                     | Result                                                                      |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/` (CI's pin, 7.5.0)                                                                                                           | ✅ 0 violations                                                             |
+| `black --check app/ tests/ alembic/` (CI's pin, 26.10.1)                                                                                                  | ✅ 3491 files unchanged                                                     |
+| `isort --check-only app/ tests/ alembic/` (9.0.2, matches CI)                                                                                             | ✅ clean                                                                    |
+| `python3 scripts/validate_migrations.py --strict`                                                                                                         | ✅ 835 revisions, single head `07abf8e6553b`                                |
+| `python3 scripts/check_route_permissions.py --strict`                                                                                                     | ✅ 339 routes, 0 errors, 0 warnings                                         |
+| `docs/DATABASE_SCHEMA.md` vs generator                                                                                                                    | ✅ already current                                                          |
+| `pytest tests/ -q -k "finance or approval or quickbooks"` (under `/usr/bin/python3.13`, the interpreter with the backend's actual dependencies installed) | ✅ 796 passed, 1 pre-existing environment-only skip (`pywebpush`), 0 failed |
+| `cd frontend && npm run typecheck`                                                                                                                        | ✅ 0 errors                                                                 |
+| `cd frontend && npm run lint`                                                                                                                             | ✅ 0 errors, 0 warnings                                                     |
+
+**Sandbox note:** this session's bare `flake8`/`black` on `$PATH` resolved to
+versions older than CI's pins (`uv tool`-installed 7.4.1/26.5.1 vs. CI's
+7.5.0/26.10.1); reinstalled at the pinned versions with `uv tool install
+--force` before running, per the lesson pass 00's own sandbox note already
+recorded (checking the other two linters pass is never evidence about the
+third).
 
 ## Pass 16 (2026-11-18) — real delta: live QuickBooks Online connection (new, ~2,200 L across 3 files), the approve/deny permission model moved into the service layer, budget-request drafts, cash-advance statements, dual-approval second-approver notices — 0 fixed, 0 new findings; scope correction to the tracker
 

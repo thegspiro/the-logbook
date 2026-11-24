@@ -1,6 +1,6 @@
 # Security Review 06 — Elections & Ballots
 
-**Prefix:** `ELEC` · **Iteration:** 06 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-05 (pass 7), 2026-10-12 (pass 8), 2026-10-14 (pass 9), 2026-10-18 (pass 10), 2026-10-22 (pass 11), 2026-10-25 (pass 12), 2026-10-28 (pass 13), 2026-11-01 (pass 14), 2026-11-05 (pass 15), 2026-11-19 (pass 16) · **PR:** [#1810](https://github.com/thegspiro/the-logbook/pull/1810) (pass 1), [#1948](https://github.com/thegspiro/the-logbook/pull/1948) (pass 2), [#2162](https://github.com/thegspiro/the-logbook/pull/2162) (pass 3, rounds 1-6, merged before round 7's fix was ready — see [#2173](https://github.com/thegspiro/the-logbook/pull/2173)), [#2173](https://github.com/thegspiro/the-logbook/pull/2173) (pass 3, round 7), [#2400](https://github.com/thegspiro/the-logbook/pull/2400) (pass 4), [#2546](https://github.com/thegspiro/the-logbook/pull/2546) (pass 5), [#2600](https://github.com/thegspiro/the-logbook/pull/2600) (pass 6 — corrected here from the "(this PR)" placeholder pass 6's own write-up left unresolved after merge), [#2947](https://github.com/thegspiro/the-logbook/pull/2947) (pass 7), [#3142](https://github.com/thegspiro/the-logbook/pull/3142) (pass 8), [#3248](https://github.com/thegspiro/the-logbook/pull/3248) (pass 9), pass 10 ([#3404](https://github.com/thegspiro/the-logbook/pull/3404)), pass 11 ([#3564](https://github.com/thegspiro/the-logbook/pull/3564)), pass 12 ([#3691](https://github.com/thegspiro/the-logbook/pull/3691)), pass 13 ([#3809](https://github.com/thegspiro/the-logbook/pull/3809)), pass 14 ([#3904](https://github.com/thegspiro/the-logbook/pull/3904)), pass 15 ([#4052](https://github.com/thegspiro/the-logbook/pull/4052)), pass 16 (this PR)
+**Prefix:** `ELEC` · **Iteration:** 06 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-05 (pass 7), 2026-10-12 (pass 8), 2026-10-14 (pass 9), 2026-10-18 (pass 10), 2026-10-22 (pass 11), 2026-10-25 (pass 12), 2026-10-28 (pass 13), 2026-11-01 (pass 14), 2026-11-05 (pass 15), 2026-11-19 (pass 16), 2026-11-24 (pass 17) · **PR:** [#1810](https://github.com/thegspiro/the-logbook/pull/1810) (pass 1), [#1948](https://github.com/thegspiro/the-logbook/pull/1948) (pass 2), [#2162](https://github.com/thegspiro/the-logbook/pull/2162) (pass 3, rounds 1-6, merged before round 7's fix was ready — see [#2173](https://github.com/thegspiro/the-logbook/pull/2173)), [#2173](https://github.com/thegspiro/the-logbook/pull/2173) (pass 3, round 7), [#2400](https://github.com/thegspiro/the-logbook/pull/2400) (pass 4), [#2546](https://github.com/thegspiro/the-logbook/pull/2546) (pass 5), [#2600](https://github.com/thegspiro/the-logbook/pull/2600) (pass 6 — corrected here from the "(this PR)" placeholder pass 6's own write-up left unresolved after merge), [#2947](https://github.com/thegspiro/the-logbook/pull/2947) (pass 7), [#3142](https://github.com/thegspiro/the-logbook/pull/3142) (pass 8), [#3248](https://github.com/thegspiro/the-logbook/pull/3248) (pass 9), pass 10 ([#3404](https://github.com/thegspiro/the-logbook/pull/3404)), pass 11 ([#3564](https://github.com/thegspiro/the-logbook/pull/3564)), pass 12 ([#3691](https://github.com/thegspiro/the-logbook/pull/3691)), pass 13 ([#3809](https://github.com/thegspiro/the-logbook/pull/3809)), pass 14 ([#3904](https://github.com/thegspiro/the-logbook/pull/3904)), pass 15 ([#4052](https://github.com/thegspiro/the-logbook/pull/4052)), pass 16 ([#4435](https://github.com/thegspiro/the-logbook/pull/4435)), pass 17 (this PR)
 
 ---
 
@@ -109,6 +109,153 @@ eligibility`'s "already voted in this election" applies only to a ballot
   Paper-tally sessions per election are naturally few; no cap and no
   pagination. Revisit if an election ever carries more than a few dozen
   batches. Recorded in `docs/KNOWN_LIMITATIONS.md`.
+
+## Pass 17 (2026-11-24) — watchdog pickup, real delta: report numbers and a formal letterhead identity line on the certified-results and pre-meeting-package PDFs; 0 fixed, 0 new findings
+
+**Scoping.** Step 0 (via GitHub, not the tracker): a fresh `list_pull_requests`
+(`state=open`) found no head branch starting `claude/security-review-`. PR
+#4655 (Feature 05, Finance & approvals, pass 17) had already merged
+(`18372c492`) before this iteration started; row 05 marked ✅ above. Row 06
+(Elections & ballots) was the next `⬜` row in `PROGRESS.md`'s rotation
+table, confirmed directly against the table rather than trusted from a prior
+note. `ListAgents` confirmed the dedicated `/loop 30m /security-review`
+session remains unreachable.
+
+**Baseline and delta.** Baseline is pass 16's merge, `762f1c93a` (PR #4435).
+1155 commits since then. `git diff --numstat 762f1c93a..HEAD` against this
+feature's established scope (`elections.py`, `election_service.py`,
+`schemas/election.py`, `models/election.py`,
+`services/minutes_election_filing.py`, `election_attendance_service.py`,
+`voter_rules.py`, `election_defaults.py`, and the frontend
+`modules/elections`/`pages/Elections*`/`pages/ElectionDetailPage*`/
+`components/Election*`/`services/electionService.ts`/`utils/election*`
+tree) shows a real but narrow delta: two backend files (+25/-4 combined)
+and two frontend files (+4/-4 combined); every other tracked file is
+byte-identical to pass 16.
+
+1. **`elections.py` / `election_service.py` — report numbers and a
+   letterhead identity line, owner decision 2026-11-21.** A new
+   cross-cutting module this feature did not introduce,
+   `app/services/document_provenance.py` (built for the export/reporting
+   surface generally), supplies `report_number_for(db, organization_id)` —
+   a non-sequential `RPT-YYYYMMDD-XXXX` id drawn with `secrets.choice`
+   (`app/utils/report_number.py`), generated fresh per download, never
+   stored or queried back. `download_certified_results` and
+   `download_package_pdf` now call it before rendering, pass the result
+   into `ElectionService.build_certified_results_pdf` /
+   `build_pre_meeting_package_pdf` as a new optional `report_number`
+   keyword (default `None`, so every other caller of these two methods is
+   unaffected), and record it on the existing `elections.manage`-gated
+   audit event (`event_data={"election_id": ..., "report_number": ...}`) —
+   the number is printed on every page, so a page in hand traces back to
+   the export and the member who ran it. Both methods also now set
+   `meta["identity"] = department_identity(organization) or None`, a
+   formatted address/phone/FDID line already derived in
+   `app/utils/election_pdf_style.py` (a shared PDF-styling module the
+   ballot PDF already used) **from the `organization` row each method had
+   already fetched org-scoped** — no new query, no new input, no new
+   trust boundary. Read `department_identity` directly: it reads only
+   `getattr(organization, name, None)` on a handful of mailing-address
+   fields and joins them with `", "`/`" · "`, with every value passed
+   through the module's existing `esc()` (`html.escape`) at render time via
+   `letterhead()` — not a new unescaped render path.
+2. **Frontend, two files, cosmetic/test-only.**
+   `EligibilityRoster.tsx` drops a `w-8` fixed-width class and swaps
+   `mx-auto` for `inline-block` on two status icons — a layout fix, no
+   data or gating change (confirmed by reading the full diff, not just the
+   class names). `ElectionsSettingsPage.w50-maxproxies.test.tsx` updates
+   one assertion string to match a field-name-humanization change made
+   elsewhere (`max_proxies_per_person` → `Max proxies per person`) — a test
+   following a message-formatting change outside this feature's files, not
+   a behavior change here.
+3. **One new, unclaimed file swept for:** `git diff --diff-filter=A
+--name-only 762f1c93a..HEAD` filtered for
+   `election|ballot|vote|candidate|attendance` found exactly one,
+   `frontend/src/components/BallotBuilder.template-popover.test.tsx` (129
+   lines) — a new test for a popover-direction fix (the saved-template
+   picker opened upward and ran off-screen on a short viewport). Read in
+   full: it mocks `electionService` and asserts rendering/interaction only,
+   no new assertion about data scope or permissions.
+
+**Re-enumeration (AST, not inherited from pass 16's count).** `elections.py`:
+**76 routes — unchanged from pass 16.** Every route still carries a
+`Depends(...)`; the two touched routes
+(`download_certified_results`/`download_package_pdf`) are pre-existing,
+`elections.manage`-gated, and their auth/permission checks are untouched —
+only the PDF metadata and audit payload changed.
+
+## Verified good ✅ (pass 17)
+
+- **`report_number_for` cannot leak or collide across organizations.** It
+  takes the caller's own `organization_id` (already resolved from
+  `current_user`), resolves only that org's local calendar day
+  (`resolve_org_today`), and returns a value drawn from
+  `secrets.choice` over a 32-symbol alphabet, four characters — not stored,
+  not looked up, not used to resolve or scope anything on read. There is no
+  id to guess into another org's data: it is a formatted audit-trail label,
+  not a credential or a lookup key.
+- **The new `report_number` keyword is additive and backward-compatible.**
+  Both `build_certified_results_pdf` and `build_pre_meeting_package_pdf`
+  default it to `None`; every other call site (direct service tests,
+  pass 16 and earlier's call sites) is unaffected, confirmed by grepping
+  every call site of both methods.
+- **`department_identity` introduces no new trust boundary.** It is a pure
+  function over fields already present on the `organization` ORM object the
+  calling method had already fetched with the request's own org scope — no
+  new database query, no client-supplied input, and its one output string
+  is HTML-escaped at the point it is rendered (`letterhead()`'s
+  `esc(identity)`), the same path the department name on the same letterhead
+  already goes through.
+- **The audit event's new field is not PII/PHI.** `report_number` is an
+  opaque, non-sequential, non-identifying label; the event still carries no
+  voter, candidate, or ballot content — consistent with dimension 5's
+  existing clean bill for this feature's audit payloads.
+- **No migration landed in this feature's scope this pass.**
+  `validate_migrations.py --strict` reports a single head (`07abf8e6553b`,
+  835 revisions) with no fork; a sweep of every migration added since
+  `762f1c93a` whose filename or diff matched
+  `election|ballot|vote|candidate` found only coincidental substring hits
+  in unrelated email-template-enum migrations (the enum's full value list
+  happens to include pre-existing `election_*`/`ballot_*` notification
+  types) and in `leave_request_votes` (a Users & Organizations/row-07 table,
+  not this feature's).
+- **Standing findings re-confirmed unchanged by direct re-read:** ELEC-12
+  (fixed, `MAX_SAVED_BALLOT_TEMPLATES_PER_ORG` cap still present and
+  untouched), ELEC-14 (fixed, untouched), ELEC-16 (accepted as is,
+  `list_manual_ballot_batches` still unbounded, untouched), ELEC-40
+  (flagged, `_validate_ballot_item_identities` still present in
+  `schemas/election.py`, untouched), ELEC-48 (flagged, the two send
+  functions it names are untouched by this diff), ELEC-49 (closed per
+  pass 16, untouched), ELEC-50/ELEC-51 (unchanged).
+
+No finding was opened this pass. The real delta (2 backend files, 2
+cosmetic frontend files, 1 new frontend test, across 1155 commits) was each
+read in full against the checklist's seven dimensions; the one
+security-relevant change — a new cross-cutting PDF-metadata mechanism
+reaching into this feature's two export endpoints — was traced from its
+call site through both helper modules to confirm it carries no new input,
+no new query, and no new unescaped render path, rather than accepted on the
+strength of its own "owner decision" docstring.
+
+## Schema & migration notes (pass 17)
+
+No migration in this feature's scope this pass. `validate_migrations.py
+--strict` re-run: single head `07abf8e6553b`, no fork, 835 revisions (up
+from 785 at pass 16 — growth from the rest of the codebase, not from this
+feature).
+
+## Completion gate (pass 17)
+
+- `cd backend && flake8 app/ tests/ alembic/` (7.5.0, CI's pin) — clean
+- `cd backend && black --check app/ tests/ alembic/` (26.10.1, CI's pin) — clean, 3493 files unchanged
+- `cd backend && isort --check-only app/ tests/ alembic/` (9.0.2, CI's pin) — clean
+- `cd backend && python3 scripts/validate_migrations.py --strict` — 835 revisions, single head `07abf8e6553b`
+- `python3 scripts/check_route_permissions.py --strict` (repo root) — 339 routes, 0 errors, 0 warnings
+- `docs/DATABASE_SCHEMA.md` vs generator — already current (no model change this window)
+- `cd backend && python3.13 -m pytest tests/ -q -k "election or ballot or vote or candidate or attendance"` — see completion gate table in the PR
+- `cd frontend && npm run typecheck` — 0 errors
+- `cd frontend && npm run lint` — see completion gate table in the PR
+- AST route enumeration of `elections.py`: 76 routes (unchanged), all carrying `Depends(...)`.
 
 ## Pass 16 (2026-11-19) — watchdog pickup, real delta: per-type voter eligibility rules (version 2), the Meeting Attendance page, per-election/per-item rule overrides with an audited reason, ELEC-49 closed; 0 fixed, 0 new findings
 

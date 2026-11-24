@@ -830,6 +830,20 @@ every authentication and public endpoint at once.
 Newest first. Nothing here blocks a restart — these are changes an operator
 should not have to discover by being surprised.
 
+### Deleting an event now deletes the files attached to it (2026-11-24)
+
+Nothing blocks a restart, and no migration ships with this change.
+
+- **Download any event attachment you must keep before deleting the event.**
+  Deleting an event, or a recurring series or the rest of one, now removes the
+  files uploaded to those events' Attachments from storage (owner decision of
+  2026-11-23). A file another event still lists is kept. The files cannot be
+  recovered from the application afterwards.
+- The event's folder under **Event Attachments** in Documents is not touched:
+  its documents stay where they are.
+- A file that cannot be removed straight away (an unreachable remote store)
+  is retried by the hourly `pending_file_deletions` sweep.
+
 ### Community risk reduction tracking, and a street map that loads tiles from OpenStreetMap (2026-11-23)
 
 Nothing blocks a restart. Migrations `89c0b481fe55` and `5c2e8a417d90` create
@@ -889,6 +903,62 @@ Nothing blocks a restart, and no migration ships with this change.
   `user_hard_deleted` gains the first three. Integers only. Anonymising a
   member with queued files is followed by a `pending_file_deletions_completed`
   event.
+
+### Outreach: a phone-only request repaired, event volunteer calls, self-ticking steps (2026-11-23)
+
+Nothing blocks a restart.
+
+- **Migration `c4e7a9d2f1b8` repairs installations that skipped
+  `5a41041e328b`.** Where startup stamped the database past that revision
+  without running it, `event_requests.contact_email` stayed NOT NULL, and a
+  request entered for a caller who gave only a phone number failed with
+  "Internal server error" (MySQL 1048). The next start relaxes the column. It
+  does nothing on an installation where `5a41041e328b` ran.
+- **Migration `e3b8d61f4a27`** adds the nullable `events.volunteer_call_sent_at`,
+  recorded when an outreach event's own signup sheet emails the membership for
+  help. Existing rows stay NULL. The downgrade drops the column.
+- **Four checklist steps on a request now follow the request's state**
+  (Review Request, Assign Coordinator, Confirm Date, Arrange Volunteers) and
+  cannot be ticked by hand. A tick a coordinator made by hand on one of them is
+  overridden: a postponed request, for example, loses its Confirm Date tick.
+- **A swap on an outreach volunteer seat moves the event RSVP** to the member
+  who takes the seat.
+
+### Training waivers: nobody grants or extends their own (2026-11-22)
+
+Nothing blocks a restart. Merge revision `561a3e9f4165` joins two heads and
+changes no table.
+
+- `POST /training/waivers` returns 400 for a waiver naming the caller, and
+  `PATCH` returns 403 on the caller's own waiver. Deactivating
+  one's own waiver (the delete route) is still allowed, as it excuses nothing. **In a department where one
+  officer is the only holder of `training.manage`, that officer can no longer
+  excuse their own training**; another officer must be given the permission.
+  See "Separation of Duties" in `docs/KNOWN_LIMITATIONS.md`.
+
+### Compliance matrix CSV gains expiry columns; evaluation goals become a list (2026-11-22)
+
+Nothing blocks a restart, and nothing is migrated.
+
+- **The compliance matrix CSV has one `<requirement> expiry` column per
+  certification requirement**, after Percent. A spreadsheet or script that
+  reads the export by column position needs updating.
+- **A Goals item on an evaluation is now a list of goals with target dates.**
+  An older free-text answer is shown as one goal and saved in the new shape the
+  next time the part is saved; a submitted part is left as it is. The
+  required-item message reads "Set at least one goal in '…'."
+- **A period's signed evaluation PDFs download as one zip**
+  (`GET /evaluations/export-pdfs`). It asks for step-up verification and is
+  monitored as a bulk export.
+
+### Store windows close at their closing time (2026-11-22)
+
+Nothing blocks a restart, and nothing is migrated. A window set to close
+automatically now stops taking orders at its exact closing time, not when the
+15-minute job next runs; a window whose closing time has passed cannot be
+reopened until the time is moved later. Giving a draft window an opening time
+makes it Scheduled, and clearing the time makes it a draft again. See
+`docs/STOREFRONT_MODULE.md`.
 
 ### Leave: stand-in notices, a cover prompt, a calendar and an export (2026-11-22)
 

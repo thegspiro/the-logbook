@@ -34,6 +34,9 @@ const ROSTER = MEMBER_NAMES.map(([firstName, lastName], i) => ({
 // the roster as a table.
 const XWIDE_TIER_PX = 78 * 16;
 
+// Where `rwd-table-fields` starts setting a reflowed card's fields in columns.
+const FIELDS_MIN_PX = 30 * 16;
+
 const CONTACT_INFO = { enabled: true, show_email: true, show_phone: true, show_mobile: true };
 
 // The member roster sets a member's name and username beside rank, member
@@ -69,6 +72,28 @@ test.describe('Members — roster table', () => {
       const room = await table.evaluate((el) => el.closest('.rwd-table-container')?.clientWidth ?? 0);
       if (room >= XWIDE_TIER_PX) {
         await expect(table.locator('thead'), 'Member roster shows as cards in a desktop-width card').toBeVisible();
+      }
+      // On a tablet the roster is cards in a card 500px or more wide. Stacked,
+      // each label sat at the left edge and its value at the right, eight
+      // lines to a member; the name leads the card and the rest sit in
+      // columns beneath it instead.
+      if (room >= FIELDS_MIN_PX && room < XWIDE_TIER_PX) {
+        const layout = await table.evaluate((el) => {
+          const row = el.querySelector('tbody tr');
+          const cell = (label: string) => row?.querySelector<HTMLElement>(`td[data-label="${label}"]`);
+          const lead = cell('Member');
+          return {
+            leadIsTitle: lead ? getComputedStyle(lead, '::before').content === 'none' : false,
+            leadLeft: Math.round((lead?.getBoundingClientRect().left ?? 0) - (row?.getBoundingClientRect().left ?? 0)),
+            sameLine: cell('Rank')?.getBoundingClientRect().top === cell('Member #')?.getBoundingClientRect().top,
+            selectAboveTitle:
+              (cell('Select')?.getBoundingClientRect().bottom ?? 0) <= (lead?.getBoundingClientRect().top ?? 0),
+          };
+        });
+        expect(layout.leadIsTitle, 'the member name still reads as a "Member" line').toBe(true);
+        expect(layout.leadLeft, 'the member name is not at the left of its card').toBeLessThan(32);
+        expect(layout.sameLine, 'Rank and Member # are stacked, not side by side').toBe(true);
+        expect(layout.selectAboveTitle, 'the selection checkbox has a line of its own above the name').toBe(false);
       }
     });
   }

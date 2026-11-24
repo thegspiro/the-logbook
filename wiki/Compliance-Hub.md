@@ -59,6 +59,13 @@ waivers, refunds and status changes; admin-hours approval; training submission
 review and crew batches; skills-test examination; meeting-minutes approval;
 driver exceptions; and crediting a missed course class.
 
+Some workflows refuse the self case with checks of their own rather than the
+shared one. Nobody records their own leave of absence, grants their own
+requirement override, or creates, extends or re-enables their own training
+waiver (since 2026-11-22); ending one's own leave or waiver early stays open,
+since it excuses nothing. On a performance evaluation the evaluator never
+calibrates or approves it, and nobody signs two approvals on one evaluation.
+
 Deliberately **not** guarded, each for a stated reason: declining or
 withdrawing your own record; reversals such as voiding a check; procurement
 status changes; approval by an external email approver (checked by address

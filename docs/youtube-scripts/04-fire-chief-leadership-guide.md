@@ -482,6 +482,31 @@ dialog; the finalized PDF.]**
 > so a member rated Meets on every item reads as Meets, not as failing. The
 > evaluator may regrade a section, with a reason, and both grades are shown."
 
+> "Once the reviews are in, the **Period results** card does two more things.
+> **Grades by evaluator** lays out how each evaluator's reviews fell across the
+> five grades, beside the whole department — so if one officer rated everybody
+> Outstanding, you'll see it before it goes in the file. The Logbook doesn't
+> flag anyone; reading it is your call. And **Download signed PDFs** gives you
+> the whole period's signed copies in one zip, for the records room or an
+> auditor. It asks you to confirm it's you first, because that's a year of
+> personnel files leaving at once."
+
+> "On any one review you'll also find **Review history** — every earlier
+> review of that member, with the grade each one stood at — and, once the
+> member has done their self-evaluation, their ratings beside the evaluator's,
+> with the items that are **far apart** marked. That's your agenda for the
+> sit-down. And goals are a list now, each with its own target date."
+
+**[PRODUCTION NOTE — 2026-11-23. New beat, about 40 seconds (2026-11-22 –
+23); re-time this chapter. Needs `evaluations.view_all` and a period with
+finalized reviews by at least three evaluators. Film: the **Period results**
+card with **Export CSV** and **Download signed PDFs**, and **Grades by
+evaluator** beneath; the identity check after **Download signed PDFs**; an
+evaluation's **Review history** card under **Last review**; the
+**Self-evaluation beside the evaluation** card with a **Far apart** badge; a
+Goals item with two goals and target dates. Any take showing a Goals item as
+one text box is dated.]**
+
 **[PRODUCTION NOTE — 2026-11-05. New, about 1:45 (2026-11-02 → 11-04). Members
 read their own under **My evaluations** — Script 06. The evaluation emails are
 a template group, **Performance Evaluations**, under Communications → Email

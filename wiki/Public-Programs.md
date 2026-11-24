@@ -83,6 +83,8 @@ Pipeline tasks are the checklist steps your coordinator follows for each request
 
 > **Tip**: Tasks are shared across all outreach types. Keep them general enough to apply to most programs. Type-specific notes can go in comments.
 
+**Some steps tick themselves** _(2026-11-22)_. Four of the built-in steps follow the request instead of waiting for a coordinator: **Review Request** ticks once work on the request starts, **Assign Coordinator** while someone is assigned, **Confirm Date** once the event is scheduled, and **Arrange Volunteers** when every seat on the request's volunteer signup sheet is filled. Each unticks if that is undone — a postponed request loses **Confirm Date**, a volunteer dropping out unticks **Arrange Volunteers** — and none can be ticked by hand. Keep them in your list if you want the requester's progress to move on its own; a step you add yourself, like the ones above, is always ticked by hand. Without a signup sheet, **Arrange Volunteers** is a manual step too.
+
 ### Step 3: Assign a Default Coordinator
 
 Navigate to **Events Admin > Settings > Public Requests > Handling > Default Coordinator**.

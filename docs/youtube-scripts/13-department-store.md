@@ -330,6 +330,19 @@ notification preview appears.]**
 > closing reminder too, on a schedule you set — because the orders you don't get
 > are the ones from people who forgot."
 
+**[SCREEN: The window form with Opens and Closes filled in, and "Open
+automatically at the scheduled time" and "Close automatically at the scheduled
+time" ticked. Then the Order Windows list with the window reading Scheduled.]**
+
+> "Or let it run itself. Give it an opening time and tick the two boxes: it
+> opens on time, and at the closing time it's gone from the member store — not
+> fifteen minutes later. If that closing time has already passed, it won't let
+> you open it until you move the date."
+
+**[PRODUCTION NOTE — 2026-11-23 PASS. New beat, about 15 seconds (W67b-15,
+W67b-16). Before 2026-11-22 a draft given an opening time later never opened,
+and members could keep ordering for up to 15 minutes past the closing time.]**
+
 **[TRANSITION: The member's side]**
 
 ---
@@ -392,6 +405,12 @@ empty. The order number is displayed on screen next to it.]**
 > PayPal."
 
 **[SCREEN: The Zelle row — a handle with a copy icon, no button.]**
+
+**[PRODUCTION NOTE — 2026-11-23 PASS. A long Zelle email (a treasurer's
+address on the department's own domain) ran past the right edge of its card
+and was cut off, at every width, until 2026-11-22. It now wraps inside the
+card. Re-shoot this cue if the recorded handle is clipped; no narration
+change.]**
 
 **[CALLOUT: "Zelle has no button. On purpose."]**
 

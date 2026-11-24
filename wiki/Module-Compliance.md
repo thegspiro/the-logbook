@@ -340,3 +340,37 @@ thresholds, when a requirement is at risk, and who the "non-compliant" deep
 link means. None raised, none failed a test, and each produced a number that
 looked plausible on its own — visible only by opening two screens and noticing
 they disagree.
+
+## Certification expiry on the matrix, its CSV and printout _(2026-11-23)_
+
+The matrix now reads a certification requirement the way My Training's
+requirement card does, so an officer and the member describe one certificate
+in the same words (#4585):
+
+- **On file** with "(Expires Mar 14, 2027)" while it is valid, or "Completed …"
+  for a certificate that never expires; **Expired** with "(Mar 14, 2026)"; or
+  **Not recorded** with no date. A missing certificate used to print the
+  requirement's frequency window, which is not what a certification is graded
+  over: it is valid until it expires.
+- **CSV:** one `<requirement> expiry` column per certification requirement in
+  view, holding the date as `YYYY-MM-DD`, `No expiry`, `Not recorded`, or blank
+  where the requirement does not apply. A spreadsheet sorts it, which answers
+  "whose CPR runs out first" without opening every member. Anything that reads
+  the CSV by column position will find these new columns after **Percent**.
+- **Print:** a short expiry date (`3/14/27`) under the mark in each
+  certification column, with a line in the legend.
+
+Catch-up and not-yet-held cells, and every other requirement type, keep their
+wording. The change is in the screen only (`complianceMatrixModel.ts`); the
+grading and the API are unchanged.
+
+## Nobody grants their own training waiver _(2026-11-22)_
+
+A training waiver lowers a member's requirements, so it is a compliance
+control. Since #4560 `POST /training/waivers` refuses a waiver for oneself
+(400) and `PATCH /training/waivers/{id}` refuses changes to one's own waiver
+(403), matching the leave of absence and the Chief's requirement override.
+Deactivating one's own waiver is still allowed. A department whose only
+`training.manage` holder is the Chief must give the permission to another
+officer, or use a leave request, for the Chief's own training to be excused.
+See [Training Module](Module-Training#no-self-granted-training-waiver-2026-11-22-4560).
