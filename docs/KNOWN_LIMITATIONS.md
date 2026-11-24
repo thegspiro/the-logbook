@@ -3255,14 +3255,18 @@ Still open:
   to protect them with the provider's tooling. A department that skips that
   has no second copy of its bucket. The same holds for a Google Shared Drive
   (2026-10-25).
-- **A copy of a Shared Drive cannot simply be put back (2026-10-25).** The
-  Logbook finds a Drive file by its id, and a file copied out and uploaded
-  again is a new file with a new id, so its record still points at the old
-  one. Nothing repoints references yet. Within 30 days the drive's own trash
-  restores a file with its id intact; after that, a copy kept elsewhere has
-  to be matched to its records by file name (each is named after its storage
-  path) and the references updated by hand. A bucket has no such gap: its
-  objects are found by key, so a mirror restores as it is.
+- ~~**A copy of a Shared Drive cannot simply be put back (2026-10-25).**~~
+  **Resolved 2026-11-24** (owner decision 2026-11-23). The Logbook finds a
+  Drive file by its id, and a file copied out and uploaded again is a new
+  file with a new id. `scripts/relink_restored_drive_files.py` now matches
+  restored files to their records by name (each is named after its storage
+  path), verifies each decrypts with the installation's file key, and
+  rewrites the references; dry run by default, `--apply` to write, safe to
+  run twice. **Still open:** a record with no file of its name, or with more
+  than one, is reported and left for a person; a renamed copy is not found;
+  and a copy taken under another installation's key will not verify. A
+  bucket has no such gap: its objects are found by key, so a mirror restores
+  as it is.
 - **A settings change reaches other workers within 30 seconds.** Each worker
   caches a department's storage view for that long; the worker that saved
   clears its own copy at once.
