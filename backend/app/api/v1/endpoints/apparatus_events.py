@@ -225,6 +225,7 @@ async def _board(
                     name=seat.name,
                     seat_type=seat.seat_type,
                     note=seat.note,
+                    is_essential=bool(seat.is_essential),
                     user_id=str(seat.user_id) if seat.user_id else None,
                     user_name=(
                         member_names.get(str(seat.user_id)) if seat.user_id else None
@@ -272,8 +273,15 @@ async def _board(
         night_number=night_number,
         night_count=max(len(series), 1),
         series=[
-            SeriesNight(event_id=i, start_datetime=start, filled=f, total=t)
-            for i, start, f, t in series
+            SeriesNight(
+                event_id=i,
+                start_datetime=start,
+                filled=f,
+                total=t,
+                essential_filled=ef,
+                essential_total=et,
+            )
+            for i, start, f, t, ef, et in series
         ],
         units=units,
         my_seat_id=my_seat_id,

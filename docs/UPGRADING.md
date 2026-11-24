@@ -135,6 +135,31 @@ _is_ the upgrade. Before it:
 Newest first. Every entry here is a change that was safe on a fresh install
 and refused to boot an existing one.
 
+### A migration whose change already exists is skipped alone, not with every later one (2026-11-23)
+
+Until now, when a migration failed at startup because its change was already
+in the database ("already exists", "Duplicate column"), the backend marked
+**every** remaining migration as applied without running any of them, and
+started. Nothing said which migrations had been skipped. An installation that
+went through that has missing changes; the one that surfaced was
+`event_requests.contact_email` staying required, so a phone-only outreach
+request failed with "Internal server error".
+
+Now the backend works out which migration raised, marks only that one as
+applied, and runs the rest. Each one skipped this way is:
+
+- logged at ERROR, naming the revision and the database error;
+- recorded in the startup status as "Migration `<revision>` was marked as
+  applied without completing…" (shown under `errors` by `/health/detailed`,
+  which answers only with `ENVIRONMENT=development`).
+
+**What can stop a start that used to succeed:** a duplicate error that cannot
+be traced to a single migration now stops startup with that error, where it
+used to mark everything as applied. Restore the database backup, or run the
+named migration's remaining steps by hand and stamp it, then start again. A
+revision graph that cannot be read at all (migration files missing from the
+mount, seen on Unraid) still marks everything as applied, as before.
+
 ### Duplicate meeting attendance rows are removed, and cannot be restored (2026-11-11)
 
 A migration (`7b6db9dd8e4f`) runs on the next start and adds a unique index on

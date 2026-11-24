@@ -1663,8 +1663,8 @@ holds a seat. The template and the other nights are not touched.
 ### Taking a seat (members)
 
 Open the night's event. The **Apparatus & Crew** card lists every seat. Select
-**Sign me up** on an open seat; you are added as going to the event. Select
-**Leave seat** to give it back before the night (once you have checked in,
+**Sign myself up** on an open seat; you are added as going to the event. Select
+**Give up my spot** to give it back before the night (once you have checked in,
 the coordinator corrects attendance instead). You can hold one seat per night.
 
 A Driver seat under **Enforce** is offered only to members who meet the
@@ -1679,7 +1679,7 @@ rule the seat uses.
 
 When a template has **Coordinator approves self sign-ups** ticked, its nights
 show **Sign-ups need approval**. Members see **Ask for this seat** instead of
-**Sign me up**:
+**Sign myself up**:
 
 - Asking leaves the seat open. You are not marked as going until a
   coordinator approves. You can ask for one seat per night, and **Withdraw

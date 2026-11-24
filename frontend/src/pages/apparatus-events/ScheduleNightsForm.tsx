@@ -6,14 +6,15 @@
 
 import React, { useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
-import { AlertTriangle, CalendarPlus, Plus, Repeat, X } from 'lucide-react';
+import { AlertTriangle, CalendarDays, CalendarPlus, Plus, Repeat, X } from 'lucide-react';
 import { isAxiosError } from 'axios';
 import { apparatusEventService } from '../../services/api';
 import type { ApparatusConflict, ApparatusEventTemplate } from '../../types/apparatusEvent';
 import { useTimezone } from '../../hooks/useTimezone';
 import { formatCalendarDate, getTodayLocalDate } from '../../utils/dateFormatting';
 import { getErrorMessage } from '../../utils/errorHandling';
-import { MAX_NIGHTS, nextKey, nightToSpec, weeklyDates, type NightDraft } from './templateForm';
+import { MAX_NIGHTS, dailyDates, nextKey, nightToSpec, weeklyDates, type NightDraft } from './templateForm';
+import DurationHoursInput from './DurationHoursInput';
 import { EVOC_MODE_LABEL, EVOC_MODE_TONE, TONE } from './tones';
 
 interface ScheduleNightsFormProps {
@@ -40,7 +41,7 @@ export const ScheduleNightsForm: React.FC<ScheduleNightsFormProps> = ({ template
 
   const [title, setTitle] = useState(template.name);
   const [nights, setNights] = useState<NightDraft[]>(() => [makeNight(getTodayLocalDate(tz))]);
-  const [weeklyCount, setWeeklyCount] = useState('4');
+  const [repeatCount, setRepeatCount] = useState('4');
   const [conflicts, setConflicts] = useState<ApparatusConflict[]>([]);
   const [acknowledged, setAcknowledged] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -89,11 +90,27 @@ export const ScheduleNightsForm: React.FC<ScheduleNightsFormProps> = ({ template
   const update = (key: string, patch: Partial<NightDraft>) =>
     setNights((list) => list.map((n) => (n.key === key ? { ...n, ...patch } : n)));
 
-  const addWeekly = () => {
-    const count = Math.min(Number.parseInt(weeklyCount, 10) || 0, MAX_NIGHTS - nights.length + 1);
-    const first = nights[nights.length - 1]?.date || getTodayLocalDate(tz);
-    const dates = weeklyDates(first, count + 1).slice(1);
-    setNights((list) => [...list, ...dates.map(makeNight)]);
+  // More nights after the last one, a day or a week apart. A Santamobile
+  // usually runs several nights in a row, which "weekly" alone could not
+  // make without adding each night by hand. Capped so the list never passes
+  // MAX_NIGHTS, the server's own limit.
+  const addRepeating = (every: 'day' | 'week') => {
+    const count = Math.min(Number.parseInt(repeatCount, 10) || 0, MAX_NIGHTS - nights.length);
+    if (count <= 0) return;
+    const last = nights[nights.length - 1];
+    const first = last?.date || getTodayLocalDate(tz);
+    const dates = (every === 'day' ? dailyDates : weeklyDates)(first, count + 1).slice(1);
+    // Each new night starts as a copy of the last one, so a changed start
+    // time, length or route carries forward instead of resetting.
+    setNights((list) => [
+      ...list,
+      ...dates.map((date) => ({
+        ...makeNight(date),
+        ...(last
+          ? { start_time: last.start_time, duration_minutes: last.duration_minutes, location: last.location }
+          : {}),
+      })),
+    ]);
   };
 
   const submit = async () => {
@@ -163,7 +180,7 @@ export const ScheduleNightsForm: React.FC<ScheduleNightsFormProps> = ({ template
                       : 'border-theme-surface-border'
                   }`}
                 >
-                  <div className="grid grid-cols-2 items-end gap-2 sm:grid-cols-[10rem_9rem_6rem_minmax(0,1fr)_auto]">
+                  <div className="grid grid-cols-2 items-end gap-2 sm:grid-cols-[minmax(0,10rem)_minmax(0,9rem)_minmax(0,6rem)_minmax(0,1fr)_auto]">
                     <div>
                       <label className="form-label text-xs" htmlFor={`sn-date-${night.key}`}>
                         Night {index + 1}
@@ -190,22 +207,28 @@ export const ScheduleNightsForm: React.FC<ScheduleNightsFormProps> = ({ template
                     </div>
                     <div>
                       <label className="form-label text-xs" htmlFor={`sn-len-${night.key}`}>
-                        Minutes
+                        Hours
                       </label>
-                      <input
+                      <DurationHoursInput
                         id={`sn-len-${night.key}`}
-                        type="number"
-                        min={15}
-                        max={1440}
-                        step={15}
-                        className="form-input"
-                        value={night.duration_minutes}
-                        onChange={(e) => update(night.key, { duration_minutes: e.target.value })}
+                        minutes={night.duration_minutes}
+                        onChange={(minutes) => update(night.key, { duration_minutes: minutes })}
                       />
                     </div>
-                    <div>
+                    <span className="hidden sm:block" aria-hidden="true" />
+                    <button
+                      type="button"
+                      className="btn-secondary btn-icon justify-self-end"
+                      aria-label={`Remove night ${index + 1}`}
+                      disabled={nights.length === 1}
+                      onClick={() => setNights((list) => list.filter((n) => n.key !== night.key))}
+                    >
+                      <X className="h-4 w-4" aria-hidden="true" />
+                    </button>
+                    {/* Its own full-width row: squeezed beside the times it showed only "Stati…". */}
+                    <div className="col-span-full">
                       <label className="form-label text-xs" htmlFor={`sn-loc-${night.key}`}>
-                        Route or place
+                        Route or place <span className="text-theme-text-muted font-normal">(optional)</span>
                       </label>
                       <input
                         id={`sn-loc-${night.key}`}
@@ -216,15 +239,6 @@ export const ScheduleNightsForm: React.FC<ScheduleNightsFormProps> = ({ template
                         onChange={(e) => update(night.key, { location: e.target.value })}
                       />
                     </div>
-                    <button
-                      type="button"
-                      className="btn-secondary btn-icon"
-                      aria-label={`Remove night ${index + 1}`}
-                      disabled={nights.length === 1}
-                      onClick={() => setNights((list) => list.filter((n) => n.key !== night.key))}
-                    >
-                      <X className="h-4 w-4" aria-hidden="true" />
-                    </button>
                   </div>
                   {nightConflicts.length > 0 && (
                     <ul className="mt-2 space-y-1 text-sm text-amber-900 dark:text-amber-200">
@@ -251,24 +265,38 @@ export const ScheduleNightsForm: React.FC<ScheduleNightsFormProps> = ({ template
               <Plus className="h-4 w-4" aria-hidden="true" />
               Add a night
             </button>
-            <div className="flex items-end gap-2">
+            <div className="flex flex-wrap items-end gap-2">
               <div>
-                <label className="form-label text-xs" htmlFor="sn-weekly">
-                  Weeks after the last night
+                <label className="form-label text-xs" htmlFor="sn-repeat">
+                  More nights after the last one
                 </label>
                 <input
-                  id="sn-weekly"
+                  id="sn-repeat"
                   type="number"
                   min={1}
                   max={MAX_NIGHTS}
                   className="form-input w-24"
-                  value={weeklyCount}
-                  onChange={(e) => setWeeklyCount(e.target.value)}
+                  value={repeatCount}
+                  onChange={(e) => setRepeatCount(e.target.value)}
                 />
               </div>
-              <button type="button" className="btn-secondary btn-sm" onClick={addWeekly}>
+              <button
+                type="button"
+                className="btn-secondary btn-sm"
+                disabled={nights.length >= MAX_NIGHTS}
+                onClick={() => addRepeating('day')}
+              >
+                <CalendarDays className="h-4 w-4" aria-hidden="true" />
+                Every day
+              </button>
+              <button
+                type="button"
+                className="btn-secondary btn-sm"
+                disabled={nights.length >= MAX_NIGHTS}
+                onClick={() => addRepeating('week')}
+              >
                 <Repeat className="h-4 w-4" aria-hidden="true" />
-                Repeat weekly
+                Every week
               </button>
             </div>
           </div>

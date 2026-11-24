@@ -759,8 +759,8 @@ class TestStaffingEndpoint:
         assert response.shift_id == "shift-9"
         assert [r.label for r in response.roles] == ["Tour Guide", "Educator"]
         assert opener.await_args.kwargs["staffing_roles"] == [
-            {"role": "tour_guide", "count": 2},
-            {"role": "educator", "count": 1},
+            {"role": "tour_guide", "count": 2, "essential": True},
+            {"role": "educator", "count": 1, "essential": True},
         ]
 
 
@@ -968,8 +968,8 @@ class TestOutreachShiftIsNotDutyCoverage:
         assert shift_data["shift_date"] == date(2026, 9, 12)
         assert event_request.staffing_shift_id == "shift-9"
         assert event_request.staffing_roles == [
-            {"role": "tour_guide", "count": 2},
-            {"role": "educator", "count": 1},
+            {"role": "tour_guide", "count": 2, "essential": True},
+            {"role": "educator", "count": 1, "essential": True},
         ]
 
     @pytest.mark.asyncio
@@ -1097,7 +1097,31 @@ class TestOutreachRoles:
                 {"role": "tour_guide", "count": 1},
             ],
         )
-        assert roles == [{"role": "tour_guide", "count": 3}]
+        assert roles == [{"role": "tour_guide", "count": 3, "essential": True}]
+
+    def test_a_role_marked_optional_keeps_the_mark(self):
+        roles = validate_staffing_roles(
+            _org(),
+            [
+                {"role": "tour_guide", "count": 2},
+                {"role": "educator", "count": 1, "essential": False},
+            ],
+        )
+        assert roles == [
+            {"role": "tour_guide", "count": 2, "essential": True},
+            {"role": "educator", "count": 1, "essential": False},
+        ]
+
+    def test_a_repeat_marked_essential_makes_the_role_essential(self):
+        # Merging must not leave a seat somebody said was needed unwatched.
+        roles = validate_staffing_roles(
+            _org(),
+            [
+                {"role": "tour_guide", "count": 1, "essential": False},
+                {"role": "tour_guide", "count": 1},
+            ],
+        )
+        assert roles == [{"role": "tour_guide", "count": 2, "essential": True}]
 
     def test_needs_render_for_a_human(self):
         assert describe_roles(

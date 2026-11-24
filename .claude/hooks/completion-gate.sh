@@ -165,19 +165,44 @@ if [ -n "$PY_FILES" ]; then
   done <<< "$REL_PY"
 
   if [ -n "$EXISTING_PY" ]; then
-    if command -v python3 >/dev/null 2>&1; then
+    # Prefer the interpreter CI's own pin was installed into. Some sandboxes
+    # carry an unrelated flake8/black on PATH (e.g. a `uv tool install`) ahead
+    # of the project's pinned one in /usr/local/bin, so `flake8`/`black` bare
+    # and `python3 -m flake8` (when the default `python3` isn't the one the
+    # pin was installed for) can both silently run the wrong version — or, as
+    # seen on 2026-11-24, fail outright with "No module named flake8" while a
+    # correctly-pinned `flake8` sits one directory over. Try the known pin
+    # location first and only fall back when it is not there.
+    FLAKE8_BIN=""
+    for candidate in /usr/local/bin/flake8 "python3 -m flake8" flake8; do
+      # shellcheck disable=SC2086
+      if command -v ${candidate%% *} >/dev/null 2>&1; then
+        FLAKE8_BIN="$candidate"
+        break
+      fi
+    done
+    BLACK_BIN=""
+    for candidate in /usr/local/bin/black "python3 -m black" black; do
+      # shellcheck disable=SC2086
+      if command -v ${candidate%% *} >/dev/null 2>&1; then
+        BLACK_BIN="$candidate"
+        break
+      fi
+    done
+
+    if [ -n "$FLAKE8_BIN" ] && [ -n "$BLACK_BIN" ]; then
       # Command substitution rather than a temp file: two sessions running the
       # gate at once would otherwise race on the same path.
       # shellcheck disable=SC2086  # deliberate word-splitting into an argv list
-      if ! OUT=$( cd "$REPO/backend" && python3 -m flake8 $EXISTING_PY 2>&1 ); then
+      if ! OUT=$( cd "$REPO/backend" && $FLAKE8_BIN $EXISTING_PY 2>&1 ); then
         record_failure "backend flake8" "$OUT"
       fi
       # shellcheck disable=SC2086
-      if ! OUT=$( cd "$REPO/backend" && python3 -m black --check $EXISTING_PY 2>&1 ); then
+      if ! OUT=$( cd "$REPO/backend" && $BLACK_BIN --check $EXISTING_PY 2>&1 ); then
         record_failure "backend black --check" "$OUT"
       fi
     else
-      SKIPPED="${SKIPPED}backend checks (python3 missing); "
+      SKIPPED="${SKIPPED}backend checks (flake8/black not found); "
     fi
   fi
 fi

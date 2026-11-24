@@ -88,6 +88,7 @@ from app.schemas.event import (
     EventTransferRequest,
     EventTransferResponse,
     EventUpdate,
+    EventVolunteerSeatBoard,
     ExternalAttendeeCheckInResponse,
     FinalizeAttendanceResponse,
     GuestCheckInLinkResponse,
@@ -148,6 +149,7 @@ from app.services.event_staffing_service import (
     get_event_staffing,
     member_signup_sheet,
     open_event_staffing,
+    seat_board,
     send_event_volunteer_call,
 )
 from app.services.file_storage_service import (
@@ -3478,6 +3480,46 @@ async def get_event_staffing_sheet(
     """
     event, org = await _staffed_event(db, current_user, event_id)
     return await get_event_staffing(db, event, org)
+
+
+@router.get("/{event_id}/staffing/seats", response_model=EventVolunteerSeatBoard)
+async def get_event_volunteer_seats(
+    event_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    # events.view, which every member holds (_LINE_MEMBER_PERMISSIONS): the
+    # board names members, so it is not left to sign-in alone.
+    current_user: User = Depends(require_permission("events.view")),
+):
+    """
+    The event's volunteer signup sheet seat by seat, for signing up from the
+    event page: each seat's role and who holds it, or that it is open.
+
+    Any member holding ``events.view`` (every member does) who may view the
+    event, as on the shift's crew board in Scheduling, which shows the same
+    names. A draft answers 404 to a caller who may not see it
+    (``can_see_draft``), as the event itself does; so does an event with no live
+    sheet, or a cancelled one. Signing up goes through the scheduling signup
+    endpoint. Under ``/staffing`` so the client never caches it: it names
+    members, and a cached copy would hide a signup.
+
+    **Authentication required**
+    **Requires permission: events.view**
+    """
+    event, org = await _staffed_event(db, current_user, event_id)
+    if event.is_draft and not can_see_draft(event, current_user):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Event not found"
+        )
+    if event.is_cancelled:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="No volunteer signup sheet"
+        )
+    state = await get_event_staffing(db, event, org)
+    if not state["shift_id"]:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="No volunteer signup sheet"
+        )
+    return seat_board(state, str(current_user.id))
 
 
 @router.post(

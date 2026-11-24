@@ -14,6 +14,9 @@ import {
   totalSeats,
   validateDraft,
   weeklyDates,
+  dailyDates,
+  hoursText,
+  minutesFromHours,
   withoutEmptySeats,
   type TemplateDraft,
 } from './templateForm';
@@ -58,8 +61,22 @@ const template: ApparatusEventTemplate = {
       apparatus_name: null,
       required_evoc_level_name: 'EVOC 3',
       seats: [
-        { id: 's1', name: 'Driver', seat_type: ApparatusEventSeatType.DRIVER, count: 1, note: null },
-        { id: 's2', name: 'Elf', seat_type: ApparatusEventSeatType.GENERAL, count: 4, note: 'Candy canes' },
+        {
+          id: 's1',
+          name: 'Driver',
+          seat_type: ApparatusEventSeatType.DRIVER,
+          count: 1,
+          note: null,
+          is_essential: true,
+        },
+        {
+          id: 's2',
+          name: 'Elf',
+          seat_type: ApparatusEventSeatType.GENERAL,
+          count: 4,
+          note: 'Candy canes',
+          is_essential: true,
+        },
       ],
     },
   ],
@@ -163,5 +180,60 @@ describe('hoursWouldNotBeCredited', () => {
 
   it('says nothing before the options have loaded', () => {
     expect(hoursWouldNotBeCredited('', 'public_education', null)).toBe(false);
+  });
+});
+
+describe('consecutive nights', () => {
+  it('runs day after day, across a month end', () => {
+    expect(dailyDates('2026-11-29', 4)).toEqual(['2026-11-29', '2026-11-30', '2026-12-01', '2026-12-02']);
+  });
+
+  it('crosses a daylight-saving change without skipping or repeating a day', () => {
+    expect(dailyDates('2026-10-31', 3)).toEqual(['2026-10-31', '2026-11-01', '2026-11-02']);
+  });
+});
+
+describe('lengths entered in hours', () => {
+  it.each([
+    ['180', '3'],
+    ['150', '2.5'],
+    ['75', '1.25'],
+    ['', ''],
+    ['0', ''],
+  ])('shows %s minutes as "%s" hours', (minutes, hours) => {
+    expect(hoursText(minutes)).toBe(hours);
+  });
+
+  it.each([
+    ['3', '180'],
+    ['2.5', '150'],
+    ['0.25', '15'],
+    ['', ''],
+    ['-1', ''],
+    ['abc', ''],
+  ])('stores "%s" hours as "%s" minutes', (hours, minutes) => {
+    expect(minutesFromHours(hours)).toBe(minutes);
+  });
+});
+
+describe('essential seats', () => {
+  it('starts a new seat essential', () => {
+    expect(blankSeat('Elf').is_essential).toBe(true);
+  });
+
+  it('carries the flag to the payload, both ways', () => {
+    const draft = blankDraft('app-1');
+    draft.name = 'Santamobile';
+    draft.units = [
+      {
+        key: 'u',
+        apparatus_id: 'app-1',
+        seats: [
+          { ...blankSeat('Driver', ApparatusEventSeatType.DRIVER) },
+          { ...blankSeat('Elf'), is_essential: false },
+        ],
+      },
+    ];
+    expect(nth(toPayload(draft).units, 0).seats.map((s) => s.is_essential)).toEqual([true, false]);
   });
 });
