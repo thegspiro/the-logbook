@@ -149,10 +149,23 @@ comment, be left out of the self-evaluation, carry a weight, and carry a
 that turn the figure into a suggested rating. An evaluator whose rating
 departs from the suggestion must say why (`justification`).
 
-`overall_mode` is `weighted` (the weighted average of scored items, weights
-summing to 100), `evaluator` (the evaluator picks from the fixed five-level
-scale: Unsatisfactory, Needs improvement, Meets expectations, Exceeds
-expectations, Outstanding), or `none`.
+`overall_mode` is `sectioned`, `weighted` (the weighted average of scored
+items, weights summing to 100), `evaluator` (the evaluator picks from the
+fixed five-level scale: Unsatisfactory, Needs improvement, Meets expectations,
+Exceeds expectations, Outstanding), or `none`.
+
+**Grading by section** (`sectioned`, 2026-11-04) grades by section instead of
+one weighted percentage. Section weights sum to 100, and item weights are
+shares of their section. Each rating is placed on a 1 to 5 scale, a section is
+the weighted average of its rated items, and the overall is the weighted
+average of the sections. Per-form `grade_bands` turn a score into a grade
+(defaults: Outstanding 4.5, Exceeds 3.5, Meets 2.5, Needs improvement 1.5),
+read from the score as shown to one decimal. The evaluator may regrade a
+section or the overall with a required reason; both grades are reported. The
+one definition is `services/evaluation_grading.py`, used by the detail
+response, the PDF and the stateless `POST /evaluations/grades` the screen and
+builder preview call. `GET /evaluations/attention` feeds the counts on the
+section strip.
 
 **Workflow:** up to 12 steps, in this order of type: self-evaluation,
 evaluator, calibration, approvals (any number, each signed by a position's
@@ -207,7 +220,7 @@ that code (pitfall #29).
 | `shifts.performance_rating_avg`    | average 1–5 rating on shift completion reports                                      |
 | `shifts.field_evaluation_averages` | average rating per field shift evaluation form, one line each (shown, never scored) |
 | `calls.responses`                  | calls responded to                                                                  |
-| `calls.response_pct`               | calls responded to out of all calls (hidden when call tracking is off)              |
+| `calls.response_pct`               | calls responded to out of all calls (not available when call tracking is off)       |
 | `admin_hours.hours`                | approved administrative hours                                                       |
 | `skills.tests_passed`              | skills tests passed                                                                 |
 | `training.knowledge_tests_passed`  | knowledge tests passed, each once, with its best score                              |
@@ -325,9 +338,13 @@ Adding these sources changed the stored shape of no existing entry, so
    self-evaluation's due date and the template allows it, the evaluator may
    lock without it (the step is marked skipped and the PDF says so).
 3. **Calibration**, when the workflow has it, opens when the evaluator first
-   submits. A `view_all` holder completes it, optionally ticking items for the
-   evaluator to revisit; the evaluator then submits again.
-4. **Approvals** are signed by the step's position holders, in order.
+   submits. A `view_all` holder other than the evaluator, or the person a
+   manager named on the step, completes it, optionally ticking items for the
+   evaluator to revisit; the evaluator then submits again. While it is open,
+   the evaluator's step is neither reminded nor reported overdue, and the
+   evaluation reads as waiting on calibration _(2026-11-24)_.
+4. **Approvals** are signed by the step's position holders, or by the person
+   a manager named on the step, in order.
 5. **The member** reads the evaluation once everything before the
    acknowledgement is done, and acknowledges receipt or refuses with a reason.
    Either finalizes it. Acknowledging is not agreement, and the PDF says so.
@@ -558,6 +575,7 @@ All under `/api/v1/evaluations`.
 | Method and path                                                                                                               | Who                                                                                           |
 | ----------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
 | `GET/POST /templates`, `GET/PATCH/DELETE /templates/{id}`, `PUT/DELETE /templates/{id}/draft`, `POST /templates/{id}/publish` | `configure` (reading also `manage`)                                                           |
+| `GET /templates/starters`, `GET /templates/preview-options`, `POST /templates/preview`                                        | `configure`                                                                                   |
 | `GET /data-sources`, `GET /builder-options`                                                                                   | `configure`                                                                                   |
 | `GET/POST /periods`, `PATCH/DELETE /periods/{id}`                                                                             | `manage` (reading also `configure`)                                                           |
 | `GET ""`                                                                                                                      | `conduct`, `view_all` or `manage`                                                             |
@@ -565,14 +583,19 @@ All under `/api/v1/evaluations`.
 | `GET /bulk-preview`, `POST /bulk`                                                                                             | `manage`                                                                                      |
 | `GET /periods/{id}/reassign-options`, `GET /periods/{id}/reassign-preview`                                                    | `manage`                                                                                      |
 | `POST /periods/{id}/reassign`                                                                                                 | `manage`, with step-up                                                                        |
+| `POST /grades`                                                                                                                | `conduct`, `manage` or `configure`; a stateless calculation, nothing stored                   |
 | `GET /removed`                                                                                                                | `view_all`, `manage` or `delete`                                                              |
 | `GET /grade-spread?period_id=`                                                                                                | `view_all`                                                                                    |
 | `GET /export-pdfs?period_id=`                                                                                                 | `view_all`, with step-up                                                                      |
 | `GET /export?period_id=`                                                                                                      | `view_all`                                                                                    |
 | `GET /{id}/history`                                                                                                           | `view_all`; each review as the caller could open it                                           |
 | `GET /mine`, `/mine/live-data`, `/mine/removed`                                                                               | sign-in                                                                                       |
+| `GET /attention`                                                                                                              | sign-in; counts for the section strip                                                         |
 | `GET /crew`                                                                                                                   | sign-in; lists only the evaluations of members the caller supervises today                    |
 | `GET /{id}` and its actions                                                                                                   | anyone with a part in it; the service decides who may do what, and answers 404 to anyone else |
+| `PUT /{id}/parts/{kind}`, `POST /{id}/parts/{kind}/submit`                                                                    | the part's author: the member for the self-evaluation, the evaluator for theirs               |
+| `POST /{id}/refresh-data`                                                                                                     | the evaluator or `manage`, until the evaluator locks their part                               |
+| `GET /{id}/document`                                                                                                          | anyone who may read the evaluation; each download is audited                                  |
 | `POST /{id}/sign`                                                                                                             | the signer the open step waits on, with step-up                                               |
 | `POST /{id}/calibration/complete`                                                                                             | the person named on the step, else `view_all`; never the evaluator                            |
 | `GET /{id}/steps/{key}/assignee-candidates`                                                                                   | `manage`                                                                                      |

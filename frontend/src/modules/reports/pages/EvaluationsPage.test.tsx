@@ -114,12 +114,13 @@ describe('EvaluationsPage', () => {
     listTemplates.mockResolvedValue([template()]);
     listPeriods.mockResolvedValue([period()]);
     listStarters.mockResolvedValue([]);
-    draftOptions.mockResolvedValue({ members: [], evaluators: [], periods: [] });
+    draftOptions.mockResolvedValue({ members: [], evaluators: [], periods: [], templates: [] });
     bulkPreview.mockResolvedValue({ period: period(), kind: 'annual', rows: [], evaluators: [] });
     attention.mockResolvedValue({ mine: 0, overdue: 0 });
   });
 
   it('names the page in the strip, with the email wording one link away and the actions in the header', async () => {
+    granted = new Set(['evaluations.configure', 'evaluations.manage', 'settings.manage']);
     window.history.pushState({}, '', '/reports/evaluations');
     renderWithRouter(<EvaluationsPage />);
 
@@ -135,6 +136,15 @@ describe('EvaluationsPage', () => {
     );
     expect(screen.getByRole('button', { name: 'New review period' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'New template' })).toBeInTheDocument();
+  });
+
+  it('does not link the email wording for someone the Email Templates page would refuse', async () => {
+    window.history.pushState({}, '', '/reports/evaluations');
+    renderWithRouter(<EvaluationsPage />);
+
+    await screen.findByRole('navigation', { name: 'Evaluations sections' });
+    expect(screen.queryByRole('link', { name: 'Email Templates' })).not.toBeInTheDocument();
+    expect(screen.getByText(/worded by an administrator under Communications → Email Templates/)).toBeInTheDocument();
   });
 
   it('badges the strip with what waits in each section, as the server counts it', async () => {
@@ -419,9 +429,7 @@ describe('EvaluationsPage', () => {
       renderWithRouter(<EvaluationsPage />);
 
       const section = await checklist();
-      expect(
-        within(section).getByText('0 of 4 done. This goes away once evaluations are under way.')
-      ).toBeInTheDocument();
+      expect(within(section).getByText('0 of 4 done. This goes away once every step is done.')).toBeInTheDocument();
       expect(within(section).queryByRole('button', { name: 'New template' })).not.toBeInTheDocument();
       expect(within(section).queryByRole('button', { name: 'New review period' })).not.toBeInTheDocument();
       expect(
@@ -473,9 +481,7 @@ describe('EvaluationsPage', () => {
       expect(stepTitle('Publish an evaluation form (done)')).toBeInTheDocument();
       expect(stepTitle('Open a review period (done)')).toBeInTheDocument();
       expect(stepTitle('Draft the evaluations (to do)')).toBeInTheDocument();
-      expect(
-        within(section).getByText('2 of 4 done. This goes away once evaluations are under way.')
-      ).toBeInTheDocument();
+      expect(within(section).getByText('2 of 4 done. This goes away once every step is done.')).toBeInTheDocument();
       expect(
         await within(section).findByText('2 members would be left out: No active, published template fits this member.')
       ).toBeInTheDocument();
@@ -484,9 +490,14 @@ describe('EvaluationsPage', () => {
       expect(bulkPreview).toHaveBeenCalledWith('p1', 'annual');
     });
 
-    it('goes away once evaluations are under way', async () => {
+    it('goes away once every step is done', async () => {
       listPeriods.mockResolvedValue([period({ evaluations_count: 4 })]);
-      draftOptions.mockResolvedValue({ members: [], evaluators: [{ id: 'capt-1', name: 'Captain' }], periods: [] });
+      draftOptions.mockResolvedValue({
+        members: [],
+        evaluators: [{ id: 'capt-1', name: 'Captain' }],
+        periods: [],
+        templates: [],
+      });
       renderWithRouter(<EvaluationsPage />);
 
       await screen.findByRole('heading', { name: 'Operational Annual' });

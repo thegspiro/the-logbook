@@ -79,6 +79,10 @@ const OPTIONS: DraftOptions = {
   ],
   evaluators: [{ id: 'e1', name: 'Jordan Captain' }],
   periods: [{ id: 'p1', name: '2026 Annual', start_date: '2026-01-01', end_date: '2026-12-31' }],
+  templates: [
+    { id: 't1', name: 'Operational Annual', kind: 'annual' },
+    { id: 't2', name: 'Probationary Check-in', kind: 'interim' },
+  ],
 };
 
 const PREVIEW: BulkDraftPreview = {
@@ -160,9 +164,49 @@ describe('EvaluationListPage', () => {
     await user.click(draftButtons[draftButtons.length - 1] as HTMLElement);
 
     await waitFor(() =>
-      expect(create).toHaveBeenCalledWith({ member_id: 'm1', period_id: 'p1', evaluator_id: undefined, kind: 'annual' })
+      expect(create).toHaveBeenCalledWith({
+        member_id: 'm1',
+        period_id: 'p1',
+        evaluator_id: undefined,
+        kind: 'annual',
+        template_id: undefined,
+      })
     );
     expect(navigate).toHaveBeenCalledWith('/reports/evaluations/new-ev');
+  });
+
+  it('lets the drafter choose a form of the chosen kind, for a member no form fits', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<EvaluationListPage />);
+    await user.click(await screen.findByRole('button', { name: 'New evaluation' }));
+    await user.selectOptions(await screen.findByLabelText('Member'), 'm1');
+    await user.selectOptions(screen.getByLabelText('Review period'), 'p1');
+    const form = screen.getByLabelText('Form');
+    expect(
+      within(form)
+        .getAllByRole('option')
+        .map((o) => o.textContent)
+    ).toEqual(["Matched to the member's class and status", 'Operational Annual']);
+
+    await user.selectOptions(screen.getByLabelText('Kind'), 'interim');
+    expect(
+      within(form)
+        .getAllByRole('option')
+        .map((o) => o.textContent)
+    ).toEqual(["Matched to the member's class and status", 'Probationary Check-in']);
+    await user.selectOptions(form, 't2');
+    const draftButtons = screen.getAllByRole('button', { name: 'Draft evaluation' });
+    await user.click(draftButtons[draftButtons.length - 1] as HTMLElement);
+
+    await waitFor(() =>
+      expect(create).toHaveBeenCalledWith({
+        member_id: 'm1',
+        period_id: 'p1',
+        evaluator_id: undefined,
+        kind: 'interim',
+        template_id: 't2',
+      })
+    );
   });
 
   it('does not offer a conductor the choice of evaluator', async () => {
@@ -186,6 +230,10 @@ describe('EvaluationListPage', () => {
     expect(screen.getByRole('checkbox', { name: /Lee Recruit/ })).toBeDisabled();
     // Sam has no evaluator by default, so nothing drafts until one is chosen.
     expect(screen.getByRole('button', { name: 'Draft 3 evaluations' })).toBeDisabled();
+    // Said beside the button, not at the foot of the list where it scrolls away.
+    expect(screen.getByRole('button', { name: 'Draft 3 evaluations' })).toHaveAccessibleDescription(
+      'Choose an evaluator for each ticked member who has none, or untick them.'
+    );
     await user.selectOptions(screen.getByLabelText('Evaluator for Sam Driver'), 'e2');
     await user.click(screen.getByRole('checkbox', { name: /Ash Probie/ }));
     await user.click(screen.getByRole('button', { name: 'Draft 2 evaluations' }));
@@ -287,6 +335,23 @@ describe('EvaluationListPage', () => {
       await user.click(within(results).getByRole('button', { name: 'Export CSV' }));
       await waitFor(() => expect(exportPeriod).toHaveBeenCalledWith('p1'));
       expect(saveBlob).toHaveBeenCalledWith(expect.any(Blob), 'evaluation-results.csv');
+    });
+
+    it('drops a chosen period that the Show filter leaves nothing in', async () => {
+      granted = new Set(['evaluations.view_all']);
+      list.mockImplementation(({ status }: { status?: string }) =>
+        Promise.resolve(status === 'finalized' ? [ELSEWHERE] : [SUMMARY, DONE, DONE_TOO, ELSEWHERE])
+      );
+      const user = userEvent.setup();
+      renderWithRouter(<EvaluationListPage />);
+      await screen.findByRole('link', { name: 'Pat Member' });
+      await user.selectOptions(screen.getByLabelText('Period'), 'p1');
+      expect(screen.queryByRole('link', { name: 'Ash Probie' })).not.toBeInTheDocument();
+
+      await user.selectOptions(screen.getByLabelText('Show'), 'finalized');
+
+      expect(await screen.findByRole('link', { name: 'Ash Probie' })).toBeInTheDocument();
+      expect(screen.getByLabelText('Period')).toHaveValue('');
     });
 
     it("shows view_all each evaluator's grades beside the department's", async () => {

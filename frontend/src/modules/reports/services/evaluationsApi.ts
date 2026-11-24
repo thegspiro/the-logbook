@@ -184,6 +184,7 @@ export const evaluationsService = {
       members: asArray(body.members ?? []),
       evaluators: asArray(body.evaluators ?? []),
       periods: asArray(body.periods ?? []),
+      templates: asArray(body.templates ?? []),
     };
   },
 

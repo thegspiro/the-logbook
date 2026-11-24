@@ -17,20 +17,25 @@ evaluation is changed or removed, the member is told and the reason is kept.
 
 ## Where it lives
 
-Every member has one **Evaluations** entry in the navigation, which opens
-**My evaluations**. The other sections appear as a strip across the top of the
-evaluation pages, and only for a member whose permissions open them. A member
-with neither grant sees no strip at all. The strip's links carry counts: on
+When the Reports module is on, every member has one **Evaluations** entry in
+the navigation, which opens **My evaluations**. The other sections appear as a
+strip across the top of the evaluation pages, and only for a member whose
+permissions open them. A member who holds none of `evaluations.conduct`,
+`view_all`, `manage` or `configure` sees no strip at all. The strip's links carry counts: on
 **My evaluations**, how many of your own evaluations are waiting on you (your
 self-evaluation or acknowledgement), and on the conduct list, how many of the
 evaluations you can see there are past a due date.
 
-| Section                                         | Path                           | Who sees it                                                                                                                         |
-| ----------------------------------------------- | ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------- |
-| **My evaluations**                              | `/reports/evaluations/mine`    | every member: their own evaluations, deleted-evaluation records, and their figures for the current period                           |
-| **Evaluations I conduct** / **All evaluations** | `/reports/evaluations/conduct` | `evaluations.conduct`, `view_all` or `manage`: the evaluations to work on (named "All evaluations" for `view_all` and `manage`)     |
-| **Templates & periods**                         | `/reports/evaluations`         | `evaluations.configure` or `evaluations.manage`: forms and review periods                                                           |
-| An evaluation                                   | `/reports/evaluations/<id>`    | the member, the evaluator, approvers at their step, anyone named on a step, the member's current supervisor, and `view_all` holders |
+![My evaluations: the member's own evaluations and their figures for the current review period](images/evaluations-my-evaluations.png)
+
+![My evaluations on a phone](images/evaluations-my-evaluations-phone.png)
+
+| Section                                         | Path                           | Who sees it                                                                                                                                                                                     |
+| ----------------------------------------------- | ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **My evaluations**                              | `/reports/evaluations/mine`    | every member: their own evaluations, deleted-evaluation records, and their figures for the current period                                                                                       |
+| **Evaluations I conduct** / **All evaluations** | `/reports/evaluations/conduct` | `evaluations.conduct`, `view_all` or `manage`: the evaluations to work on (named "All evaluations" for `view_all` and `manage`)                                                                 |
+| **Templates & periods**                         | `/reports/evaluations`         | `evaluations.configure` or `evaluations.manage`: forms and review periods                                                                                                                       |
+| An evaluation                                   | `/reports/evaluations/<id>`    | the member, the evaluator, approvers at their step, anyone named on a step, the member's current supervisor, and `view_all` holders; `manage` holders see its status and steps, not its content |
 
 ## Who can do what
 
@@ -55,7 +60,8 @@ evaluations you can see there are past a due date.
   nobody signs two approvals on one evaluation _(2026-11-16)_. Holding the
   approving position or `view_all` does not change that. See
   [Naming who takes a step](#naming-who-takes-a-step).
-- **Signing**, **deleting** and **handing over work** ask the person to confirm their identity again
+- **Signing**, **deleting**, **naming who takes a step**, **handing over work**
+  and **downloading a period's signed PDFs** ask the person to confirm their identity again
   (password, passkey or authenticator), as other sensitive actions do — see
   [Authentication](Security-Authentication).
 
@@ -66,15 +72,22 @@ evaluations you can see there are past a due date.
 Until evaluations are under way, **Templates & periods** shows a **Getting
 started** checklist: publish a form, open a review period, give someone besides
 the Chief the Conduct evaluations permission, and draft. Each step is ticked off
-from what the department already has, and the checklist goes away once the
-first evaluation is drafted. Once a form is published and a period is open, it
+from what the department already has, and the checklist goes away once every
+step is done — so it stays, with the rest ticked, while the Chief is still the
+only one who may conduct evaluations. Once a form is published and a period is open, it
 also lists the members that drafting the period would leave out, and why — no
 form fits them, or they served no full month — so they can be fixed before
 drafting rather than during it.
 
+![Templates & periods: the section strip, the published Annual Member Evaluation form and the 2025 and 2026 review periods](images/evaluations-setup.png)
+
 ### 1. Build the forms
 
 **Evaluations → Templates & periods → New template.** Choose:
+
+![The New evaluation template dialog with the Annual Member Evaluation starter chosen, filling in the name, kind and who it applies to](images/evaluations-new-template.png)
+
+![The template builder for the Annual Member Evaluation, with its sections, items and weights](images/evaluations-template-builder.png)
 
 - **Start from** a blank form or a ready-made one. Three are offered: an
   **Annual Member Evaluation** (training, operational performance,
@@ -124,13 +137,13 @@ figures: **events attended by type** (`events.attended_by_type`, one line per
 event type, adding up to the attended count), **certifications expiring soon**
 (`certifications.expiring_soon`, held at the period's end and expiring within
 90 days after it, the window the member's training stats use) and **field
-shift evaluation averages** (`shifts.field_evaluation_averages`, per form,
+shift evaluation scores** (`shifts.field_evaluation_averages`, per form,
 never pooled across scales, only evaluations the member can see). All three
-are lists: shown, not scored. `GET /evaluations/data-sources` now gives each
-source an `unavailable_reason` when the Training or Scheduling module, or call
-tracking, is off; the builder labels it **(turned off)** but still offers it,
-since a published form may already use it. The builder also lists the values
-a scoring rule's bands leave unscored.
+are lists: shown, not scored. A source whose module (Training or Scheduling)
+or call tracking is off is labelled **(turned off)** in the builder but still
+offered, since a published form may already use it. When a scoring rule's
+bands leave values uncovered, the editor says "No rating is suggested for
+values …".
 
 For each item you can also choose whether it may be N/A, whether a comment is
 optional, required or not offered, whether certain levels need a specific
@@ -154,21 +167,17 @@ training hours suggests level 2). An evaluator who rates differently from the
 suggestion must say why. The figures available are training hours, training
 requirements met, training session attendance, business meeting attendance,
 events attended, shift hours, shifts worked, shift performance rating, calls
-responded to, call response rate (hidden when call tracking is off),
+responded to, call response rate (reads "not available" when call tracking is off),
 administrative hours, skills tests passed, certifications held, and positions
 held.
 
 _Updated 2026-11-14._ The list is grouped by area (Training, Business
 meetings, Events, Shifts, Calls, Administrative hours, Membership) and also
-offers field shift evaluation scores, certifications expiring soon, event
-attendance by type, and waiver requests for training sessions and business
-meetings (shown, never scored; a request's line ends "attachment on file" when
-at least one document was on file when the figures were taken, and says
-nothing else about it — attachments are deleted a set time after a request
-closes, a year by default, so a later draft can read no). A source whose
-module or call tracking is off
-reads "(turned off)". When the score bands leave values uncovered, the editor
-says "No rating is suggested for values …". Each figure now shows the counts
+offers waiver requests for training sessions and business meetings (shown,
+never scored; a request's line ends "attachment on file" when at least one
+document was on file when the figures were taken, and says nothing else about
+it — attachments are deleted a set time after a request closes, a year by
+default, so a later draft can read no). Each figure now shows the counts
 behind it ("6 of 8 meetings attended"), on screen and in the PDF, and the
 call response rate leaves out calls during a leave or a gap in membership.
 
@@ -182,7 +191,9 @@ with its best passing score), **Equipment checks completed**
 their own, with how many found a failed item) and **Property overdue at period
 end** (`inventory.overdue_at_period_end`; items checked out past their due
 date and not returned on the period's last day — loans with no due date and
-temporary assignments are not counted). None is labelled "(turned off)".
+temporary assignments are not counted). **Hours for other agencies** and
+**Knowledge tests passed** are labelled "(turned off)" when Scheduling or
+Training is off; the equipment and inventory figures never are.
 
 _Updated 2026-11-10._ **Training session attendance** follows the
 session-attendance requirement that applies to the member: only the sessions
@@ -257,21 +268,29 @@ period stops new evaluations being drafted for it.
 
 ## Drafting evaluations
 
-**Evaluations → New evaluation** drafts one: choose the member, the period
+**Evaluations → Evaluations I conduct** (**All evaluations** for `view_all`
+and `manage` holders) **→ New evaluation** drafts one: choose the member, the period
 and the kind. A manager may choose the evaluator; left blank, it goes to the
 member's supervisor if they may conduct evaluations, otherwise to the manager.
 Someone who only holds `conduct` drafts evaluations they will conduct
-themselves.
+themselves. The **Form** is matched to the member's class and status unless
+you choose one _(2026-11-24)_ — choose it when no form fits the member, or
+when more than one fits equally well. Only current members can be drafted
+for, or named as evaluator.
 
-**Evaluations → Draft a review period** (managers) drafts many at once:
+![The New evaluation dialog: member, review period, kind, the Form choice and the evaluator](images/evaluations-new-evaluation.png)
+
+**Draft a review period** (managers, on the same list) drafts many at once:
 
 1. Choose the period and the kind, then **Preview members**.
 2. Every current member is listed with the form and evaluator they would get,
-   or why they are left out (already drafted, no form fits, or no full month
-   served in the period).
-3. Untick anyone you do not want drafted, and choose an evaluator wherever
-   none is filled in.
-4. **Draft**. Anyone who could not be drafted is listed with the reason.
+   or why they are left out (already drafted, no form fits, two forms fit
+   equally well, or no full month served in the period). Anyone left out for
+   want of a form can be drafted one at a time from **New evaluation**,
+   choosing the form there.
+
+![Draft a review period: the preview lists each current member with the form and evaluator they would get, or why they are left out](images/evaluations-draft-period.png) 3. Untick anyone you do not want drafted, and choose an evaluator wherever
+none is filled in. 4. **Draft**. Anyone who could not be drafted is listed with the reason.
 
 **Which time counts.** The figures cover the member's time in the period, not
 the whole period: they start from the first full month after the member joined
@@ -309,6 +328,8 @@ their part.
   Either one finalizes the evaluation. Acknowledging is not agreeing, and the
   PDF says so.
 
+![An evaluation in progress, seen by its evaluator: the steps, the member's figures for the period, and the evaluator's form](images/evaluations-in-progress.png)
+
 ## Self-evaluation beside the evaluation
 
 _(2026-11-22)_ Once the member has submitted their self-evaluation, the
@@ -329,6 +350,8 @@ _(2026-11-16)_ Refusing the evaluator at calibration and approval would stall
 an evaluation where the evaluator is the only holder of the step's position —
 a department whose only Captain wrote it, say. So an `evaluations.manage`
 holder can name who takes an approval or calibration step on one evaluation:
+
+![The Who takes dialog for the calibration step, listing the members who may be named](images/evaluations-assign-step.png)
 
 - On the evaluation's step list, a step not yet done shows **Assign** (or
   **Change**). The **Who takes "…"** dialog lists the members who may be
@@ -385,6 +408,8 @@ changed the calculated one), and its goals under **Goals set then**, with
 yourself, so a new evaluator without `view_all` does not see a predecessor's
 review. It is not printed on the PDF.
 
+![The Last review card: last year's overall and section grades, and the goals set then, with Open the last review](images/evaluations-last-review.png)
+
 ## Rating last year's goals
 
 _(2026-11-21)_ A **Last review's goals** item turns the card's goals into a
@@ -412,6 +437,8 @@ CSV** (`evaluation-results.csv`, one row per evaluation; each export audited
 as `evaluation_period_exported`). `evaluations.manage` alone shows no grades.
 Your own evaluation is left out of the list and the export.
 
+![All evaluations filtered to the 2025 period: the Overall grade column and the Period results card with Grades by evaluator, Export CSV and Download signed PDFs](images/evaluations-conduct-period-results.png)
+
 ### Grades by evaluator
 
 _(2026-11-23)_ At the foot of the **Period results** card, **Grades by
@@ -437,6 +464,8 @@ it hands over a period's personnel records at once; each download is audited
 export. Files are named _Member - Form - period end.pdf_; your own evaluation
 is left out, as on the list. A PDF that cannot be read from storage is named
 in **NOT INCLUDED.txt** inside the zip instead of failing the download.
+If the button is greyed out, set **Show** to **All**: it counts the finalized
+evaluations the list is showing, though the zip itself ignores that filter.
 
 ## Review history
 
@@ -448,19 +477,6 @@ result** where the form has none). Grades on different forms sit side by side
 with the form named, since a member may have moved from one form to another.
 A review you could not open yourself is left out. It is not printed on the
 PDF.
-
-## Grading by section
-
-A form with `overall_mode` `sectioned` (2026-11-04) is graded by section instead
-of showing one weighted percentage. Each rating is placed on a 1 to 5 scale, a
-section is the weighted average of its rated items, and the overall is the
-weighted average of the sections. Per-form `grade_bands` turn a score into a
-grade (defaults: Outstanding 4.5, Exceeds 3.5, Meets 2.5, Needs improvement 1.5),
-read from the score as shown to one decimal. The evaluator may regrade a section
-or the overall with a required reason; both grades are reported. The one
-definition is `services/evaluation_grading.py`, used by the detail response, the
-PDF and the stateless `POST /evaluations/grades` the screen and builder preview
-call. `GET /evaluations/attention` feeds the counts on the section strip.
 
 ## The PDF
 
@@ -489,6 +505,10 @@ are footed "Page X of Y" _(2026-11-20)_; a PDF frozen before then keeps its
   signatures and its PDF for good, with a reason. A record that it was
   deleted, by whom and why stays on the member's history, where the member
   reads it under **Evaluations → My evaluations → Deleted evaluations**.
+
+![A finalized evaluation: every step done, the signatures, Download PDF and the review history](images/evaluations-finalized.png)
+
+![The member's finalized evaluation, with the written response box and Submit response](images/evaluations-member-response.png)
 
 ---
 

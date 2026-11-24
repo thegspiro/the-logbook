@@ -12,6 +12,7 @@ import { ArrowLeft, Download, FilePenLine, PenLine, RefreshCw, Trash2 } from 'lu
 import toast from 'react-hot-toast';
 import { useConfirm } from '../../../contexts/ConfirmContext';
 import { useTimezone } from '../../../hooks/useTimezone';
+import { useUnsavedChanges } from '../../../hooks/useUnsavedChanges';
 import { conductListLabel } from '../../../components/layout/evaluationsNavigation';
 import { useSectionPermission } from '../../../components/layout/useSectionPermission';
 import { useAuthStore } from '../../../stores/authStore';
@@ -80,6 +81,10 @@ const EvaluationDetailPage: React.FC = () => {
     detail?.grades ?? null
   );
   const [dirty, setDirty] = useState(false);
+  useUnsavedChanges({
+    hasChanges: dirty,
+    message: 'Your changes to this evaluation have not been saved. Are you sure you want to leave?',
+  });
   const [busy, setBusy] = useState(false);
   const [signing, setSigning] = useState<SigningOption | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -114,6 +119,14 @@ const EvaluationDetailPage: React.FC = () => {
 
   useEffect(() => {
     let cancelled = false;
+    // The Last review and Review history links open another evaluation on this
+    // same route, which keeps the page mounted: without the reset, the previous
+    // record (and its Submit and Sign buttons) stays on screen under the new
+    // address until the next one arrives, and a load error outlives the record
+    // it was about.
+    setDetail(null);
+    setLoadError(null);
+    setDirty(false);
     evaluationsService
       .get(evaluationId)
       .then((loaded) => {
@@ -141,6 +154,13 @@ const EvaluationDetailPage: React.FC = () => {
   }
 
   const kind = editableKind(detail);
+  const backTo = detail.viewer.is_member
+    ? '/reports/evaluations/mine'
+    : readsAsOfficer
+      ? '/reports/evaluations/conduct'
+      : '/members/my-crew';
+  const backLabel = detail.viewer.is_member ? 'My evaluations' : readsAsOfficer ? conductLabel : 'My crew';
+
   const readOnlyParts = detail.parts.filter((p) => p.kind !== kind && p.kind in PART_TITLES);
   // The self-evaluation once the member has submitted it, beside the
   // evaluator's ratings: their live draft while they write, otherwise the part
@@ -153,6 +173,11 @@ const EvaluationDetailPage: React.FC = () => {
     setDraft(content);
     setDirty(true);
   };
+
+  // Neither calibration nor naming a step touches the part being edited, so a
+  // manager who is also this evaluation's evaluator keeps their unsaved edits:
+  // a revision that can never match tells adopt to leave the draft alone.
+  const keepEdits = () => (dirty ? -1 : editRevision.current);
 
   const save = async (): Promise<boolean> => {
     if (!kind) return false;
@@ -196,9 +221,14 @@ const EvaluationDetailPage: React.FC = () => {
   };
 
   const refresh = async () => {
+    // Update figures is offered while the evaluator's part is open, and the
+    // response carries that part as last saved — and, on a form that rates last
+    // review's goals, the goals copied into it again. Saving first keeps what
+    // the evaluator typed and lets the refreshed part replace the draft.
+    if (dirty && !(await save())) return;
     setBusy(true);
     try {
-      adopt(await evaluationsService.refreshData(detail.id), editRevision.current);
+      adopt(await evaluationsService.refreshData(detail.id), null);
       toast.success('Figures updated');
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Could not update the figures.'));
@@ -210,7 +240,7 @@ const EvaluationDetailPage: React.FC = () => {
   const calibrate = async (flaggedItems: string[]) => {
     setBusy(true);
     try {
-      adopt(await evaluationsService.completeCalibration(detail.id, flaggedItems), editRevision.current);
+      adopt(await evaluationsService.completeCalibration(detail.id, flaggedItems), keepEdits());
       setCalibrating(false);
       toast.success('Calibration recorded');
     } catch (err: unknown) {
@@ -224,7 +254,7 @@ const EvaluationDetailPage: React.FC = () => {
     if (!assigning) return;
     setBusy(true);
     try {
-      adopt(await evaluationsService.assignStep(detail.id, assigning.key, assigneeId), editRevision.current);
+      adopt(await evaluationsService.assignStep(detail.id, assigning.key, assigneeId), keepEdits());
       setAssigning(null);
       toast.success(assigneeId ? 'Step assigned' : 'Step handed back');
     } catch (err: unknown) {
@@ -269,7 +299,9 @@ const EvaluationDetailPage: React.FC = () => {
     try {
       await evaluationsService.remove(detail.id, reason);
       toast.success('Evaluation deleted');
-      void navigate('/reports/evaluations/conduct');
+      // Deleting needs only evaluations.delete, which does not open the conduct
+      // list, so return to wherever this reader came from.
+      void navigate(backTo);
     } catch (err: unknown) {
       setBusy(false);
       if (toAppError(err).status === 422) throw err;
@@ -320,13 +352,6 @@ const EvaluationDetailPage: React.FC = () => {
       setBusy(false);
     }
   };
-
-  const backTo = detail.viewer.is_member
-    ? '/reports/evaluations/mine'
-    : readsAsOfficer
-      ? '/reports/evaluations/conduct'
-      : '/members/my-crew';
-  const backLabel = detail.viewer.is_member ? 'My evaluations' : readsAsOfficer ? conductLabel : 'My crew';
 
   return (
     <div className="min-h-screen">

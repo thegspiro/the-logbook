@@ -9,7 +9,7 @@
  */
 import React from 'react';
 import type { GradeResult, ScaleLevel } from '../../types/evaluations';
-import { describeCalculatedGrade } from '../../utils/evaluationRecord';
+import { MAX_ANSWER_TEXT, describeCalculatedGrade } from '../../utils/evaluationRecord';
 
 interface GradePanelProps {
   id: string;
@@ -83,6 +83,7 @@ export const GradePanel: React.FC<GradePanelProps> = ({
                 Why is this {labelOf(overrideLevel)} rather than {labelOf(calculated) || 'ungraded'}? (required)
               </label>
               <textarea
+                maxLength={MAX_ANSWER_TEXT}
                 id={`${id}-reason`}
                 className="form-input min-h-20"
                 value={reason}

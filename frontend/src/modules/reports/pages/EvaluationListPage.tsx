@@ -34,9 +34,16 @@ interface DraftForm {
   period_id: string;
   evaluator_id: string;
   kind: EvaluationTemplateKind;
+  template_id: string;
 }
 
-const EMPTY_DRAFT: DraftForm = { member_id: '', period_id: '', evaluator_id: '', kind: EvaluationTemplateKind.ANNUAL };
+const EMPTY_DRAFT: DraftForm = {
+  member_id: '',
+  period_id: '',
+  evaluator_id: '',
+  kind: EvaluationTemplateKind.ANNUAL,
+  template_id: '',
+};
 
 const EvaluationListPage: React.FC = () => {
   const navigate = useNavigate();
@@ -100,6 +107,13 @@ const EvaluationListPage: React.FC = () => {
         .map((e) => [e.period_id ?? '', e.period_name ?? formatCalendarDate(e.period_end)] as const)
     ).entries(),
   ];
+  // The periods offered come from the list as filtered by Show, so a period
+  // chosen under one filter can vanish under the next: the dropdown would then
+  // read "All periods" over a list still filtered to it.
+  const selectedPeriodShown = !periodId || periods.some(([id]) => id === periodId);
+  useEffect(() => {
+    if (!loading && !selectedPeriodShown) setPeriodId('');
+  }, [loading, selectedPeriodShown]);
   const shown = periodId ? evaluations.filter((e) => e.period_id === periodId) : evaluations;
   const finalizedCount = shown.filter((e) => e.status === 'finalized').length;
 
@@ -150,6 +164,7 @@ const EvaluationListPage: React.FC = () => {
         period_id: draft.period_id,
         evaluator_id: draft.evaluator_id || undefined,
         kind: draft.kind,
+        template_id: draft.template_id || undefined,
       });
       toast.success('Evaluation drafted');
       setDraft(null);
@@ -467,10 +482,32 @@ const EvaluationListPage: React.FC = () => {
                     id="draft-kind"
                     className="form-input"
                     value={draft.kind}
-                    onChange={(e) => setDraft({ ...draft, kind: e.target.value as EvaluationTemplateKind })}
+                    onChange={(e) =>
+                      setDraft({ ...draft, kind: e.target.value as EvaluationTemplateKind, template_id: '' })
+                    }
                   >
                     <option value={EvaluationTemplateKind.ANNUAL}>Annual evaluation</option>
                     <option value={EvaluationTemplateKind.INTERIM}>Check-in</option>
+                  </select>
+                </div>
+                <div>
+                  <label htmlFor="draft-template" className="form-label">
+                    Form
+                  </label>
+                  <select
+                    id="draft-template"
+                    className="form-input"
+                    value={draft.template_id}
+                    onChange={(e) => setDraft({ ...draft, template_id: e.target.value })}
+                  >
+                    <option value="">Matched to the member&apos;s class and status</option>
+                    {options.templates
+                      .filter((t) => t.kind === draft.kind)
+                      .map((t) => (
+                        <option key={t.id} value={t.id}>
+                          {t.name}
+                        </option>
+                      ))}
                   </select>
                 </div>
                 {canManage && (
@@ -496,7 +533,7 @@ const EvaluationListPage: React.FC = () => {
                   </div>
                 )}
                 <p className="text-theme-text-secondary text-xs">
-                  The form is chosen from the member&apos;s class and status, and the figures are taken now.
+                  Choose a form when none fits the member, or when more than one does. The figures are taken now.
                   {canManage ? '' : ' You will be the evaluator.'}
                 </p>
               </>

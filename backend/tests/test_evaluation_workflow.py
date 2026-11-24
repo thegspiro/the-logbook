@@ -563,6 +563,40 @@ class TestDrafting:
         assert response.status_code == 400
         assert "More than one template fits" in response.json()["detail"]
 
+    async def test_drafting_refuses_a_member_or_evaluator_who_is_not_current(
+        self, dept: _Dept, make_client: ClientFactory
+    ):
+        """Every other drafting path offers current members only; a direct
+        request must not draft a retired member or name a departed evaluator,
+        who could never act on the evaluation."""
+        manager = await make_client(dept.manager)
+        dept.evaluator.status = "retired"
+        await dept.db.flush()
+        response = await manager.post(
+            "/evaluations",
+            json={
+                "member_id": dept.member.id,
+                "period_id": dept.period.id,
+                "evaluator_id": dept.evaluator.id,
+            },
+        )
+        assert response.status_code == 400
+        assert response.json()["detail"] == "Name a current member of the department."
+
+        dept.evaluator.status = "active"
+        dept.member.status = "inactive"
+        await dept.db.flush()
+        response = await manager.post(
+            "/evaluations",
+            json={
+                "member_id": dept.member.id,
+                "period_id": dept.period.id,
+                "evaluator_id": dept.evaluator.id,
+            },
+        )
+        assert response.status_code == 400
+        assert "is not a current member" in response.json()["detail"]
+
     async def test_drafting_is_audited(self, dept: _Dept, make_client: ClientFactory):
         detail = await _draft(await make_client(dept.manager), dept)
         logged = (
@@ -1496,6 +1530,40 @@ class TestDraftingDefaults:
         member = await make_client(dept.member)
         assert (await member.get("/evaluations/draft-options")).status_code == 403
 
+    async def test_draft_options_offer_active_published_templates(
+        self, dept: _Dept, make_client: ClientFactory
+    ):
+        """Drafting answers "Choose a template" when no form fits or two fit
+        equally, so the dialog is given the forms it may choose from: active
+        ones with a published version, and no others."""
+        check_in = await _template(dept.db, dept.org, name="Check-in", kind="interim")
+        retired = await _template(dept.db, dept.org, name="Retired form")
+        retired.is_active = False
+        unpublished = EvaluationTemplate(
+            organization_id=dept.org, name="Unpublished", kind="annual", is_active=True
+        )
+        dept.db.add(unpublished)
+        await dept.db.flush()
+        dept.db.add(
+            EvaluationTemplateVersion(
+                organization_id=dept.org,
+                template_id=unpublished.id,
+                version_number=1,
+                definition=DEFINITION,
+                workflow=ANNUAL,
+            )
+        )
+        await dept.db.flush()
+
+        response = await (await make_client(dept.evaluator)).get(
+            "/evaluations/draft-options"
+        )
+        assert response.status_code == 200
+        assert response.json()["templates"] == [
+            {"id": check_in.id, "name": "Check-in", "kind": "interim"},
+            {"id": dept.template.id, "name": dept.template.name, "kind": "annual"},
+        ]
+
 
 WITH_APPROVAL_STEPS = [
     _step("self_evaluation", "self_evaluation", "member", 14),
@@ -2038,6 +2106,42 @@ class TestWhenAStepOpens:
         assert outbox.to(dept.member, REMINDER) == []
         assert counts["reminders"] == 0
 
+    async def test_an_evaluator_waiting_on_calibration_is_not_chased(
+        self, dept: _Dept, make_client: ClientFactory, outbox: _Outbox
+    ):
+        """The evaluator's step stays open while their part is with
+        calibration, but they cannot act on it then; the evaluation is waiting
+        on calibration, which is what the list names and the scan chases."""
+        calibrated = await _template(
+            dept.db, dept.org, name="Calibrated", workflow=WITH_CALIBRATION
+        )
+        detail = await _draft(
+            await make_client(dept.manager), dept, template_id=calibrated.id
+        )
+        url = f"/evaluations/{detail['id']}"
+        member = await make_client(dept.member)
+        evaluator = await make_client(dept.evaluator)
+        await member.put(f"{url}/parts/self_evaluation", json={"content": SELF_ANSWERS})
+        await member.post(f"{url}/parts/self_evaluation/submit")
+        await evaluator.put(
+            f"{url}/parts/evaluator", json={"content": EVALUATOR_ANSWERS}
+        )
+        sent = await evaluator.post(f"{url}/parts/evaluator/submit")
+        assert sent.json()["outcome"] == "sent_for_calibration"
+        outbox.clear()
+
+        await EvaluationNoticeService(dept.db).send_due_notices(
+            now=_at(EVALUATOR_DUE + timedelta(days=1))
+        )
+
+        assert outbox.to(dept.evaluator, OVERDUE) == []
+        assert outbox.to(dept.evaluator, REMINDER) == []
+        assert (
+            await _step(dept, detail["id"], "evaluator")
+        ).overdue_notice_sent_at is None
+        (row,) = (await (await make_client(dept.manager)).get("/evaluations")).json()
+        assert row["current_step"] == "Calibration"
+
 
 class TestFinalized:
     async def test_the_member_and_the_evaluator_are_told(
@@ -2550,7 +2654,116 @@ async def _finalized(
     return url
 
 
+class TestDocumentBuildFailure:
+    """Finalizing commits the signature first and freezes the PDF after it. A
+    PDF that cannot be built then must not cost the action its audit row, nor
+    turn the committed action into an error: the download builds it later."""
+
+    async def test_a_failed_pdf_keeps_the_signature_audited_and_answers_200(
+        self, dept: _Dept, make_client: ClientFactory, monkeypatch
+    ):
+        from app.services import evaluation_document_service as documents
+
+        def broken(_record):
+            raise RuntimeError("renderer unavailable")
+
+        monkeypatch.setattr(documents, "render_evaluation_pdf", broken)
+        detail = await _draft(await make_client(dept.manager), dept)
+        url = f"/evaluations/{detail['id']}"
+        await _lock_evaluator(dept, make_client, url)
+        signed = await (await make_client(dept.member)).post(
+            f"{url}/sign",
+            json={
+                "signed_name": dept.member.full_name,
+                "disposition": "acknowledged",
+                "intent_confirmed": True,
+            },
+        )
+
+        assert signed.status_code == 200, signed.text
+        assert signed.json()["outcome"] == "finalized"
+        audited = (
+            (
+                await dept.db.execute(
+                    select(AuditLog).where(
+                        AuditLog.event_type == "evaluation_signed",
+                        AuditLog.user_id == dept.member.id,
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        assert len(audited) == 1
+
+    async def test_a_failed_response_pdf_keeps_the_response_audited(
+        self, dept: _Dept, make_client: ClientFactory, monkeypatch
+    ):
+        from app.services import evaluation_document_service as documents
+
+        url = await _finalized(dept, make_client)
+
+        def broken(_record):
+            raise RuntimeError("renderer unavailable")
+
+        monkeypatch.setattr(documents, "render_evaluation_pdf", broken)
+        member = await make_client(dept.member)
+        await member.put(f"{url}/response", json={"text": "My response."})
+        submitted = await member.post(f"{url}/response/submit")
+
+        assert submitted.status_code == 200, submitted.text
+        audited = (
+            (
+                await dept.db.execute(
+                    select(AuditLog).where(
+                        AuditLog.event_type == "evaluation_response_submitted"
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        assert len(audited) == 1
+
+
 class TestAmending:
+    async def test_an_amended_check_in_does_not_promise_an_acknowledgement(
+        self, dept: _Dept, make_client: ClientFactory, outbox: _Outbox
+    ):
+        """A check-in has no acknowledgement step, so the member's notice
+        must not say they will be asked to acknowledge it again."""
+        interim = await _template(
+            dept.db, dept.org, name="Monthly check-in", kind="interim", workflow=INTERIM
+        )
+        detail = await _draft(
+            await make_client(dept.manager),
+            dept,
+            kind="interim",
+            template_id=interim.id,
+        )
+        url = f"/evaluations/{detail['id']}"
+        member = await make_client(dept.member)
+        evaluator = await make_client(dept.evaluator)
+        await member.put(f"{url}/parts/self_evaluation", json={"content": SELF_ANSWERS})
+        await member.post(f"{url}/parts/self_evaluation/submit")
+        await evaluator.put(
+            f"{url}/parts/evaluator", json={"content": EVALUATOR_ANSWERS}
+        )
+        locked = await evaluator.post(f"{url}/parts/evaluator/submit")
+        assert locked.json()["outcome"] == "finalized"
+        outbox.clear()
+
+        response = await (await make_client(dept.manager)).post(
+            f"{url}/amend", json={"reason": "Wrong month."}
+        )
+
+        assert response.status_code == 200, response.text
+        (notice,) = outbox.to(dept.member, AMENDED)
+        assert notice["summary"] == (
+            f"{dept.manager.full_name} amended your evaluation for "
+            f"{dept.period.name}. It goes back through its steps."
+        )
+
     async def test_amending_reopens_from_the_evaluator_and_tells_the_member(
         self, dept: _Dept, make_client: ClientFactory, outbox: _Outbox, monkeypatch
     ):
@@ -2623,6 +2836,7 @@ class TestAmending:
 
         (notice,) = outbox.to(dept.member, AMENDED)
         assert notice["summary"].startswith(f"{dept.manager.full_name} amended your")
+        assert notice["summary"].endswith("you will be asked to acknowledge it again.")
         assert "wrong year" not in str(notice)
         assert len(outbox.to(dept.evaluator, WAITING)) == 1
 

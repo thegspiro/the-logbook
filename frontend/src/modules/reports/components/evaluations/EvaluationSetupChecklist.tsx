@@ -179,7 +179,7 @@ export const EvaluationSetupChecklist: React.FC<EvaluationSetupChecklistProps> =
         Getting started
       </h2>
       <p className="text-theme-text-secondary mt-1 text-sm">
-        {steps.filter((s) => s.done).length} of {steps.length} done. This goes away once evaluations are under way.
+        {steps.filter((s) => s.done).length} of {steps.length} done. This goes away once every step is done.
       </p>
       <ol className="mt-4 space-y-4">
         {steps.map((step) => (

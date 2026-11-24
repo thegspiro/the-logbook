@@ -1519,8 +1519,8 @@ station is a free-text field, and positions say what a member does, but no
 column or table links a member to the officer they report to. So "my crew" and
 "the members I supervise" cannot be answered anywhere in the application.
 
-Member performance evaluations (`app/models/evaluation.py`) are the first
-feature to feel this. Until a relationship exists, anyone holding the
+Member performance evaluations (`app/models/evaluation.py`) were the first
+feature to feel this. _As first recorded (resolved below):_ until a relationship existed, anyone holding the
 evaluator permission may be assigned to evaluate any member (owner decision
 2026-10-31): the evaluator is named per evaluation, by whoever drafts it or in
 bulk by an evaluation manager, rather than derived from a supervisor. The one
@@ -1532,8 +1532,8 @@ model's docstring for why).
 `reports_to_id` on `users`, or a dated assignment table so the history of who
 supervised a member is kept), and then decide which features read it —
 evaluator defaults, line-officer visibility of their own crew's evaluations,
-and approvals. Not started; it is a change to the member model and its editing
-screens, separate from the evaluations work.
+and approvals. It was a change to the member model and its editing screens,
+separate from the evaluations work — decided and built as recorded next.
 
 **Resolved (2026-11-01), owner decision: dated supervisor assignments.**
 `member_supervisor_assignments` (migration `a1c3e5f7b9d2`) records who a member
