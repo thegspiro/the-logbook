@@ -100,13 +100,22 @@ export const waiverAttachmentService = {
     return response.data;
   },
 
-  /** Fetch one document through the authenticated client and save it under its neutral name. */
-  async downloadAttachment(requestId: string, attachment: WaiverAttachment): Promise<void> {
+  /**
+   * One document's bytes, through the authenticated client: the same audited
+   * route a download uses, so a preview is never served from a public URL.
+   * Typed from the stored MIME type, which the server detected on upload.
+   */
+  async fetchAttachment(requestId: string, attachment: WaiverAttachment): Promise<Blob> {
     const response = await api.get<Blob>(
       `${BASE}/${encodeURIComponent(requestId)}/attachments/${encodeURIComponent(attachment.id)}`,
       { responseType: 'blob' }
     );
-    saveBlob(response.data, attachment.filename);
+    return new Blob([response.data], { type: attachment.mime_type });
+  },
+
+  /** Fetch one document and save it under its neutral name. */
+  async downloadAttachment(requestId: string, attachment: WaiverAttachment): Promise<void> {
+    saveBlob(await waiverAttachmentService.fetchAttachment(requestId, attachment), attachment.filename);
   },
 };
 
