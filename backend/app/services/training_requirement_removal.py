@@ -6,8 +6,9 @@ a valid reference; one nothing points at is hard-deleted.
 
 A hard delete is not harmless here even where the database allows it.
 ``program_requirements``, ``requirement_progress`` (and the credits under it),
-``recertification_pathways``, ``training_session_requirements`` and
-``training_requirement_overrides`` cascade, so the delete would erase members'
+``recertification_pathways``, ``training_session_requirements``,
+``training_requirement_overrides`` and ``rolling_requirement_last_met``
+cascade, so the delete would erase members'
 progress, pipeline structure and Chief overrides; the skills-testing,
 knowledge-test, session and course-class links are SET NULL, so those records
 would silently lose which requirement they satisfied; and compliance profiles
@@ -39,6 +40,7 @@ from app.models.training import (
     ProgramRequirement,
     RecertificationPathway,
     RequirementProgress,
+    RollingRequirementLastMet,
     TrainingRequirement,
     TrainingRequirementOverride,
     TrainingSession,
@@ -94,6 +96,16 @@ _FOREIGN_KEY_REFERENCES: Sequence[_ForeignKeyReference] = (
         "training_requirement_overrides",
         "Chief overrides",
         TrainingRequirementOverride.requirement_id,
+        REMOVED,
+    ),
+    # Bookkeeping for the compliance-notice task, not history: a member's last
+    # met date for a rolling requirement. Counted like any reference, so a
+    # requirement members have been meeting is deactivated rather than
+    # deleted by an ordinary delete; a permanent delete removes the dates.
+    _ForeignKeyReference(
+        "rolling_requirement_last_met",
+        "Compliance notice dates (last met)",
+        RollingRequirementLastMet.requirement_id,
         REMOVED,
     ),
     _ForeignKeyReference(

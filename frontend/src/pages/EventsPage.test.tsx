@@ -418,6 +418,38 @@ describe('EventsPage', () => {
     });
   });
 
+  // Owner decision 2026-11-23: a training manager sees Training drafts.
+  // The page asks for drafts; the server returns only the types the caller
+  // may see, so a member asking gets published events either way.
+  describe('Drafts', () => {
+    const grant = (...permissions: string[]) => {
+      mockAuthState.checkPermission = vi.fn((permission: string) => permissions.includes(permission));
+    };
+
+    beforeEach(() => {
+      vi.mocked(eventService.getEvents).mockReset();
+      vi.mocked(eventService.getEvents).mockResolvedValue([]);
+    });
+
+    it('asks for drafts for a training manager without events.manage', async () => {
+      grant('training.manage');
+      renderWithRouter(<EventsPage />);
+
+      await waitFor(() =>
+        expect(eventService.getEvents).toHaveBeenCalledWith(expect.objectContaining({ include_drafts: true }))
+      );
+    });
+
+    it('does not ask for drafts for a member', async () => {
+      grant('events.view');
+      renderWithRouter(<EventsPage />);
+
+      await waitFor(() =>
+        expect(eventService.getEvents).toHaveBeenCalledWith(expect.objectContaining({ include_drafts: false }))
+      );
+    });
+  });
+
   describe('Manager Actions', () => {
     it('should show an edit badge on each event for managers', async () => {
       mockAuthState.checkPermission = vi.fn().mockReturnValue(true);
