@@ -53,10 +53,6 @@ CALLER = {"current_user", "user"}
 #: alone has no business on the route and is rightly refused. Each entry is a
 #: judgement made by reading the handler, not a permission to skip the rule.
 ALLOWED = {
-    # `events.manage` decides only whether a draft event's folder is visible
-    # (ADV2-7, as GET /events/{id} does for the event itself), not whether
-    # an `events.view` holder may open a published event's folder.
-    ("events.py", "GET", "/{event_id}/folder", "events.manage"),
     # The documents grants decide whether folder *counts* are shown, not
     # whether the facility's folders may be listed. A related narrowness for
     # `facilities.view`-only callers is tracked as FAC-13 in
