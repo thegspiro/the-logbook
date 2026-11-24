@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../test/utils';
 import { MemberIdCardPage } from './MemberIdCardPage';
 import * as apiModule from '../services/api';
+import type { RequirementDetail } from '../types/training';
 
 // Mock the API module
 vi.mock('../services/api', () => ({
@@ -55,6 +56,27 @@ vi.mock('jsbarcode', () => ({
 // Mock useTimezone hook
 vi.mock('../hooks/useTimezone', () => ({
   useTimezone: () => 'America/New_York',
+}));
+
+// The card reads the member's certifications through these two hooks. The
+// requirements hook records how it was asked, so a test can assert who may
+// read a colleague's training, and returns what the block sets.
+let trainingModuleOn = true;
+let memberRequirements: RequirementDetail[] = [];
+const mockUseMemberRequirements = vi.fn();
+vi.mock('../hooks/useEnabledModules', () => ({
+  useEnabledModules: () => ({
+    enabledModules: null,
+    isLoading: false,
+    isModuleOn: (key: string) => key !== 'training' || trainingModuleOn,
+  }),
+}));
+vi.mock('../hooks/useMemberRequirements', () => ({
+  useMemberRequirements: (...args: unknown[]) => {
+    mockUseMemberRequirements(...args);
+    const [, enabled] = args as [string, boolean, boolean];
+    return enabled ? memberRequirements : [];
+  },
 }));
 
 // Mock useRanks hook
@@ -156,6 +178,9 @@ describe('MemberIdCardPage', () => {
     vi.clearAllMocks();
     routeUserId = 'user-123';
     grantedPermissions = [];
+    trainingModuleOn = true;
+    memberRequirements = [];
+    mockUseMemberRequirements.mockReset();
     mockGetBadge.mockReset();
     mockGetBadge.mockImplementation((id: string) => Promise.resolve({ user_id: id, badge_code: BADGE }));
     mockReissue.mockReset();
@@ -595,6 +620,96 @@ describe('MemberIdCardPage', () => {
 
       expect(mockReissue).not.toHaveBeenCalled();
       expect(screen.getByTestId('badge-code')).toHaveTextContent(BADGE);
+    });
+  });
+
+  describe('Certifications on the card', () => {
+    const cert = (overrides: Partial<RequirementDetail>): RequirementDetail => ({
+      id: 'req-cpr',
+      name: 'CPR/BLS',
+      requirement_type: 'certification',
+      frequency: 'biannual',
+      required_hours: 1,
+      completed_hours: 1,
+      progress_percentage: 100,
+      is_met: true,
+      due_date: null,
+      days_until_due: null,
+      expiry_date: '2027-03-14',
+      ...overrides,
+    });
+
+    beforeEach(() => {
+      vi.mocked(userService.getUserWithRoles).mockReset();
+      vi.mocked(userService.getUserWithRoles).mockResolvedValue(mockMember as never);
+      vi.mocked(organizationService.getProfile).mockReset();
+      vi.mocked(organizationService.getProfile).mockResolvedValue(mockOrg);
+      memberRequirements = [
+        cert({}),
+        cert({ id: 'req-emt', name: 'EMT-B', expiry_date: '2026-12-01' }),
+        cert({ id: 'req-hazmat', name: 'Hazmat Ops', is_met: false, expiry_date: '2026-03-14' }),
+        cert({ id: 'req-pump', name: 'Pump Ops', is_met: false, expiry_date: null }),
+        cert({ id: 'req-hours', name: 'Annual Training Hours', requirement_type: 'hours' }),
+      ];
+    });
+
+    it("lists each certification with its state and date on the member's own card", async () => {
+      renderWithRouter(<MemberIdCardPage />);
+
+      const block = await screen.findByTestId('card-certifications');
+      const rows = within(block).getAllByRole('listitem');
+      expect(rows).toHaveLength(4);
+      expect(rows[0]).toHaveTextContent('CPR/BLSOn fileExpires Mar 14, 2027');
+      expect(rows[1]).toHaveTextContent('EMT-BOn fileExpires Dec 1, 2026');
+      expect(rows[2]).toHaveTextContent('Hazmat OpsExpiredMar 14, 2026');
+      expect(rows[3]).toHaveTextContent('Pump OpsNot recorded');
+      expect(within(block).queryByText('Annual Training Hours')).not.toBeInTheDocument();
+      // The member reads their own, through My Training's endpoint.
+      expect(mockUseMemberRequirements).toHaveBeenCalledWith('user-123', true, true);
+    });
+
+    it('is valid through the soonest current expiry, not a lapsed one', async () => {
+      renderWithRouter(<MemberIdCardPage />);
+
+      const block = await screen.findByTestId('card-certifications');
+      // EMT-B (Dec 1, 2026) is the soonest held certificate; Hazmat's
+      // Mar 14, 2026 has already lapsed and does not count.
+      expect(within(block).getByText(/Card valid through/)).toHaveTextContent('Card valid through Dec 1, 2026');
+    });
+
+    it('carries no valid-through date when no current certificate expires', async () => {
+      memberRequirements = [cert({ expiry_date: null }), cert({ id: 'req-x', is_met: false, expiry_date: null })];
+      renderWithRouter(<MemberIdCardPage />);
+
+      await screen.findByTestId('card-certifications');
+      expect(screen.queryByText(/card valid through/i)).not.toBeInTheDocument();
+    });
+
+    it("leaves certifications off a colleague's card for an ID-card officer without training access", async () => {
+      routeUserId = 'someone-else';
+      grantedPermissions = ['members.manage_id_cards'];
+      renderWithRouter(<MemberIdCardPage />);
+
+      expect(await screen.findByTestId('qr-code')).toBeInTheDocument();
+      expect(screen.queryByTestId('card-certifications')).not.toBeInTheDocument();
+      expect(mockUseMemberRequirements).toHaveBeenLastCalledWith('someone-else', false, false);
+    });
+
+    it("shows a colleague's certifications to a training officer", async () => {
+      routeUserId = 'someone-else';
+      grantedPermissions = ['members.manage_id_cards', 'training.manage'];
+      renderWithRouter(<MemberIdCardPage />);
+
+      expect(await screen.findByTestId('card-certifications')).toBeInTheDocument();
+      expect(mockUseMemberRequirements).toHaveBeenLastCalledWith('someone-else', true, false);
+    });
+
+    it('leaves certifications off when the training module is off', async () => {
+      trainingModuleOn = false;
+      renderWithRouter(<MemberIdCardPage />);
+
+      expect(await screen.findByTestId('qr-code')).toBeInTheDocument();
+      expect(screen.queryByTestId('card-certifications')).not.toBeInTheDocument();
     });
   });
 });

@@ -889,6 +889,8 @@ Once the notice is sent, the row reads **Quartermaster notified** with the
 date in place of the button, so it is not offered twice. The button returns if
 the quartermaster denies the notice, or after they receive the item.
 
+![Issued to Me on My Issued Gear: one item reads Quartermaster notified with the date of the notice, where the others offer Notify quartermaster of return](./images/05-155-my-gear-quartermaster-notified.png)
+
 The notice appears on **Inventory Administration → Return Requests**, and as a
 "Pending return" row in **Waiting for action**. When the gear arrives:
 
@@ -3076,6 +3078,8 @@ Each of these is said under the box rather than done silently. An empty box
 reads "Enter whole hours, from 0 to 24. 2 is kept."; a typed 99 reads "24 is
 the most allowed. 24 was saved."; a save the server refuses shows its reason
 under the control it came from.
+
+![Checklist Settings after 99 was typed into Opens before the start: the box holds 24, and under it "24 is the most allowed. 24 was saved."](./images/05-156-checklist-hours-clamped.png)
 
 On a phone each setting is one row with its switch or number box at the right,
 under a compact page top.

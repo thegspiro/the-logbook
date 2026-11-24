@@ -1740,6 +1740,7 @@ async def get_event(
             and not event.is_cancelled
             and await is_outreach_event(db, current_user.organization_id, event.id)
         ),
+        can_record_crr=await crr_recording_offered(db, event, current_user),
         volunteer_signup=await member_signup_sheet(
             db, event, organization, str(current_user.id)
         ),
@@ -3186,6 +3187,22 @@ async def guest_headcount_offered(
         and as_utc(event.start_datetime) <= datetime.now(dt_timezone.utc)
         and await is_outreach_event(db, current_user.organization_id, event.id)
     )
+
+
+async def crr_recording_offered(
+    db: AsyncSession, event: Event, current_user: User
+) -> bool:
+    """Whether the event page offers this caller CRR activity recording.
+
+    The same refusals POST /crr/activities applies to an event — crr.record or
+    events.manage, and an outreach event by is_outreach_event, which already
+    excludes a cancelled one — decided here so the page offers the card
+    exactly when a save would be accepted (CLAUDE.md #29).
+    """
+    return (
+        user_has_permission(current_user, "crr.record")
+        or user_has_permission(current_user, EVENT_MANAGER_PERMISSION)
+    ) and await is_outreach_event(db, current_user.organization_id, event.id)
 
 
 @router.put("/{event_id}/guest-headcount", response_model=EventResponse)

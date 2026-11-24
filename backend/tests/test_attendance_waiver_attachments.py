@@ -717,3 +717,109 @@ class TestMemberData:
         rows = export["attendance_waiver_attachments"]
         assert [(r["request_id"], r["ordinal"]) for r in rows] == [(request_id, 1)]
         assert "file_path" not in rows[0]
+
+
+# ---------------------------------------------------------------------------
+# Removing a document (owner decision 2026-11-23)
+# ---------------------------------------------------------------------------
+
+
+async def _remove(as_user, who, request_id, attachment_id):
+    async with as_user(who) as client:
+        return await client.delete(f"{BASE}/{request_id}/attachments/{attachment_id}")
+
+
+async def _attachment_ids(as_user, dept, request_id) -> list[str]:
+    async with as_user(dept.member) as client:
+        resp = await client.get(f"{BASE}/{request_id}")
+    return [a["id"] for a in resp.json()["attachments"]]
+
+
+@pytest.mark.integration
+class TestRemoving:
+    async def test_the_member_removes_one_while_pending(self, as_user, dept):
+        request_id = await _filed(as_user, dept, count=2)
+        first, second = await _attachment_ids(as_user, dept, request_id)
+
+        resp = await _remove(as_user, dept.member, request_id, first)
+
+        assert resp.status_code == 200, resp.text
+        assert [a["id"] for a in resp.json()["attachments"]] == [second]
+        assert resp.json()["can_attach"] is True
+        assert resp.json()["can_remove_attachment"] is True
+        assert len(_files_on_disk(dept.uploads)) == 1
+
+    async def test_removing_it_again_is_a_no_op(self, as_user, dept):
+        request_id = await _filed(as_user, dept, count=2)
+        first, second = await _attachment_ids(as_user, dept, request_id)
+        await _remove(as_user, dept.member, request_id, first)
+
+        again = await _remove(as_user, dept.member, request_id, first)
+
+        assert again.status_code == 200, again.text
+        assert [a["id"] for a in again.json()["attachments"]] == [second]
+        assert len(_files_on_disk(dept.uploads)) == 1
+
+    async def test_only_the_member_may_remove(self, as_user, dept):
+        request_id = await _filed(as_user, dept)
+        (only,) = await _attachment_ids(as_user, dept, request_id)
+        decider = await _remove(as_user, dept.officer, request_id, only)
+        other = await _remove(as_user, dept.other, request_id, only)
+        foreign = await _remove(as_user, dept.foreign, request_id, only)
+        assert (decider.status_code, other.status_code, foreign.status_code) == (
+            403,
+            404,
+            404,
+        )
+        assert len(_files_on_disk(dept.uploads)) == 1
+
+    async def test_nothing_is_removed_after_a_decision(self, as_user, dept):
+        request_id = await _filed(as_user, dept)
+        (only,) = await _attachment_ids(as_user, dept, request_id)
+        async with as_user(dept.officer) as client:
+            decided = await client.post(f"{BASE}/{request_id}/approve", json={})
+        assert decided.status_code == 200, decided.text
+
+        late = await _remove(as_user, dept.member, request_id, only)
+
+        assert late.status_code == 400
+        assert "while the request is pending" in late.json()["detail"]
+        assert decided.json()["can_remove_attachment"] is False
+        assert len(_files_on_disk(dept.uploads)) == 1
+
+    async def test_a_required_document_keeps_its_last_one(
+        self, as_user, dept, db_session
+    ):
+        request_id = await _filed(as_user, dept, count=2)
+        first, second = await _attachment_ids(as_user, dept, request_id)
+        await set_policy(
+            db_session,
+            dept.org,
+            approver_position_ids=[dept.officer_pos],
+            attachment="required",
+        )
+
+        allowed = await _remove(as_user, dept.member, request_id, first)
+        refused = await _remove(as_user, dept.member, request_id, second)
+
+        assert allowed.status_code == 200, allowed.text
+        assert allowed.json()["can_remove_attachment"] is False
+        assert refused.status_code == 400
+        assert "requires a document" in refused.json()["detail"]
+        assert len(_files_on_disk(dept.uploads)) == 1
+
+    async def test_a_file_another_row_names_is_kept(self, as_user, dept, monkeypatch):
+        from app.services import member_files
+
+        request_id = await _filed(as_user, dept, count=2)
+        first, _ = await _attachment_ids(as_user, dept, request_id)
+
+        async def everything_shared(db, org_id, paths, exclude_rows, areas=None):
+            return set(paths)
+
+        monkeypatch.setattr(member_files, "referenced_elsewhere", everything_shared)
+        resp = await _remove(as_user, dept.member, request_id, first)
+
+        assert resp.status_code == 200, resp.text
+        assert len(resp.json()["attachments"]) == 1
+        assert len(_files_on_disk(dept.uploads)) == 2

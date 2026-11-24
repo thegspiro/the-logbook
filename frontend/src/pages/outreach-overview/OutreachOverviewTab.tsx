@@ -23,6 +23,7 @@ import {
   Clock,
   Inbox,
   Phone,
+  ShieldCheck,
   Truck,
   Users,
 } from 'lucide-react';
@@ -282,6 +283,10 @@ const OutreachOverviewTab: React.FC = () => {
           <Link to={`${REQUEST_BOARD_PATH}&new=1`} className="btn-secondary flex items-center gap-2">
             <Phone className="h-4 w-4" aria-hidden="true" />
             Log a request
+          </Link>
+          <Link to="/events/crr-activities?new=1" className="btn-secondary flex items-center gap-2">
+            <ShieldCheck className="h-4 w-4" aria-hidden="true" />
+            Log a CRR activity
           </Link>
           <Link to="/events/admin?tab=apparatus_events" className="btn-secondary flex items-center gap-2">
             <Truck className="h-4 w-4" aria-hidden="true" />

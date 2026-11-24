@@ -329,6 +329,14 @@ Member Management lists every member except the archived and dropped (voluntary 
 
 > Authenticated rather than `events.manage` on purpose: an event's organizer or alternate decides its "I was there" requests whether or not they hold `events.manage`. The server scopes the list to the events the viewer organizes; **All events** needs `events.manage`.
 
+### CRR Activities _(2026-11-22)_
+
+| URL                      | Page           | Permission                      |
+| ------------------------ | -------------- | ------------------------------- |
+| `/events/crr-activities` | CRR Activities | `crr.record` or `events.manage` |
+
+> The community risk reduction log, also drawn as the Community Outreach area's **CRR Activities** page in Events Administration (`?tab=crr_activities`). A page of its own because the Community Outreach Team records activities without holding `events.manage` (owner decision, 2026-11-22). A resident's address, contact and the notes come back only with `crr.view_contact`.
+
 ### Check-In Settings _(2026-08-09)_
 
 Set per event on **Edit Event → Check-In Settings**. Both default to off.
@@ -357,6 +365,7 @@ Requires `events.manage` permission. Drawn with the same two-level navigation as
 | Events             | `past_events`      | Past Events       |
 | Community Outreach | `overview`         | Overview          |
 | Community Outreach | `requests`         | Outreach Requests |
+| Community Outreach | `crr_activities`   | CRR Activities    |
 | Community Outreach | `community`        | Outreach Impact   |
 | Community Outreach | `apparatus_events` | Apparatus Events  |
 | Check-ins          | `analytics`        | QR Code Analytics |

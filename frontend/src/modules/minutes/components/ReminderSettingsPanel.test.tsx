@@ -117,9 +117,7 @@ describe('ReminderSettingsPanel', () => {
     const sent = (mockUpdate.mock.calls[0]?.[0] as { minutes: Record<string, unknown> }).minutes;
     expect('reminder_days_before_due' in sent).toBe(false);
     expect(sent.overdue_repeat_days).toBe(7);
-    expect(days).toHaveAccessibleDescription(
-      expect.stringContaining('Not saved: this needs a number in the range below.')
-    );
+    expect(days).toHaveAccessibleDescription(/Not saved: this needs a number in the range below\./);
     expect(days).toHaveAttribute('aria-invalid', 'true');
     expect(screen.getByRole('status')).toHaveTextContent(/Saved, except the field flagged below/);
   });
@@ -142,9 +140,7 @@ describe('ReminderSettingsPanel', () => {
     await user.click(screen.getByRole('button', { name: 'Save' }));
 
     const repeat = screen.getByLabelText('Repeat while overdue, every this many days');
-    await waitFor(() =>
-      expect(repeat).toHaveAccessibleDescription(expect.stringContaining('Repeat while overdue must be 90 or less.'))
-    );
+    await waitFor(() => expect(repeat).toHaveAccessibleDescription(/Repeat while overdue must be 90 or less\./));
     expect(repeat).toHaveAttribute('aria-invalid', 'true');
     const retried = (mockUpdate.mock.calls[1]?.[0] as { minutes: Record<string, unknown> }).minutes;
     expect('overdue_repeat_days' in retried).toBe(false);
