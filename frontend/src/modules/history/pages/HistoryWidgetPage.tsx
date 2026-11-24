@@ -64,6 +64,7 @@ export const HistoryWidgetPage: React.FC = () => {
 
   return (
     <main
+      id="main-content"
       className={`${THEMES[answer.theme]} ${dark ? 'dark' : ''} min-h-screen p-4 font-sans`}
       data-theme={dark ? 'dark' : 'light'}
     >
