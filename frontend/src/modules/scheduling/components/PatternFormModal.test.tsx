@@ -115,7 +115,7 @@ describe('PatternFormModal payload', () => {
     }
   });
 
-  it('offers no weekly or custom type for a new pattern, and points to the Patterns tab', () => {
+  it('offers no weekly or custom type for a new pattern', () => {
     // This form has no weekday or date fields, so a weekly or custom pattern
     // saved from it carried no schedule_config and generated no shifts.
     renderWithRouter(
@@ -127,10 +127,29 @@ describe('PatternFormModal payload', () => {
       (option) => option.value
     );
     expect(values).toEqual(['daily', 'platoon']);
-    expect(screen.getByRole('link', { name: 'Patterns tab' })).toHaveAttribute(
-      'href',
-      '/scheduling/admin/planning/patterns'
+  });
+
+  it('says a weekly pattern keeps its days here and points to New Pattern, not to the tab it is on', () => {
+    // The form opens only from the Patterns tab's Edit, so a link to "the
+    // Patterns tab" led nowhere. What the hint has to say is that this form
+    // cannot change the days or dates.
+    renderWithRouter(
+      <PatternFormModal
+        isOpen
+        onClose={vi.fn()}
+        onSubmit={onSubmit}
+        initialData={{ ...storedPattern, pattern_type: 'weekly' }}
+        title="Edit Pattern"
+        templates={templates}
+      />
     );
+
+    expect(
+      screen.getByText(
+        "A weekly pattern's days and a custom pattern's dates stay as they are here. To change them, make a new pattern with New Pattern."
+      )
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Patterns tab' })).not.toBeInTheDocument();
   });
 
   it('keeps a stored weekly pattern weekly when it is edited here', async () => {
