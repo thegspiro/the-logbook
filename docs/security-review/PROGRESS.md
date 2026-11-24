@@ -16,13 +16,14 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR (branch `claude/friendly-babbage-2isqey`)**: Feature 09
+**PR [#4665](https://github.com/thegspiro/the-logbook/pull/4665) (branch
+`claude/friendly-babbage-2isqey`)**: Feature 09
 (Medical screening, PHI), pass 17 — watchdog pickup (the dedicated `/loop 30m
 /security-review` session, `session_011T1ZyyLrD5HagusgK9uDw2`, remains
-unreachable). PR number recorded in a second commit on this branch once
-known. **Branch-name deviation**, same as prior watchdog-run passes recorded
-here: this session's environment restricts pushes to its own assigned branch
-rather than a freely-chosen `claude/security-review-medical-screening` name.
+unreachable). **Branch-name deviation**, same as prior watchdog-run passes
+recorded here: this session's environment restricts pushes to its own
+assigned branch rather than a freely-chosen
+`claude/security-review-medical-screening` name.
 
 PR #4664 (Feature 08, Membership pipeline, pass 18 — 0 fixed, 0 new
 findings) had already merged before this iteration started; row 08 marked
