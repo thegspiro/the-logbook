@@ -233,38 +233,39 @@ const TrainingRequirementsPage: React.FC = () => {
     if (warning) toast(warning, { icon: '⚠️', duration: 10000 });
   };
 
+  // A failed save rejects to the editor, which puts the reason on its field
+  // or, for a refusal no field answers for (a new-members-only save on a
+  // requirement that already holds the earlier standard), says it in the
+  // form (owner form rule, 2026-11-05). `keepOpen` is an edit saved without a
+  // refused field: the list takes the saved record and the editor stays open.
   const handleSave = async (
     data: TrainingRequirementCreate | TrainingRequirementUpdate,
     isEdit: boolean,
-    id?: string
+    id?: string,
+    options?: { keepOpen: boolean }
   ) => {
-    try {
-      if (isEdit && id) {
-        const updated = await trainingService.updateRequirement(id, data);
-        if (updated.id !== id) {
-          // Saved for new members only: the original was narrowed and a copy
-          // created, so both rows changed — reload rather than patch one in.
-          await fetchData();
-          toast.success('Saved for new members. The current standard stays in place for existing members.');
-        } else {
-          setRequirements(requirements.map((r) => (r.id === id ? updated : r)));
-          toast.success('Requirement updated');
-        }
-        warnIfAmbiguous(updated, id);
+    if (isEdit && id) {
+      const updated = await trainingService.updateRequirement(id, data);
+      if (updated.id !== id) {
+        // Saved for new members only: the original was narrowed and a copy
+        // created, so both rows changed — reload rather than patch one in.
+        await fetchData();
+        toast.success('Saved for new members. The current standard stays in place for existing members.');
       } else {
-        const created = await trainingService.createRequirement(data as TrainingRequirementCreate);
-        setRequirements([...requirements, created]);
-        toast.success('Requirement created');
-        warnIfAmbiguous(created);
+        setRequirements((prev) => prev.map((r) => (r.id === id ? updated : r)));
+        if (!options?.keepOpen) toast.success('Requirement updated');
       }
-      setShowCreateModal(false);
-      setSelectedRequirement(null);
-      setTemplateSeed(null);
-    } catch (error: unknown) {
-      // The backend explains a refused save (e.g. a new-members-only save on
-      // a requirement that already holds the earlier standard); say so.
-      toast.error(getErrorMessage(error, 'Failed to save requirement'));
+      warnIfAmbiguous(updated, id);
+      if (options?.keepOpen && updated.id === id) return;
+    } else {
+      const created = await trainingService.createRequirement(data as TrainingRequirementCreate);
+      setRequirements((prev) => [...prev, created]);
+      toast.success('Requirement created');
+      warnIfAmbiguous(created);
     }
+    setShowCreateModal(false);
+    setSelectedRequirement(null);
+    setTemplateSeed(null);
   };
 
   const filteredRequirements = requirements.filter((req) => {
