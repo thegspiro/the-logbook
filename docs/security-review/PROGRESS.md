@@ -16,6 +16,37 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR (branch `claude/friendly-babbage-2isqey`)**: Feature 05
+(Finance & approvals), pass 17 — watchdog pickup (the dedicated `/loop 30m
+/security-review` session, `session_011T1ZyyLrD5HagusgK9uDw2`, remains
+unreachable). **Branch-name deviation**, same as prior watchdog-run passes
+recorded here: this session's environment restricts pushes to its own
+assigned branch rather than a freely-chosen
+`claude/security-review-finance-approvals` name. This PR's own number is
+recorded in a follow-up commit on this same branch once known, per Step 8.
+
+PR #4654 (Feature 04, Storefront & payments, pass 17 — 0 fixed, 0 new
+findings) had already merged before this iteration started; row 04 marked
+✅ above.
+
+Backend byte-identical to pass 16's baseline across every tracked file (`git
+diff --numstat`, zero lines). Frontend: 19 files under `modules/finance/`,
+mostly the repo-wide reflow/touch-target polish already reviewed generically
+elsewhere this lap, plus two correctness-only fixes with no security effect
+— a former-member label on the approver picker (cosmetic; the backend
+already re-derives active-membership server-side on every approve/deny) and
+a stale-`<select>` data-binding fix on the purchase-request form (the
+Pitfall #38-class bug `finance-purchase-request-draft.spec.ts` catches).
+**0 fixed, 0 new findings.** Full write-up:
+`docs/security-review/FIN-05-finance-approvals.md`'s **Pass 17** section.
+
+Row 05 → ✅ (pending this PR's merge); next is Feature 06 (Elections &
+ballots) — re-check `list_pull_requests` fresh rather than trusting this
+note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 04, Storefront & payments, pass 17, PR #4654, merged), preserved for history</summary>
+
 **PR [#4654](https://github.com/thegspiro/the-logbook/pull/4654) (branch
 `claude/friendly-babbage-2isqey`)**: Feature 04
 (Storefront & payments), pass 17 — watchdog pickup (the dedicated `/loop 30m
@@ -44,6 +75,8 @@ org-scoping, the audit-log organization_id fallback, bounded text fields).
 Row 04 → ✅ (pending this PR's merge); next is Feature 05 (Finance &
 approvals) — re-check `list_pull_requests` fresh rather than trusting this
 note.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 03, Public surface & webhooks, pass 17, PR #4644, merged), preserved for history</summary>
@@ -27729,7 +27762,7 @@ iteration's commit" rule.
 | 02  | Permissions & roles       | PERM   | `dependencies.py`, `core/permissions.py`, `roles.py`, `operational_ranks.py`, `officers.py`, `org_chart.py`                                                                                                                                                                           | ✅     |
 | 03  | Public surface & webhooks | PUB    | `api/public/*` (51 unauth routes, added pass 16), `paypal_webhook.py`, `integrations_webhook.py`, `salesforce_webhook.py`, `zeffy_webhook.py`, `shift_evaluations.py` (added pass 16)                                                                                                 | ✅     |
 | 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                                                                                                                                                                    | ✅     |
-| 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`, `endpoints/quickbooks_online.py` (8 routes; corrected from `services/quickbooks_online.py`, pass 16), `services/quickbooks_online_client.py`, `services/quickbooks_sync_service.py` (both added pass 16) | ⬜     |
+| 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`, `endpoints/quickbooks_online.py` (8 routes; corrected from `services/quickbooks_online.py`, pass 16), `services/quickbooks_online_client.py`, `services/quickbooks_sync_service.py` (both added pass 16) | ✅     |
 | 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (76 routes, token-scoped voting), `election_service.py`, `services/voter_rules.py` (added pass 16), `services/election_attendance_service.py` (added pass 16), `services/election_defaults.py` (added pass 16)                                               | ⬜     |
 | 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`, `leave_requests.py` (9 routes, added pass 17)                                                                                                                                                                 | ⬜     |
 | 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                                                                                                                                                            | ⬜     |
