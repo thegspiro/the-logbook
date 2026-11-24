@@ -8,3 +8,4 @@
 !docs-site
 docs-site/build
 **/__pycache__
+docs-site/.env
