@@ -27,6 +27,7 @@ from loguru import logger
 from pydantic import BaseModel
 from sqlalchemy import String, cast, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.api.attendance_lock import attendance_lock_http_error
 from app.api.dependencies import (
@@ -46,6 +47,8 @@ from app.models.event import (
     EventType,
     RSVPStatus,
 )
+from app.models.forms import Form as FeedbackFormModel
+from app.models.forms import FormStatus
 from app.models.historical_import import ImportedRecordKind
 from app.models.notification import NotificationChannel
 from app.models.user import (
@@ -128,6 +131,7 @@ from app.services.event_organizer_service import (
     can_manage_organizers,
     is_event_organizer,
 )
+from app.services.event_request_service import get_pipeline_settings
 from app.services.event_service import (
     BULK_ADD_MAX_SIZE,
     DEFAULT_ALLOWED_RSVP_STATUSES,
@@ -164,6 +168,10 @@ from app.services.integration_services.notification_dispatch import (
 from app.services.membership_pipeline_service import MembershipPipelineService
 from app.services.notifications_service import NotificationsService
 from app.services.outreach_calendar_service import OutreachCalendarService
+from app.services.outreach_feedback_service import (
+    OutreachFeedbackService,
+    is_rating_field,
+)
 from app.services.qr_check_in_analytics import (
     device_type_from_user_agent,
     record_check_in_outcome,
@@ -1089,6 +1097,11 @@ EVENT_SETTINGS_DEFAULTS = {
         # with the forms module, where counting rejects let anonymous traffic
         # exhaust a department's allowance and lock out legitimate submitters.
         "public_daily_limit": 50,
+        # The form a requester is offered once their request is Completed, and
+        # the question on it whose answer the report averages as the rating.
+        # None until a department chooses one: no feedback is asked for.
+        "feedback_form_id": None,
+        "feedback_rating_field_id": None,
         "tasks": [
             {
                 "id": "review_request",
@@ -1298,6 +1311,88 @@ async def list_fallback_position_options(
     return [{"id": r.id, "name": r.name, "slug": r.slug} for r in result.all()]
 
 
+@router.get("/settings/feedback-forms")
+async def list_feedback_form_options(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("events.manage")),
+):
+    """
+    The department's published forms, each with the questions that can serve
+    as its rating, for choosing the outreach feedback form in settings.
+
+    Listed here rather than read from Forms because choosing one is an events
+    setting: an officer who runs outreach need not be able to open Forms.
+
+    **Requires permission: events.manage**
+    """
+    forms = (
+        (
+            await db.execute(
+                select(FeedbackFormModel)
+                .where(
+                    FeedbackFormModel.organization_id
+                    == str(current_user.organization_id),
+                    FeedbackFormModel.status == FormStatus.PUBLISHED,
+                )
+                .options(selectinload(FeedbackFormModel.fields))
+                .order_by(FeedbackFormModel.name)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    return [
+        {
+            "id": str(form.id),
+            "name": form.name,
+            "rating_fields": [
+                {"id": str(f.id), "label": f.label}
+                for f in sorted(form.fields, key=lambda f: f.sort_order)
+                if is_rating_field(f)
+            ],
+        }
+        for form in forms
+    ]
+
+
+@router.post("/settings/feedback-forms/starter")
+async def create_starter_feedback_form(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("events.manage")),
+):
+    """
+    Create the starter outreach feedback form and make it the department's.
+
+    A rating from 1 to 5, "What went well?", and "What could we do better?"
+    shown at a rating of 3 or less. The department can then edit it in Forms.
+    Calling it again returns the form already chosen rather than a second one.
+
+    **Requires permission: events.manage**
+    """
+    org = await db.get(Organization, str(current_user.organization_id))
+    if org is None:
+        raise HTTPException(status_code=404, detail="Organization not found")
+    form = await OutreachFeedbackService(db).create_starter_form(
+        org, str(current_user.id)
+    )
+    org = await db.get(Organization, str(current_user.organization_id))
+    pipeline = get_pipeline_settings(org)
+    await log_audit_event(
+        db=db,
+        event_type="events.feedback_form_set",
+        event_category="events",
+        severity="info",
+        event_data={"form_id": str(form.id), "starter": True},
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+    return {
+        "form_id": str(form.id),
+        "form_name": form.name,
+        "rating_field_id": pipeline.get("feedback_rating_field_id"),
+    }
+
+
 @router.patch("/settings")
 async def update_event_settings(
     updates: EventSettingsUpdate,
@@ -1375,6 +1470,31 @@ async def update_event_settings(
                     )
                 ],
                 label="default coordinator",
+            )
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=safe_error_detail(e))
+    # XC-1: the feedback form and its rating question are client-supplied ids
+    # the public status page then serves, so both are checked against this
+    # department, as the pair they will be after the save.
+    # Checked only when either value changes: the settings screen sends the
+    # whole pipeline on every save, and an unrelated save (a reordered task)
+    # must not fail because the chosen form has since been unpublished.
+    stored_pipeline = current_events.get("request_pipeline") or {}
+    form_id = pipeline_update.get(
+        "feedback_form_id", stored_pipeline.get("feedback_form_id")
+    )
+    rating_id = pipeline_update.get(
+        "feedback_rating_field_id", stored_pipeline.get("feedback_rating_field_id")
+    )
+    form_changed = form_id != stored_pipeline.get("feedback_form_id")
+    if form_changed and "feedback_rating_field_id" not in pipeline_update:
+        # A new form cannot keep the old form's question.
+        rating_id = None
+        pipeline_update["feedback_rating_field_id"] = None
+    if form_changed or rating_id != stored_pipeline.get("feedback_rating_field_id"):
+        try:
+            await OutreachFeedbackService(db).validate_settings(
+                str(current_user.organization_id), form_id, rating_id
             )
         except ValueError as e:
             raise HTTPException(status_code=400, detail=safe_error_detail(e))

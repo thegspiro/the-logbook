@@ -1,11 +1,17 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
+import { MemoryRouter } from 'react-router';
 import PipelineSection from './PipelineSection';
 import type { EventModuleSettings } from '../../types/event';
 import type { OrgMember } from './types';
 
 vi.mock('../../hooks/useRanks', () => ({
   useRanks: () => ({ ranks: [], formatRank: (rank: string) => rank }),
+}));
+// The section holds the feedback form setting, which loads the department's
+// published forms; none are needed for the coordinator tests here.
+vi.mock('../../services/outreachFeedbackServices', () => ({
+  outreachFeedbackService: { getFeedbackFormOptions: () => Promise.resolve([]) },
 }));
 
 const members: OrgMember[] = [
@@ -29,20 +35,23 @@ const settingsWith = (defaultAssigneeId: string | null) =>
 
 const renderSection = (defaultAssigneeId: string | null) =>
   render(
-    <PipelineSection
-      settings={settingsWith(defaultAssigneeId)}
-      saving={false}
-      members={members}
-      onUpdateDefaultAssignee={vi.fn()}
-      onTogglePublicVisibility={vi.fn()}
-      onAddTask={vi.fn()}
-      onRemoveTask={vi.fn()}
-      onReorderTask={vi.fn()}
-      newTaskLabel=""
-      onNewTaskLabelChange={vi.fn()}
-      newTaskDesc=""
-      onNewTaskDescChange={vi.fn()}
-    />
+    <MemoryRouter>
+      <PipelineSection
+        settings={settingsWith(defaultAssigneeId)}
+        saving={false}
+        members={members}
+        onUpdateDefaultAssignee={vi.fn()}
+        onTogglePublicVisibility={vi.fn()}
+        onSaveFeedback={vi.fn()}
+        onAddTask={vi.fn()}
+        onRemoveTask={vi.fn()}
+        onReorderTask={vi.fn()}
+        newTaskLabel=""
+        onNewTaskLabelChange={vi.fn()}
+        newTaskDesc=""
+        onNewTaskDescChange={vi.fn()}
+      />
+    </MemoryRouter>
   );
 
 const coordinatorOptions = () =>
