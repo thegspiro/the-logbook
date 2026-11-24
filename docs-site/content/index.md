@@ -9,6 +9,9 @@ Everything you need to learn and run The Logbook, the open-source intranet for
 fire departments and emergency services: step-by-step training guides, setup
 and administration instructions, videos and answers to common questions.
 
+New to The Logbook? See [what it does](features.md) and
+[why departments choose it](why.md).
+
 ## Start here
 
 <div class="grid cards" markdown>
@@ -37,6 +40,8 @@ and administration instructions, videos and answers to common questions.
 
 | Section                                          | What is in it                                                                 |
 | ------------------------------------------------ | ----------------------------------------------------------------------------- |
+| [Features](features.md)                          | What The Logbook does, module by module                                       |
+| [Why The Logbook](why.md)                        | Why a department would run it, and how to get started                         |
 | [Training guides](../../docs/training/README.md) | How members, officers and administrators use each module, screen by screen    |
 | [Setup & administration](../../wiki/Home.md)     | Installing, deploying, configuring, integrations, security and recent changes |
 | [Reference](../../docs/README.md)                | Module references, upgrading, backups, troubleshooting and policies           |

@@ -438,3 +438,37 @@ body {
     padding: 0;
   }
 }
+
+/* Screenshots on the Features page, framed like the application's cards. */
+.md-typeset img.screenshot {
+  display: block;
+  margin: 1em 0;
+  border: 1px solid var(--logbook-border);
+  border-radius: 0.5rem;
+  box-shadow: var(--logbook-shadow-card);
+}
+
+.md-typeset img.screenshot--phone {
+  max-width: 320px;
+}
+
+/* Buttons as the application's: btn-primary is red-800 under white text. */
+.md-typeset .md-button {
+  border-radius: 0.5rem;
+  font-weight: 600;
+  color: var(--logbook-link);
+  border-color: currentcolor;
+}
+
+.md-typeset .md-button--primary,
+.md-typeset .md-button--primary:is(:hover, :focus) {
+  background-color: #991b1b;
+  border-color: #991b1b;
+  color: #ffffff;
+}
+
+.md-typeset .md-button:is(:hover, :focus) {
+  background-color: #7f1d1d;
+  border-color: #7f1d1d;
+  color: #ffffff;
+}
