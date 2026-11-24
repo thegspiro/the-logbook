@@ -338,51 +338,58 @@ reads **Add**. The CSV template walkthrough is left to Script 3.]**
 
 ---
 
+**[PRODUCTION NOTE — 2026-11-22 PASS. Recorded as a phone-width capture
+(`video-production/shorts/8g-two-factor/`, merged 2026-11-21). The narration
+below is the recorded take. The QR code on screen is a decoy that decodes to
+nothing, and the setup key beside it is not valid base32, so no authenticator
+accepts either. The card after enabling reads "Authenticator app is **on** · 10
+recovery codes left"; the earlier cue "Two-factor authentication is on" never
+matched the screen. Supersedes the 2026-10-04 note.]**
+
 **[SCREEN: My Account page]**
 
-> "Protect your account with two-factor authentication. Takes sixty seconds."
+> "Protect your account with two-factor authentication. It takes about a
+> minute."
 
 **[SCREEN: Navigate to My Account → Security]**
 
-> "Go to My Account. Click Security."
+> "Open My Account, then Security."
 
-**[SCREEN: Click "Enable two-factor authentication"]**
+**[SCREEN: Tap "Enable two-factor authentication"]**
 
-> "Click Enable two-factor authentication."
+> "Tap **Enable two-factor authentication**."
 
-**[PRODUCTION NOTE — 2026-10-04. The page is titled **My Account** (since
-2026-09-29), not "User Settings". Re-record the first two cues.]**
+**[SCREEN: The QR code that appears (decoy), with "Scan this QR code with an
+authenticator app (Google Authenticator, Authy, 1Password…)".]**
 
-**[SCREEN: Show the QR code that appears]**
+> "Open your authenticator app, such as Google Authenticator or 1Password, and
+> scan the QR code."
 
-> "Open your authenticator app — Google Authenticator, Authy, 1Password —
-> whatever you use. Scan this QR code."
+**[SCREEN: Entering the six-digit code]**
 
-**[SCREEN: Show a phone scanning the QR code (simulated or actual)]**
-
-> "Enter the six-digit code from your app and press **Verify & enable**."
+> "Enter the six-digit code from the app, and tap **Verify & enable**."
 
 **[SCREEN: The **Save your recovery codes** panel — **Copy codes**, **Done**.
 Demo account only; never show real codes.]**
 
-> "Now the part people skip: these ten recovery codes. Copy them and keep them
-> somewhere safe — they're shown once. Then press **Done**."
+> "Now the part people skip. These ten recovery codes are shown only once. Copy
+> them, keep them somewhere safe, then press **Done**."
 
-**[SCREEN: The card now reads "Two-factor authentication is on".]**
+**[SCREEN: The card now reads "Authenticator app is on · 10 recovery codes
+left".]**
 
-> "Done. From now on, login requires both your password and a code from your
-> app. Even if someone gets your password, they can't get in without your
-> phone."
+> "From now on, signing in takes your password and a code from your app. A
+> stolen password alone won't get anyone in."
 
-**[SCREEN: My Account → Security, the **Passkeys** card; **Add a passkey**, a
-name typed in **Name this passkey**, **Create passkey**. Then the sign-in page's
-second step with **Use your passkey** above the code field.]**
+**[SCREEN: My Account → Security, the **Passkeys** card with **Add a
+passkey**.]**
 
-> "Prefer Face ID or a fingerprint to typing a code? Add a passkey from the
-> Passkeys card. At sign-in, the second step offers **Use your passkey** — a
-> passkey or the app code, either one is enough."
+> "Prefer Face ID or a fingerprint? Add a passkey, and use it at sign in instead
+> of typing a code."
 
-**[CALLOUT: "2FA = password + authenticator code = much safer"]**
+> "One minute now keeps your account safe."
+
+**[CALLOUT: "Password + authenticator code = much safer"]**
 
 ---
 
@@ -393,42 +400,42 @@ second step with **Use your passkey** above the code field.]**
 
 ---
 
-**[SCREEN: Sidebar showing Scheduling module]**
+**[PRODUCTION NOTE — 2026-11-22 PASS. Recorded as a phone-width capture
+(`video-production/shorts/8h-schedule-board/`, merged 2026-11-21). The
+narration below is the recorded take. A phone shows one week and reaches the
+board from **Schedule** in the bottom bar; the Month toggle is for wider
+screens, so the month/week beat and the grey "no crew size set" line were
+dropped. The voice cannot say "Schedule", so `shots.json` speaks a respelling
+("Sked-yool") while the captions read **Schedule**. Short 8AH covers the chips
+in more depth.]**
 
-> "See your department's shift schedule at a glance."
+**[SCREEN: The dashboard on a phone, bottom bar visible]**
 
-**[SCREEN: Click Scheduling. The calendar view loads.]**
+> "See who's working every shift this week, at a glance."
 
-> "Click Scheduling. The Schedule board shows every shift, colour coded by
-> whether it still needs people."
+**[SCREEN: Tap **Schedule** in the bottom bar. The board loads on this week.]**
 
-**[SCREEN: Show the board in month view with shifts displayed]**
+> "Tap **Schedule**, at the bottom of the screen. The board shows every shift
+> this week, colored by whether it still needs people."
 
-**[REWRITTEN 2026-09-30 — the board's chips mean open seats, not staffing
-tiers: red or amber with a number is open seats, green is full, blue is a
-shift you're on, grey is a shift with no crew size set. The filters are All
-shifts, Needs staffing and My shifts. The previous take described
-green/yellow/red staffing levels and a station filter, from the calendar the
-board replaced. Short 8AH covers the chips in more depth.]**
+**[SCREEN: Red, amber and green chips]**
 
-> "Red or amber with a number means that many seats are open. Green means it's
-> full. Grey just means nobody set how many people it wants."
+> "Red means two or more seats are open. Amber means one. Green means the shift
+> is full."
 
-**[SCREEN: Select a day to open the crew panel]**
+**[SCREEN: Tap a day to open the crew panel]**
 
-> "Pick a day to see who's on each shift and which seats are still open."
+> "Tap a day to see who's on each shift, and which seats are still open."
 
-**[SCREEN: Show the Month / Week toggle and the **All shifts**, **Needs
-staffing**, **My shifts** filters]**
+**[SCREEN: The **Needs staffing** and **My shifts** filters]**
 
-> "Switch between month and week. Filter to what needs staffing, or just your
-> own shifts."
+> "Filter to the shifts that need staffing, or to just your own."
 
-**[SCREEN: Show a blue chip]**
+**[SCREEN: A blue chip]**
 
 > "Your own shifts are blue, so you always know when you're on duty."
 
-**[SCREEN: Show the highlighted personal shifts]**
+> "Know who's on duty, any time."
 
 **[CALLOUT: "Scheduling — know who's on duty, anytime"]**
 

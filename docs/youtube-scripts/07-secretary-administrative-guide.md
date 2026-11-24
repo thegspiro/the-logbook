@@ -212,12 +212,19 @@ place, the button is **Copy status link**, **Decline…** and **Postpone** sit
 under **More**, and **New request** enters one taken by phone. Finalizing the
 event's attendance now completes the request.]**
 
-**[SCREEN: Community Outreach → Requests. Open a request: its page, the
+**[PRODUCTION NOTE — 2026-11-22. Same beat: the tab is now **Outreach
+Requests**, and the **Community Outreach** card opens on **Overview** first,
+so the recording passes through it (about 5 seconds on screen, no narration
+change needed beyond the line below).]**
+
+**[SCREEN: Community Outreach → Overview, then **Outreach Requests**. Open a request: its page, the
 checklist, **Coordinator**, **Schedule event** and **More** (Postpone,
 Decline…). Point to **Copy status link** under Contact. Back on the list,
 press **New request** and show **How it came in**.]**
 
-> "Open a request and it gets a page of its own, with the checklist your
+> "Community Outreach opens on its Overview — what's waiting on a reply,
+> what's short of people, and the outreach calendar. Requests live on
+> **Outreach Requests**. Open a request and it gets a page of its own, with the checklist your
 > department set up for these. Work through it, then **Schedule event** — or,
 > under **More**, **Postpone** or **Decline**. Scheduling puts it on the
 > calendar."
@@ -256,8 +263,13 @@ without event-manager rights.]**
 
 > "It's laid out as area cards — Events, Community Outreach, Check-ins and
 > Settings — with a strip of that area's pages beneath. Create Event and Past
-> Events sit under Events, Requests under Community Outreach, and Card
-> Check-ins under Check-ins, which lists every tap of a member's ID card."
+> Events sit under Events; Overview, Outreach Requests, Outreach Impact and
+> Apparatus Events under Community Outreach; and Card Check-ins under
+> Check-ins, which lists every tap of a member's ID card."
+
+**[PRODUCTION NOTE — 2026-11-22. Narration changed: Community Outreach now
+lists four pages under their 2026-11-21 names. Re-record this line, about 10
+seconds.]**
 
 **[SCREEN: Show the admin hub with filters and summary stats]**
 

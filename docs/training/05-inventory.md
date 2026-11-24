@@ -822,6 +822,11 @@ record notes who made it.
 
 ![The member picker opened from Assign to Member, with its search field and roster](./images/05-55-member-picker.png)
 
+Under each name, the picker says what that member already holds, by kind, in
+the same words as the **Members** page: for example "1 permanent · 2 issued", or
+"3 checked out". Pool stock issued to a member counts as **issued**, not as an
+assigned item.
+
 ### Batch Return
 
 1. Go to **Inventory Administration → Members**.
@@ -1134,7 +1139,11 @@ the request into an actual issuance, loan or assignment in one step.
    member asked for (same product, size, colour and style), so what you can
    fulfil from matches what the member was shown. The list is worked out across
    your whole catalog. When it is shortened for display, it says so.
-4. Confirm.
+4. Check **Quantity**. It starts at the quantity the member asked for. It must
+   be a whole number of at least 1: a blank box or 0 is refused with "Enter a
+   whole quantity of at least 1". (Before 2026-11-21 a blank box quietly issued
+   the full requested quantity.)
+5. Confirm.
 
 The request then shows **Issued** and a line saying how and when, for example
 "Fulfilled via issuance on 8/11/2026". The line does not name who fulfilled it
@@ -1426,6 +1435,15 @@ receiving, if any line has a problem, nothing is saved.
 
 **Import CSV**, beside these buttons, is the third way in. See
 [CSV Import](#csv-import).
+
+### Correcting a lot's count
+
+On an item's **Stock Lots** tab, each lot has **−** and **+** buttons beside its
+quantity. Each press changes the count by one and is saved, in the order you
+pressed. Tapping **+** three times quickly adds three. (Before 2026-11-21 only
+the first press in a quick run was saved, so the screen showed one count and
+the server kept another.) If a save fails, the tab reloads the lots so you see
+the count actually stored.
 
 ### Which trucks carry this item
 
@@ -2440,6 +2458,32 @@ Keep track of inspections, repairs and other work on equipment.
 On **Inventory Administration**, the **Maintenance** card shows how many items
 are due. **Waiting for action** lists each item whose maintenance is due or
 overdue, with **Open item**.
+
+The **Maintenance** page itself has three tabs: **Due Items**, **Never
+Inspected** and **Maintenance History**. The **Category** column on **Due
+Items** shows the item's category.
+
+### Items that have never been inspected
+
+An item only gets a due date once its first inspection is recorded. So a new
+item that needs inspecting, because its category requires maintenance or it has
+its own inspection interval, has no date and does not show under **Due Items**.
+
+The **Never Inspected** tab lists these items, with a count on the tab. Each row
+shows the item's category, why it needs inspecting (for example "Every 365 days"
+or "Turnout Gear requires maintenance") and its condition. Select **Log
+Maintenance** to record its first inspection. That sets its due date, and from
+then on it appears under **Due Items** when it falls due.
+
+An item you gave a due date by hand is not listed here, because **Due Items**
+already shows it. These items are not counted as due on the dashboard or the
+**Maintenance** card. When every item that needs inspecting has had one, the
+tab reads "Every item that needs inspecting has had one."
+
+> **Screenshot needed** (`05-155-maintenance-never-inspected.png`): the
+> **Maintenance** page on the **Never Inspected** tab, with the explanation line
+> and two items, one listed for its own interval and one because its category
+> requires maintenance, each with **Log Maintenance**.
 
 ### Creating a Maintenance Record
 
@@ -3837,6 +3881,10 @@ have moved, been renamed or work differently.
   those values set to 0 on upgrade. Check their counts.
 - **The "Transfer is immediate" checkbox is gone.** Transfers always took effect
   immediately.
+- **The Maintenance page has a Never Inspected tab** _(2026-11-21)_. Items
+  that need inspecting but never had one used to appear nowhere, because only a
+  recorded inspection gives an item a due date. See
+  [Items that have never been inspected](#items-that-have-never-been-inspected).
 
 ---
 

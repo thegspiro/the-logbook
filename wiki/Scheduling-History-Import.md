@@ -350,6 +350,13 @@ Filters: **Need attention** (the default), **All**, **Skipped** and
   the file's value.
 - **Exclude / Include:** leave a row out of the import entirely, or bring it
   back.
+- **Fixing an overlap in place** _(2026-11-10; date added 2026-11-21)_: a row
+  flagged for overlapping times shows its **Date**, start and end as boxes in
+  the table, with one **Save** (Enter in any box also saves). Only the changed
+  values are sent, as one row edit, so **Revert** in the dialog restores the
+  file's values. Only fields the column mapping reads are offered. Before
+  2026-11-21 only the times were editable here (**Save times**), so an
+  overnight shift entered on the wrong day still needed the edit dialog.
 - **Other lines in these issues** _(edit dialog)_: when a row's issue joins it
   to other lines (an overlap, a duplicate), the edit dialog lists them with
   **Exclude line N** / **Include line N**. Since 2026-11-20 a line you exclude

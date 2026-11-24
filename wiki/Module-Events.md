@@ -335,8 +335,11 @@ honoured rather than re-derived in the browser.
 ### Capacity and guests
 
 Capacity (`max_attendees`) is a **sum of seats** — each Going RSVP counts
-itself plus its guests. Guests are accepted only on events with `allow_guests`
-on. A party larger than the whole event is refused at RSVP time. Events already
+itself plus its guests. The exception is a volunteer — a member holding a role
+on the signup sheet that staffs an outreach event — whose own RSVP takes no
+seat (crew, not audience); their guests still do, and must fit at once,
+because a volunteer is never waitlisted _(2026-11-21)_. Guests are accepted
+only on events with `allow_guests` on. A party larger than the whole event is refused at RSVP time. Events already
 over their seat count are not retroactively waitlisted; they simply admit
 nobody new.
 
@@ -1127,8 +1130,8 @@ opt-out applies. `GET /member-audience/options` and `POST
   time), event type distribution chart, monthly trends chart and a top events
   table, with date range filtering (`GET /events/analytics/summary`).
 - **`/events/:id/analytics`** — per-event analytics dashboard.
-- **QR Code Analytics** and **Outreach Impact** (formerly Community Engagement) tabs in the Events admin
-  hub. Outreach Impact (`GET /dashboard/community-engagement?period=`,
+- **QR Code Analytics** and **Outreach Impact** (formerly Community
+  Engagement) tabs in the Events admin hub. Outreach Impact (`GET /dashboard/community-engagement?period=`,
   `events.manage`) reports events held, people reached — a guest headcount
   recorded on the event, else guest sign-ins, else the request's audience
   size, reported separately — member hours, requests completed in the period
@@ -1169,8 +1172,19 @@ opt-out applies. `GET /member-audience/options` and `POST
 
 Community members submit event requests (fire safety demos, station tours,
 school visits, CPR classes, etc.) through a public form. Department
-coordinators manage requests through a configurable workflow on the **Requests**
-tab of the Events admin hub.
+coordinators manage requests through a configurable workflow on the **Outreach
+Requests** tab of the Events admin hub (**Community Outreach** area).
+
+**Outreach Overview** _(2026-11-21)_ — the **Community Outreach** area opens on
+**Overview**, the Community Outreach Manager's home page
+(`GET /events/outreach-calendar`, `events.manage`). It shows **Needs
+attention** (requests **Waiting for a reply**, events **Short of people** in
+the next 60 days, events **Waiting to be closed out** from the last 30 days —
+over, with attendance not finalized), a **Week** / **Month** planning calendar
+of every outreach event with its sheet and crew fill, quick links (**New
+outreach event**, **Log a request**, **Apparatus nights**) and **This year at a
+glance** from Outreach Impact. It counts the same events Outreach Impact does,
+so an apparatus night on a non-public event type is not on it.
 
 > **Public intake is opt-in.** Turn it on under **Event settings → Public Requests →
 > Overview → Accept Public Requests**; it is **off by default**. While it is off the
@@ -1186,7 +1200,7 @@ tab of the Events admin hub.
 ### Pipeline features
 
 - **Requests taken by phone** _(2026-11-21)_ — **New request** on the
-  Requests tab files a request a coordinator took by phone, email or in person
+  Outreach Requests tab (or **Log a request** on the Overview) files a request a coordinator took by phone, email or in person
   (`POST /event-requests`, `events.manage`). It records **How it came in**,
   needs a phone or an email (not both), works while public intake is off, has
   no CAPTCHA or daily limit, and flags a date inside the minimum lead time
@@ -1265,8 +1279,9 @@ tab of the Events admin hub.
   shows the crew and **Check In** lists them first. An outreach event created
   directly, with no request, opens the same sheet from its **Volunteer
   staffing** card; an event scheduled from a request is staffed from the
-  request. Moving the event moves its sheet; cancelling or deleting it stands
-  the sheet down and tells the crew (a series cancel does not yet).
+  request. Moving the event moves its sheet; cancelling or deleting it — or
+  its whole series — stands the sheet down and tells the crew. A volunteer's
+  RSVP takes no attendee seat (see [Capacity and guests](#capacity-and-guests)).
 - **Comment thread** — internal discussion visible to coordinators.
 - **Cancel / postpone** — both the requester (from the status page) and the
   department can cancel or postpone; a postponed request can have a new date or

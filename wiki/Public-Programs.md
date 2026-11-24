@@ -47,12 +47,9 @@ Attends event           →   Coordinator marks complete
 
 ### Step 1: Configure Outreach Types
 
-Navigate to **Events Admin > Settings > Outreach Types**.
+Navigate to **Events Admin > Settings > Public Requests > Types & roles** (the **Request Types** card).
 
-Add the program types your department offers. Each type needs:
-
-- **Key**: A lowercase identifier (e.g., `fire_safety_demo`, `station_tour`)
-- **Label**: The display name shown to the public (e.g., "Fire Safety Demonstration")
+Add the program types your department offers: type a **Type Name** — the display name shown to the public (e.g., "Fire Safety Demonstration") — and press **Add**. The lowercase key (e.g., `fire_safety_demo`) is made from the name for you.
 
 **Recommended starter types for fire departments:**
 
@@ -70,7 +67,7 @@ Add the program types your department offers. Each type needs:
 
 ### Step 2: Set Up Pipeline Tasks
 
-Navigate to **Events Admin > Settings > Request Pipeline > Tasks**.
+Navigate to **Events Admin > Settings > Public Requests > Handling**, under **Request Checklist**.
 
 Pipeline tasks are the checklist steps your coordinator follows for each request. Use the up/down arrows to set the order.
 
@@ -90,19 +87,21 @@ Pipeline tasks are the checklist steps your coordinator follows for each request
 
 ### Step 3: Assign a Default Coordinator
 
-Navigate to **Events Admin > Settings > Pipeline > Default Coordinator**.
+Navigate to **Events Admin > Settings > Public Requests > Handling > Default Coordinator**.
 
 Select the member who should be auto-assigned all incoming requests. Members are listed as name and rank (for example "Jordan Avery — Firefighter"). This is typically:
 
-- The **Public Education Officer** or **Community Outreach Coordinator**
+- The member holding the **Community Outreach Manager** position (or your department's public education officer)
 - A **Lieutenant** or **Captain** responsible for public programs
 - The **Chief** (for smaller departments)
 
 The coordinator receives an email notification whenever a new request arrives.
 
+Only current members (active or probationary) are offered. If the default coordinator later leaves the department, they stay selected, marked "(former member)", but new requests are left **unassigned** rather than given to them, so they still show in the queue for anyone to pick up. Choose a current member to have requests assigned again.
+
 ### Step 4: Configure Email Triggers
 
-Navigate to **Events Admin > Settings > Email**, under **Notification Triggers**.
+Navigate to **Events Admin > Settings > Public Requests > Emails**, under **Automatic Emails**.
 
 Each status change can automatically send an email. Configure:
 
@@ -119,8 +118,8 @@ Each status change can automatically send an email. Configure:
 
 ### Step 5: Create the Public Form
 
-The easiest route is **Events Admin > Settings > Public Form > Generate Event
-Request Form**. It creates a ready-made form that already accepts submissions
+The easiest route is **Events Admin > Settings > Public Requests > Request form >
+Generate Event Request Form**. It creates a ready-made form that already accepts submissions
 without an account, in Draft status — open it in **Forms**, adjust the fields
 if you like, and press **Publish Form**.
 
@@ -344,7 +343,7 @@ full link.
 
 ## Email Template Library
 
-Below are ready-to-use email templates. Copy these into **Events Admin > Settings > Email**, under **Email Templates**, and customize for your department.
+Below are ready-to-use email templates. Copy these into **Events Admin > Settings > Public Requests > Emails**, under **Email Templates**, and customize for your department.
 
 > **Available variables:** `{{contact_name}}`, `{{outreach_type}}`,
 > `{{organization_name}}` and `{{event_date}}` (in the department's timezone,
@@ -357,7 +356,7 @@ Below are ready-to-use email templates. Copy these into **Events Admin > Setting
 > written. Nothing else is filled in — an unknown variable reaches the
 > requester literally. In particular there is **no status-link variable**, and
 > no email sends the requester their status page. To give them one, press
-> **Copy Link** on the request (Events Admin > Community Outreach > Outreach Requests) and paste the address
+> **Copy status link** on the request (Events Admin > Community Outreach > Outreach Requests) and paste the address
 > into your message yourself.
 
 ### Template: Request Received Confirmation
@@ -539,13 +538,13 @@ Thank you for your commitment to safety!
 - **Use comments for coordination** — Keep internal notes in the comment thread so anyone who takes over can see the full context.
 - **Front-load approvals** — Put "Chief Approval" early in the pipeline so you don't do prep work that gets blocked later.
 - **Batch similar requests** — If you get multiple school visit requests, try to schedule them in the same week to reduce setup time.
-- **Copy the status link** — No email sends the requester their status page. Press **Copy Link** on the request and paste it into a message to them so they can self-serve.
+- **Copy the status link** — No email sends the requester their status page. Press **Copy status link** on the request and paste it into a message to them so they can self-serve.
 
 ### For Department Administrators
 
 - **Start simple** — You don't need all program types on day one. Start with your 2-3 most common requests and add more as needed.
 - **Review templates quarterly** — Update email templates with current addresses, phone numbers, and seasonal information.
-- **Track metrics** — Monitor how many requests come in per month, average time to schedule, and completion rates. This data helps justify volunteer coordinator positions.
+- **Track metrics** — **Community Outreach > Outreach Impact** reports requests received and completed, people reached and member hours for any period; the **Overview** page shows what is waiting on you now. Also watch average time to schedule. This data helps justify volunteer coordinator positions.
 - **Delegate** — If one coordinator is overwhelmed, reassign requests to other qualified members.
 
 ### For Public Forms

@@ -993,6 +993,16 @@ example "James Fortner"), not "Former member 1005". Members already set to be
 created as archived former members sit in a collapsed section, so the few still
 to decide stay in view; open it to change any of them.
 
+**The staffing roster is paired with the hours** _(2026-11-21)_. The roster
+and the hours file share no ID, so each seat goes with the same member's hours
+entry that overlaps it by at least 30 minutes, and a shift seat is written onto
+that shift. A member's Shift & Call History then shows the seat they sat
+(Driver, Officer…) beside the hours. Before you write the roster, **Paired with
+the hours already imported** shows how many seats pair, how many have no hours
+entry (written as scheduled seats), and how many hours entries have no seat
+(they keep their hours and calls). Open **Seats with no hours** or **Hours with
+no seat** to see the first few of each.
+
 Running the same file twice is safe. Full detail is in the wiki page
 [Historical Data Import](../../wiki/Integration-Historical-Data-Import.md).
 
@@ -1020,6 +1030,10 @@ created are removed too, unless something else still refers to them. Select
 **Undo this step** to go ahead, or **Keep it**.
 
 ![The Undo the training records? confirmation, once the drills were undone: how many records are removed, the one changed since the import that is kept, and that the former members it created go too, with Keep it and Undo this step](./images/16-34-import-undo-training-confirm.png)
+
+_(2026-11-21)_ Undoing the staffing roster also puts back any member it moved
+to another seat. A roster written before 2026-11-21 did not record those moves,
+so its moved members keep the roster's seat.
 
 The rules, and why:
 

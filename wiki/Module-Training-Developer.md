@@ -173,6 +173,19 @@ never graded. `POST /training/course-links` and `/link-suggested` answer 409
 when two links collide on the same records ("…Nothing was linked; try
 again.").
 
+**Changed 2026-11-21.** `GET /training/reports/compliance-forecast` returns
+`{members, averages}` instead of a bare list. Each member adds
+`forecast_30_standing`, `forecast_60_standing` and `forecast_90_standing`
+(the member's own grading, as `current_standing`), and each projection is the
+shared grader run as of today + 30, 60 and 90 days on the records already
+logged. `averages.current` / `days_30` / `days_60` / `days_90` each carry
+`pct` (null when nobody is graded) and a `standing` classified by the
+department's thresholds (`ComplianceGrading.classify_average`; under
+`all_required`, compliant only when every graded member is). `GET
+/training/competency-matrix` is retired and answers 404; use
+`/training/compliance-matrix`. A training-record attachment entry carries
+`can_remove`, computed server-side for the caller.
+
 ### Training Programs
 
 The router is mounted at `/training/programs`, and program resources sit at

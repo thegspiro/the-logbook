@@ -484,6 +484,30 @@ delete itself, so a server restart or an unreachable file store in the
 middle no longer leaves them behind: an hourly task finishes the job. Files in a member's personal Member Files folder and
 the separation letter in Documents are not touched by either action yet.
 
+**A permanent delete is never left without its audit record**
+_(2026-11-21)_. The record of who deleted the member, and when, is now
+written in the same step as the delete. If it cannot be written, the delete
+does not happen, and the page shows "The member was not deleted: the audit
+record a permanent delete requires could not be written. Nothing was changed;
+please try again." The member and their files stay as they were.
+
+**Files left behind by older deletes can now be cleared** _(2026-11-21)_.
+Permanent deletes before 2026-11-16 left their members' files on the server,
+with nothing pointing at them. A system administrator can now find and remove
+them with a command; see
+[Scripts](../../backend/scripts/README.md#sweep_orphaned_member_filespy). It
+counts first and changes nothing until told to, keeps anything newer than 30
+days, and cannot reach files kept on a remote store. Copies in backups taken
+before stay in those backups.
+
+**You can remove a file you attached to your own training record**
+_(2026-11-21)_. Open the record's **Files** dialog, select the bin icon beside
+the file and confirm with **Remove file**. The record stays. A training
+officer can remove any file uploaded to a record. A certificate that came with
+an approved self-report, and the files on a voided record, cannot be removed
+there. See
+[Removing an Attachment](./02-training.md#removing-an-attachment-2026-11-21).
+
 **Permanently deleting a member also removes their application**
 _(2026-11-21)_. If the member joined through the membership pipeline, their
 applicant record went with them only by name before: deleting the member left

@@ -34,6 +34,43 @@ saving.
 
 **Made wrong by this range:** `02-66`, `02-65`, `18-04`.
 
+## Queued by the November 21 – 22 documentation pass
+
+Source: [CHANGE_AUDIT_2026-11](../CHANGE_AUDIT_2026-11.md#change-audit-november-21--22-2026).
+Nothing was captured by this pass. Numbers continue each guide's sequence as
+of this pass; check them against `images/` before saving.
+
+| Guide | Screen | Action |
+| --- | --- | --- |
+| 12 | Grants & Fundraising → Zeffy with a dues payment **Awaiting confirmation** and its **Confirm member** button | **Replace** `12-19-zeffy-page` (shows the retired "No member match" badge); its alt text is unchanged until recaptured |
+| 12 | **Confirm member dues** dialog: the pre-selected member and its hint, the donation box, **Credit dues** | Create `12-21-zeffy-confirm-dues` |
+| 12 | `12-20-zeffy-link-dialog` (dues helper text changed), `12-04-create-application` (mobile sweep) | Check |
+| 02 | Compliance Forecast with the new subtitle and colours by each member's thresholds | **Replace** `02-75-compliance-forecast` (re-shot 2026-11-21 before #4485/#4525 merged) |
+| 02 | Training record attachments with the bin icon | **Replace** `02-79-training-attachments` |
+| 02 | `02-62-print-member-history` (if an exempt member is shown: **Exempt** now grey), Compliance Matrix detail images showing a met hours cell with a past expiry, `02-02-historical-import-preview` (mobile sweep) | Check |
+| 02 | **Hand over open work** dialog after **Preview**: one row moving, one **Skipped:** row | Create `02-160-evaluation-hand-over-preview` |
+| 02 | An evaluation's **Last year's goals** item with two goals rated and a comment | Create `02-161-evaluation-goal-review` |
+| 02 | Template builder **Data shown with this item** open on **Apparatus & equipment** and **Inventory** | Create `02-162-evaluation-data-sources-new` |
+| 02 | Planned `02-146-evaluation-period-results` | When captured: the header now also has **Hand over work** |
+| 04 | Community Outreach **Overview** at desktop width: a request under Waiting for a reply, an event under Short of people, Month view with a day selected, the four glance figures | Create `04-108-outreach-overview` |
+| 04 | `04-20-event-requests` | **Replace**: the tab reads **Outreach Requests**, and the strip starts with **Overview** |
+| 04 | `04-100-community-engagement`, `04-99-event-request-drawer` (page strip), `04-84-public-minutes-phone` (taller list links) | Check |
+| 14 | `14-22-ballot-template-picker` | Check: the picker may now open above the button |
+| 01 | **Leave Requests** with the **Approver cover** card: one cover in effect with **End cover**, above the Stand-in / First day away / Last day away form | Create `01-63-leave-approver-cover` |
+| 01 | History: the Timeline with a decade open and Milestones boxes; the event form (People with a Role, Apparatus, Photos and documents); an apparatus page with Unit numbers and Timeline; the Dashboard's **Today in history** card | Create `01-64-history-timeline`, `01-65-history-event-form`, `01-66-history-apparatus-page`, `01-67-today-in-history-dashboard` |
+| 01 | Any positions capture showing **Public Outreach** or **Community Education / Outreach Team** | **Replace** if found: the seeded names are now Community Outreach Manager / Team |
+| 03 | **Assign someone** with a member marked "— leave requested" and the amber note | Create `03-141-assign-leave-requested` |
+| 03 | `03-58-assign-member-form`, `03-05-assignment-form` (only if seed data has a pending leave request), `03-22-equipment-check-builder` (bar wraps), `wiki/images/history-import-rows.png` | Check |
+| 16 | The staffing step's **Paired with the hours already imported** block | Check the staffing-step image, if the guide has one; otherwise optional Create |
+| 05 | Maintenance **Never Inspected** tab with the explanation line and two rows, each with **Log Maintenance** | Create `05-155-maintenance-never-inspected` |
+| 05 | Any Maintenance-page capture (new tab, **Category** column fixed), `05-55-member-picker` ("items assigned" is gone), `05-150-builder-crew-view` | Check |
+| 06 | `06-29-add-apparatus-form` (checkbox rows), `06-23-add-operator-member-picker` (if it uses the member picker) | Check |
+| 18 | An order with a reported payment and **Not received**, plus its confirmation | Create `18-09-payment-not-received` |
+| 18 | `18-03-order-windows` (may read **Update vendor order**), `18-04-my-orders-unpaid` (badge colours) | Check |
+| 11, 08 | `11-12-create-check-request` (cash-advance row), `08-11-error-monitor` | Check |
+
+**Made wrong by this range:** `12-19`, `02-75`, `02-79`, `04-20`.
+
 ## Captured 2026-11-22 — the shots still failing after the 2026-11-21 pass
 
 The 2026-11-21 capture left 95 shots failing, and three rows open: `14-22`,

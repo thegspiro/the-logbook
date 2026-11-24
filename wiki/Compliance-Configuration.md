@@ -162,7 +162,7 @@ date, rank and membership type — before it counts.
 The same resolution feeds the dashboard percentage, the compliance matrix, the
 Department Compliance card, the member profile's compliance card, My
 Training, the monthly and annual reports and — since 2026-11-20 — the member
-status roster, competency matrix, compliance exports, forecast and
+status roster, compliance exports, forecast and
 Scheduling's Shift Compliance report, so all of them agree. Stored reports
 keep the figures they were generated with.
 

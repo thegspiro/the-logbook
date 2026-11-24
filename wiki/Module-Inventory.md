@@ -238,6 +238,12 @@ batch scanner is titled **Distribute Items**.
   Maintenance records can persist structured NFPA Ch. 6–8 inspection results
   (assessment booleans, contamination level, SCBA fields, recommendation) to
   `nfpa_inspection_details` when supplied
+- **Maintenance page** — tabs for **Due Items**, **Never Inspected** and
+  **Maintenance History**. **Never Inspected** lists active items that need
+  inspecting (their category requires maintenance, or they carry their own
+  interval) but have no inspection on record and no due date, so they would
+  otherwise appear nowhere; **Log Maintenance** records the first inspection
+  and starts the schedule. They are not counted as due on the dashboard
 
 ---
 

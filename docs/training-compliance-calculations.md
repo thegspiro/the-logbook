@@ -28,7 +28,7 @@ All examples assume **today is October 15, 2025** and the department has
 > date every evening — a certificate on its last valid day read as expired, and
 > "this month" rolled over early. The whole engine moved at once (matrix,
 > dashboard percentage, member status, compliance summary, requirement
-> progress, competency matrix, annual report, forecast, CSV/PDF exports, My
+> progress, competency matrix (retired 2026-11-21), annual report, forecast, CSV/PDF exports, My
 > Training, MCP tools), so no two views disagree about the same member.
 
 ---
@@ -177,6 +177,18 @@ today as expired.
 
 Each training requirement is evaluated individually. The evaluation method
 depends on the requirement type.
+
+> **One grader decides met and expired** _(2026-11-21)_. The rules below are
+> applied once, in `app/services/training_compliance.py`. My Training and the
+> officer's member view (`TrainingService.evaluate_requirement_detail`) take
+> the status from it and keep only their display figures (progress bar,
+> monthly average, due date). Requirement progress
+> (`check_requirement_progress`, which feeds the user training report and the
+> MCP progress tool) is built from that detail and follows the
+> include-current-month setting. Before this, each kept its own copy of the
+> rules, and they disagreed with the matrix: a certification never held read
+> "Expired — Renew ASAP", one logged hour met a zero-hour target, and an
+> unrelated certificate outside a biannual window lapsed the requirement.
 
 ### 2a. Hours-Based Requirements
 
@@ -383,7 +395,7 @@ code is `load_credited_shift_dates` and `credited_shifts_in_window` in
 `app/services/training_compliance.py`; every grader — the compliance matrix,
 the dashboard percentage, the Department Compliance card, the period roster,
 the profile card, My Training, `/training/requirements/progress` (and the MCP
-tool on it), the annual and monthly reports, the competency matrix, the
+tool on it), the annual and monthly reports, the
 compliance exports and forecast, and the scheduling Shift Compliance report —
 reads it.
 
@@ -1114,8 +1126,14 @@ Note that `expired` and `in_progress` cells do **not** count toward
 
 ### Division by Zero Protection
 
-- If `required_hours = 0`, percentage is set to 100% (automatically
-  complete).
+- A requirement with **no positive target** — `required_hours = 0`, no shifts
+  or calls target, or a courses requirement with no course linked — is
+  **never met**. It reads not started, or in progress once something matching
+  is logged, at 0%. (A shifts or calls target that leave prorates down to
+  zero is different: the member owes nothing for the window and it reads
+  met.) Until 2026-11-21
+  My Training counted one logged hour as meeting a zero-hour target while the
+  matrix did not.
 - If `total_months = 0`, no adjustment is applied (original requirement
   stands).
 - `active_months` is clamped to a minimum of 1 to prevent negative or zero
@@ -1131,8 +1149,9 @@ Note that `expired` and `in_progress` cells do **not** count toward
 
 Riverside FD creates a new continuing-education requirement mid-year with
 `required_hours = 0` (they plan to set the value later). In the meantime,
-every member automatically shows 100% for that requirement because dividing
-by zero would be undefined. The system treats it as automatically met.
+nobody meets it: a zero target is a misconfiguration, not a free pass, so
+every graded member reads it as not met and their standing counts it against
+them. Set the real target, or deactivate the requirement until it is known.
 
 ### Biannual Requirements
 
@@ -1309,10 +1328,10 @@ Every screen that decides who a requirement grades goes through
 `requirement_applies_to_member` / `requirement_applies_to_user` with the join
 date — dashboard, matrix and print view, profile card, My Training, progress
 and MCP, compliance-officer report, member status, scheduling hours report,
-competency matrix, forecast, and the CSV/PDF exports, which print N/A where a
+forecast, and the CSV/PDF exports, which print N/A where a
 requirement does not apply. Most reach it through
 `ComplianceGrading.for_member`, which first narrows to the member's compliance
-profile; the member status roster, competency matrix, forecast, exports and
+profile; the member status roster, forecast, exports and
 scheduling report joined them on 2026-11-20. `tests/test_requirement_grandfathering.py` sweeps
 `app/` for a call that omits it. Passing role ids through the same helper also
 fixed the dashboard, matrix and member-status views, which had ignored

@@ -288,6 +288,28 @@ results share the table and are never deleted by retention.
   retried every hour by the `pending_file_deletions` task, which checks each
   file's references again first and keeps one another record still uses. A
   row that keeps failing stays queued; nothing is dropped.
+  Since 2026-11-21 the `user_hard_deleted` audit event is written inside the
+  delete's transaction (carrying `files_queued`), and a delete whose audit row
+  cannot be written is refused with a 500 and changes nothing; the file counts
+  follow in a `pending_file_deletions_completed` event linked to it by
+  `user_hard_deleted_audit_id`. See
+  [UPGRADING](https://github.com/thegspiro/the-logbook/blob/main/docs/UPGRADING.md).
+- **Orphaned member files** — files in the self-report, training-record and
+  attendance-waiver areas that no record names any more, left by permanent
+  deletes before 2026-11-16 or by a historical-import undo, the onboarding
+  reset or a process killed mid-delete — are removed by
+  `scripts/sweep_orphaned_member_files.py` _(2026-11-21)_. It is run by an
+  operator, never on a timer: a dry run by default that prints counts only,
+  never a path; `--apply` deletes files at least 30 days old and writes one
+  `orphaned_member_files_removed` audit event per department. It refuses while
+  an upload relocation or remote migration is unfinalized and reaches the
+  local uploads volume only. A removed file survives in backups taken before.
+  See [`backend/scripts/README.md`](https://github.com/thegspiro/the-logbook/blob/main/backend/scripts/README.md#sweep_orphaned_member_filespy).
+- **A file uploaded to a training record can be removed** _(2026-11-21)_ by
+  a training officer, or by the member for a file they uploaded, from the
+  record's **Files** dialog. A certificate an approval copied onto the record,
+  and every file on a voided record, stays. Each removal is audited as
+  `training_record_attachment_removed`, with ids only.
 - **Public-portal access logs** (each request to the public API, including
   refused authentications, with the requester's IP address) are kept **90
   days**, a fixed platform-wide period, and deleted daily by the

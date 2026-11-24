@@ -65,7 +65,8 @@ organization as well as on the permissions below.
 - **Zeffy** _(2026-11-01)_ — donations, event tickets and memberships sold
   through [Zeffy](Integration-Zeffy) are read in and recorded on a linked
   fundraising campaign, fundraising event or dues schedule. Read-only: nothing
-  is written to Zeffy.
+  is written to Zeffy. A dues payment waits as **Awaiting confirmation** until
+  a treasurer confirms whose dues it pays _(2026-11-21)_.
 - **Dashboard and reports** — the dashboard combines grant and fundraising
   figures; the reports page has **Grants** and **Fundraising** tabs over a date
   range.
