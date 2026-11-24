@@ -173,9 +173,11 @@ describe('TrainingRequirementsPage', () => {
     await user.click(within(dialog).getByRole('button', { name: 'Create Requirement' }));
 
     expect(mockCreateRequirement).not.toHaveBeenCalled();
-    expect(vi.mocked(toast.error)).toHaveBeenCalledWith(
-      'Select at least one course from the library for a courses requirement'
+    // Said in the form, on the picker and in its summary, not in a toast.
+    expect(within(dialog).getByRole('alert')).toHaveTextContent(
+      'Courses: Select at least one course from the library for a courses requirement.'
     );
+    expect(vi.mocked(toast.error)).not.toHaveBeenCalled();
   });
 
   it('shows the warning the backend reports for a requirement any hour can satisfy', async () => {
@@ -318,9 +320,12 @@ describe('TrainingRequirementsPage', () => {
     await user.click(within(dialog).getByRole('button', { name: 'Create Requirement' }));
 
     expect(mockCreateRequirement).not.toHaveBeenCalled();
-    expect(vi.mocked(toast.error)).toHaveBeenCalledWith(
-      'Select at least one member category, or check "Applies to all members"'
+    const appliesToAll = within(dialog).getByLabelText(/applies to all members/i);
+    expect(appliesToAll).toHaveAttribute('aria-invalid', 'true');
+    expect(appliesToAll).toHaveAccessibleDescription(
+      'Select at least one member category, or check "Applies to all members".'
     );
+    expect(vi.mocked(toast.error)).not.toHaveBeenCalled();
   });
 });
 

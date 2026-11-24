@@ -254,6 +254,25 @@ describe('RequirementDetailCard', () => {
       expect(screen.getByText(/Certification expired — renew ASAP/)).toBeInTheDocument();
     });
 
+    it('shows the count when the department withholds certification status', () => {
+      // A lapsed certificate, its date withheld: "Not recorded" would be untrue.
+      render(
+        <RequirementDetailCard
+          requirement={{
+            ...cpr,
+            completed_hours: 0,
+            progress_percentage: 0,
+            is_met: false,
+            expiry_date: null,
+            certification_status_hidden: true,
+          }}
+          timezone="UTC"
+        />
+      );
+      expect(screen.getByText('0/1')).toBeInTheDocument();
+      expect(screen.queryByText('Not recorded')).not.toBeInTheDocument();
+    });
+
     it('says not recorded when nothing is on file, rather than expired', () => {
       render(
         <RequirementDetailCard

@@ -485,6 +485,23 @@ APPARATUS_EVENTS_MANAGE = Permission(
     PermissionCategory.EVENTS,
 )
 
+# Community risk reduction (owner decisions, 2026-11-22). Recording an activity
+# is granted to every seeded list holding events.manage and to the Community
+# Outreach Team; seeing a resident's address and contact is narrower, the
+# Community Outreach Manager and above (the chiefs and the president).
+# tests/test_crr_grants.py holds both, and migration 5c2e8a417d90 applies them
+# to stored rows.
+CRR_RECORD = Permission(
+    "crr.record",
+    "Record community risk reduction activities and see the activity log",
+    PermissionCategory.EVENTS,
+)
+CRR_VIEW_CONTACT = Permission(
+    "crr.view_contact",
+    "View the resident address and contact details on CRR activities",
+    PermissionCategory.EVENTS,
+)
+
 # Locations
 LOCATIONS_VIEW = Permission(
     "locations.view", "View locations", PermissionCategory.LOCATIONS
@@ -949,6 +966,8 @@ ALL_PERMISSIONS: list[Permission] = [
     EVENTS_REOPEN_ATTENDANCE,
     APPARATUS_EVENTS_SIGNUP,
     APPARATUS_EVENTS_MANAGE,
+    CRR_RECORD,
+    CRR_VIEW_CONTACT,
     # Locations
     LOCATIONS_VIEW,
     LOCATIONS_CREATE,
@@ -1635,6 +1654,8 @@ OPERATIONAL_RANKS: dict[str, dict] = {
             EVENTS_DELETE.name,
             EVENTS_MANAGE.name,
             APPARATUS_EVENTS_MANAGE.name,
+            CRR_RECORD.name,
+            CRR_VIEW_CONTACT.name,
             EVENTS_REOPEN_ATTENDANCE.name,
             LOCATIONS_CREATE.name,
             LOCATIONS_EDIT.name,
@@ -1713,6 +1734,8 @@ OPERATIONAL_RANKS: dict[str, dict] = {
             EVENTS_DELETE.name,
             EVENTS_MANAGE.name,
             APPARATUS_EVENTS_MANAGE.name,
+            CRR_RECORD.name,
+            CRR_VIEW_CONTACT.name,
             EVENTS_REOPEN_ATTENDANCE.name,
             LOCATIONS_CREATE.name,
             LOCATIONS_EDIT.name,
@@ -1777,6 +1800,8 @@ OPERATIONAL_RANKS: dict[str, dict] = {
             EVENTS_EDIT.name,
             EVENTS_MANAGE.name,
             APPARATUS_EVENTS_MANAGE.name,
+            CRR_RECORD.name,
+            CRR_VIEW_CONTACT.name,
             EVENTS_REOPEN_ATTENDANCE.name,
             LOCATIONS_CREATE.name,
             LOCATIONS_EDIT.name,
@@ -2161,6 +2186,8 @@ DEFAULT_POSITIONS: dict[str, dict] = {
             EVENTS_DELETE.name,
             EVENTS_MANAGE.name,
             APPARATUS_EVENTS_MANAGE.name,
+            CRR_RECORD.name,
+            CRR_VIEW_CONTACT.name,
             EVENTS_REOPEN_ATTENDANCE.name,
             LOCATIONS_VIEW.name,
             LOCATIONS_CREATE.name,
@@ -2333,6 +2360,7 @@ DEFAULT_POSITIONS: dict[str, dict] = {
             APPARATUS_EVENTS_SIGNUP.name,
             EVENTS_MANAGE.name,
             APPARATUS_EVENTS_MANAGE.name,
+            CRR_RECORD.name,
             LOCATIONS_VIEW.name,
             FORMS_VIEW.name,
             FORMS_MANAGE.name,
@@ -2460,6 +2488,8 @@ DEFAULT_POSITIONS: dict[str, dict] = {
             EVENTS_EDIT.name,
             EVENTS_MANAGE.name,
             APPARATUS_EVENTS_MANAGE.name,
+            CRR_RECORD.name,
+            CRR_VIEW_CONTACT.name,
             LOCATIONS_VIEW.name,
             LOCATIONS_CREATE.name,
             LOCATIONS_EDIT.name,
@@ -2487,6 +2517,7 @@ DEFAULT_POSITIONS: dict[str, dict] = {
             EVENTS_EDIT.name,
             EVENTS_MANAGE.name,
             APPARATUS_EVENTS_MANAGE.name,
+            CRR_RECORD.name,
             LOCATIONS_VIEW.name,
             DOCUMENTS_VIEW.name,
             NOTIFICATIONS_VIEW.name,
@@ -2735,6 +2766,7 @@ DEFAULT_POSITIONS: dict[str, dict] = {
             EVENTS_EDIT.name,
             EVENTS_MANAGE.name,
             APPARATUS_EVENTS_MANAGE.name,
+            CRR_RECORD.name,
             LOCATIONS_VIEW.name,
             LOCATIONS_CREATE.name,
             LOCATIONS_EDIT.name,
@@ -2848,6 +2880,7 @@ DEFAULT_POSITIONS: dict[str, dict] = {
             EVENTS_EDIT.name,
             EVENTS_MANAGE.name,
             APPARATUS_EVENTS_MANAGE.name,
+            CRR_RECORD.name,
             LOCATIONS_VIEW.name,
             LOCATIONS_CREATE.name,
             LOCATIONS_EDIT.name,
@@ -3065,6 +3098,10 @@ for _slug in COMMITTEE_POSITION_SLUGS:
     DEFAULT_POSITIONS[_slug]["permissions"] = list(
         DEFAULT_POSITIONS["member"]["permissions"]
     )
+
+# The one committee grant beyond the baseline: the Community Outreach Team
+# records the CRR activities its members deliver (owner decision, 2026-11-22).
+DEFAULT_POSITIONS["community_outreach_team"]["permissions"].append(CRR_RECORD.name)
 
 
 def position_mirrors_rank(slug: str | None, is_system: bool | None) -> bool:

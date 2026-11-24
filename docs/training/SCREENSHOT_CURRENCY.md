@@ -290,34 +290,35 @@ re-shot on 2026-11-21.
 ## Queued by the November 19 – 20 documentation pass
 
 Source: [CHANGE_AUDIT_2026-11](../CHANGE_AUDIT_2026-11.md#change-audit-november-19--20-2026).
-Nothing was captured by this pass.
+Nothing was captured by this pass. The Create and Check rows were worked on
+2026-11-23.
 
 | Guide | Screen | Action |
 | --- | --- | --- |
 | 03 | My Shifts → **Hours**, new layout: cards with the two-colour split bar, year arrows, the "<year> at a glance" chart and its summary tiles | **Replace** `03-104-my-shifts-hours` (shows the always-visible table and no chart) |
 | 03 | **All shifts** list: a department shift labelled with the short name, outside shifts with a blue edge, one **Not counted** with its reason, the filter chips, **Log outside shift** | **Replace** `03-108-member-outside-shifts` (the card it shows was removed) |
 | 03 | Hours with outside hours: a card reading "N FCVFD" / "+24 with other departments", **All shifts** below | **Replace** `03-113-member-hours-with-outside` |
-| 03 | A month bar selected on the chart, its shifts highlighted in the list | Optional |
+| 03 | A month bar selected on the chart, its shifts highlighted in the list | **CURRENT** 2026-11-23 as `03-143-hours-month-selected` (October, the latest month with credited hours) |
 | 01 | Profile **Shift & Call History** in the new layout, officer view without **Log outside shift** | Optional |
-| 08 | Settings → Profile with **Short Name** and its hint | Create |
-| 03 | Shift template dialog reading "Template saved, except name" with the field flagged; the **Discard changes** confirmation | Create |
-| 03 | Settings → General, Overtime advisory card with a cleared Hours limit flagged "Enter a whole number from 0 to 336." | Create |
-| 16 | Historical import: a committed step's **Undo this step**, the **Undo the training records?** confirmation with counts, the greyed-out "first undo the company drills step" line, the kept-records notice | Create |
-| 02 | Curriculum → Course Links with **Recent links**, one row reading "undone … by …", and the Undo confirmation (**Undo link** / **Keep it**) | Create |
-| 02 | Training Admin attention row "N training names can be linked to a course" with **Review links**, and the Course Links badge | Create |
-| 02 | Competency heat-map at 390px: pinned names, wrapping, scroll cue | Create. **Check** `02-67-competency-matrix`: the name column is now capped at 7rem and long names wrap |
-| 10 | My Training History tab and Expiring Certifications as cards at 390px | Create. `10-18-training-table-phone` stays valid |
-| 02 | `02-107-my-training-history-tab`, `02-01-my-training` | Check only: at 1440px these should still be tables |
+| 08 | Settings → Profile with **Short Name** and its hint | Created `08-125-profile-short-name` |
+| 03 | Shift template dialog reading "Template saved, except name" with the field flagged; the **Discard changes** confirmation | Created `03-143-template-saved-except-name`, `03-144-template-discard-changes` |
+| 03 | Settings → General, Overtime advisory card with a cleared Hours limit flagged "Enter a whole number from 0 to 336." | Created `03-142-overtime-hours-limit-error` |
+| 16 | Historical import: a committed step's **Undo this step**, the **Undo the training records?** confirmation with counts, the greyed-out "first undo the company drills step" line, the kept-records notice | Created `16-32-import-training-undo-blocked`, `16-33-import-training-undo-ready`, `16-34-import-undo-training-confirm`, `16-35-import-undo-kept-notice`, on a legacy import the seeder commits (`seed_backlog_16_historical_import`) for four archived former members. The shots undo for real and commit again in their cleanup. Guide 16 quoted the greyed line wrongly; it now quotes the server's "Undo the company drills step first: it builds on the training." |
+| 02 | Curriculum → Course Links with **Recent links**, one row reading "undone … by …", and the Undo confirmation (**Undo link** / **Keep it**) | Created `02-152-course-links-recent`, `02-153-course-links-undo-confirm` (history mocked: the demo has no links) |
+| 02 | Training Admin attention row "N training names can be linked to a course" with **Review links**, and the Course Links badge | Created `02-154-course-links-attention`, with the Curriculum card's badge (row mocked: no demo name has a suggestion) |
+| 02 | Competency heat-map at 390px: pinned names, wrapping, scroll cue | Created `02-155-competency-heatmap-phone` (levels mocked: the demo has evaluated no skills). `02-67-competency-matrix` checked: its heat-map shows the empty message, so the name column is not in frame |
+| 10 | My Training History tab and Expiring Certifications as cards at 390px | Created `10-30-expiring-certs-phone`; `10-18-training-table-phone` is the History tab |
+| 02 | `02-107-my-training-history-tab`, `02-01-my-training` | Checked: both are tables at 1440px |
 | 02, 04, 07, 12 | A picker showing a saved "Name (former member)" | Optional |
-| 05 | My Issued Gear row reading **Quartermaster notified** _date_ in place of the button | Create. `05-66-my-equipment`, `05-98-my-equipment-empty` stay valid |
-| 05 | Checklist Settings with the note under an hours box ("24 is the most allowed. 24 was saved.") | Create. `05-153-checklist-settings-phone` stays valid |
-| 06 | Apparatus edit with **These were not saved** and "Apparatus saved, except …" | Create. Check `06-29-add-apparatus-form` (layout unchanged, likely valid) |
-| 06 | A facility extended section (e.g. Insurance) with a field error and a character counter; the "Discard your changes?" dialog | Create |
-| 07 | Suggestion submit step with "Answer “…”." under a question; Step 2 with "Give your suggestion a title." | Create. **Check** `07-15-suggestion-submit-anonymous` and `07-36-compliance-details-step`; replace if Submit appears greyed out |
-| 07 | Suggestion box dialog with a flagged question ("Write the question members will be asked.") | Create. `07-14-suggestion-box-dialog` stays valid |
-| 18 | Store Settings with **Fix these before saving the settings** and a flagged tax rate | Create. `18-02-store-admin` stays valid |
+| 05 | My Issued Gear row reading **Quartermaster notified** _date_ in place of the button | Created `05-155-my-gear-quartermaster-notified` (notice mocked so none waits on Return Requests) |
+| 05 | Checklist Settings with the note under an hours box ("24 is the most allowed. 24 was saved.") | Created `05-156-checklist-hours-clamped`, on Opens before the start (Closes allows up to 72); the old value is restored after |
+| 06 | Apparatus edit with **These were not saved** and "Apparatus saved, except …" | Created `06-37-apparatus-saved-except`. `06-29-add-apparatus-form` checked: layout unchanged |
+| 06 | A facility extended section (e.g. Insurance) with a field error and a character counter; the "Discard your changes?" dialog | Created `06-38-facility-insurance-flagged`, `06-39-facility-discard-changes`. No counter: it appears at 80% of a 100- or 200-character limit, and the guide now says so |
+| 07 | Suggestion submit step with "Answer “…”." under a question; Step 2 with "Give your suggestion a title." | Created `07-50-suggestion-question-unanswered`, `07-51-suggestion-title-missing`. `07-15` and `07-36` checked: Submit is not greyed |
+| 07 | Suggestion box dialog with a flagged question ("Write the question members will be asked.") | Created `07-49-suggestion-box-question-flagged` |
+| 18 | Store Settings with **Fix these before saving the settings** and a flagged tax rate | Created `18-09-store-settings-fix-these`, `18-10-store-settings-tax-flagged` |
 | 08 | Template editor with a flagged CC field and **Save** enabled | Optional. `08-56-template-discard` stays valid |
-| 04 | `04-68-minutes-outlines`: the Default badge is a darker green | Check (colour only) |
+| 04 | `04-68-minutes-outlines`: the Default badge is a darker green | Checked: a fresh capture is identical |
 | wiki | Shift history import edit dialog, "Other lines in these issues" with **Include line N** | Optional |
 
 **Made wrong by this range:** `03-104`, `03-108`, `03-113` (My Hours
@@ -359,7 +360,7 @@ Nothing was captured by this pass.
 | --- | --- | --- |
 | 03 | Shift Planning → **Templates** tab: templates only, the heading's "make a pattern in **Shift patterns**" link, no Templates / Patterns switch | Check `03-12-shift-templates` and `03-129-template-reactivate`; replace either if it shows the old switch |
 | 03 | Shift Planning → **Patterns**: a pattern card with its **Edit** button; **Edit Pattern** open from it | Create; `03-133-pattern-form-template-inactive` was taken from the old Templates-tab form and should be re-shot from the Patterns tab |
-| 03 | My Shifts → **Past**: **Hours credited** / **Credited shifts** / **Avg hours/shift** tiles with "+N hrs awaiting close-out", a **Xh credited** pill and an amber **Xh · awaiting close-out** pill | Create (supersedes the 2026-11-09 Past row) |
+| 03 | My Shifts → **Past**: **Hours credited** / **Credited shifts** / **Avg hours/shift** tiles with "+N hrs awaiting close-out", a **Xh credited** pill and an amber **Xh · awaiting close-out** pill | **CURRENT** 2026-11-23 as `03-142-my-shifts-past-credited`, taken as the administrator: the demo member has no shift closed out, so its tiles read 0 |
 | 04 | **Check In Members** dialog with the new "credited from the scheduled start" line | Create |
 | 04 | Event settings → **Attendance** → **Mandatory event responses** with **Ask for a response** (60 days) and the error for an out-of-range value | Create |
 | 02 | Requirement **Member Categories** in a department with a Senior tier: **Operational members** selected, Senior ticked, the hint "Active, Probationary, Life and Senior Member" | Create (`02-135` stays valid for a department with no Senior tier) |
@@ -411,7 +412,7 @@ Nothing was captured.
 | 02    | Session Waivers settings; event-page "Request to be excused" card and **Ask to be excused**; waiver request queue and decision page; My Waiver Requests | Create                                              |
 | 02    | Evaluation form builder sources grouped with "(turned off)" and the scoring-gap note; a figure with its counts; requirement modal with a custom tier; monthly shifts on My Training | Create                                              |
 | 02    | Any capture of the Settings & Data tab row (now Manual Entry, Compliance, Import History)                                                      | Check                                               |
-| 03    | Preceptor link dialog with QR code; outside shift row with **Preceptor link**; close-out "A shift evaluation is still needed for:"              | Create                                              |
+| 03    | Preceptor link dialog with QR code; outside shift row with **Preceptor link**; close-out "A shift evaluation is still needed for:"              | Create. **Blocked 2026-11-23:** needs an outside shift by a member with an *active* EMT Field Internship enrollment, on a department with Evaluate shifts on. After a full seed every enrollment in that program reads completed (all ten were set between 05:37 and 05:41 UTC in one run), so no outside shift can need an evaluation, and no capture login (`nbelhaj`, `snolan`) is an intern. Why they complete is not yet traced |
 | 03    | `03-108`, `03-113` (outside-shift card has a button now)                                                                                         | Check                                               |
 | 04    | Documents History folder with **Managed in History**; draft request-form warning with its button; Email Templates **Meetings & Minutes** group | Create                                              |
 | 04    | `04-14-meeting-minutes` and Meeting Attendance: Voting column, Waiver requests / Waiver settings                                               | Check                                               |
@@ -528,7 +529,7 @@ Nothing was captured by this pass.
 | Guide | Screen                                                                       | Action          |
 | ----- | ---------------------------------------------------------------------------- | --------------- |
 | 03    | My Shifts **Upcoming** under month headers                                   | Replace `03-04` |
-| 03    | My Shifts **Past** with Year dropdown, hours chart, month headers            | Create          |
+| 03    | My Shifts **Past** with Year dropdown, hours chart, month headers            | Superseded by the 2026-11-17 Past row: **CURRENT** 2026-11-23 as `03-142-my-shifts-past-credited` |
 | 04    | Event attendance **Check In** dialog with **Add a member** on a closed event | Create          |
 | 02    | Training History records showing the source line                             | Create          |
 | 02    | Requirement card reading **No sessions held yet**                            | Create          |
@@ -544,7 +545,7 @@ Nothing was captured by this pass.
 
 | Guide | Screen                                                                         | Action  |
 | ----- | ------------------------------------------------------------------------------ | ------- |
-| 03    | My Shifts **Past** view with the Year dropdown, hours chart and month headings | Replace |
+| 03    | My Shifts **Past** view with the Year dropdown, hours chart and month headings | Superseded by the 2026-11-17 Past row: **CURRENT** 2026-11-23 as `03-142-my-shifts-past-credited` |
 | 02    | Pipeline wizard with the resume-draft notice and **Save draft**                | Create  |
 | 10    | A reflowed table (audit log) as cards at 390px                                 | Create  |
 
@@ -690,7 +691,7 @@ Nothing was captured by this pass.
 | 02    | Compliance Configure → **Thresholds** with **Months on leave**                                                                                      | Create  |
 | 02    | A member's Training History **Requirements** section with the **Leave of absence** box                                                              | Create  |
 | 02    | `02-108-monthly-hours-leave`: an excused month now keeps its hours and reads **Leave**                                                              | Replace |
-| 03    | Outside Apparatus settings with **Evaluate shifts on _agency_'s units**; an **Evaluation needed** badge                                             | Create  |
+| 03    | Outside Apparatus settings with **Evaluate shifts on _agency_'s units**; an **Evaluation needed** badge                                             | Create. **Blocked 2026-11-23:** needs an outside shift by a member with an *active* EMT Field Internship enrollment, on a department with Evaluate shifts on. After a full seed every enrollment in that program reads completed (all ten were set between 05:37 and 05:41 UTC in one run), so no outside shift can need an evaluation, and no capture login (`nbelhaj`, `snolan`) is an intern. Why they complete is not yet traced |
 | 05    | The **Before you print** checklist with **Printer resolution** (Code 128)                                                                           | Create  |
 
 ## Queued by the November 1 – 2 documentation pass

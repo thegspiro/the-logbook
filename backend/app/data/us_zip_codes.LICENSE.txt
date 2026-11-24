@@ -1,0 +1,11 @@
+us_zip_codes.json is derived from the GeoNames postal code data for the United
+States (https://download.geonames.org/export/zip/US.zip).
+
+GeoNames (www.geonames.org) publishes it under the Creative Commons Attribution
+4.0 License (https://creativecommons.org/licenses/by/4.0/): it may be used as
+long as credit is given to GeoNames, for example with a link to
+www.geonames.org. The application's footer carries that credit.
+
+The data is provided "as is" without warranty or any representation of
+accuracy, timeliness or completeness. Only the ZIP code, place name, state code
+and county are kept. Rebuild with backend/scripts/build_us_zip_codes.py.

@@ -39,6 +39,9 @@ class AdminHoursEntryMethod(str, Enum):
     # apart so an export or audit never presents years of imported history as
     # entries members typed.
     IMPORT = "import"
+    # Credited from a CRR activity log entry (owner decision, 2026-11-22), so an
+    # export never presents it as hours a member typed or an event recorded.
+    CRR_ACTIVITY = "crr_activity"
 
 
 class AdminHoursEntryStatus(str, Enum):
@@ -177,6 +180,14 @@ class AdminHoursEntry(Base):
         ForeignKey("event_rsvps.id", ondelete="SET NULL"),
         nullable=True,
     )
+    # The CRR activity an entry was credited from (entry_method crr_activity).
+    # Deleting the activity removes the entries it created; the link is SET
+    # NULL so an entry an officer has since taken over by hand survives it.
+    source_crr_activity_id: Mapped[Optional[str]] = mapped_column(
+        String(36),
+        ForeignKey("crr_activities.id", ondelete="SET NULL"),
+        nullable=True,
+    )
 
     # Approval workflow
     status: Mapped[AdminHoursEntryStatus] = mapped_column(
@@ -228,6 +239,7 @@ class AdminHoursEntry(Base):
             "status",
         ),
         Index("ix_admin_hours_entries_source_rsvp", "source_rsvp_id", "category_id"),
+        Index("ix_admin_hours_entries_source_crr", "source_crr_activity_id"),
     )
 
 

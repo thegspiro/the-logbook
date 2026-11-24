@@ -150,7 +150,10 @@ describe('navigation gates match the routes they target', () => {
     for (const row of EVENTS_NAV_ITEMS) {
       const gate = routeGate(sources, row.path);
       expect(gate.exists, row.path).toBe(true);
-      expect(row.permission ? [row.permission] : [], row.path).toEqual(gate.permissions);
+      // A row gates on one grant or on any of several, as the route's
+      // ProtectedRoute does (requiredPermission / requiredAnyPermission).
+      const rowGate = row.anyPermission ?? (row.permission ? [row.permission] : []);
+      expect(rowGate, row.path).toEqual(gate.permissions);
     }
   });
 

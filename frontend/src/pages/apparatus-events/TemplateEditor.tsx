@@ -282,6 +282,22 @@ export const TemplateEditor: React.FC<TemplateEditorProps> = ({ initial, templat
               />
               Members can take open seats themselves
             </label>
+            <label className="text-theme-text-secondary ml-6 flex items-start gap-2 text-sm">
+              <input
+                type="checkbox"
+                className="form-checkbox mt-0.5"
+                checked={draft.allow_self_signup && draft.require_signup_approval}
+                disabled={!draft.allow_self_signup}
+                onChange={(e) => set('require_signup_approval', e.target.checked)}
+              />
+              <span>
+                Coordinator approves self sign-ups
+                <span className="text-theme-text-muted block text-xs">
+                  Sign me up asks for the seat instead of taking it. The organizer is emailed, and a request nobody
+                  answers is declined when the night starts.
+                </span>
+              </span>
+            </label>
             <label className="text-theme-text-secondary flex items-start gap-2 text-sm">
               <input
                 type="checkbox"

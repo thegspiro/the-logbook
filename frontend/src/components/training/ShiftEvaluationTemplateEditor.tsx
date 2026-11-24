@@ -279,7 +279,14 @@ export const ShiftEvaluationTemplateEditor: React.FC<Props> = ({ initial, headin
             <select
               id="et-threshold"
               className="form-input text-sm"
-              value={body.comment_required_at_or_below ?? ''}
+              value={
+                // NaN marks a threshold following a rating whose value box is
+                // momentarily blank; it matches no option either way, and React
+                // refuses NaN as a value.
+                body.comment_required_at_or_below === null || Number.isNaN(body.comment_required_at_or_below)
+                  ? ''
+                  : body.comment_required_at_or_below
+              }
               onChange={(e) =>
                 patch({ comment_required_at_or_below: e.target.value === '' ? null : Number(e.target.value) })
               }

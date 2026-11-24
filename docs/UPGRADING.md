@@ -830,6 +830,40 @@ every authentication and public endpoint at once.
 Newest first. Nothing here blocks a restart — these are changes an operator
 should not have to discover by being surprised.
 
+### Community risk reduction tracking, and a street map that loads tiles from OpenStreetMap (2026-11-23)
+
+Nothing blocks a restart. Migrations `89c0b481fe55` and `5c2e8a417d90` create
+the CRR tables, add a source column and the `crr_activity` entry method to
+Admin Hours, and change no existing row except the stored positions below.
+
+- **Two permissions are added to stored positions.** `crr.record` goes to
+  every built-in position holding `events.manage` (or `events.*`) and to the
+  Community Outreach Team; `crr.view_contact` goes to Public Outreach, the
+  fire, deputy and assistant chiefs, and the president. A position the
+  department created is not changed. The downgrade revokes both.
+- **Resident details are cleared on a schedule.** A daily task (03:55 UTC)
+  clears the address, name, phone, email and notes of CRR activities older
+  than the department's period, 24 months unless changed under Events
+  Settings → CRR Catalogue. The ZIP code and counts are kept. What it clears
+  cannot be restored except from a backup.
+- **The CSP now allows images from `https://tile.openstreetmap.org`** in all
+  three nginx configs (`frontend/nginx.conf`,
+  `infrastructure/nginx/nginx.conf`, `infrastructure/nginx/docker.conf`), for
+  the map on Outreach Impact. The map loads only when someone presses **Show
+  map**, and then each viewer's browser fetches tiles from OpenStreetMap,
+  which tells OpenStreetMap what area is being viewed. No activity, count or
+  ZIP code is sent.
+  - **Your own reverse proxy in front** (Unraid, Traefik, a load balancer)
+    that sets its own Content-Security-Policy must add the same host to
+    `img-src`, or the map shows its circles over a blank background.
+  - **An air-gapped install, or one whose network blocks the host,** gets the
+    same blank background and a note saying the street map could not load.
+    Nothing else is affected.
+- **New frontend dependency:** `leaflet` (BSD-2-Clause), loaded only with the
+  map.
+- **The bundled ZIP data grows** from about 1.5 MB to 2.2 MB: it now carries
+  each ZIP code's centre, from the same GeoNames source and licence.
+
 ### Outreach: a phone-only request repaired, event volunteer calls, self-ticking steps (2026-11-23)
 
 Nothing blocks a restart.

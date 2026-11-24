@@ -30,6 +30,8 @@ POST   /training/waivers/requests/{id}/override      - The Chief approves a deni
 POST   /training/waivers/requests/{id}/request-info  - Ask the member a question
 POST   /training/waivers/requests/{id}/respond       - Answer the open question
 POST   /training/waivers/requests/{id}/attachments   - File documents (pending)
+DELETE /training/waivers/requests/{id}/attachments/{attachment_id} - Remove one
+                                                       (pending)
 GET    /training/waivers/requests/{id}/attachments/{attachment_id} - Download one
 
 Who may decide is a matter of holding a position, not a permission (the
@@ -40,7 +42,7 @@ someone who may decide it.
 """
 
 from contextlib import contextmanager
-from typing import Iterator, List, Optional
+from typing import Iterator, List, Optional, Union
 
 from fastapi import (
     APIRouter,
@@ -54,7 +56,11 @@ from fastapi import (
 )
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.dependencies import get_current_user, require_permission
+from app.api.dependencies import (
+    get_current_user,
+    require_permission,
+    user_has_permission,
+)
 from app.core.database import get_db
 from app.core.utils import safe_error_detail
 from app.models.attendance_waiver import (
@@ -69,6 +75,7 @@ from app.schemas.attendance_waiver import (
     AttendanceWaiverAttention,
     AttendanceWaiverDecision,
     AttendanceWaiverEligibilityResponse,
+    AttendanceWaiverMemberPolicy,
     AttendanceWaiverMessage,
     AttendanceWaiverOverride,
     AttendanceWaiverPolicy,
@@ -76,6 +83,8 @@ from app.schemas.attendance_waiver import (
     AttendanceWaiverRequestPage,
     AttendanceWaiverRequestResponse,
     AttendanceWaiverSubmit,
+    QueueState,
+    member_policy,
 )
 from app.services.attendance_waiver_attachments import (
     AttendanceWaiverAttachmentService,
@@ -118,7 +127,12 @@ async def _one(
     return AttendanceWaiverRequestResponse(**bodies[0])
 
 
-@router.get("/policy", response_model=AttendanceWaiverPolicy)
+@router.get(
+    "/policy",
+    # The member's shape first: a full policy fails it on the routing fields
+    # (extra="forbid") and falls through to AttendanceWaiverPolicy.
+    response_model=Union[AttendanceWaiverMemberPolicy, AttendanceWaiverPolicy],
+)
 async def get_attendance_waiver_policy(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -126,13 +140,18 @@ async def get_attendance_waiver_policy(
     """
     The department's policy for session waiver requests: whether members may
     ask, the deadline, the cap, the categories and how a reason is taken.
-    Every member reads it, because the request form is built from it.
+    Every member reads it, because the request form is built from it. Who
+    decides (the approver and copy-to positions, the Chief's alternate) is
+    included only for a training.manage holder, who edits it.
 
     **Authentication required**
     """
-    return await AttendanceWaiverService(db).get_policy(
+    policy = await AttendanceWaiverService(db).get_policy(
         str(current_user.organization_id)
     )
+    if user_has_permission(current_user, "training.manage"):
+        return policy
+    return member_policy(policy)
 
 
 @router.put("/policy", response_model=AttendanceWaiverPolicy)
@@ -313,6 +332,7 @@ async def list_my_attendance_waiver_requests(
 @router.get("", response_model=AttendanceWaiverRequestPage)
 async def list_attendance_waiver_requests(
     status_filter: Optional[AttendanceWaiverStatus] = Query(None, alias="status"),
+    state: Optional[QueueState] = Query(None),
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=MAX_PAGE),
     db: AsyncSession = Depends(get_db),
@@ -320,15 +340,17 @@ async def list_attendance_waiver_requests(
 ):
     """
     The requests the caller may decide or has decided, newest first, filtered
-    by status. Empty for a member who decides none: the routed positions, the
-    Chief and, when those are vacant, training managers decide.
+    by status, or by ``state``: "pending" or "decided" (every other status),
+    with ``total`` counting only that state. Empty for a member who decides
+    none: the routed positions, the Chief and, when those are vacant,
+    training managers decide.
 
     **Authentication required**
     """
     service = AttendanceWaiverService(db)
     org_id = str(current_user.organization_id)
     requests, total = await service.list_for_decider(
-        org_id, current_user, status_filter, skip=skip, limit=limit
+        org_id, current_user, status_filter, skip=skip, limit=limit, state=state
     )
     return AttendanceWaiverRequestPage(
         items=[
@@ -534,6 +556,34 @@ async def add_attendance_waiver_attachments(
     with _refusals():
         request = await AttendanceWaiverAttachmentService(db).add_attachments(
             str(current_user.organization_id), current_user, request_id, files
+        )
+    return await _one(AttendanceWaiverService(db), current_user, request)
+
+
+@router.delete(
+    "/{request_id}/attachments/{attachment_id}",
+    response_model=AttendanceWaiverRequestResponse,
+)
+async def remove_attendance_waiver_attachment(
+    request_id: str,
+    attachment_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Remove one document from the caller's own pending request; answers with
+    the request. Removing one already gone changes nothing. 400 once it is
+    decided or withdrawn, or for the last document when the department
+    requires one; 403 for a decider, 404 for anyone else.
+
+    **Authentication required**
+    """
+    with _refusals():
+        request = await AttendanceWaiverAttachmentService(db).remove_attachment(
+            str(current_user.organization_id),
+            current_user,
+            request_id,
+            attachment_id,
         )
     return await _one(AttendanceWaiverService(db), current_user, request)
 

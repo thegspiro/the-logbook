@@ -1,0 +1,139 @@
+# Builds the documentation site (docs-site/) and publishes its image.
+#
+# A pull request that changes docs/, wiki/ or docs-site/ builds the site in
+# MkDocs strict mode, so a broken link, missing anchor or bad !youtube line
+# fails here rather than on the published site, and runs the site's tests.
+# A merge to main also builds and publishes ghcr.io/thegspiro/the-logbook-docs
+# (:latest and :sha-<short>), which the Unraid template and
+# docs-site/docker-compose.yml run. See docs-site/README.md.
+name: Docs Site
+
+on:
+  pull_request:
+    paths:
+      - "docs/**"
+      - "wiki/**"
+      - "docs-site/**"
+      - ".github/workflows/docs-site.yml"
+  push:
+    branches: [main]
+    paths:
+      - "docs/**"
+      - "wiki/**"
+      - "docs-site/**"
+      - ".github/workflows/docs-site.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  # Two publishes for main would race to move :latest; queue them, and let a
+  # newer push to a pull request replace its older run.
+  group: docs-site-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  # Must match <Repository> in docs-site/unraid-template.xml and image: in
+  # docs-site/docker-compose.yml.
+  IMAGE: ghcr.io/thegspiro/the-logbook-docs
+
+jobs:
+  build:
+    name: Build docs site
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+
+      - name: Install dependencies
+        run: |
+          pip install -r docs-site/requirements-dev.txt
+          pip install 'flake8==7.4.1' 'black==26.10.1' 'isort==9.0.2'
+
+      # Same pins and configuration as ci.yml's Backend Lint job.
+      - name: Lint
+        run: |
+          flake8 --config backend/.flake8 docs-site/csp.py docs-site/hooks docs-site/tests
+          black --check docs-site/csp.py docs-site/hooks docs-site/tests
+          isort --check-only --settings-path backend docs-site/csp.py docs-site/hooks docs-site/tests
+
+      - name: Test
+        if: "!cancelled()"
+        run: python -m pytest docs-site/tests -v
+
+      - name: Build site (strict)
+        if: "!cancelled()"
+        env:
+          NO_MKDOCS_2_WARNING: "1"
+        run: sh docs-site/build.sh
+
+  image:
+    name: Build and publish image
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v7
+
+      # Pinned to commit SHAs as in release-image.yml: this job holds a token
+      # that can publish the image.
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      # Only a push to main in this repository publishes. A pull request (or a
+      # fork) builds the image to prove it builds, and pushes nothing.
+      - name: Log in to GitHub Container Registry
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && github.repository == 'thegspiro/the-logbook'
+        uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build (and on main, push)
+        env:
+          PUBLISH: ${{ github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && github.repository == 'thegspiro/the-logbook' }}
+        run: |
+          short_sha=$(git rev-parse --short=7 HEAD)
+          if [ "$PUBLISH" = "true" ]; then
+            output="--push"
+            platforms="linux/amd64,linux/arm64"
+          else
+            output="--load"
+            platforms="linux/amd64"
+          fi
+          docker buildx build \
+            --file docs-site/Dockerfile \
+            --platform "$platforms" \
+            --tag "$IMAGE:latest" \
+            --tag "$IMAGE:sha-$short_sha" \
+            --label "org.opencontainers.image.source=https://github.com/${GITHUB_REPOSITORY}" \
+            --label "org.opencontainers.image.revision=${GITHUB_SHA}" \
+            --label "org.opencontainers.image.description=The Logbook documentation site" \
+            $output \
+            .
+
+      - name: Smoke test
+        if: github.event_name == 'pull_request'
+        run: |
+          docker run -d --name docs --read-only --tmpfs /tmp --cap-drop=ALL \
+            --security-opt no-new-privileges:true -p 8080:8080 "$IMAGE:latest"
+          for i in 1 2 3 4 5 6 7 8 9 10; do
+            curl -fsS http://127.0.0.1:8080/healthz && break
+            sleep 1
+          done
+          curl -fsS -o /dev/null http://127.0.0.1:8080/
+          curl -fsS -o /dev/null http://127.0.0.1:8080/docs/training/
+          curl -fsS -o /dev/null http://127.0.0.1:8080/search/search_index.json
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8080/no-such-page/)" = 404

@@ -299,6 +299,9 @@ The **Profile**, **Contact** and **Addresses** sections hold:
   beside the department's own shifts in a member's **My Hours** list, where
   they sit among shifts worked for other departments. Leave it blank to use
   the full name. Emails still name the department in full.
+
+  ![Settings, General, Profile: the Short Name box under the department's name, with its example FCVFD and the hint that it is used where the full name will not fit, such as beside the department's own shifts in a member's hours, and that left blank the full name is used](./images/08-125-profile-short-name.png)
+
 - **Department Type** and **Identifiers** (FDID, State ID)
 - **Timezone** — the department's clock. See
   [The department's timezone is the clock](#the-departments-timezone-is-the-clock).

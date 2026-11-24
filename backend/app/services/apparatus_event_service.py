@@ -23,6 +23,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.core.utils import generate_uuid
 from app.models.admin_hours import AdminHoursCategory
 from app.models.apparatus import (
     Apparatus,
@@ -33,6 +34,8 @@ from app.models.apparatus import (
 from app.models.apparatus_event import (
     ApparatusEventEvocMode,
     ApparatusEventSeatMethod,
+    ApparatusEventSeatRequest,
+    ApparatusEventSeatRequestStatus,
     ApparatusEventSeatType,
     ApparatusEventTemplate,
     ApparatusEventTemplateSeat,
@@ -76,9 +79,37 @@ class ConflictsNotAcknowledged(ValueError):
 
 @dataclass
 class SeatOutcome:
-    """A seat write's result: the warnings the caller should show."""
+    """A seat write's result: the warnings the caller should show, and
+    whether a sign-up became a request for the coordinator to answer."""
 
     warnings: List[Dict[str, Any]]
+    requested: bool = False
+
+
+@dataclass(frozen=True)
+class RequestDecision:
+    """A seat request closed by a write, for the email sent after it commits.
+
+    Carried out of the transaction rather than emailed from inside it, so a
+    rolled-back write never tells a member something that did not happen.
+    """
+
+    request_id: str
+    event_id: str
+    user_id: str
+    seat_name: str
+    status: str
+    note: Optional[str]
+
+
+# The reasons a member reads in the decision email when the system, not a
+# coordinator's own words, closed their request.
+NOTE_SEAT_TAKEN = "The seat went to another member."
+NOTE_SEAT_REMOVED = "The seat was removed from this night."
+NOTE_CREW_REMOVED = "The apparatus crew was taken off this event."
+NOTE_NIGHT_STARTED = "The night started before the coordinator answered."
+NOTE_NIGHT_CANCELLED = "The night was cancelled."
+NOTE_NIGHT_FINALIZED = "The night's attendance was finalized."
 
 
 @overload
@@ -128,6 +159,11 @@ class ApparatusEventService:
 
     def __init__(self, db: AsyncSession):
         self.db = db
+        # Filled by a write and read by the caller once it has committed:
+        # requests just made (coordinators to tell) and requests just closed
+        # (members to tell). See ``apparatus_seat_request_notices``.
+        self.new_request_ids: List[str] = []
+        self.decisions: List[RequestDecision] = []
 
     # ------------------------------------------------------------------
     # Reference validation
@@ -280,6 +316,7 @@ class ApparatusEventService:
         template.admin_hours_category_id = data.admin_hours_category_id
         template.evoc_mode = _value(data.evoc_mode)
         template.allow_self_signup = data.allow_self_signup
+        template.require_signup_approval = data.require_signup_approval
         template.show_on_schedule = data.show_on_schedule
         template.units = [
             ApparatusEventTemplateUnit(
@@ -521,6 +558,7 @@ class ApparatusEventService:
             admin_hours_category_id=template.admin_hours_category_id,
             evoc_mode=template.evoc_mode,
             allow_self_signup=template.allow_self_signup,
+            require_signup_approval=template.require_signup_approval,
             show_on_schedule=template.show_on_schedule,
         )
         self.db.add(plan)
@@ -652,6 +690,14 @@ class ApparatusEventService:
                 "Someone already has a seat on this crew. Clear the seats "
                 "before removing the crew."
             )
+        # The rows would go with the seats by cascade; closing them first is
+        # what lets each member waiting on one be told.
+        await self._close_requests(
+            await self._locked_pending(event_id, organization_id),
+            ApparatusEventSeatRequestStatus.DECLINED,
+            NOTE_CREW_REMOVED,
+            None,
+        )
         await self.db.delete(plan)
         await self.db.commit()
         return True
@@ -1008,6 +1054,17 @@ class ApparatusEventService:
                 "first to take a different one."
             )
 
+        mine = await self._locked_pending(
+            event_id, organization_id, user_id=str(user.id)
+        )
+        if plan.require_signup_approval and mine:
+            if str(mine[0].seat_id) == str(seat.id):
+                return SeatOutcome(warnings=[], requested=True)
+            raise ValueError(
+                "You already asked for another seat on this night. Withdraw "
+                "that request first to ask for a different one."
+            )
+
         warnings: List[Dict[str, Any]] = []
         if seat.seat_type == ApparatusEventSeatType.DRIVER.value:
             unit = await self._unit(seat.unit_id, organization_id)
@@ -1018,10 +1075,53 @@ class ApparatusEventService:
                 raise ValueError(outcome["blocked_reason"])
             warnings = list(outcome["warnings"])
 
+        if plan.require_signup_approval:
+            # The id is chosen here, not at flush, so it can be read after the
+            # commit without reloading an expired row.
+            request_id = generate_uuid()
+            request = ApparatusEventSeatRequest(
+                id=request_id,
+                organization_id=str(organization_id),
+                event_id=str(event_id),
+                seat_id=str(seat.id),
+                user_id=str(user.id),
+                status=ApparatusEventSeatRequestStatus.PENDING.value,
+                pending_user_id=str(user.id),
+                requested_at=datetime.now(dt_timezone.utc),
+            )
+            self.db.add(request)
+            try:
+                await self.db.commit()
+            except IntegrityError as exc:
+                await self.db.rollback()
+                # ux_apparatus_event_seat_requests_pending: a second request by
+                # this member on this night committed first.
+                raise ValueError(
+                    "You already have a request waiting on this night"
+                ) from exc
+            self.new_request_ids.append(request_id)
+            return SeatOutcome(warnings=warnings, requested=True)
+
         seat.user_id = str(user.id)
         seat.assignment_method = ApparatusEventSeatMethod.SELF_SIGNUP.value
         seat.assigned_by = str(user.id)
         seat.assigned_at = datetime.now(dt_timezone.utc)
+        # Approval was switched off with requests still waiting: the member's
+        # own one is moot now they have a seat, and anyone else waiting on
+        # this seat has lost it.
+        await self._close_requests(
+            mine,
+            ApparatusEventSeatRequestStatus.WITHDRAWN,
+            None,
+            str(user.id),
+            notify=False,
+        )
+        await self._close_requests(
+            await self._locked_pending(event_id, organization_id, seat_id=seat.id),
+            ApparatusEventSeatRequestStatus.DECLINED,
+            NOTE_SEAT_TAKEN,
+            None,
+        )
         await self._ensure_going(event_id, str(user.id), organization_id, str(user.id))
         await self._commit_seat()
         return SeatOutcome(warnings=warnings)
@@ -1123,11 +1223,327 @@ class ApparatusEventService:
         seat.assignment_method = ApparatusEventSeatMethod.ASSIGNED.value
         seat.assigned_by = str(actor.id)
         seat.assigned_at = datetime.now(dt_timezone.utc)
+        await self._settle_requests_for_fill(
+            event_id, seat, str(target.id), organization_id, str(actor.id)
+        )
         await self._ensure_going(
             event_id, str(target.id), organization_id, str(actor.id)
         )
         await self._commit_seat()
         return SeatOutcome(warnings=warnings)
+
+    # ------------------------------------------------------------------
+    # Seat requests, on a night whose self sign-ups need approval
+    # ------------------------------------------------------------------
+
+    async def _locked_pending(
+        self,
+        event_id: str,
+        organization_id: str,
+        *,
+        seat_id: Optional[str] = None,
+        user_id: Optional[str] = None,
+        seat_ids: Optional[Sequence[str]] = None,
+    ) -> List[ApparatusEventSeatRequest]:
+        """Waiting requests on a night, narrowed to a seat, a set of seats or a
+        member, as a locking read (pitfall #27) oldest first."""
+        query = select(ApparatusEventSeatRequest).where(
+            ApparatusEventSeatRequest.event_id == str(event_id),
+            ApparatusEventSeatRequest.organization_id == str(organization_id),
+            ApparatusEventSeatRequest.status
+            == ApparatusEventSeatRequestStatus.PENDING.value,
+        )
+        if seat_id is not None:
+            query = query.where(ApparatusEventSeatRequest.seat_id == str(seat_id))
+        if seat_ids is not None:
+            if not seat_ids:
+                return []
+            query = query.where(
+                ApparatusEventSeatRequest.seat_id.in_([str(i) for i in seat_ids])
+            )
+        if user_id is not None:
+            query = query.where(ApparatusEventSeatRequest.user_id == str(user_id))
+        result = await self.db.execute(
+            # ``requested_at`` is to the second; the id only makes two requests
+            # sent in the same second come back in a stable order.
+            query.order_by(
+                ApparatusEventSeatRequest.requested_at, ApparatusEventSeatRequest.id
+            )
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+        return list(result.scalars().all())
+
+    async def _seat_names(self, seat_ids: Iterable[str]) -> Dict[str, str]:
+        ids = sorted({str(i) for i in seat_ids})
+        if not ids:
+            return {}
+        result = await self.db.execute(
+            select(EventApparatusSeat.id, EventApparatusSeat.name).where(
+                EventApparatusSeat.id.in_(ids)
+            )
+        )
+        return {str(i): name for i, name in result.all()}
+
+    async def _close_requests(
+        self,
+        requests: Sequence[ApparatusEventSeatRequest],
+        status: ApparatusEventSeatRequestStatus,
+        note: Optional[str],
+        actor_id: Optional[str],
+        *,
+        notify: bool = True,
+    ) -> None:
+        """Decide *requests*; the member is emailed after commit unless
+        *notify* is off (a member withdrawing their own needs no email)."""
+        if not requests:
+            return
+        names = await self._seat_names(r.seat_id for r in requests)
+        now = datetime.now(dt_timezone.utc)
+        for request in requests:
+            request.status = status.value
+            request.pending_user_id = None
+            request.decided_by = actor_id
+            request.decided_at = now
+            request.decision_note = note
+            if notify:
+                self.decisions.append(
+                    RequestDecision(
+                        request_id=str(request.id),
+                        event_id=str(request.event_id),
+                        user_id=str(request.user_id),
+                        seat_name=names.get(str(request.seat_id), "crew"),
+                        status=status.value,
+                        note=note,
+                    )
+                )
+        await self.db.flush()
+
+    async def _settle_requests_for_fill(
+        self,
+        event_id: str,
+        seat: EventApparatusSeat,
+        member_id: str,
+        organization_id: str,
+        actor_id: str,
+    ) -> None:
+        """A coordinator filled *seat* with *member_id*: everyone else waiting
+        on it has lost it, and the member's own waiting request is answered —
+        yes if it was for this seat, otherwise no, with the seat they got."""
+        own = await self._locked_pending(event_id, organization_id, user_id=member_id)
+        same = [r for r in own if str(r.seat_id) == str(seat.id)]
+        other = [r for r in own if str(r.seat_id) != str(seat.id)]
+        await self._close_requests(
+            same, ApparatusEventSeatRequestStatus.APPROVED, None, actor_id
+        )
+        await self._close_requests(
+            other,
+            ApparatusEventSeatRequestStatus.DECLINED,
+            f"The coordinator gave you the {seat.name} seat instead.",
+            actor_id,
+        )
+        await self._close_requests(
+            await self._locked_pending(event_id, organization_id, seat_id=seat.id),
+            ApparatusEventSeatRequestStatus.DECLINED,
+            NOTE_SEAT_TAKEN,
+            actor_id,
+        )
+
+    async def _locked_request(
+        self, event_id: str, request_id: str, organization_id: str
+    ) -> Optional[ApparatusEventSeatRequest]:
+        result = await self.db.execute(
+            select(ApparatusEventSeatRequest)
+            .where(
+                ApparatusEventSeatRequest.id == str(request_id),
+                ApparatusEventSeatRequest.event_id == str(event_id),
+                ApparatusEventSeatRequest.organization_id == str(organization_id),
+            )
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+        return result.scalar_one_or_none()
+
+    @staticmethod
+    def _assert_waiting(request: ApparatusEventSeatRequest) -> None:
+        if request.status != ApparatusEventSeatRequestStatus.PENDING.value:
+            raise ValueError("That request has already been answered")
+
+    async def approve_request(
+        self, event_id: str, request_id: str, organization_id: str, actor: User
+    ) -> Optional[SeatOutcome]:
+        """Put the member in the seat they asked for. Everyone else waiting on
+        that seat is declined in the same transaction."""
+        event = await self._get_event(event_id, organization_id, lock=True)
+        if event is None:
+            return None
+        plan = await self._plan_row(event_id, organization_id)
+        if plan is None:
+            return None
+        request = await self._locked_request(event_id, request_id, organization_id)
+        if request is None:
+            return None
+        self._assert_waiting(request)
+        self._assert_night_open(event)
+        if _utc(event.start_datetime) <= datetime.now(dt_timezone.utc):
+            raise ValueError("This night has already started")
+        seat = await self._locked_seat(event_id, request.seat_id, organization_id)
+        if seat is None:
+            return None
+        if seat.user_id:
+            raise ValueError(
+                f"The {seat.name} seat is already filled. Decline this request, "
+                "or clear the seat first."
+            )
+        member = (
+            await self.db.execute(
+                select(User.id).where(
+                    User.id == str(request.user_id),
+                    User.organization_id == str(organization_id),
+                    User.deleted_at.is_(None),
+                    User.status.in_(ACTIVE_ACCOUNT_STATUSES),
+                )
+            )
+        ).scalar_one_or_none()
+        if member is None:
+            raise ValueError("This member is no longer active. Decline the request.")
+        held = await self._locked_seat_of(
+            event_id, str(request.user_id), organization_id
+        )
+        if held is not None:
+            raise ValueError(
+                f"This member already has the {held.name} seat on this night."
+            )
+
+        warnings: List[Dict[str, Any]] = []
+        if seat.seat_type == ApparatusEventSeatType.DRIVER.value:
+            unit = await self._unit(seat.unit_id, organization_id)
+            outcome = await self.evaluate_driver(
+                event, plan, unit, str(request.user_id), organization_id
+            )
+            if not outcome["allowed"]:
+                raise ValueError(outcome["blocked_reason"])
+            warnings = list(outcome["warnings"])
+
+        seat.user_id = str(request.user_id)
+        # The member chose the seat; the coordinator only agreed to it.
+        seat.assignment_method = ApparatusEventSeatMethod.SELF_SIGNUP.value
+        seat.assigned_by = str(actor.id)
+        seat.assigned_at = datetime.now(dt_timezone.utc)
+        await self._settle_requests_for_fill(
+            event_id, seat, str(request.user_id), organization_id, str(actor.id)
+        )
+        await self._ensure_going(
+            event_id, str(request.user_id), organization_id, str(actor.id)
+        )
+        await self._commit_seat()
+        return SeatOutcome(warnings=warnings)
+
+    async def decline_request(
+        self,
+        event_id: str,
+        request_id: str,
+        organization_id: str,
+        actor: User,
+        note: Optional[str],
+    ) -> Optional[SeatOutcome]:
+        """Say no. Allowed on a cancelled or finalized night too, so a
+        coordinator can always clear what is waiting."""
+        event = await self._get_event(event_id, organization_id, lock=True)
+        if event is None:
+            return None
+        request = await self._locked_request(event_id, request_id, organization_id)
+        if request is None:
+            return None
+        self._assert_waiting(request)
+        await self._close_requests(
+            [request], ApparatusEventSeatRequestStatus.DECLINED, note, str(actor.id)
+        )
+        await self.db.commit()
+        return SeatOutcome(warnings=[])
+
+    async def withdraw_request(
+        self, event_id: str, request_id: str, organization_id: str, user: User
+    ) -> Optional[SeatOutcome]:
+        """The member takes back their own request. Another member's request
+        reads as not found, so its id tells the caller nothing."""
+        event = await self._get_event(event_id, organization_id, lock=True)
+        if event is None:
+            return None
+        request = await self._locked_request(event_id, request_id, organization_id)
+        if request is None or str(request.user_id) != str(user.id):
+            return None
+        self._assert_waiting(request)
+        await self._close_requests(
+            [request],
+            ApparatusEventSeatRequestStatus.WITHDRAWN,
+            None,
+            str(user.id),
+            notify=False,
+        )
+        await self.db.commit()
+        return SeatOutcome(warnings=[])
+
+    async def pending_requests(
+        self, event_id: str, organization_id: str
+    ) -> List[ApparatusEventSeatRequest]:
+        """A night's waiting requests, oldest first, for the crew board."""
+        result = await self.db.execute(
+            select(ApparatusEventSeatRequest)
+            .where(
+                ApparatusEventSeatRequest.event_id == str(event_id),
+                ApparatusEventSeatRequest.organization_id == str(organization_id),
+                ApparatusEventSeatRequest.status
+                == ApparatusEventSeatRequestStatus.PENDING.value,
+            )
+            .order_by(
+                ApparatusEventSeatRequest.requested_at, ApparatusEventSeatRequest.id
+            )
+        )
+        return list(result.scalars().all())
+
+    async def lapse_unanswered_requests(self, organization_id: str) -> int:
+        """Close every request still waiting on a night that has started,
+        been cancelled or had its attendance finalized. Commits.
+
+        Stamp, then send (pitfall #36): the status change commits before the
+        caller emails anyone, and only a request still ``pending`` is picked
+        up, so a second run finds nothing and cannot email a member twice. A
+        crash between the commit and the email costs that member the notice;
+        the crew card shows the request is gone either way.
+        """
+        now = datetime.now(dt_timezone.utc)
+        rows = (
+            await self.db.execute(
+                select(ApparatusEventSeatRequest, Event)
+                .join(Event, Event.id == ApparatusEventSeatRequest.event_id)
+                .where(
+                    ApparatusEventSeatRequest.organization_id == str(organization_id),
+                    ApparatusEventSeatRequest.status
+                    == ApparatusEventSeatRequestStatus.PENDING.value,
+                    Event.organization_id == str(organization_id),
+                    or_(
+                        Event.start_datetime <= now,
+                        Event.is_cancelled.is_(True),
+                        Event.attendance_finalized_at.is_not(None),
+                    ),
+                )
+                .with_for_update(of=ApparatusEventSeatRequest)
+            )
+        ).all()
+        for request, event in rows:
+            if event.is_cancelled:
+                note = NOTE_NIGHT_CANCELLED
+            elif _utc(event.start_datetime) <= now:
+                note = NOTE_NIGHT_STARTED
+            else:
+                note = NOTE_NIGHT_FINALIZED
+            await self._close_requests(
+                [request], ApparatusEventSeatRequestStatus.LAPSED, note, None
+            )
+        if rows:
+            await self.db.commit()
+        return len(rows)
 
     # ------------------------------------------------------------------
     # The template editor's pick-lists
@@ -1339,6 +1755,8 @@ class ApparatusEventService:
 
         plan.evoc_mode = _value(data.evoc_mode)
         plan.allow_self_signup = data.allow_self_signup
+        if data.require_signup_approval is not None:
+            plan.require_signup_approval = data.require_signup_approval
         plan.show_on_schedule = data.show_on_schedule
         plan.admin_hours_category_id = data.admin_hours_category_id
 
@@ -1374,6 +1792,16 @@ class ApparatusEventService:
                 seat_row.sort_order = seat_index
 
         await self.db.flush()
+        await self._close_requests(
+            await self._locked_pending(
+                event_id,
+                organization_id,
+                seat_ids=[i for i in existing_seats if i not in kept_seat_ids],
+            ),
+            ApparatusEventSeatRequestStatus.DECLINED,
+            NOTE_SEAT_REMOVED,
+            None,
+        )
         for seat_id, seat in existing_seats.items():
             if seat_id not in kept_seat_ids:
                 await self.db.delete(seat)
@@ -1493,6 +1921,25 @@ class ApparatusEventService:
                 )
             ).all()
         }
+        waiting = {
+            str(event_id): int(count)
+            for event_id, count in (
+                await self.db.execute(
+                    select(
+                        ApparatusEventSeatRequest.event_id,
+                        func.count(ApparatusEventSeatRequest.id),
+                    )
+                    .where(
+                        ApparatusEventSeatRequest.organization_id
+                        == str(organization_id),
+                        ApparatusEventSeatRequest.event_id.in_(event_ids),
+                        ApparatusEventSeatRequest.status
+                        == ApparatusEventSeatRequestStatus.PENDING.value,
+                    )
+                    .group_by(ApparatusEventSeatRequest.event_id)
+                )
+            ).all()
+        }
         names = await self.template_names(
             organization_id, [plan.template_id for _event, plan in rows]
         )
@@ -1514,6 +1961,7 @@ class ApparatusEventService:
                     "is_cancelled": bool(event.is_cancelled),
                     "attendance_finalized": attendance_is_finalized(event),
                     "checked_in": checked_in.get(str(event.id), 0),
+                    "pending_requests": waiting.get(str(event.id), 0),
                 }
             )
         return out

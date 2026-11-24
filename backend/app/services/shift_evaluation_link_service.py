@@ -410,9 +410,17 @@ class ShiftEvaluationLinkService:
         # row lock is held: a second submission waits on the lock and then
         # finds the link used (Pitfall #36). A refused submission rolls back,
         # so the link stays open for the preceptor to correct and resend.
+        submitted_ip = (ip_address or "")[:64] or None
+        submitted_user_agent = (user_agent or "")[:500] or None
         link.used_at = _now()
-        link.submitted_ip = (ip_address or "")[:64] or None
-        link.submitted_user_agent = (user_agent or "")[:500] or None
+        link.submitted_ip = submitted_ip
+        link.submitted_user_agent = submitted_user_agent
+        # Read before the save: when an officer creates the same evaluation at
+        # the same moment, save_for_entry rolls back and retries onto the
+        # officer's row, and that rollback expires this link (reading an
+        # attribute of it afterwards fails on an async session) and discards
+        # everything set on it above.
+        link_id = link.id
         try:
             evaluation = await self.evaluations.save_for_entry(
                 resolved.entry,
@@ -424,10 +432,13 @@ class ShiftEvaluationLinkService:
         except ValueError:
             await self.db.rollback()
             raise
-        link = await self.db.get(ShiftEvaluationLink, link.id) or link
+        link = await self.db.get(ShiftEvaluationLink, link_id) or link
         link.evaluation_id = evaluation.id
         if link.used_at is None:
+            # The retry's rollback took these back; set them again.
             link.used_at = _now()
+            link.submitted_ip = submitted_ip
+            link.submitted_user_agent = submitted_user_agent
         await self.db.commit()
         return evaluation
 

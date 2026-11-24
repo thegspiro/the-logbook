@@ -163,6 +163,14 @@ def test_migration_snapshot_matches_the_registry_it_was_written_against():
             "_apparatus_event_grants",
         )._EVIDENCE_GRANTS
     )
+    # The CRR grants reached the events managers, the Community Outreach Team
+    # and the outreach manager's line in their own revision.
+    crr_grants = _load_module(
+        versions / "20261122_1613_5c2e8a417d90_crr_activities_and_grants.py",
+        "_crr_grants",
+    )
+    later_grants.update(p for p, _evidence in crr_grants._EVIDENCE_GRANTS)
+    later_grants.update(p for p, _slugs in crr_grants._SLUG_GRANTS)
     for slug, expected in migration._PRIOR_DEFAULTS.items():
         current = set(DEFAULT_POSITIONS[slug]["permissions"]) - later_grants
         assert current == expected | {PERMISSION}, (

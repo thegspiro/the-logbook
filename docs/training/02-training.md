@@ -564,6 +564,10 @@ ten to a page: the name and the course it went to ("CPR Refresher → CPR for
 Healthcare Providers"), how many records it changed, and who linked it and
 when. Select **Undo** on a link and confirm (**Undo link** / **Keep it**).
 
+![Recent links on Course Links: Pump Ops linked to Pump Operations with an Undo button, and CPR Refresher's link to CPR for Healthcare Providers reading undone with the date and who undid it](./images/02-152-course-links-recent.png)
+
+![The Undo confirmation for the Pump Ops link to Pump Operations, with Keep it and Undo link](./images/02-153-course-links-undo-confirm.png)
+
 - Each record goes back to **no course**, with the category and training type
   it had before the link, so it stops counting toward the requirements that
   name that course.
@@ -603,6 +607,8 @@ suggested** clears every one of them, whereas a name the library cannot match
 would hold the badge up for good with nothing to click. The count is read
 whenever the hub loads, so a provider sync or CSV import that brings in a new
 name shows next time, and it drops as soon as you link, link all or undo.
+
+![Training Admin's attention list with "3 training names can be linked to a course, across 14 records" and its Review links button](./images/02-154-course-links-attention.png)
 
 When every record names a library course, the page says "Every training record
 names a library course."
@@ -1386,6 +1392,16 @@ These actions credit pipeline progress without anyone editing the enrollment:
 > report, the session, the imported record, the submission. If the same source
 > is processed again — a course synced twice, a report filed again, a
 > submission approved again — it is recognized and **not** credited twice.
+
+> **A correction can reopen a requirement** _(2026-11-23)_. If a shift report
+> is corrected, a training session is finalized again, or a credited record is
+> voided, and that leaves a member below a requirement they had completed, the
+> requirement goes back to **In Progress**. Training officers get an email and
+> a notification. Nothing else changes: certificates already issued stand, the
+> program stays completed if it was, and any phase the member reached is kept.
+> A correction that still leaves them at or above the target changes nothing.
+> A requirement a training officer marked **Verified** or **Waived** is never
+> reopened this way.
 
 ### Viewing Your Own Progress (Members)
 
@@ -4472,6 +4488,9 @@ department is not on the map.
   which skill a cell is; a fade and chevron on an edge mean there is more that
   way. Long member names wrap within the pinned column rather than being cut
   off. On a keyboard, tab into the map and use the arrow keys to scroll it.
+
+  ![Department Readiness on a 390px phone: the member column pinned on the left with long names wrapping, skill names pinned along the top, and a fade with a chevron on the right edge where more skills lie](./images/02-155-competency-heatmap-phone.png)
+
 - An active member with no evaluations appears as a row of dashes, not left
   off, so a gap in the roster is visible.
 
@@ -4954,10 +4973,10 @@ Details**; the course is on **Training Info**.
 > open, **Start from a Template** above the form offers the department's
 > active Training templates. Picking one fills the event's details and, when
 > the template saved them, **Training Info**: the course, training type,
-> credit hours, lead instructor and certification settings. It replaces what
-> was already typed. Requirement and program links, **Counts toward
-> attendance** and the completion settings are not saved on a template and
-> start on their defaults. If the template's course is no longer in the
+> credit hours, lead instructor and certification settings, and since
+> 2026-11-23 the requirement and program links, **Counts toward
+> attendance** and the completion settings. It replaces what was already
+> typed. A link no longer active is left out, with a note. If the template's course is no longer in the
 > Course Library, **Training Info** starts on **No course yet**; if its lead
 > instructor is no longer a current member, **Lead instructor** starts empty.
 > A note on **Training Info** says which. Templates are made and edited under
@@ -5847,6 +5866,8 @@ back**. Each change is recorded in the audit log. An amendment starts its new
 revision with no one named. A position holder replaced by a name no longer sees
 the evaluation unless they have another part in it.
 
+![An evaluation's page with the Who takes “Calibration” dialog open from the Assign button on the step list's Calibration step: who can and cannot be named, the Completed by list still on No one named, and Cancel beside a greyed button](./images/02-144-evaluation-step-assign.png)
+
 > **After the upgrade:** an evaluation already waiting on an approval whose
 > only position holder is its own evaluator stays open until a manager names
 > someone.
@@ -5866,6 +5887,8 @@ evaluator who is not allowed to read last year's review (because someone else
 wrote it and they do not hold `evaluations.view_all`) does not get it. The card
 is not printed on the PDF, which records this review alone.
 
+![The Last review card on this year's evaluation: last year's period, its overall grade and each section's grade, the goal set then under Goals set then, and Open the last review](./images/02-145-evaluation-last-review.png)
+
 ### Period results and export _(2026-11-20)_
 
 On **Evaluations I conduct** / **All evaluations**, a **Period** list beside
@@ -5883,6 +5906,8 @@ On **Evaluations I conduct** / **All evaluations**, a **Period** list beside
 `evaluations.manage` alone does not show grades: a manager runs the process
 without reading what is in the evaluations. Your own evaluation is left out of
 both the list and the export.
+
+![Evaluations I conduct with the 2025 period chosen: the Period results card reading 3 of 4 complete with how many stand at each grade and Export CSV, above the list with its Overall grade column, blank for the review still in progress](./images/02-146-evaluation-period-results.png)
 
 ### Grades by evaluator _(2026-11-23)_
 

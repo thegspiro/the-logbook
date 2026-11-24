@@ -324,6 +324,71 @@ async def test_hiding_certification_status_hides_the_cert_derived_flags(
         assert "blocks_activity" not in detail
 
 
+async def _held_certification(db_session, org_id: str, user_id: str) -> None:
+    """A certification requirement and a current certificate meeting it."""
+    db_session.add_all(
+        [
+            TrainingRequirement(
+                organization_id=org_id,
+                name="CPR/BLS Certification",
+                requirement_type="certification",
+                training_type=TrainingType.CERTIFICATION,
+                frequency="biannual",
+            ),
+            TrainingRecord(
+                id=str(uuid.uuid4()),
+                organization_id=org_id,
+                user_id=user_id,
+                course_name="CPR/BLS Provider",
+                training_type=TrainingType.CERTIFICATION,
+                completion_date=date(2025, 3, 14),
+                expiration_date=date(2099, 3, 14),
+                hours_completed=4,
+                status=TrainingStatus.COMPLETED,
+            ),
+        ]
+    )
+    await db_session.flush()
+
+
+@pytest.mark.integration
+async def test_hiding_certification_status_hides_the_expiry_date_too(
+    db_session, setup_org_and_admin
+):
+    """The card reads expiry_date as the certification's status, so it goes too."""
+    org_id, admin_id = setup_org_and_admin
+    user = await _member(db_session, setup_org_and_admin)
+    await _held_certification(db_session, org_id, admin_id)
+    await _configure(db_session, org_id, show_certification_status=False)
+
+    result = await get_my_training_summary(db=db_session, current_user=user)
+
+    [cert] = [
+        d for d in result["requirements_detail"] if d["name"] == "CPR/BLS Certification"
+    ]
+    assert "expiry_date" not in cert
+    assert cert["certification_status_hidden"] is True
+    # The fact of the requirement stays; only its certification status goes.
+    assert cert["is_met"] is True
+
+
+@pytest.mark.integration
+async def test_certification_status_shown_by_default_with_its_expiry(
+    db_session, setup_org_and_admin
+):
+    org_id, admin_id = setup_org_and_admin
+    user = await _member(db_session, setup_org_and_admin)
+    await _held_certification(db_session, org_id, admin_id)
+
+    result = await get_my_training_summary(db=db_session, current_user=user)
+
+    [cert] = [
+        d for d in result["requirements_detail"] if d["name"] == "CPR/BLS Certification"
+    ]
+    assert cert["expiry_date"] == "2099-03-14"
+    assert "certification_status_hidden" not in cert
+
+
 @pytest.mark.integration
 async def test_defaults_disclose_everything_the_page_already_showed(
     db_session, setup_org_and_admin
