@@ -11327,6 +11327,32 @@ mirrored in the Multi-Tenant Isolation section above.
 
 ## LIFE-11 — Anonymizing a Member Leaves Their Separation Letter, With Home Address, in Documents (2026-11-10, app review A6 pass 6)
 
+**Resolved 2026-11-23** (owner decision of that date: option 1 for the
+letter, delete for the personal folder). Anonymisation and permanent delete
+both call `app.services.member_documents.erase_member_documents` before they
+change or remove the users row:
+
+- The member's separation letters are **redacted in place**: the stored HTML
+  loses the home address and the "Reason:" paragraph, and any remaining copy of
+  the member's street line or stored status reason. The item list and values
+  stay. They are rewritten rather than regenerated, because a regenerated
+  letter would list today's property, not the property owed on the day of the
+  drop. The member's name and membership number stay on the letter: the owner
+  named the address and reason, and the letter is a claim against a named
+  person.
+- Every folder the member owns under **Member Files** is deleted with its
+  sub-folders and documents, through the same code as the folder delete; the
+  files are queued on `pending_file_deletions`.
+
+**Accepted residuals:** a letter saved before 2026-11-23 has no link to its
+member, so it is found by its name, and, when the member has a membership
+number, also by that number (current or previous) printed in it. A letter whose
+name no longer matches (the member was renamed after the drop), or which does
+not print the member's number, is not found and keeps the address. A letter in
+a backup taken before the erasure is not changed.
+
+The original entry follows.
+
 Anonymization (`POST /users/{id}/anonymize`, `MemberAnonymizationService`)
 scrubs the member's personal data from a long list of tables but touches no
 `Document`. The property-return letter generated when the member was dropped is
@@ -11809,8 +11835,8 @@ each case; confirmed by the owner 2026-11-23):
   to `upload_relocation.collect_references` or to a commented allowlist, so
   the shared-file check's "every other row" is enforced rather than assumed.
 
-Related, still open: **LIFE-11** (the separation letter in Documents), and the
-Member Files personal-folder documents, which neither path touches.
+Related, closed 2026-11-23: **LIFE-11**. Both paths now redact the separation
+letters and delete the member's personal Member Files folder.
 
 ## Apparatus — Three Decisions From App Review B2 Pass 6 (2026-11-20)
 
