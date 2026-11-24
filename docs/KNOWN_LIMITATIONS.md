@@ -405,6 +405,22 @@ added; `elections.manage` is enough; eligibility follows the election chosen).
   same tally the ballot check uses, so a meeting held before a member's
   current stint is left out of both the count and their list.
 
+## Evaluations — The Signed-PDF Button Follows the Status Filter, the Zip Does Not (2026-11-23)
+
+Found by the November 22 – 23 documentation pass; not fixed, because the right
+behaviour is a choice. On the evaluations list with a review period chosen,
+**Download signed PDFs** (#4570) is enabled only when a row the **Show** filter
+leaves visible is finalized (`finalizedCount` in `EvaluationListPage.tsx` counts
+the filtered list). The zip it downloads, `GET /evaluations/export-pdfs`, holds
+every finalized review in the period whatever the filter says. So with **Show**
+set to **In progress** the button is greyed out although the period has signed
+reviews to download.
+
+**For the owner:** either the zip follows the filter (send the status, and the
+button's rule is then right), or the button counts the whole period (it needs
+the period's finalized total, which the filtered list does not carry). Until
+then, set **Show** to **All** to download.
+
 ## Evaluations — Waiver Data Points in the Annual Review (2026-11-11)
 
 The annual review can show a member's requests to be excused from training

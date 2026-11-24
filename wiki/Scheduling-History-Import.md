@@ -333,7 +333,9 @@ see all of them.
   shift, or already has those outside-agency hours, so nothing is written twice.
 
 Rows on outside agencies' units are listed under **Outside-agency hours** at
-the bottom of the tab.
+the bottom of the tab, 50 to a page, with page buttons once there are more
+than 50 (2026-11-22). Before, the list stopped at the first 200 and said
+"Every entry is listed on the Rows tab."
 
 ![The Shifts tab with every shift shown: Dana Former held as an 85% match with Same shift and Keep separate buttons, a night shift crossing midnight, a 25.5-hour attendance joined from two entries with a Split apart button, and 12 outside-agency hours on County EMS's A106](images/history-import-shifts.png)
 

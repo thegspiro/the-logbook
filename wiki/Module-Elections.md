@@ -786,7 +786,12 @@ Results Report** / **Send Report** (only after close).
   closed elections only) is a formal PDF with tallies, turnout/quorum, the
   attestation trail, integrity verification and officer signature lines. Its
   pages, and the pre-meeting package's, are numbered "Page N of M"
-  _(2026-11-21, #4451)_; the printable ballot already was.
+  _(2026-11-21, #4451)_; the printable ballot already was. _(2026-11-23,
+  #4588)_ Both also print the department's identity line (mailing address,
+  phone, FDID) and a per-download report number (`RPT-YYYYMMDD-XXXX`) on page
+  1 and in each later page's header, recorded in the export's audit row. The
+  printable ballot carries none by owner decision: a per-download serial on a
+  voting paper, tied to an audit row, is not wanted.
 
 ### Live Turnout Dashboard
 
