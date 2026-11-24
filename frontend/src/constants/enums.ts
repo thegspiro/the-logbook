@@ -1490,3 +1490,15 @@ export const STAFF_ENTERED_SOURCES: readonly EventRequestSource[] = [
   EventRequestSource.IN_PERSON,
   EventRequestSource.OTHER,
 ];
+
+/**
+ * Whether a waiver policy takes documents with a request. Here rather than
+ * beside the upload service so the first-load waiver service can read it
+ * without pulling the upload code into every visit.
+ */
+export const WaiverAttachmentMode = {
+  OFF: 'off',
+  OPTIONAL: 'optional',
+  REQUIRED: 'required',
+} as const;
+export type WaiverAttachmentMode = (typeof WaiverAttachmentMode)[keyof typeof WaiverAttachmentMode];

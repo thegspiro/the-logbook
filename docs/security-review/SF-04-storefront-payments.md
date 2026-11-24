@@ -1,6 +1,144 @@
 # Security Review — Storefront & Payments
 
-**Prefix:** `SF` · **Iteration:** 04 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-01 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-05 (pass 7), 2026-10-12 (pass 8), 2026-10-14 (pass 9), 2026-10-18 (pass 10), 2026-10-22 (pass 11), 2026-10-25 (pass 12), 2026-10-28 (pass 13), 2026-10-31 (pass 14), 2026-11-04 (pass 15), 2026-11-16 (pass 16) · **PR:** #1807 (pass 1)
+**Prefix:** `SF` · **Iteration:** 04 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-01 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-05 (pass 7), 2026-10-12 (pass 8), 2026-10-14 (pass 9), 2026-10-18 (pass 10), 2026-10-22 (pass 11), 2026-10-25 (pass 12), 2026-10-28 (pass 13), 2026-10-31 (pass 14), 2026-11-04 (pass 15), 2026-11-16 (pass 16), 2026-11-24 (pass 17) · **PR:** #1807 (pass 1)
+
+---
+
+## Pass 17 (2026-11-24) — watchdog pickup: real delta (window cancel/fulfill rules, overpayment handling, payment-report rejection), 0 fixed, 0 new findings
+
+Watchdog-delegated iteration (the dedicated `/loop 30m /security-review`
+session remains unreachable; `list_pull_requests` (state `open`) found no
+`claude/security-review-*` head after PR #4644 (Feature 03, Public surface &
+webhooks, pass 17) had already merged). Row 04 (Storefront & payments) was
+the next `⬜` row in `PROGRESS.md`'s rotation table, confirmed directly
+against the table.
+
+**Scope.** Diffed pass 16's own merge (`381b447d4`, PR #4359) against current
+`main` across the full established domain: `storefront.py`,
+`storefront_service.py`, `storefront_notification_service.py`,
+`storefront_preview_service.py`, `email_templates_storefront.py`,
+`storefront_payments.py`, `paypal_webhook.py`, `models/storefront.py`,
+`schemas/storefront.py`, `utils/size_order.py`, `utils/embroidery.py`, and
+the entire `frontend/src/modules/storefront/` tree.
+
+**Real delta — 23 files, +2008/-631, 25 non-merge commits, all owner-decided
+(`W67b-*`) hardening and feature work. Every backend file's diff read in
+full; every frontend diff read in full:**
+
+1. **Window lifecycle rules (W67b-12, -16).** `cancel_window` (replacing the
+   old bare `set_window_status(..., CANCELLED)`) refuses while any open order
+   in the window has money recorded (`amount_paid > 0`) or a payment report
+   waiting (`PENDING_VERIFICATION`), naming the orders; otherwise it cancels
+   every open order through the existing, already-reviewed `cancel_order`
+   (so each gets its own date/reason/timeline/notice) before marking the
+   window cancelled — safe to run twice (a re-run skips orders already
+   cancelled). `fulfill_window` (replacing the same bare setter for
+   `FULFILLED`) now refuses unless the window is `CLOSED` and every order in
+   it is fulfilled or cancelled. `open_window` and the scheduled auto-open job
+   both now refuse/skip opening a window whose closing time has already
+   passed (`_past_closing_time`), closing a "job was down" gap that used to
+   open and close a window within the same run. Both endpoints
+   (`storefront.py:1026`, `:1047`) are unchanged at `require_permission(
+"storefront.manage")`, org-scoped via `current_user.organization_id` —
+   confirmed by reading the full diff rather than trusting the docstring.
+2. **Overpayment handling (W67b-7).** `record_payment` gained
+   `allow_overpayment: bool = False`; when `False` (the default), an explicit
+   amount above the locked, freshly-read balance is refused with the exact
+   figure still owed. Traced every caller: the admin-facing
+   `POST /orders/{id}/payments` endpoint (`storefront.py:1314`) never passes
+   the flag, so staff remain bound by the refusal; only the internal PayPal
+   webhook-capture path (`storefront_service.py:3359`) passes
+   `allow_overpayment=True`, because a capture already arrived and must be
+   recorded as-is — the excess is then surfaced as `overpaid_amount` on the
+   response and refunded through the existing, already-reviewed
+   `refund_order` (which still enforces `refunded <= amount_paid` and still
+   requires `assert_different_person`). `refund_order`'s status derivation
+   was also corrected to resolve to `PAID` (not `PARTIAL`) when refunding
+   only the excess of an overpaid order.
+3. **Payment-report rejection (new, W67b-14).** `POST
+/orders/{id}/reject-payment-report` (`storefront.py:1510`,
+   `require_permission("storefront.manage")`) calls
+   `reject_payment_report`, which locks the order row
+   (`get_order(..., for_update=True)`, matching every other settlement path's
+   SF-9 locking shape) and refuses unless `payment_status ==
+PENDING_VERIFICATION`. Its audit event
+   (`event_type="store_payment_report_rejected"`) passes `user_id=` (not
+   `organization_id=`), which `AuditLogger.create_log_entry`
+   (`app/core/audit.py:352-360`) resolves to the acting user's own
+   organization — the same fallback mechanism PUB-15 (Feature 03, this lap)
+   relied on, confirmed by reading `create_log_entry` directly rather than
+   assuming the fallback exists. Not the same defect: PUB-15's five sites
+   put the id only inside `event_data`, passing neither keyword.
+4. **Negative-price guard (W67b-6).** A new `_option_below_zero` helper
+   refuses creating or updating a product, or replacing a window's
+   offerings, if any active variant's price (base + delta, or an offering's
+   `price_override` + delta) would be negative; `create_order`'s own
+   line-pricing loop carries the same check as a last-resort guard for a
+   price that predates it or a later base-price edit — all four call sites
+   read and traced to the same `_money`-quantized comparison.
+5. **Shipping-address scope (W67b-9).** `create_order` now stores
+   `shipping_address` only when `fulfillment_method == SHIP`; a pickup order
+   no longer persists a home address it has no use for. Not a new exposure
+   path (the field already existed and was already org/owner-scoped by the
+   order's own id) — a data-minimization fix, not a leak fix.
+6. **`paypal_webhook.py` (+4 lines).** A second, pre-existing
+   `log_audit_event` call in this file (for the webhook's match-result event,
+   distinct from the `store_payment_received` call PUB-15 fixed) gained
+   `organization_id=str(integration.organization_id)` — already correct
+   before this lap's PUB-15 finding, confirming the fix pattern was already
+   known to this feature's own commits.
+7. **Frontend** (`OrderDetailModal.tsx` +234, `StoreSettingsTab.tsx` +1060/-,
+   `CheckoutPage.tsx`, `MyOrdersPage.tsx`, `StoreAdminPage.tsx`,
+   `services/api.ts`, `types/index.ts`, new `utils/orderStatus.ts`): refund
+   is now its own confirmed (`useConfirm()`, never `window.confirm`), amount-
+   and reason-bound form — the server-side `refunded <= amount_paid` check
+   is unchanged and authoritative; the new "Not received"/"Refund the
+   excess" actions call the two new/changed endpoints above through the
+   same confirmed-action pattern. `StoreSettingsTab.tsx`'s large diff is the
+   established forms-rollout (`FormField`/`useFieldErrors`) adoption, not new
+   logic. Full-directory grep for `window\.(confirm|alert|prompt)`,
+   `dangerouslySetInnerHTML` and `localStorage` found only two `localStorage`
+   calls, both in `CheckoutPage.test.tsx` (a cart-persistence test fixture,
+   not production code).
+
+**Route inventory re-enumerated by AST**, not diffed: `storefront.py` has
+**49** routes (up from 48 at pass 16 — the one new `reject-payment-report`
+route), every one carrying a `Depends(require_permission(...))` or
+`Depends(get_current_user)` auth dependency, confirmed by a script walk of
+every `@router.{get,post,put,patch,delete}` decorator and its function body
+rather than a grep count.
+
+**Re-verified unchanged, by direct read (no diff in this window):**
+`models/storefront.py` (no new column, no migration needed — Checklist §7
+n/a this pass); all five self-settlement separation-of-duties guards still
+call `assert_different_person`; capacity locking (organisation → window →
+product → tally, `with_for_update()` throughout) unchanged;
+`StoreOrderItemInput` still carries no client-supplied price field;
+`get_admin_recipients`'s account-status filter (SF14-04-1) unchanged; the
+PayPal webhook signature verification and replay/idempotency guard
+(`UniqueConstraint(organization_id, provider, external_id)`) unchanged.
+
+**0 fixed, 0 new findings. 0 findings remain OPEN or FLAGGED for this feature
+going into pass 18** — SF-1 through SF-11, SF8-04-1/2/3 and SF14-04-1 all
+re-verified FIXED and unchanged; the real delta reviewed above is owner-
+decided hardening that already applies every established pattern correctly
+(locking, SoD, org-scoping, the audit-org fallback, bounded text fields, the
+confirmed-action UI convention) — nothing new to flag.
+
+### Completion gate (pass 17)
+
+| Check                                                                                          | Result                                                   |
+| ---------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/` (7.4.1, CI's pin, via `/usr/bin/python3.13`)                     | ✅ 0 violations                                          |
+| `black --check app/ tests/ alembic/` (26.10.1, CI's pin)                                       | ✅ 3489 files unchanged                                  |
+| `isort --check-only app/ tests/ alembic/` (9.0.2, CI's pin)                                    | ✅ clean                                                 |
+| `python3 scripts/validate_migrations.py --strict`                                              | ✅ 834 revisions, single head (`0a4667186b2d`)           |
+| `python3 scripts/check_route_permissions.py --strict` (repo root)                              | ✅ 339 routes, 0 errors, 0 warnings                      |
+| `docs/DATABASE_SCHEMA.md` vs `generate_schema_docs.py`                                         | ✅ already current (no model change this window)         |
+| backend tests (scoped: `-k "storefront or stripe or payment or refund or checkout or paypal"`) | ✅ 678 passed, 1 skipped (environment-only: `pywebpush`) |
+| `cd frontend && npm run typecheck`                                                             | ✅ 0 errors                                              |
+
+Next in the rotation: Feature 05 (Finance & approvals).
 
 ---
 
