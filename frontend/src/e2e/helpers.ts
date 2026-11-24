@@ -4579,6 +4579,29 @@ const routes = ({
   ['**/api/v1/history/titles?**', (request) => (empty ? [] : withRetired(HISTORY_TITLES, request))],
   ['**/api/v1/history/sources?**', (request) => (empty ? [] : withRetired(HISTORY_SOURCES, request))],
   ['**/api/v1/history/clearance/steps', () => (empty ? [] : HISTORY_CLEARANCE_STEPS)],
+  // History settings → "Public website": the portal ready, two parts on, a
+  // widget link made and one department website listed.
+  [
+    '**/api/v1/history/public-settings',
+    () => ({
+      people: true,
+      honor_roll: true,
+      photos: false,
+      documents: false,
+      events: false,
+      apparatus: false,
+      articles: false,
+      timeline: false,
+      today: false,
+      widget_theme: 'auto',
+      widget_show_branding: true,
+      widget_link_exists: !empty,
+      widget_token_created_at: empty ? null : '2026-11-24T09:00:00Z',
+      portal_enabled: true,
+      portal_has_key: true,
+      widget_websites: empty ? [] : ['https://www.example-fd.org'],
+    }),
+  ],
   [
     '**/api/v1/history/clearance/positions',
     () => [

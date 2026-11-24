@@ -234,12 +234,12 @@ export const historyService = {
 
   async getPublicSettings(): Promise<HistoryPublicSettings> {
     const { data } = await api.get<HistoryPublicSettings>(`${BASE}/public-settings`);
-    return data;
+    return { ...data, widget_websites: asArray(data.widget_websites) };
   },
 
   async updatePublicSettings(values: HistoryPublicSettingsUpdate): Promise<HistoryPublicSettings> {
     const { data } = await api.put<HistoryPublicSettings>(`${BASE}/public-settings`, values);
-    return data;
+    return { ...data, widget_websites: asArray(data.widget_websites) };
   },
 
   /** A new widget link. Its secret is returned this once. */
