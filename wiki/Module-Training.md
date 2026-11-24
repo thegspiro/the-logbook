@@ -513,9 +513,14 @@ audited the same way. See
 **Review Submissions → Settings → Certificate Files** sets how many days after
 a decision (90 minimum) an approved or rejected submission's files are deleted
 (`attachment_retention_days`). Unset (the default) keeps them indefinitely. The
-daily `self_report_attachment_retention` task unlinks the files and removes the
-references from the submission and the member's training records; the
-submission and record rows stay. Audited per organization as
+daily `self_report_attachment_retention` task unlinks the files and replaces
+each reference on the submission and the member's training records with a
+marker (`removed_at`, `removed_reason: "retention"`; owner decision
+2026-11-23), so My Training, the training history and the record view read
+"Certificate file removed under the department's retention policy on <date>"
+instead of losing the line, and a download answers `410`. A certificate the
+stored-file malware scan deletes is marked the same way with reason
+`malware`. The submission and record rows stay. Audited per organization as
 `self_report_attachment_retention`; changes to the period as
 `self_report_attachment_retention_updated`. The decision date is
 `coalesce(reviewed_at, submitted_at)` _(2026-11-20, #4476)_: a submission

@@ -3547,9 +3547,16 @@ no operator has to remember to start it:
   is finished by the next run without a second audit row — and an image is
   cleared from its row in the same transaction as its audit (only if the row
   still holds the scanned value, so a replacement is never wiped).
-  **The row itself is kept**: the document or training record still lists the
-  attachment, and downloading it reports the file as not found. The audit
-  entry is the only account of why; nobody is emailed.
+  **The row itself is kept.** For a self-report or training-record
+  certificate, the entry is replaced by a marker (`removed_at`,
+  `removed_reason: "malware"`; owner decision 2026-11-23): My Training, the
+  training history and the record's Files dialog read "Certificate file
+  removed by the malware scan on <date>: it was found to be infected", in the
+  department's timezone, and a download answers `410` saying the same.
+  **Default taken:** other tables — documents, event, applicant and minutes
+  attachments, and the rest — still list the attachment, and downloading it
+  reports the file as not found; the audit entry is their only account of
+  why. Nobody is emailed.
 
 To run a batch now instead of waiting for the hour, the System Owner
 (`system.run_tasks`) can call
