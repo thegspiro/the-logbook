@@ -49,7 +49,11 @@ program enrollments, external training integrations, and compliance reporting.
 - **Compliance Matrix** — A triage rail: members grouped by standing
   (non-compliant, at risk, compliant), each requirement's figure on opening a
   member, and a By requirement view. Existing members inside a catch-up period
-  show a neutral **Catching up** mark
+  show a neutral **Catching up** mark. Since 2026-11-23 (#4585) a
+  certification requirement reads **On file** "(Expires …)", **Expired**
+  "(date)" or **Not recorded**, the words of My Training's card, and the CSV
+  and printout carry each certificate's expiry; see
+  [Certification expiry](#certification-expiry-on-the-matrix-its-csv-and-printout-2026-11-23)
 - **First-Run Guidance** — The Training Officer Dashboard shows a dismissible
   **Set up training for your department** checklist (courses, requirements,
   first session, optional program); compliance with no active requirements reads
@@ -73,7 +77,8 @@ program enrollments, external training integrations, and compliance reporting.
 - **Training Waivers** — Leave of Absence auto-linking, waiver management,
   proportional requirement adjustment. Supports permanent waivers (no end date),
   a New Member waiver type, and multi-select "Applies To" (Training + Meetings +
-  Shifts can be combined)
+  Shifts can be combined). Nobody grants or extends their own: see
+  [No self-granted training waiver](#no-self-granted-training-waiver-2026-11-22-4560)
 - **Session Waiver Requests** _(2026-11-11)_ — a member asks to be excused from
   one training session that counts toward their attendance requirement
   (**Request to be excused** on the event page; **My Training > My Waiver
@@ -1364,6 +1369,11 @@ as a printable grid:
   | `Due` | `catch_up` — an existing member before their catch-up deadline |
   | `—`   | **only** "does not apply to this member" — no cell was sent    |
 
+  _(2026-11-23, #4585)_ In a certification column the member's `expiry_date`
+  prints under the mark in short form (`3/14/27`, via `formatCalendarDate`, so
+  never shifted by the viewer's timezone), and the legend adds "a date under a
+  certification is when it expires"
+
   A dash means the member is not graded on that requirement (a compliance
   profile, membership type, role or join-date rule excluded it)
 
@@ -1567,6 +1577,46 @@ template may have left since.
 - **Headline Metrics settings** (#4426) no longer jump on a slow load: the
   placeholder and loaded screen are keyed separately, so React replaces one
   with the other instead of morphing it (a 0.35 layout shift on a phone).
+
+## Certification expiry on the matrix, its CSV and printout _(2026-11-23)_
+
+Since #4585, a certification requirement (`requirement_type ==
+'certification'`, `isCertificationRequirement` in
+`pages/training/complianceMatrixModel.ts`) is read by state and expiry date, in the words My Training's requirement card
+already uses:
+
+| Tone              | Progress label | Date label                                           |
+| ----------------- | -------------- | ---------------------------------------------------- |
+| met / due soon    | `On file`      | `(Expires Mar 14, 2027)`, or `Completed …` with none |
+| lapsed            | `Expired`      | `(Mar 14, 2026)`                                     |
+| missing           | `Not recorded` | none — the frequency window is no longer printed     |
+| catch-up, not yet | unchanged      | unchanged (`Due by …`, `No sessions held yet`)       |
+
+Every other requirement type keeps its labels (an untyped missing requirement
+still reads "Nothing recorded"). The CSV export adds one `<requirement name>
+expiry` column per certification requirement in view, holding the expiry as
+`YYYY-MM-DD`, `No expiry`, `Not recorded`, or blank where the requirement does
+not apply (`certificationExpiryText`); the columns follow the class switch. The
+print page adds the short expiry under the mark (see
+[Compliance Matrix Print Page](#compliance-matrix-print-page)). Frontend only:
+the API already sent `expiry_date`. Held by
+`e2e/training-matrix-certification.spec.ts` at 390px and 1280px.
+
+## No self-granted training waiver _(2026-11-22, #4560)_
+
+Owner decision 2026-11-22, closing what ADV2-9 left open (a leave for oneself
+was already refused). `POST /training/waivers` answers **400** when `user_id`
+is the caller, and `PATCH /training/waivers/{id}` answers **403** on the
+caller's own waiver, so it cannot be extended, widened or re-enabled by its
+member. Both carry "You cannot grant or change your own training waiver. Ask
+another training officer, or submit a leave request.", which the Waivers page
+shows as it is. `DELETE` (deactivate) on one's own waiver stays open: it excuses
+nothing. This mirrors `MemberLeaveService.create_leave` and
+`RequirementOverrideService.grant`. A Chief who is the department's only
+`training.manage` holder can no longer excuse their own training; see
+`docs/KNOWN_LIMITATIONS.md`, "Separation of Duties". Tests:
+`tests/test_training_waiver_self_grant.py`. The same PR added the no-op merge
+revision `561a3e9f4165`, joining two heads that both landed that day.
 
 ## Compliance, member files and templates, 2026-11-20 – 21
 

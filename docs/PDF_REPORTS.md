@@ -138,7 +138,9 @@ Letter only, no duplex hint).
     lines, each with a date line, kept together on one page
     (`signature_block` in `pdf_report_kit.py`). The preparer's name and rank
     are printed under the first line. A CSV ignores the flag.
-  - `tests/test_pdf_provenance.py` checks all four across every document.
+    `tests/test_pdf_signature_lines.py` checks it.
+  - `tests/test_pdf_provenance.py` checks the identity line, report number,
+    information block and handling banner across every document.
 - **Unapproved minutes are marked DRAFT** (owner decision, 2026-11-21). Draft,
   submitted and rejected minutes, which are every status but approved, carry
   a pale diagonal "DRAFT" across each page, because a printed copy cut off
@@ -147,8 +149,9 @@ Letter only, no duplex hint).
   `HeadedDocTemplate(overlay=...)`, at 18% opacity, not beneath it: an
   opaque table-row fill hides anything underneath, and the first attempt was
   invisible on an attendance page for that reason. PDF/A-2b allows the
-  transparency, and veraPDF passes it. `tests/test_minutes_draft_watermark.py`
-  checks it.
+  transparency, and veraPDF passes it. PDF attachments appended after the
+  minutes (`append_pdfs`) are copied as they are and carry no mark.
+  `tests/test_minutes_draft_watermark.py` checks it.
 - **Documents leave scaling to the viewer.** A page shrunk to 97% by "Fit"
   is still readable.
 - **Label sheets and ID cards ask to print at actual size**

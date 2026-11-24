@@ -219,6 +219,7 @@ PUT    /events/{id}/guest-headcount              # Set or clear the guests count
 PUT    /events/{id}/outreach-closeout            # Replace the outreach close-out: outcome note, apparatus, materials, photos (manage)
 GET    /events/{id}/staffing                     # The volunteer signup sheet staffing this event, its own or its request's (manage)
 POST   /events/{id}/staffing                     # Open a signup sheet on an outreach event with no request behind it (manage)
+POST   /events/{id}/volunteer-call               # Email the membership for help with the event's own sheet (manage; email only)
 GET    /events/outreach-calendar?start=&end=     # Outreach events in a range (<= 93 days) with sheet and crew fill, for the Outreach Overview (manage)
 POST   /events/{id}/end-event                    # End now + bulk checkout + finalize durations (manage, or training.manage on Training)
 POST   /events/{id}/finalize-attendance          # Finalize attendance (manage, or training.manage on Training)
@@ -431,6 +432,51 @@ DELETE /event-requests/email-templates/{id}           # Delete
 - **Open Shifts window.** `OUTREACH_LOOKAHEAD_DAYS = 60` in
   `endpoints/scheduling.py`: with no end date, outreach sheets are listed 60
   days ahead and duty shifts 30.
+
+**Outreach changes of 2026-11-22 and 2026-11-23 (#4561, #4582):**
+
+- **Self-ticking checklist.** `AUTOMATIC_TASK_HINTS`,
+  `automatic_task_states` and `effective_task_completions` in
+  `event_request_service.py` (owner decision, 2026-11-22). `review_request`,
+  `assign_coordinator`, `confirm_date` and `arrange_volunteers` are decided
+  from the request's status, `assigned_to` and the `(filled, total)` from
+  `staffing_counts_by_request`; `arrange_volunteers` is automatic only when a
+  live sheet has seats. Read, never stored: every reader (detail, list, public
+  status progress, the toggle's response) returns `effective_task_completions`,
+  which overrides a stored tick either way — including one made by hand before
+  the rule — so no backfill exists. `EventRequestResponse.automatic_tasks`
+  (task id → hint) tells the screen which to lock; `PATCH …/tasks` on one is a
+  400 carrying the hint. Matched by task id, so a renamed default keeps it.
+- **Volunteer signup from the event page.** `EventResponse.volunteer_signup`
+  (detail endpoint only; `member_signup_sheet` in `event_staffing_service.py`)
+  carries the sheet's `shift_id`, its roles' counts and the caller's own
+  `signed_up` / `my_role_label` — no other volunteer's name, which stays
+  behind `events.manage` on `GET /events/{id}/staffing`. None for a cancelled
+  event or one with no live sheet. Signing up goes through the scheduling
+  signup endpoint with `outreach_role`, which enforces eligibility and the
+  window. `OutreachRoleSignup` (`modules/scheduling/components/`) is the one
+  control the event page (`EventVolunteerSignupCard`, or inside
+  `EventStaffingCard` for an organizer) and `ShiftDetailPanel` use; the panel
+  no longer offers per-seat signup, bulk fill or a position on an outreach
+  sheet, and its assign form sends `outreach_role`.
+- **Swaps sync RSVPs.** `_sync_outreach_after_swap` in `scheduling_service.py`
+  runs `_sync_outreach_rsvps` after a swap commits, once per shift, naming the
+  member who gave each seat up in `removed_user_ids` (a swap rewrites the
+  seat's `user_id`, so the sync cannot see them otherwise) and adding the
+  requested shift of an approved one-way move. Covers officer-approved swaps,
+  accepted offers and picked-up open swaps.
+- **Volunteer call from an event's own sheet.** `send_event_volunteer_call`
+  reuses `volunteer_call_recipients`, `roles_still_needed` and
+  `email_volunteer_call` (split out of the request's `send_volunteer_call`),
+  stamps `events.volunteer_call_sent_at` (migration `e3b8d61f4a27`, nullable,
+  existing rows NULL) and is audited as `event_volunteer_call_sent`. Refused
+  (400) for a cancelled or past event, one with no sheet, and one linked to a
+  request. Email only — not an `SmsAlert`.
+- **Phone-only requests on a skipped migration.** Migration `c4e7a9d2f1b8`
+  re-applies `5a41041e328b` (nullable `contact_email`, `source`) on an
+  installation stamped past it by the "already exists" fallback in `main.py`,
+  where a request with no email failed with MySQL 1048. A no-op elsewhere; its
+  downgrade does nothing.
 
 All event response schemas inherit from `UTCResponseBase`, so datetimes are
 serialized with an explicit UTC offset.

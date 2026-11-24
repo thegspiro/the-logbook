@@ -1243,8 +1243,39 @@ tab of the Events admin hub.
   zone; the status page shows the scheduled date in the department's zone.
 - **Configurable pipeline tasks** — custom, reorderable checklist steps (e.g.
   "Chief Approval", "Volunteer Signup Email", "Equipment Prep").
+  _(2026-11-22)_ Four of the default steps tick themselves from the request's
+  state and untick when it is undone: **Review Request** (past Submitted),
+  **Assign Coordinator** (a coordinator is assigned), **Confirm Date**
+  (scheduled or completed) and **Arrange Volunteers** (every seat on the
+  request's signup sheet filled; a manual tick when there is no sheet with
+  seats). They show the rule in italics and cannot be toggled by hand
+  (`PATCH /event-requests/{id}/tasks` answers 400). The ticks are computed on
+  read, never stored, so the list, the request page and the public status
+  page's progress all agree, and a renamed step keeps the behaviour.
 - **Scheduling with room booking** — coordinators set a confirmed date, create
   a calendar event and book a room, with double-booking prevention.
+  _(2026-11-22)_ **Quick Duration** buttons (1, 2, 4, 8 hours) set the end
+  from the start, as on the event form.
+- **Signing up to volunteer** _(2026-11-22)_ — an outreach event with a live
+  signup sheet shows members a **Volunteer** card on its page: each role and
+  how many are still needed, a role choice (**What would you like to do?**)
+  and **Sign me up**. Officers who can manage events get the same button on
+  the **Volunteer staffing** card. The shift's detail panel on the schedule
+  offers the same role choice (**Sign yourself up for this outreach event**)
+  instead of the per-seat **Sign myself up**, which named no role and was
+  refused; an officer assigning someone there picks a **Role**, and **Fill
+  All Open** is hidden on an outreach sheet. Eligibility and the signup
+  window are enforced by the scheduling signup endpoint, as on Open Shifts.
+- **Shift swaps move volunteer RSVPs** _(2026-11-23)_ — an officer-approved
+  exchange or move, an accepted offer and a picked-up open swap now settle the
+  event's RSVPs like any other seat change: the member who gave the seat up
+  goes back to not going, the one who took it is going.
+- **Email the Membership from an event's own sheet** _(2026-11-23)_ — an
+  outreach event that opened its own sheet (no request behind it) can email
+  the membership for help from its **Volunteer staffing** card, with the same
+  audience picker, optional note and **Send Request for Help** as a request's
+  sheet. **Last sent** shows the time of the last call. Email only. Refused on
+  a cancelled or past event and on an event staffed from a request.
 - **Volunteer staffing** — for a scheduled request, open a volunteer signup
   sheet (an open-to-all shift on the confirmed date, filled through the
   ordinary Open Shifts flow, which lists outreach sheets 60 days ahead rather
@@ -1399,10 +1430,6 @@ Settings are stored in `organization.settings.events`; nested JSON writes use
   department has no default pipeline.
 - **Outreach requesters** are not sent their status link automatically; a
   coordinator copies it from the request.
-- **An outreach event's own signup sheet** is not stood down when its
-  recurring series is cancelled, has no **Email the membership** call, and a
-  volunteer's Going RSVP counts toward the event's capacity — see
-  `docs/KNOWN_LIMITATIONS.md`.
 - **Kiosk badge check-in** accepts a copied card unattended — see
   `docs/KNOWN_LIMITATIONS.md`.
 

@@ -2519,6 +2519,18 @@ _"Lapsed 41 days ago"_, _"Expires in 26 days"_.
 - A cell met by an override reads **Met by the Chief's override**; a Chief sees
   the **Chief override** control on a requirement that allows it (see
   [Session attendance requirements](#the-chiefs-override-of-a-session-attendance-requirement)).
+- **A certification reads by its expiry date** _(2026-11-23)_. Opening a
+  member, a certification requirement reads **On file** with _"(Expires Mar
+  14, 2027)"_, **Expired** with the day it lapsed, _"(Mar 14, 2026)"_, or **Not
+  recorded** with no date at all. These are the same words the member sees on
+  their own requirement card in My Training, so the two of you read one
+  certificate the same way. A certificate that never expires shows the day it
+  was earned instead (_"Completed …"_). A missing certificate no longer shows
+  the requirement's frequency window, because a certification is valid until
+  it expires rather than for a window. A member inside a catch-up deadline
+  still reads **Due by …**, and every other kind of requirement keeps its
+  usual wording. On **By requirement**, the expiry date sits under each
+  member's name.
 - **By requirement** turns it around: requirements grouped by how many members
   are behind on them.
 - Arriving from the dashboard's non-compliant link filters the list and shows a
@@ -2539,7 +2551,13 @@ _"Lapsed 41 days ago"_, _"Expires in 26 days"_.
 
 The actions available are **Print**, a CSV export, and links to each member's
 training records. Both **Print** and the CSV follow the class switch, and the
-CSV has a **Member class** column. With a class chosen, the printout carries
+CSV has a **Member class** column. _(2026-11-23)_ The CSV also has one
+**_name_ expiry** column for each certification requirement in view (for
+example **CPR/BLS Certification expiry**), so you can sort the sheet to see
+whose card runs out first without opening every member. Each cell holds the
+expiry date as YYYY-MM-DD, **No expiry** for a certificate that never lapses,
+**Not recorded** when none is on file, or nothing when the requirement does
+not apply to that member. With a class chosen, the printout carries
 that class alone and says so in its subtitle. With **All**, a roster that
 spans more than one class prints one heading per class (Operational,
 Administrative, Social, then Unclassified), each table carrying only the
@@ -3040,7 +3058,9 @@ those two choices above.
 
 ## Waivers
 
-**Who can do this:** officers who can manage member profiles.
+**Who can do this:** officers who can manage member profiles open the page.
+Creating or changing a training waiver also needs the training-manage
+permission (`training.manage`), and nobody can create or change their own.
 
 Open **Members > Admin > Waivers** to manage every waiver in the department.
 This one page covers:
@@ -3336,6 +3356,22 @@ cannot.
    | Meeting Attendance & Shift Requirements only | A leave of absence that does not waive training                  |
 
 5. Select **Create Waiver**.
+
+**Never your own waiver** _(2026-11-22)_. Nobody can create a waiver for
+themselves, whatever they tick under **Applies To**. Choosing yourself with
+**Training Requirements** only is refused with _"You cannot grant or change
+your own training waiver. Ask another training officer, or submit a leave
+request."_ A waiver that includes **Meeting Attendance & Shift Requirements**
+is a leave of absence, which was already refused for yourself (see
+[Leave of Absence](./01-membership.md#leave-of-absence)). A waiver you already
+hold cannot be extended, widened to more requirements or turned back on by
+you either. You can still **Deactivate** your own waiver, because ending it
+excuses nothing.
+
+> **A one-officer department.** If the Chief is the only person who can manage
+> training, the Chief can no longer excuse their own training this way. Give
+> the training-management permission to another officer, or have the Chief
+> submit a leave request on **Leave Requests**.
 
 ### Training Waivers Tab (Officer View)
 
@@ -5459,6 +5495,10 @@ The printed matrix includes:
   progress, **✗** not started, **Exp** expired, **Due** an existing member
   before their catch-up deadline, and **—** only where the requirement does not
   apply to that member;
+- _(2026-11-23)_ under the mark in a certification column, the date the
+  member's certificate expires in short form (for example _3/14/27_), and a
+  line in the key saying so. A certificate with no expiry date, or none on
+  file, shows the mark alone;
 - a **landscape** layout on letter-size paper;
 - column headings repeated on every page when the matrix runs over several
   pages.
@@ -6085,6 +6125,123 @@ both the list and the export.
 
 ![Evaluations I conduct with the 2025 period chosen: the Period results card reading 3 of 4 complete with how many stand at each grade and Export CSV, above the list with its Overall grade column, blank for the review still in progress](./images/02-146-evaluation-period-results.png)
 
+### Grades by evaluator _(2026-11-23)_
+
+With a period chosen, a holder of `evaluations.view_all` also sees **Grades by
+evaluator** at the foot of the **Period results** card. The first line,
+**Whole department**, counts the period's finalized reviews at each of the
+five grades (**Unsatisfactory**, **Needs improvement**, **Meets
+expectations**, **Exceeds expectations**, **Outstanding**). Below it, each
+evaluator has a line of their own, with how many reviews they finalized in
+brackets. Use it to spot an evaluator who rates everyone the same, or much
+harder or softer than everyone else, before the results go further.
+
+- The counts come from the same reviews and grades as the list and the CSV, so
+  the three always agree. Your own evaluation is left out, as it is there.
+- A review is counted under the evaluator it stands under today, so work
+  handed to someone else counts under them.
+- A form graded as a weighted percentage, or with no overall grade, has no
+  place on the five grades. Those reviews are counted as **Not on the five
+  grades**.
+- The Logbook shows the spread and does not judge it: nothing flags an
+  evaluator. The section appears once the period has a finalized review.
+
+### Downloading a period's signed PDFs _(2026-11-22)_
+
+Beside **Export CSV** on the **Period results** card, a holder of
+`evaluations.view_all` can select **Download signed PDFs**. It downloads
+`evaluation-pdfs.zip`, holding the signed PDF of every finalized evaluation in
+the period, for your records or an auditor.
+
+1. On **All evaluations**, choose the review period under **Period**.
+2. On the **Period results** card, select **Download signed PDFs**. The button
+   is greyed out until at least one evaluation listed is finalized.
+3. Confirm your identity when asked. The button reads **Preparing…** while the
+   zip is built.
+
+- Each PDF is **the signed copy**: the record exactly as it was signed,
+  without any response the member added afterwards. Open the evaluation to
+  download the copy with the response.
+- Files are named _Member - Form - period end.pdf_. Characters that cannot go
+  in a file name are replaced with `_`.
+- The zip holds the evaluations the list shows you, so your own is left out.
+- If a PDF cannot be read from storage, it is named in a **NOT INCLUDED.txt**
+  file inside the zip instead of the download failing. Tell your system
+  administrator if you see one.
+- Every download is recorded in the audit log, with how many PDFs it held.
+
+### Review history _(2026-11-23)_
+
+The **Last review** card shows one year back. For a holder of
+`evaluations.view_all`, the evaluation page also shows a **Review history**
+card below it, listing every other finalized review of the member, newest
+first and on any form. Each entry gives the review period (select it to open
+that review), the form's name, and **Overall:** with the grade that stood, or
+**No overall result** for a form without one. A member with no other
+finalized review reads "No other finalized reviews of this member."
+
+- Grades from different forms are listed side by side with each form's name,
+  since a member may have moved from one form to another (from probationary
+  to annual, say). Read them with that in mind.
+- A review you could not open yourself is left out.
+- The card is not printed on the PDF.
+
+### Self-evaluation beside the evaluation _(2026-11-22)_
+
+Once the member has submitted their self-evaluation, the evaluation page shows
+a **Self-evaluation beside the evaluation** card. It lists each rated item the
+member answered in their self-evaluation, with **Self:** their rating and
+**Evaluator:** the evaluator's, and marks **Far apart** on the items where the
+two are two or more levels apart on a scale, or opposite on meets / does not
+meet. Those are the points worth raising when you sit down to discuss the
+review. The line under the heading says how many there are (or "No rated item
+is far apart."), and **Show only those** hides the rest.
+
+- An item left unrated, or marked not applicable, reads **Not rated** or
+  **Not applicable** and is never marked far apart.
+- While the evaluator is writing their part, the card follows their ratings
+  as they change them, before they save.
+- It shows nobody anything new. The evaluator sees it only once the
+  self-evaluation is submitted, and the member only once the evaluator's
+  ratings are released to them.
+- It is not printed on the PDF, which carries both parts in full.
+
+### Setting goals _(2026-11-22)_
+
+A **Goals** item is now a list of goals, each with its own target date,
+instead of one box of text.
+
+1. On the item, select **Add a goal**.
+2. Write the goal in the **Goal 1** box. Optionally set **Target date for goal
+   1**.
+3. Select **Add a goal** again for each further goal, up to 20. **Remove goal
+   _N_** takes one out.
+
+You cannot submit your part until the item has at least one goal: the message
+reads "Set at least one goal in '…'." A goal left blank is dropped when you
+save. Readers see the goals as a numbered list, each with "(by _date_)" where it
+has a target, and the PDF prints them the same way.
+
+- **Next year's review** reads each goal on its own. The **Last review** card
+  and a **Last review's goals** item list them one by one, with **Target:**
+  and the date beneath each goal that had one. When an item held more than one
+  goal, each is labelled with its place, for example "Goals for the coming
+  year, goal 2".
+- **Goals written before 2026-11-22** were one block of text. An evaluation
+  still being written opens that text as **Goal 1**, and saving stores it as
+  one goal. A part already submitted keeps its text exactly as signed, and
+  next year's review reads it as one goal.
+
+> **Screenshots needed** _(2026-11-22 – 23)_: `02-146-evaluation-period-results`,
+> still to be taken, should now show **Download signed PDFs** beside **Export
+> CSV** and **Grades by evaluator** at the foot of the card (three evaluators),
+> and `02-145-evaluation-last-review` a goal with its **Target:** date. New:
+> `02-163-evaluation-review-history` (the **Review history** card below **Last
+> review**, three entries on two forms), `02-164-evaluation-self-comparison`
+> (the **Self-evaluation beside the evaluation** card with two **Far apart**
+> items) and `02-165-evaluation-goals-list` (a **Goals** item being written,
+> two goals with target dates and **Add a goal**).
+
 ### Figures on the form _(2026-11-14)_
 
 When you build a template, an item's **Data shown with this item** list is
@@ -6262,6 +6419,12 @@ have moved, been renamed or work differently.
   _(2026-11-16)_, even when they hold the approving position, and nobody signs
   two approvals on one evaluation. A manager names someone else on the step;
   see [Naming who takes a step](#naming-who-takes-a-step-2026-11-16).
+- **A Goals item on a performance evaluation is a list** _(2026-11-22)_: one
+  box per goal, each with an optional target date, added with **Add a goal**.
+  It was one box of text. See [Setting goals](#setting-goals-2026-11-22).
+- **Nobody creates, extends or re-enables their own training waiver**
+  _(2026-11-22)_, as nobody records their own leave. See
+  [Creating a Waiver](#creating-a-waiver).
 - **A Certification requirement no longer credits a course just because its
   name contains the requirement's name** — not even for older records, since
   2026-11-04. An older record on an older requirement counts by name only when
@@ -6307,7 +6470,10 @@ have moved, been renamed or work differently.
   it.
 - **The printed Compliance Matrix** groups members by the same standing as the
   screen, prints **✗** for unmet, and wraps full requirement names. A print
-  kept from before cannot be compared with a new one.
+  kept from before cannot be compared with a new one. Since 2026-11-23 it also
+  prints each certificate's expiry date under its mark, and the matrix screen
+  reads a certification **On file**, **Expired** or **Not recorded** with its
+  date, as My Training does.
 - **Shift report hours** are the shift's length, not the crew's total. Check
   the hours on reports filed long ago — a three-person 12-hour shift could have
   credited each rider 35.6 hours.

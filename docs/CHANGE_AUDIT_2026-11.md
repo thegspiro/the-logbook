@@ -78,6 +78,64 @@ documentation pass" in `docs/training/SCREENSHOT_CURRENCY.md`. **Replace:**
 **YouTube scripts:** 03, 05, 07 and 08 edited; 06, 15 and 16 flagged in
 `docs/youtube-scripts/SCRIPT_CURRENCY.md`.
 
+## Change audit: November 22 – 23, 2026
+
+The last 25 hours of `main`: the 31 first-parent merges after `2248da3b`
+through `4b1a8792` (2026-11-23 14:06 UTC), #4538 to #4616. The November
+21 – 22 pass (#4568) covers everything up to `2248da3b` and was still open
+when this pass ran, so its sections, screenshot ids and script notes are not
+repeated here; expect the two passes to conflict at the top of each ledger, and
+keep both. Five merges are security-review passes recording no change (#4566,
+#4580, #4589, #4616 and the direct `8c20bff8`); two are documentation-only
+(#4571, #4597). `CHANGELOG.md` stays closed.
+
+| Change                                                                                                                                                                                                                                                                                                       | Guide  | Disposition                                                                                                                                                                                                                                                            |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Evaluations: **Review history** with the grade each review stood at (#4538), **Grades by evaluator** for a period (#4567), **Download signed PDFs** as one zip, step-up gated (#4570), the self-evaluation beside the evaluator's ratings (#4563), a Goals item as a list of goals with target dates (#4565) | 02     | Five new sections in 02; wiki `Module-Evaluations`; `EVALUATIONS_MODULE.md` permission table, step-up list and goal labels corrected; YouTube 04 beat, 16 footage note                                                                                                 |
+| Training waivers: nobody creates or extends their own; merge revision `561a3e9f4165` (#4560)                                                                                                                                                                                                                 | 02     | "Never your own waiver" and the one-officer callout; wiki `Module-Training`, `Module-Compliance`, `Compliance-Hub`; YouTube 05 editor note. Closes the self-waiver item the November 20 – 21 pass escalated. `UPGRADING.md`                                            |
+| Compliance matrix shows certification expiry, in its CSV (`<requirement> expiry` columns) and printout (#4585)                                                                                                                                                                                               | 02     | Written; wiki `Module-Training`, `Module-Compliance`; YouTube 05 beat. `UPGRADING.md`: the CSV gains columns                                                                                                                                                           |
+| Outreach: phone-only request fix and migration `c4e7a9d2f1b8`, **Quick Duration** buttons, four checklist steps that tick themselves, volunteer signup on the shift panel and the event page (#4561)                                                                                                         | 04, 03 | New "Signing up to volunteer at an outreach event"; checklist table; two troubleshooting rows; 03 Open Shifts paragraph; wiki `Module-Events`, `-Developer`, `Public-Programs`. `UPGRADING.md`                                                                         |
+| Outreach: swaps move volunteer RSVPs; an event's own sheet can **Email the Membership**, migration `e3b8d61f4a27` (#4582)                                                                                                                                                                                    | 04, 03 | The stale "no Email the Membership button yet" sentence replaced; 03 swap paragraph; wiki Known Limitations bullet removed (now closed). `UPGRADING.md`                                                                                                                |
+| Unapproved minutes print DRAFT on every page, with identity line and report number (#4588)                                                                                                                                                                                                                   | 04, 14 | Written; wiki `Module-Meeting-Minutes`, `Module-Elections`; `MEETING_MINUTES_MODULE.md`; YouTube 07's "no PDF export on minutes" note corrected, 12 footage notes                                                                                                      |
+| Optional signature lines on report PDFs, by **Add signature lines to PDF** at download (#4586)                                                                                                                                                                                                               | 08     | "Signature lines" and "Report numbers" paragraphs; `PDF_REPORTS.md` test line corrected                                                                                                                                                                                |
+| Leave: stand-in notices, cover prompt, **Calendar**, **Export leave records**; migration `b6e3d1f47a29` (#4569)                                                                                                                                                                                              | 01, 03 | 01 was written by the PR and checked; the export's file name and 1830-day limit added; 03 "Who is away this month"; wiki `Module-Communications` templates. `UPGRADING.md` already had it                                                                              |
+| Storefront: a window closes at its closing time, drafts schedule themselves, **Your store balance** email choice, a **Cancellation** preview (#4550); a long payment handle stays in its card (#4573)                                                                                                        | 18     | "Opening and closing on its own", "Members choose too", four troubleshooting entries; the **Closes** label corrected (it said "Ordering closes"); YouTube 13 beat and a Zelle re-shoot note. `UPGRADING.md` already had the email choice; the window timing line added |
+| Purchase request edit shows the saved budget line and fiscal year (#4581)                                                                                                                                                                                                                                    | 11     | "What the edit form shows"; `FINANCE_MODULE.md`                                                                                                                                                                                                                        |
+| History import pages through every outside-agency entry, 50 at a time (#4591)                                                                                                                                                                                                                                | 03     | Written; wiki `Scheduling-History-Import`                                                                                                                                                                                                                              |
+| Emailed ballot mobile fixes (#4562); checkbox and stacked-table alignment (#4574)                                                                                                                                                                                                                            | none   | Visual only; screenshot checks below                                                                                                                                                                                                                                   |
+| Migration chain rejoins itself when it forks (#4592); CI apt cache (#4548), sweep budgets and retries (#4551); demo seeder re-runs (#4575); screenshot repairs (#4578); short 8I and the member guide chapter 3 pilot tooling (#4545)                                                                        | none   | Internal, documented in their own files (`docs/rules/migrations.md`, `video-production/README.md`)                                                                                                                                                                     |
+
+**Also fixed on the way:**
+
+- `wiki/Security-Authentication.md`'s step-up table lacked handing over a
+  departed evaluator's work and the period PDF zip, both in
+  `STEPUP_HANDLERS`.
+- Guide 02's Waivers section said only "officers who can manage member
+  profiles"; creating a training waiver also needs `training.manage`.
+- `EVALUATIONS_MODULE.md` said only signing and deleting need step-up.
+
+**Left for #4568 to merge first:** guide 02's Compliance Matrix intro and its
+screenshot caption still give "Nothing on file" and "Expires in 26 days" as
+examples; a certification now reads **On file**, **Expired** or **Not
+recorded**. Those lines sit beside a #4568 hunk, so they are untouched here;
+fix them after #4568 merges. The same applies to the "series cancel does not
+yet" sentences in 04, `Module-Events` and `Module-Events-Developer`, which
+#4568 already rewrites.
+
+**Recorded in `docs/KNOWN_LIMITATIONS.md`:** **Download signed PDFs** is greyed
+out or enabled based on the rows the **Show** filter leaves visible, but the
+zip holds every finalized review in the period whatever the filter says.
+
+**Alembic heads.** Four migrations in this range, one a merge; `main` at
+`4b1a8792` has one head, `e3b8d61f4a27` (checked with `alembic heads`).
+
+**Screenshots to create or replace:** see "Queued by the November 22 – 23
+documentation pass" in `docs/training/SCREENSHOT_CURRENCY.md`. **Replace:**
+`02-66-compliance-matrix`, `02-65-print-compliance`, `18-04-my-orders-unpaid`.
+
+**YouTube scripts:** 04, 05, 07, 12, 13 and 16 edited; 06, 07 and 08 flagged
+in `docs/youtube-scripts/SCRIPT_CURRENCY.md`.
+
 ## Change audit: November 20 – 21, 2026
 
 The last 25 hours of `main`: the 57 first-parent merges after `357402ed`

@@ -32,7 +32,7 @@ from typing import Any, Dict, List, Optional, Sequence
 
 from fastapi import Response
 from loguru import logger
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -527,7 +527,7 @@ class AttendanceWaiverAttachmentService:
             try:
                 policy = await self.engine.get_policy(org_id)
                 days = policy.attachment_retention_days
-                outcome = await self._sweep_org(org_id, now - timedelta(days=days))
+                outcome = await self._sweep_org(org_id, now - timedelta(days=days), now)
                 if outcome["attachment_ids"]:
                     await log_audit_event(
                         db=self.db,
@@ -557,7 +557,9 @@ class AttendanceWaiverAttachmentService:
                 await self.db.rollback()
         return results
 
-    async def _sweep_org(self, org_id: str, cutoff: datetime) -> Dict[str, Any]:
+    async def _sweep_org(
+        self, org_id: str, cutoff: datetime, now: datetime
+    ) -> Dict[str, Any]:
         closed_at = func.coalesce(
             AttendanceWaiverRequest.decided_at,
             AttendanceWaiverRequest.updated_at,
@@ -589,7 +591,7 @@ class AttendanceWaiverAttachmentService:
             )
         ).all()
         deleted: List[str] = []
-        requests: set[str] = set()
+        removed_by_request: Dict[str, int] = {}
         failed = 0
         for attachment_id, request_id, stored_path in rows:
             path = file_storage.resolve(stored_path, org_id, AREA)
@@ -613,10 +615,34 @@ class AttendanceWaiverAttachmentService:
                 )
             )
             deleted.append(str(attachment_id))
-            requests.add(str(request_id))
+            removed_by_request[str(request_id)] = (
+                removed_by_request.get(str(request_id), 0) + 1
+            )
+        # Recorded in the same transaction as the row deletes, so a removal
+        # is counted exactly once whatever a later run finds (pitfall #36).
+        # updated_at is written back as it stands: the retention clock of a
+        # withdrawn or voided request reads it, and the column's onupdate
+        # would otherwise restart it.
+        naive_now = now.astimezone(dt_timezone.utc).replace(tzinfo=None)
+        for request_id, removed in removed_by_request.items():
+            await self.db.execute(
+                update(AttendanceWaiverRequest)
+                .where(
+                    AttendanceWaiverRequest.id == request_id,
+                    AttendanceWaiverRequest.organization_id == org_id,
+                )
+                .values(
+                    attachments_removed_count=func.coalesce(
+                        AttendanceWaiverRequest.attachments_removed_count, 0
+                    )
+                    + removed,
+                    attachments_removed_at=naive_now,
+                    updated_at=AttendanceWaiverRequest.updated_at,
+                )
+            )
         return {
             "attachment_ids": deleted,
-            "request_ids": sorted(requests),
+            "request_ids": sorted(removed_by_request),
             "failed": failed,
         }
 

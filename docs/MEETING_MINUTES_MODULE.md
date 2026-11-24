@@ -20,7 +20,7 @@ The Meeting Minutes module enables organizations to create, manage, and publish 
 - **Attachments**: Reports, handouts and the signed copy, scanned and stored encrypted _(2026-10-14)_
 - **Approved Versions**: An immutable, SHA-256-hashed snapshot per approval, with verification _(2026-10-14)_
 - **Action-Item Follow-Through**: Carry-forward between meetings, a "assigned to me" list, and an email to each assignee on approval _(2026-10-14)_
-- **Printable PDF**: With signature lines and, once approved, the version and hash _(2026-10-14)_
+- **Printable PDF**: With signature lines and, once approved, the version and hash _(2026-10-14)_; a diagonal DRAFT on every page until adopted, and a per-download report number _(2026-11-23)_
 
 ---
 
@@ -711,6 +711,27 @@ nothing past it is read), 300 appended pages, 40 megapixels per image. A file
 over a budget, missing, password-protected or unreadable is listed with the
 reason and the PDF is still produced. The rendering runs off the event loop.
 Appended pages carry no minutes footer.
+
+Since 2026-11-23 (owner decisions 2026-11-21, #4588):
+
+- **Unapproved minutes are marked DRAFT.** When `build_print_data` passes no
+  `approval` — every status but approved — `render_minutes_pdf` hands
+  `HeadedDocTemplate` an `overlay` (`_draw_draft_mark`) that draws a pale
+  diagonal "DRAFT" over each page, after its content and at 18% fill opacity.
+  It cannot go beneath: an opaque table-row fill painted over the first
+  attempt on the attendance page. PDF/A-2b permits the transparency. Appended
+  PDF attachments are merged after rendering and carry no mark.
+  `tests/test_minutes_draft_watermark.py` holds it.
+- **Provenance.** Page 1 sets the department's identity line
+  (`department_identity`) under its name and appends "Report No. …" to the
+  subtitle; later pages carry the number at the right of the running header.
+  The number (`report_number_for`, `RPT-YYYYMMDD-XXXX`) is new per download
+  and stored only in the `minutes_pdf_exported` audit row's `report_number`.
+- **Handling banner.** The outline's `footer_config.confidentiality_notice`
+  (the **Footer notice**) is also set at the top of every page
+  (`HeadedDocTemplate(banner=...)`).
+
+The rules shared by every PDF are in [PDF_REPORTS.md](./PDF_REPORTS.md).
 
 ### Record-keeping endpoints
 

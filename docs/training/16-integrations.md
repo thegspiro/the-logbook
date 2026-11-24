@@ -1044,6 +1044,11 @@ The rules, and why:
 
 - **A record already deleted by hand** is simply forgotten, so committing the
   step again writes it afresh.
+- **A former member the undo removes goes back to "create"**, with the name
+  you typed for them _(2026-11-24)_, so committing again makes them under that
+  name rather than "Former member" and their number. An import committed
+  before this date did not keep the typed name: retype it before committing
+  again.
 - **Attached files go too** _(2026-11-23)_. Files attached to the training
   records or company drills the undo removes are deleted shortly afterwards,
   unless another record still uses the same file. Before, the records went and

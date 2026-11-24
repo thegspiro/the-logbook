@@ -196,6 +196,22 @@ back on All.]**
 > a month that's only partly covered by leave is treated is a department setting
 > called **Months on leave**. Part 2 shows where."
 
+**[SCREEN: A member's detail: CPR/BLS Certification reading "On file" with
+"(Expires Mar 14, 2027)"; then another member reading "Expired" "(Mar 14,
+2026)"; then the CSV open in a spreadsheet, sorted on the CPR/BLS
+Certification expiry column.]**
+
+> "Certifications read the way your members see them on My Training: **On
+> file** with the date it expires, **Expired** with the date it lapsed, or
+> **Not recorded**. And the CSV has an expiry column for each certification,
+> so sort it and you know whose card runs out first. The printout puts the
+> date under the mark, too."
+
+**[PRODUCTION NOTE — 2026-11-23. New beat, about 20 seconds; re-time
+Chapter 2. Since 2026-11-23 the matrix no longer shows "Expires in 26 days" or
+a window date on a certification; a take showing those on a certification row,
+or a printout with no dates under the certification marks, is dated.]**
+
 **[PRODUCTION NOTE — 2026-11-21. Footage check, no narration change required.
 Since 2026-11-20 an hours requirement in a member's detail leads with the
 monthly average against the monthly pace — "2/2 hrs/mo avg" — and the total
@@ -354,6 +370,14 @@ form shows "Sessions to Attend (%)" and no hours box.]**
 > override, which the Chief uses from the member in the Compliance Matrix — and
 > only if you ticked **Allow the Chief to override it for a member** on the
 > requirement."
+
+**[EDITOR — 2026-11-22. Footage and wording check, no re-record required. A
+training officer cannot give **themselves** a training waiver, nor extend or
+turn back on one they hold: the Waivers page answers "You cannot grant or
+change your own training waiver. Ask another training officer, or submit a
+leave request." Do not film an officer waiving their own requirements. If a
+line is wanted after "That's a training waiver": _"— recorded by another
+officer if it's your own."_]**
 
 **[PRODUCTION NOTE — 2026-11-05. New beat, about 45 seconds; re-time Chapter 3
 and record the requirement form and the create-session checklist. The override
