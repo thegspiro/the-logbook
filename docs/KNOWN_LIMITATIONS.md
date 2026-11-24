@@ -11457,9 +11457,15 @@ request, kept 365 days) shipped with these gaps, each the narrower choice:
 - **A withdrawn or voided request is timed from its last change**
   (`updated_at`), since it has no decision time; an approved or denied one
   from its decision.
-- **The request page does not say documents were once filed** after retention
-  removes them. The `attendance_waiver_attachment_retention` audit entry
-  records which documents of which requests were deleted.
+- ~~**The request page does not say documents were once filed** after
+  retention removes them.~~ ✅ Resolved 2026-11-23 (owner decision): the sweep
+  records on each request how many documents it removed and when
+  (`attachments_removed_count`, `attachments_removed_at`, migration
+  `241c1cc27313`), and the request page shows "N documents removed under
+  retention on <date>" in the department's timezone to anyone who can see the
+  request. **A request swept before that migration still says nothing:** the
+  old retention audit entries list a department's requests and documents
+  together, so they cannot be split back into a count per request.
 - **Retention covers the training workflow only.** The business-meeting
   workflow files no documents; when it does, its own policy needs to be read
   by the sweep.
