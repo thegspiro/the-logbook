@@ -288,9 +288,14 @@ The owner ruled that a request's crew rides on the request's existing
 calendar event, that volunteer signups and a crew may both be used, and that
 the coordinator picks the template each time (no default per outreach type).
 
-- **A moved date is not re-checked for apparatus conflicts.** Postponing a
-  request to a new date moves its event and the crew with it; the conflict
-  check ran only when the crew was added.
+- **A moved date is re-checked for apparatus conflicts** _(owner decision of
+  2026-11-24)_. Scheduling or postponing a request that has a crew onto a date
+  where its apparatus is already committed is held back with the conflicts
+  listed, until the coordinator ticks **Move anyway**. The acceptance is noted
+  in the request's activity log. A save that keeps the same date and time is
+  not checked again. **Moving an apparatus night from its own event page is
+  not re-checked** — the owner chose requests only; Edit event and the
+  event's own Postpone move the crew without asking.
 - **A postponement to a date TBD leaves the crew on the cancelled event.**
   Rescheduling opens a new calendar event without a crew, and the
   coordinator adds it again. Carrying it over automatically would seat members

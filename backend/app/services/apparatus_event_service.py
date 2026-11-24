@@ -650,6 +650,60 @@ class ApparatusEventService:
             organization_id, apparatus, [night], exclude_event_ids=[str(event.id)]
         )
 
+    async def check_move_conflicts(
+        self,
+        event_id: str,
+        start: datetime,
+        end: datetime,
+        organization_id: str,
+    ) -> List[ApparatusConflict]:
+        """The conflicts an event's crew would have if the event moved to
+        *start*–*end*: what a public request's reschedule must show before it
+        carries the crew to a new date.
+
+        Empty when the event has no crew, is cancelled, or keeps the window it
+        already has. That last case matters: a save that changes only the room
+        must not be stopped again by a conflict the coordinator accepted when
+        the crew went on.
+
+        The apparatus are read as the night has them, archived or not. An
+        engine archived after the crew went on is still the one on the night,
+        and refusing the move as "invalid apparatus" would leave the request
+        unable to change date at all.
+        """
+        event = await self._get_event(event_id, organization_id)
+        if event is None or event.is_cancelled:
+            return []
+        start, end = _utc(start), _utc(end)
+        if _utc(event.start_datetime) == start and _utc(event.end_datetime) == end:
+            return []
+        result = await self.db.execute(
+            select(Apparatus)
+            .join(
+                EventApparatusUnit,
+                EventApparatusUnit.apparatus_id == Apparatus.id,
+            )
+            .options(selectinload(Apparatus.status_record))
+            .where(
+                EventApparatusUnit.event_id == str(event_id),
+                EventApparatusUnit.organization_id == str(organization_id),
+                Apparatus.organization_id == str(organization_id),
+            )
+        )
+        apparatus = {str(a.id): a for a in result.scalars().all()}
+        if not apparatus:
+            return []
+        # Built without NightSpec's validation: that caps a night at 24 hours,
+        # and a public request's window is the request's own (a two-day
+        # festival is a valid one). find_conflicts reads only the two times.
+        night = NightSpec.model_construct(start_datetime=start, end_datetime=end)
+        return await self.find_conflicts(
+            organization_id,
+            apparatus,
+            [night],
+            exclude_event_ids=[str(event.id)],
+        )
+
     async def attach_template(
         self,
         event_id: str,

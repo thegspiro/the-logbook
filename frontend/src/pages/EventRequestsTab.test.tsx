@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router';
 import userEvent from '@testing-library/user-event';
+import { AxiosError, type AxiosResponse } from 'axios';
 
 const listRequests = vi.fn();
 const getRequest = vi.fn();
@@ -854,6 +855,88 @@ describe('EventRequestsTab scheduling a request', () => {
     await user.selectOptions(within(page).getByRole('combobox', { name: /Start time AM\/PM|Start time period/ }), 'PM');
     await user.click(within(page).getByRole('button', { name: '8 hours' }));
     expect(within(page).getByLabelText('End Date & Time')).toHaveValue('2026-11-26');
+  });
+});
+
+const CREW_CONFLICT = new AxiosError('Conflict', 'ERR_BAD_REQUEST', undefined, undefined, {
+  status: 409,
+  data: {
+    detail: {
+      message: 'The apparatus crew on this request would conflict on the new date.',
+      conflicts: [
+        {
+          night_index: 0,
+          apparatus_id: 'engine-1',
+          unit_number: 'E1',
+          reason: 'E1 is already on Holiday Parade.',
+          conflicting_event_id: 'parade',
+          conflicting_title: 'Holiday Parade',
+        },
+      ],
+    },
+  },
+} as AxiosResponse);
+
+describe('EventRequestsTab moving a request whose crew would conflict', () => {
+  beforeEach(() => {
+    listRequests.mockReset();
+    getRequest.mockReset();
+    postponeRequest.mockReset();
+    scheduleRequest.mockReset();
+    toastError.mockReset();
+    listRequests.mockResolvedValue([request]);
+    getRequest.mockResolvedValue({ ...request, activity_log: [] });
+  });
+
+  it('shows the conflict on Postpone and moves only once it is accepted', async () => {
+    postponeRequest.mockRejectedValueOnce(CREW_CONFLICT).mockResolvedValueOnce({ status: 'postponed' });
+    const user = userEvent.setup();
+    renderBoard();
+
+    await user.click(await screen.findByRole('button', { name: /Pat Requester/ }));
+    await user.click(await screen.findByRole('button', { name: 'More' }));
+    await user.click(screen.getByRole('button', { name: 'Postpone' }));
+    await user.click(screen.getByRole('button', { name: 'Confirm Postpone' }));
+
+    expect(await screen.findByText('E1 is already on Holiday Parade.')).toBeInTheDocument();
+    expect(toastError).not.toHaveBeenCalled();
+    const confirm = screen.getByRole('button', { name: 'Confirm Postpone' });
+    expect(confirm).toBeDisabled();
+
+    await user.click(screen.getByRole('checkbox', { name: /Move anyway/ }));
+    await user.click(confirm);
+
+    await waitFor(() => expect(postponeRequest).toHaveBeenCalledTimes(2));
+    expect(postponeRequest).toHaveBeenNthCalledWith(
+      1,
+      'req-1',
+      expect.objectContaining({ acknowledge_conflicts: false })
+    );
+    expect(postponeRequest).toHaveBeenNthCalledWith(
+      2,
+      'req-1',
+      expect.objectContaining({ acknowledge_conflicts: true })
+    );
+  });
+
+  it('asks again on Schedule when the date changes after a conflict', async () => {
+    scheduleRequest.mockRejectedValueOnce(CREW_CONFLICT);
+    const user = userEvent.setup();
+    renderBoard();
+    await user.click(await screen.findByRole('button', { name: /Pat Requester/ }));
+    const page = await screen.findByRole('article', { name: /Pat Requester/ });
+    await user.click(within(page).getByRole('button', { name: 'Schedule event' }));
+    await user.type(within(page).getByLabelText('Start Date & Time *'), '2026-12-05');
+    await user.click(within(page).getByRole('button', { name: 'Confirm & Create Calendar Event' }));
+
+    expect(await within(page).findByText('E1 is already on Holiday Parade.')).toBeInTheDocument();
+    expect(within(page).getByRole('button', { name: 'Confirm & Create Calendar Event' })).toBeDisabled();
+
+    // The conflict described the date that was sent; another date is unknown.
+    await user.click(within(page).getByRole('button', { name: '2 hours' }));
+
+    expect(within(page).queryByText('E1 is already on Holiday Parade.')).not.toBeInTheDocument();
+    expect(within(page).getByRole('button', { name: 'Confirm & Create Calendar Event' })).toBeEnabled();
   });
 });
 

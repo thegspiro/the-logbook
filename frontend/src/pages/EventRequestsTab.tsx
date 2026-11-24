@@ -61,6 +61,7 @@ import type {
   OutreachRole,
   StaffingRoleNeed,
 } from '../types/event';
+import type { ApparatusConflict } from '../types/apparatusEvent';
 import { initialRoleNeeds } from '../utils/outreachRoles';
 import { useTimezone } from '../hooks/useTimezone';
 import { useRanks } from '../hooks/useRanks';
@@ -72,6 +73,8 @@ import { displayNameOf } from '../utils/memberName';
 import { isActiveAccount } from '../constants/enums';
 import { useAuthStore } from '../stores/authStore';
 import RequestApparatusCrewSection from './event-requests/RequestApparatusCrewSection';
+import ApparatusConflictNotice from './event-requests/ApparatusConflictNotice';
+import { conflictsFrom } from './event-requests/apparatusConflicts';
 import RequestFeedbackSection from './event-requests/RequestFeedbackSection';
 import MemberAudiencePicker from '../components/member-audience/MemberAudiencePicker';
 import { EMPTY_AUDIENCE, type MemberAudienceChoice } from '../types/memberAudience';
@@ -241,6 +244,22 @@ const EventRequestsTab: React.FC<EventRequestsTabProps> = ({ requestId }) => {
   const [showPostponeForm, setShowPostponeForm] = useState(false);
   const [postponeReason, setPostponeReason] = useState('');
   const [postponeNewDate, setPostponeNewDate] = useState('');
+
+  // A request's apparatus crew moves with its date, so a move onto a date
+  // where the apparatus is committed comes back 409 with the conflicts. They
+  // describe the date that was sent, so changing the date clears them.
+  const [scheduleConflicts, setScheduleConflicts] = useState<ApparatusConflict[]>([]);
+  const [scheduleConflictsAccepted, setScheduleConflictsAccepted] = useState(false);
+  const [postponeConflicts, setPostponeConflicts] = useState<ApparatusConflict[]>([]);
+  const [postponeConflictsAccepted, setPostponeConflictsAccepted] = useState(false);
+  useEffect(() => {
+    setScheduleConflicts([]);
+    setScheduleConflictsAccepted(false);
+  }, [scheduleDate, scheduleEndDate]);
+  useEffect(() => {
+    setPostponeConflicts([]);
+    setPostponeConflictsAccepted(false);
+  }, [postponeNewDate]);
 
   // Email templates
   const [emailTemplates, setEmailTemplates] = useState<EmailTemplate[]>([]);
@@ -541,6 +560,7 @@ const EventRequestsTab: React.FC<EventRequestsTabProps> = ({ requestId }) => {
         location_id: scheduleLocationId || undefined,
         notes: scheduleNotes || undefined,
         create_calendar_event: true,
+        acknowledge_conflicts: scheduleConflicts.length > 0 && scheduleConflictsAccepted,
       });
       toast.success('Event scheduled and added to calendar.');
       setShowScheduleForm(false);
@@ -550,6 +570,12 @@ const EventRequestsTab: React.FC<EventRequestsTabProps> = ({ requestId }) => {
       setScheduleNotes('');
       await refreshDetail(requestId);
     } catch (err) {
+      const conflicts = conflictsFrom(err);
+      if (conflicts) {
+        setScheduleConflicts(conflicts);
+        setScheduleConflictsAccepted(false);
+        return;
+      }
       // The server's sentence when it gave one: a double-booked room, or an
       // event whose attendance is already closed, are different fixes and the
       // coordinator can only tell them apart by reading which it was. The
@@ -566,6 +592,7 @@ const EventRequestsTab: React.FC<EventRequestsTabProps> = ({ requestId }) => {
       await eventRequestService.postponeRequest(requestId, {
         reason: postponeReason || undefined,
         new_event_date: postponeNewDate ? localToUTC(postponeNewDate, tz) : undefined,
+        acknowledge_conflicts: postponeConflicts.length > 0 && postponeConflictsAccepted,
       });
       toast.success('Request postponed.');
       setShowPostponeForm(false);
@@ -574,6 +601,12 @@ const EventRequestsTab: React.FC<EventRequestsTabProps> = ({ requestId }) => {
       setPostponeNewDate('');
       await refreshDetail(requestId);
     } catch (err) {
+      const conflicts = conflictsFrom(err);
+      if (conflicts) {
+        setPostponeConflicts(conflicts);
+        setPostponeConflictsAccepted(false);
+        return;
+      }
       toast.error(getErrorDetail(err) || 'Failed to postpone request.');
     } finally {
       setActionLoading(false);
@@ -1059,11 +1092,19 @@ const EventRequestsTab: React.FC<EventRequestsTabProps> = ({ requestId }) => {
                       aria-label="Scheduling notes"
                       className="form-input placeholder-theme-text-muted text-sm"
                     />
+                    <ApparatusConflictNotice
+                      conflicts={scheduleConflicts}
+                      acknowledged={scheduleConflictsAccepted}
+                      onAcknowledge={setScheduleConflictsAccepted}
+                      confirmLabel="Move anyway. I’ve confirmed the apparatus can cover the new date."
+                    />
                     <div className="flex flex-wrap gap-2">
                       <button
                         type="button"
                         onClick={() => void handleSchedule(detail.id)}
-                        disabled={actionLoading || !scheduleDate}
+                        disabled={
+                          actionLoading || !scheduleDate || (scheduleConflicts.length > 0 && !scheduleConflictsAccepted)
+                        }
                         className="btn-primary text-sm font-medium"
                       >
                         Confirm & Create Calendar Event
@@ -1100,11 +1141,17 @@ const EventRequestsTab: React.FC<EventRequestsTabProps> = ({ requestId }) => {
                         className="form-input text-sm"
                       />
                     </div>
+                    <ApparatusConflictNotice
+                      conflicts={postponeConflicts}
+                      acknowledged={postponeConflictsAccepted}
+                      onAcknowledge={setPostponeConflictsAccepted}
+                      confirmLabel="Move anyway. I’ve confirmed the apparatus can cover the new date."
+                    />
                     <div className="flex flex-wrap gap-2">
                       <button
                         type="button"
                         onClick={() => void handlePostpone(detail.id)}
-                        disabled={actionLoading}
+                        disabled={actionLoading || (postponeConflicts.length > 0 && !postponeConflictsAccepted)}
                         className="btn-warning text-sm font-medium"
                       >
                         Confirm Postpone
