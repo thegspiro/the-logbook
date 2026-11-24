@@ -409,6 +409,66 @@ docker exec -it logbook-backend python scripts/sweep_orphaned_member_files.py
 docker exec -it logbook-backend python scripts/sweep_orphaned_member_files.py --apply
 ```
 
+### `relink_restored_drive_files.py`
+
+Points records back at Google Shared Drive files that were put back from a
+copy — **owner decision 2026-11-23**. The Logbook finds a Drive file by its
+id; a file restored from the drive's own trash keeps it and needs nothing,
+but a file uploaded again from a copy kept elsewhere (an `rclone copy`
+backup, say) is a new file with a new id. Each stored file is named after its
+storage path, so the command matches restored files to their records by that
+name and rewrites the references to the new ids.
+
+- **Put the files back first**, into the department's configured Shared
+  Drive, in any folder, **without renaming them**. They must be the encrypted
+  files as the Logbook wrote them: each match is read back and decrypted with
+  this installation's file key before anything is changed, so the backup
+  must come from this installation and its `ENCRYPTION_KEY` /
+  `ENCRYPTION_SALT`.
+- **Dry run by default**: lists what it would repoint, and every reference it
+  cannot settle. `--apply` rewrites the records, each re-read under a row
+  lock, so a record changed since the scan keeps that change.
+- **Safe to run twice**: a record whose file is there is left alone, so a
+  second run finds nothing to do. Restore in batches and re-run after each.
+- **Left alone and reported**: a record with no file of its name in the
+  drive, one with more than one (delete the extra copy and re-run), and one
+  whose match does not read back as this installation's file.
+- Covers every department with Google Drive settings saved, including one
+  that has since moved to another store. `--org <organization id>` limits it
+  to one department.
+
+Exit codes: `0` success; `1` some references were reported and left alone;
+`2` database error, a department named by `--org` without usable Drive
+settings, or bad arguments.
+
+**Docker Compose** (the standard install, and AWS EC2, which the AWS guide
+deploys with Docker Compose — connect to the instance first):
+
+```bash
+# Dry run — writes nothing:
+docker exec -it intranet-backend python scripts/relink_restored_drive_files.py
+
+# Repoint the records:
+docker exec -it intranet-backend python scripts/relink_restored_drive_files.py --apply
+```
+
+**Unraid**: the backend container is `logbook-backend` in the Unraid compose
+stack (`TheLogbook` on a Community Applications install). From the Unraid
+terminal:
+
+```bash
+docker exec -it logbook-backend python scripts/relink_restored_drive_files.py
+docker exec -it logbook-backend python scripts/relink_restored_drive_files.py --apply
+```
+
+**Without Docker** (a Linux host or a cloud VM running the backend directly),
+from `backend/`, with the same environment the backend runs with:
+
+```bash
+python scripts/relink_restored_drive_files.py
+python scripts/relink_restored_drive_files.py --apply
+```
+
 ### `clear_hidden_form_answers.py`
 
 Removes stale answers to conditional form questions from stored submissions.

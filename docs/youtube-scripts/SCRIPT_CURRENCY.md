@@ -1,5 +1,49 @@
 # Script currency
 
+## 2026-11-23 pass
+
+**Edited:**
+
+- **04 Fire Chief, evaluations.** A new beat of about 40 seconds after the
+  "Graded by section" quote: **Grades by evaluator**, **Download signed PDFs**,
+  **Review history**, the self-evaluation comparison and goals with target
+  dates (#4538, #4563, #4565, #4567, #4570). Production note added. Re-time
+  the chapter.
+- **05 Training Officer.** A beat of about 20 seconds on certification expiry
+  on the compliance matrix and its CSV columns (#4585). An editor note after
+  the waiver line: do not film an officer waiving their own requirements, which
+  the app now refuses (#4560).
+- **07 Secretary.** The 2026-10-04 note "There is no PDF export on minutes" was
+  wrong; replaced, with an optional **Download PDF** cue showing DRAFT on
+  unapproved minutes (#4588).
+- **12 Elections**, Chapter 16 certified results and Short 12q: production
+  notes that earlier footage lacks the identity line and report number (#4588).
+- **13 Department Store**, Chapter 4 "Opening it": a beat of about 15 seconds
+  on opening and closing automatically at the exact time (#4550), and a
+  re-shoot note on the Zelle cue, whose handle was clipped (#4573).
+- **16 Training Officer part 2.** A footage check for the goals list and the
+  self-comparison card.
+
+**Flagged, not edited:**
+
+- **06 Member guide** could show signing up to volunteer from an outreach
+  event's page (#4561), the self-evaluation comparison card members see once
+  ratings are released, and goals as a numbered list (#4563, #4565).
+- **07 Secretary**, event-request beat (about lines 201–216): the checklist's
+  four steps now tick themselves (#4561). Left because #4568 rewrites those
+  lines. Its Waiver Management chapter should say nobody creates a waiver for
+  themselves (#4560).
+- **04 Chief / 07 Secretary:** neither mentions the leave **Calendar** or
+  **Export leave records** (#4569).
+- **08 Shorts:** candidates "Who's away this month" (#4569), "Signature lines on
+  a report PDF" (#4586) and "Store payment reminders are their own email
+  choice" (#4550). Check any compliance-matrix short for the certification
+  wording (#4585).
+- **05 and 16** could mention signature lines on training-history PDFs and the
+  Member Records export (#4586).
+
+See [CHANGE_AUDIT_2026-11](../CHANGE_AUDIT_2026-11.md#change-audit-november-22--23-2026).
+
 ## 2026-11-21 pass
 
 **Edited:**

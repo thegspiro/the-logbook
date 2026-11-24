@@ -16,6 +16,38 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#4659](https://github.com/thegspiro/the-logbook/pull/4659) (branch
+`claude/friendly-babbage-2isqey`)**: Feature 06
+(Elections & ballots), pass 17 — watchdog pickup (the dedicated `/loop 30m
+/security-review` session, `session_011T1ZyyLrD5HagusgK9uDw2`, remains
+unreachable). **Branch-name deviation**, same as prior watchdog-run passes
+recorded here: this session's environment restricts pushes to its own
+assigned branch rather than a freely-chosen
+`claude/security-review-elections-ballots` name.
+
+PR #4655 (Feature 05, Finance & approvals, pass 17 — 0 fixed, 0 new
+findings) had already merged before this iteration started; row 05 marked
+✅ above.
+
+Real delta since pass 16's merge (`762f1c93a`, PR #4435), across 1155
+commits: two backend files (`elections.py`, `election_service.py`) adopt a
+new cross-cutting PDF-metadata mechanism — a non-sequential `RPT-YYYYMMDD-
+XXXX` report number and a formatted letterhead identity line — on the
+certified-results and pre-meeting-package downloads, both owner-decided
+2026-11-21 and traced end to end (no new query, no new input, no new
+unescaped render path). Two frontend files are cosmetic/test-only (an icon
+layout fix, a test-assertion-text update), plus one new, unclaimed test file
+for an unrelated popover-direction fix, all read in full. **0 fixed, 0 new
+findings.** Full write-up:
+`docs/security-review/ELEC-06-elections-ballots.md`'s **Pass 17** section.
+
+Row 06 → ✅ (pending this PR's merge); next is Feature 07 (Users &
+organizations) — re-check `list_pull_requests` fresh rather than trusting
+this note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 05, Finance & approvals, pass 17, PR #4655, merged), preserved for history</summary>
+
 **PR [#4655](https://github.com/thegspiro/the-logbook/pull/4655) (branch
 `claude/friendly-babbage-2isqey`)**: Feature 05
 (Finance & approvals), pass 17 — watchdog pickup (the dedicated `/loop 30m
@@ -43,6 +75,8 @@ Pitfall #38-class bug `finance-purchase-request-draft.spec.ts` catches).
 Row 05 → ✅ (pending this PR's merge); next is Feature 06 (Elections &
 ballots) — re-check `list_pull_requests` fresh rather than trusting this
 note.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 04, Storefront & payments, pass 17, PR #4654, merged), preserved for history</summary>
@@ -27763,7 +27797,7 @@ iteration's commit" rule.
 | 03  | Public surface & webhooks | PUB    | `api/public/*` (51 unauth routes, added pass 16), `paypal_webhook.py`, `integrations_webhook.py`, `salesforce_webhook.py`, `zeffy_webhook.py`, `shift_evaluations.py` (added pass 16)                                                                                                 | ✅     |
 | 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                                                                                                                                                                    | ✅     |
 | 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`, `endpoints/quickbooks_online.py` (8 routes; corrected from `services/quickbooks_online.py`, pass 16), `services/quickbooks_online_client.py`, `services/quickbooks_sync_service.py` (both added pass 16) | ✅     |
-| 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (76 routes, token-scoped voting), `election_service.py`, `services/voter_rules.py` (added pass 16), `services/election_attendance_service.py` (added pass 16), `services/election_defaults.py` (added pass 16)                                               | ⬜     |
+| 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (76 routes, token-scoped voting), `election_service.py`, `services/voter_rules.py` (added pass 16), `services/election_attendance_service.py` (added pass 16), `services/election_defaults.py` (added pass 16)                                               | ✅     |
 | 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`, `leave_requests.py` (9 routes, added pass 17)                                                                                                                                                                 | ⬜     |
 | 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                                                                                                                                                            | ⬜     |
 | 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`, `screening_reminder_service.py` (added pass 16)                                                                                                                                                                               | ⬜     |
@@ -27852,6 +27886,49 @@ into row 13's declared scope rather than leaving it to be rediscovered.
 ---
 
 ## Log
+
+### 2026-11-24 — Feature 05 (Finance & approvals, pass 17) merged (PR #4655); Feature 06 (Elections & ballots, pass 17): watchdog pickup, real delta (report numbers and a letterhead identity line on two PDF exports), 0 fixed, 0 new findings
+
+PR #4655 merged (`18372c492`); row 05 confirmed ✅ above. A fresh
+`list_pull_requests` (state=open) found zero `claude/security-review-*`
+heads, so this iteration continued to Step 1: row 06 (Elections & ballots)
+was the next ⬜ row.
+
+Baseline: pass 16's merge `762f1c93a` (PR #4435). Real delta across 1155
+commits: `elections.py` and `election_service.py` adopt a new
+cross-cutting PDF-metadata mechanism (`app/services/document_provenance.py`,
+`app/utils/report_number.py`) on the certified-results and pre-meeting-
+package downloads — a non-sequential `RPT-YYYYMMDD-XXXX` report number
+(drawn with `secrets.choice`, never stored or queried back) recorded on the
+existing `elections.manage`-gated audit event, and a formatted letterhead
+identity line (`department_identity`) sourced from fields already present
+on the already-org-scoped `organization` row, escaped at render time —
+both owner-decided 2026-11-21. Traced end to end rather than accepted on the
+docstring's own claim: no new query, no new client-supplied input, no new
+unescaped render path. Two frontend files are cosmetic/test-only (an icon
+layout fix; a test-assertion-text update following a field-name-
+humanization change made elsewhere), plus one new, unclaimed test file for
+an unrelated popover-direction fix — all read in full. Route count
+unchanged at 76 (re-enumerated by AST); the two touched routes are
+pre-existing and untouched in their auth/permission gating. **0 fixed, 0
+new findings** — standing findings ELEC-12, ELEC-14, ELEC-16, ELEC-40,
+ELEC-48, ELEC-49, ELEC-50/51 all re-confirmed unchanged by direct re-read.
+Full write-up: `docs/security-review/ELEC-06-elections-ballots.md`'s
+**Pass 17** section.
+
+**Completion gate:** `flake8`, `black --check` (26.10.1) and
+`isort --check-only` (9.0.2) on `app/ tests/ alembic/` all clean (via
+`python3.13`, matching CI's pins). `validate_migrations.py --strict` — 835
+revisions, single head `07abf8e6553b` (no fork this pass). `check_route_
+permissions.py --strict` — 339 routes, 0 errors/warnings. Schema docs
+already current (no model change this window). Scoped backend pytest
+(`-k "election or ballot or vote or candidate or attendance"`) — 2555
+passed, 1 pre-existing environment-only skip (`pywebpush`). `npm run
+typecheck` — 0 errors. `npm run lint` — 0 errors, 0 warnings.
+
+Row 06 → ✅ (pending this PR's merge). Next is Feature 07 (Users &
+organizations) — re-check `list_pull_requests` fresh rather than trusting
+this note.
 
 ### 2026-11-24 — Feature 03 (Public surface & webhooks, pass 17) merged (PR #4644, PUB-15 fixed); Feature 04 (Storefront & payments, pass 17): watchdog pickup, real delta (window lifecycle rules, overpayment handling, payment-report rejection, negative-price guard), 0 fixed, 0 new findings
 
