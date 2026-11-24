@@ -16,40 +16,36 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR [#4664](https://github.com/thegspiro/the-logbook/pull/4664) (branch
-`claude/friendly-babbage-2isqey`)**: Feature 08
-(Membership pipeline), pass 18 — watchdog pickup (the dedicated `/loop 30m
+**PR (branch `claude/friendly-babbage-2isqey`)**: Feature 09
+(Medical screening, PHI), pass 17 — watchdog pickup (the dedicated `/loop 30m
 /security-review` session, `session_011T1ZyyLrD5HagusgK9uDw2`, remains
-unreachable). **Branch-name deviation**, same as prior watchdog-run passes
-recorded here: this session's environment restricts pushes to its own
-assigned branch rather than a freely-chosen
-`claude/security-review-membership-pipeline` name.
+unreachable). PR number recorded in a second commit on this branch once
+known. **Branch-name deviation**, same as prior watchdog-run passes recorded
+here: this session's environment restricts pushes to its own assigned branch
+rather than a freely-chosen `claude/security-review-medical-screening` name.
 
-PR #4662 (Feature 07, Users & organizations, pass 17 — 1 fixed, USR-15,
-MED) had already merged before this iteration started; row 07 marked ✅
-above. A concurrent watchdog session's duplicate pass for the same feature
-(PR #4660, 0 fixed) was closed in #4662's favor — see that PR's own
-comment thread for the reasoning, mirroring the #4643/#4644 precedent.
+PR #4664 (Feature 08, Membership pipeline, pass 18 — 0 fixed, 0 new
+findings) had already merged before this iteration started; row 08 marked
+✅ above.
 
-Real delta since pass 17's merge (`422d7eff`, PR #4438), across 5 commits
-touching a declared file directly (1204 commits/624 non-merge in the full
-window): an applicant who edits their own email, name, or date of birth
-through a follow-up form stops being matched to that prospect record by
-those fields (ADV2-10, owner decision 2026-11-21) — a new
-`identity_edited_by_applicant_at` stamp, set only by the applicant's public
-follow-up-form submission and cleared only by a coordinator's own edit,
-gates the self-access guard's two forgeable identifiers (email, name+DOB)
-while leaving its one unforgeable one (the transfer back-link)
-unconditional. **0 fixed, 0 new findings** — traced both the stamp/clear
-write sites and the guard predicate directly against the live code, not
-the commit message. The other four commits in the window are cosmetic
-(padding, a contrast fix, a reflow tweak, a helper-function extraction with
-no behavior change). Full write-up:
-`docs/security-review/MP-08-membership-pipeline.md`'s **Pass 18** section.
+**True near-zero-delta pass.** `git diff --stat` against each of the five
+declared backend files since pass 16's merge (`8c07c62f`, PR #4439) is
+empty — not a byte changed. The only commit touching this feature's scope at
+all (`dc5c5cfe`, an app-review pass) had already fixed the one real issue in
+it (MS2-11, LOW: a view-only reader was shown Add/Edit/Delete controls the
+server would refuse — UI-only defense-in-depth, since all six write routes
+already required `.manage`), confirmed correct and unchanged. **0 fixed, 0
+new findings.** Also recorded, not acted on: a close read of
+`docs/app-review/medical-screening.md`'s MS-1 heading briefly looked like a
+stale finding (PHI columns described as plaintext) but was not — that file
+lists passes newest-first, and a later pass (Pass 4, same file) already
+closed it; the heading belongs to a superseded earlier section. Full
+write-up: `docs/security-review/MS-09-medical-screening.md`'s **Pass 17**
+section.
 
-Row 08 → ✅ (pending this PR's merge); next is Feature 09 (Medical
-screening, PHI) — re-check `list_pull_requests` fresh rather than trusting
-this note.
+Row 09 → ✅ (pending this PR's merge); next is Feature 10 (Documents &
+legal) — re-check `list_pull_requests` fresh rather than trusting this
+note.
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 07, Users & organizations, pass 17, PR #4662, merged), preserved for history</summary>
@@ -27876,7 +27872,7 @@ iteration's commit" rule.
 | 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (76 routes, token-scoped voting), `election_service.py`, `services/voter_rules.py` (added pass 16), `services/election_attendance_service.py` (added pass 16), `services/election_defaults.py` (added pass 16)                                               | ✅     |
 | 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`, `leave_requests.py` (20 routes, added pass 17; Chief routing, approver cover, escalation, calendar/export added pass 17)                                                                                      | ✅     |
 | 08  | Membership pipeline       | MP     | `membership_pipeline.py` (64 routes), `membership_pipeline_service.py`, `models/membership_pipeline.py` (`identity_edited_by_applicant_at`, added pass 18)                                                                                                                            | ✅     |
-| 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`, `screening_reminder_service.py` (added pass 16)                                                                                                                                                                               | ⬜     |
+| 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`, `screening_reminder_service.py` (added pass 16)                                                                                                                                                                               | ✅     |
 | 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                                                                                                                                                          | ⬜     |
 | 11  | Inventory                 | INV    | `endpoints/inventory.py` (7089 L), `inventory_service.py`                                                                                                                                                                                                                             | ⬜     |
 | 12  | Facilities                | FAC    | `endpoints/facilities.py` (4394 L), `facilities_service.py`                                                                                                                                                                                                                           | ⬜     |
@@ -27962,6 +27958,8 @@ into row 13's declared scope rather than leaving it to be rediscovered.
 ---
 
 ## Log
+
+### 2026-11-24 — Feature 08 (Membership pipeline, pass 18) merged (PR #4664); Feature 09 (Medical screening, PHI, pass 17): watchdog pickup, true near-zero-delta pass, 0 fixed, 0 new findings; MS2-11 (view/manage UI gate, app-review's own fix) re-confirmed correct
 
 ### 2026-11-24 — Feature 05 (Finance & approvals, pass 17) merged (PR #4655); Feature 06 (Elections & ballots, pass 17): watchdog pickup, real delta (report numbers and a letterhead identity line on two PDF exports), 0 fixed, 0 new findings
 

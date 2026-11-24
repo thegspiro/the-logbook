@@ -1,6 +1,96 @@
 # Security Review — Medical Screening
 
-**Prefix:** `MS` · **Iteration:** 9 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-16 (pass 6), 2026-10-06 (pass 7), 2026-10-13 (pass 8), 2026-10-15 (pass 9, PR [#3256](https://github.com/thegspiro/the-logbook/pull/3256) — corrected here from "(this PR)", which pass 9's own section never filled in after merge), 2026-10-18 (pass 10, PR [#3427](https://github.com/thegspiro/the-logbook/pull/3427)), 2026-10-23 (pass 11, PR [#3577](https://github.com/thegspiro/the-logbook/pull/3577)), 2026-10-25 (pass 12, PR [#3711](https://github.com/thegspiro/the-logbook/pull/3711)), 2026-10-28 (pass 13, PR [#3813](https://github.com/thegspiro/the-logbook/pull/3813)), 2026-11-01 (pass 14, PR [#3911](https://github.com/thegspiro/the-logbook/pull/3911) — corrected here from "(this PR)"), 2026-11-06 (pass 15, PR [#4098](https://github.com/thegspiro/the-logbook/pull/4098)), 2026-11-19 (pass 16) · **PR:** [#1816](https://github.com/thegspiro/the-logbook/pull/1816) (pass 1), [#1952](https://github.com/thegspiro/the-logbook/pull/1952) (pass 2), [#2180](https://github.com/thegspiro/the-logbook/pull/2180) (pass 3), [#2409](https://github.com/thegspiro/the-logbook/pull/2409) (pass 4), [#2557](https://github.com/thegspiro/the-logbook/pull/2557) (pass 5), [#2608](https://github.com/thegspiro/the-logbook/pull/2608) (pass 6) — corrected here from "(this PR)", which pass 6's own section never filled in after merge, [#2957](https://github.com/thegspiro/the-logbook/pull/2957) (pass 7) — likewise never filled in after merge, corrected here, [#2978](https://github.com/thegspiro/the-logbook/pull/2978) (pass 8) — also never filled in after merge; found via its own PR title ("security(medical-screening): 0 fixes, 1 flagged (MS-15)") rather than assumed, [#3256](https://github.com/thegspiro/the-logbook/pull/3256) (pass 9), [#3427](https://github.com/thegspiro/the-logbook/pull/3427) (pass 10), [#3577](https://github.com/thegspiro/the-logbook/pull/3577) (pass 11), [#3711](https://github.com/thegspiro/the-logbook/pull/3711) (pass 12), [#3813](https://github.com/thegspiro/the-logbook/pull/3813) (pass 13), [#3911](https://github.com/thegspiro/the-logbook/pull/3911) (pass 14), [#4098](https://github.com/thegspiro/the-logbook/pull/4098) (pass 15), pass 16 (this PR)
+**Prefix:** `MS` · **Iteration:** 9 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-16 (pass 6), 2026-10-06 (pass 7), 2026-10-13 (pass 8), 2026-10-15 (pass 9, PR [#3256](https://github.com/thegspiro/the-logbook/pull/3256) — corrected here from "(this PR)", which pass 9's own section never filled in after merge), 2026-10-18 (pass 10, PR [#3427](https://github.com/thegspiro/the-logbook/pull/3427)), 2026-10-23 (pass 11, PR [#3577](https://github.com/thegspiro/the-logbook/pull/3577)), 2026-10-25 (pass 12, PR [#3711](https://github.com/thegspiro/the-logbook/pull/3711)), 2026-10-28 (pass 13, PR [#3813](https://github.com/thegspiro/the-logbook/pull/3813)), 2026-11-01 (pass 14, PR [#3911](https://github.com/thegspiro/the-logbook/pull/3911) — corrected here from "(this PR)"), 2026-11-06 (pass 15, PR [#4098](https://github.com/thegspiro/the-logbook/pull/4098)), 2026-11-19 (pass 16, PR [#4439](https://github.com/thegspiro/the-logbook/pull/4439)), 2026-11-24 (pass 17, watchdog pickup) · **PR:** [#1816](https://github.com/thegspiro/the-logbook/pull/1816) (pass 1), [#1952](https://github.com/thegspiro/the-logbook/pull/1952) (pass 2), [#2180](https://github.com/thegspiro/the-logbook/pull/2180) (pass 3), [#2409](https://github.com/thegspiro/the-logbook/pull/2409) (pass 4), [#2557](https://github.com/thegspiro/the-logbook/pull/2557) (pass 5), [#2608](https://github.com/thegspiro/the-logbook/pull/2608) (pass 6) — corrected here from "(this PR)", which pass 6's own section never filled in after merge, [#2957](https://github.com/thegspiro/the-logbook/pull/2957) (pass 7) — likewise never filled in after merge, corrected here, [#2978](https://github.com/thegspiro/the-logbook/pull/2978) (pass 8) — also never filled in after merge; found via its own PR title ("security(medical-screening): 0 fixes, 1 flagged (MS-15)") rather than assumed, [#3256](https://github.com/thegspiro/the-logbook/pull/3256) (pass 9), [#3427](https://github.com/thegspiro/the-logbook/pull/3427) (pass 10), [#3577](https://github.com/thegspiro/the-logbook/pull/3577) (pass 11), [#3711](https://github.com/thegspiro/the-logbook/pull/3711) (pass 12), [#3813](https://github.com/thegspiro/the-logbook/pull/3813) (pass 13), [#3911](https://github.com/thegspiro/the-logbook/pull/3911) (pass 14), [#4098](https://github.com/thegspiro/the-logbook/pull/4098) (pass 15), [#4439](https://github.com/thegspiro/the-logbook/pull/4439) (pass 16) — corrected here from "(this PR)"
+
+---
+
+## Pass 17 (2026-11-24, watchdog pickup) — true near-zero-delta pass: all five declared backend files byte-identical to pass 16; the one real change (MS2-11, a view/manage UI gating fix) already landed and already correct, via the app-review rotation, not this one; 0 new findings; MS-15 re-confirmed OPEN, unchanged
+
+**Step 0.** A fresh `list_pull_requests` (state `open`) returned 0 results. PR
+#4664 (Feature 08, Membership pipeline, pass 18) had already merged with no
+open rotation PR behind it; `ListAgents` confirmed the dedicated `/loop 30m
+/security-review` session (`session_011T1ZyyLrD5HagusgK9uDw2`) still
+unreachable. Row 09 (Medical screening, PHI) was the next `⬜` row on a
+freshly pulled `main`.
+
+**Scope.** Baseline: pass 16's merge, `8c07c62f` (PR #4439). `git diff --stat
+8c07c62f..HEAD` against each of the five declared backend files
+(`medical_screening.py`, `medical_screening_service.py`,
+`screening_reminder_service.py`, `models/medical_screening.py`,
+`schemas/medical_screening.py`) is **empty** — not a byte changed in any of
+them. A sweep for any new unclaimed medical/screening-named file
+(`git log --no-merges --diff-filter=A -- '*medical*' '*screening*'` over the
+same range) found none.
+
+**The only commit touching this feature's scope at all, `dc5c5cfe` (app-review
+B1, pass 6), already landed and was read in full rather than trusted from its
+own message:**
+
+- **MS2-11 (LOW, already fixed by that pass)** — `MedicalScreeningPage.tsx`
+  showed every `.view` holder the Add Requirement, Add Record, and each row's
+  Edit/Delete controls, although all six corresponding routes require
+  `.manage` server-side (confirmed unchanged in `medical_screening.py` — every
+  write route still gates on `require_permission("medical_screening.manage")`).
+  A view-only officer could fill in a form the server would then refuse. The
+  fix reads `useAuthStore((state) => state.checkPermission('medical_screening.manage'))`
+  once and conditionally renders all six controls on it — read the diff
+  directly: this is UI-only defense-in-depth (the backend gate was already
+  correct and unchanged), not a new server-side check, and it introduces no
+  new permission string or OR-gate to re-verify. `MedicalScreeningPage.manage.test.tsx`
+  (new, 130 lines) asserts both view-only cases; re-run clean this pass.
+- The same commit's two doc-only fixes (MS2-9, MS2-10 — stale claims in
+  `medicalScreeningServices.ts`'s comment and the wiki about reminders not
+  being wired) touch no code this feature's checklist covers.
+
+**All 16 routes re-enumerated by AST**, unchanged from pass 13–16: same count,
+same `Depends`/`require_permission` arguments.
+
+**Standing items re-verified, not re-derived:**
+
+- **MS-14** (narrative tier, `medical_screening.view_details`) — unchanged, RESOLVED.
+- **MS-15** (compliance roster unbounded, LOW, FLAGGED, same class as MS-6/
+  FIN-9/ELEC-12/USR-5/MP-10/DOC-9) — `get_compliance_roster` and its
+  `list_requirements`/`list_records` calls re-read directly; still
+  `limit=None`. Re-confirmed OPEN.
+- **MS-18** (screening type, requirement link, status all encrypted) — unchanged, RESOLVED.
+
+**A near-miss worth recording, not a finding.** `docs/app-review/medical-screening.md`
+lists `provider_name`/`result_summary`/`result_data`/`notes` as plaintext
+under an `MS-1 — 🚩 FLAGGED (unchanged)` heading that, read in isolation,
+looks live. Checking the model directly (`models/medical_screening.py`)
+first — all four are `EncryptedText`/`EncryptedJSON`, with inline comments
+naming "MS-1" — showed that claim false before touching the doc. Reading the
+whole file (it lists passes **newest first**) resolved it: that heading
+belongs to **Pass 1–3** (2026-08-06/08-09), superseded by **Pass 4**
+(2026-08-09, same day)'s own "MS-1 closed: PHI encrypted at rest" section
+sitting above it in the file, and the pass-6 summary at the top correctly
+says "every earlier open item is resolved." No correction needed; recorded
+here so a future pass checks a multi-section app-review file's newest
+section before reading any heading inside it as current.
+
+**0 fixed, 0 new findings this pass.** Every real change in scope was already
+correct and already landed by a different review stream; this pass's own
+contribution is confirming that directly rather than trusting the commit
+message.
+
+### Completion gate (pass 17)
+
+| Check                                                                    | Result                                                           |
+| ------------------------------------------------------------------------ | ---------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/` (7.5.0, CI's pin)                          | ✅ 0 violations                                                  |
+| `black --check app/ tests/ alembic/` (26.10.1, CI's pin)                 | ✅ 3498 files unchanged                                          |
+| `isort --check-only app/ tests/ alembic/` (9.0.2, CI's pin)              | ✅ clean                                                         |
+| `python3 scripts/validate_migrations.py --strict`                        | ✅ 836 revisions, single head `241c1cc27313`                     |
+| `python3 scripts/check_route_permissions.py --strict`                    | ✅ 339 routes, 0 errors, 0 warnings                              |
+| `pytest tests/ -q -k "medical_screening or medical_screen or screening"` | ✅ 265 passed, 1 pre-existing environment-only skip (`py_vapid`) |
+| `cd frontend && npm run typecheck`                                       | ✅ 0 errors                                                      |
+| `cd frontend && npm run lint`                                            | ✅ 0 errors, 0 warnings                                          |
+| `npx vitest run src/modules/medical-screening`                           | ✅ 88 passed (16 files, up from 85/15 at pass 16)                |
+
+Backend linters run under `/usr/local/bin/python3.13`, matching CI's
+interpreter and pinned versions exactly (verified `sys.version` before
+trusting the result, per this rotation's own recorded lesson about a sandbox
+`python3` resolving to an older interpreter).
 
 ---
 
