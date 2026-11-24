@@ -5907,9 +5907,11 @@ owner.
 
 Still open, each the owner's call:
 
-- The member response still carries the cohort's creator id
-  (`created_by`). It is not displayed, but it is sent. The cohort's `notes`
-  are no longer sent to a roster member (stripped 2026-11-04,
+- ~~The member response still carries the cohort's creator id
+  (`created_by`). It is not displayed, but it is sent.~~ ✅ **Resolved
+  2026-11-23.** `created_by` and `generated_by` are blanked for a roster
+  member (`_build_detail`, `tests/test_course_cohort.py`). The cohort's
+  `notes` are no longer sent to a roster member (stripped 2026-11-04,
   `course_cohorts.py`): they are the training officers' own remarks.
 - `is_roster_member` admits a withdrawn member, while `/mine` lists only
   active ones.
@@ -9288,8 +9290,10 @@ single-page form. What it changes, and what it leaves:
 - **A single session created from Training Admin is announced to chat
   integrations.** It is created through `POST /events`, which tells connected
   chat integrations (Slack, Discord, Teams) about a new event; the old
-  `POST /training/sessions` path did not. A series, through
-  `/events/recurring`, is not announced, from either screen.
+  `POST /training/sessions` path did not. ~~A series, through
+  `/events/recurring`, is not announced, from either screen.~~ ✅ Since
+  2026-11-23 a series is announced once, by its first occurrence
+  (`tests/test_recurring_event_chat_announcement.py`).
 - **On a finalized event, only "Counts toward attendance" can change among
   the training details.** The rest of Training Info is drawn locked; reopen
   attendance to change it. The event's own fields keep the finalized-event
@@ -9361,6 +9365,20 @@ single-page form. What it changes, and what it leaves:
   confirms.~~ **Resolved 2026-11-11:** the header leaves Create Session out
   for a viewer without `events.manage`, as the approved mockup draws it, and
   the Sessions tab still shows its notice naming the permission.
+- **A training manager can read a draft Training event's session, but not
+  the draft itself** (2026-11-23). `GET /training/sessions/by-event/{id}` now
+  answers `training.manage` for a draft whose type is Training, so the
+  session no longer reads as "No training details" to the officer who
+  administers it. **Default taken:** `GET /events/{id}` and the events list
+  still hide every draft from a caller without `events.manage`, as ADV-5 set
+  them, so a training manager without it cannot open a draft Training event
+  to see that session. Showing them the draft is a wider visibility change,
+  left for an owner decision (`tests/test_draft_event_side_paths.py`).
+- **The training-session calendar lists draft events' sessions.**
+  `GET /training/sessions/calendar` filters cancelled events but not drafts,
+  so any member can see a draft Training event's title and time there, which
+  `GET /events/{id}` hides from them (ADV-5). Found on 2026-11-23 and left
+  for its own change, since it alters what the calendar shows.
 
 ## Events — Attendance-Lock Refusals (2026-09-30)
 
@@ -9391,7 +9409,7 @@ same screen, and left as they are:
   start or end with seconds, or one in the hour repeated when clocks fall back,
   can move by those seconds or by an hour on its first save. A finalized
   event's times are locked, never resent, and not checked by the form either.
-- **A series save from an open occurrence can be refused for a field nobody
+- ~~**A series save from an open occurrence can be refused for a field nobody
   touched.** "This and all future events" writes the edited occurrence's type,
   category and check-in rules onto every later occurrence,
   and moves every occurrence when the form's restatement of its times, which
@@ -9407,7 +9425,15 @@ same screen, and left as they are:
   location, capacity or RSVP deadline) clears that field on later open
   occurrences too, and a later finalized occurrence that has a category refuses
   the save. A save from a finalized occurrence leaves all of these fields out
-  and is not affected.
+  and is not affected.~~
+  ✅ **Resolved 2026-11-23.** The edit page now sends a series save only the
+  fields that differ from the occurrence it loaded, and the three timing
+  fields together or not at all, so an untouched field neither refuses the
+  save nor clears later occurrences (`onlyChangedSeriesFields`,
+  `EventEditPage.test.tsx`). **Still true:** a stored start or end with
+  seconds differs from the form's minute, so it is sent and moves the series
+  by those seconds, as above; and training details are sent as the form has
+  them.
 - ~~**Reminder and validation markers an earlier series save copied are still
   there.**~~ ✅ **Resolved (owner decision 2026-11-01: clear with a migration,
   based on each row's schedule; built 2026-11-05).** Migration

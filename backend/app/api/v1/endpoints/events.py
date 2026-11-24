@@ -131,6 +131,7 @@ from app.services.event_service import (
     BULK_ADD_MAX_SIZE,
     DEFAULT_ALLOWED_RSVP_STATUSES,
     PHASE_GATE_PREFIX,
+    EventNotFoundError,
     EventService,
     FinalizeOutcome,
     SeriesPhaseGateWarning,
@@ -898,6 +899,32 @@ async def list_missed_mandatory_events(
     return await _list_items(db, str(current_user.organization_id), rows)
 
 
+def _announce_new_event(
+    background_tasks: BackgroundTasks, organization_id: Any, event: Event
+) -> None:
+    """Fan a new event out to the org's chat integrations (Slack/Discord/
+    Teams) and webhooks after the response — best-effort, in its own DB
+    session. A series is announced once, by its first occurrence."""
+    event_type_value = (
+        event.event_type.value
+        if hasattr(event.event_type, "value")
+        else event.event_type
+    )
+    background_tasks.add_task(
+        notify_entity_created,
+        str(organization_id),
+        "event",
+        {
+            "title": event.title,
+            "event_type": event_type_value,
+            "start_time": (
+                event.start_datetime.isoformat() if event.start_datetime else "TBD"
+            ),
+            "location": event.location or "",
+        },
+    )
+
+
 @router.post("", response_model=EventResponse, status_code=status.HTTP_201_CREATED)
 async def create_event(
     event_data: EventCreate,
@@ -938,26 +965,7 @@ async def create_event(
                 db, current_user, [event], event_data.training_details
             )
 
-        # Fan the new event out to the org's chat integrations (Slack/Discord/
-        # Teams) after the response — best-effort, runs in its own DB session.
-        event_type_value = (
-            event.event_type.value
-            if hasattr(event.event_type, "value")
-            else event.event_type
-        )
-        background_tasks.add_task(
-            notify_entity_created,
-            str(current_user.organization_id),
-            "event",
-            {
-                "title": event.title,
-                "event_type": event_type_value,
-                "start_time": (
-                    event.start_datetime.isoformat() if event.start_datetime else "TBD"
-                ),
-                "location": event.location or "",
-            },
-        )
+        _announce_new_event(background_tasks, current_user.organization_id, event)
 
         return _build_event_response(event)
     except ValueError as e:
@@ -1971,6 +1979,10 @@ async def update_future_events(
             "message": f"Successfully updated {updated_count} event(s)",
             "updated_count": updated_count,
         }
+    except EventNotFoundError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Event not found"
+        )
     except PermissionError as e:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, detail=safe_error_detail(e)
@@ -4036,6 +4048,7 @@ async def delete_event_template(
 )
 async def create_recurring_event(
     recurring_data: RecurringEventCreate,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("events.manage")),
 ):
@@ -4063,6 +4076,15 @@ async def create_recurring_event(
     if recurring_data.training_details is not None:
         await _audit_training_details_created(
             db, current_user, events, recurring_data.training_details
+        )
+
+    # Once per series, not per occurrence: a year of weekly drills would
+    # otherwise post fifty-two messages to the department's channels.
+    if events:
+        _announce_new_event(
+            background_tasks,
+            current_user.organization_id,
+            min(events, key=lambda e: e.start_datetime),
         )
 
     return [_build_event_response(event) for event in events]

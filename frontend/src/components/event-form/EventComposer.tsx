@@ -267,7 +267,9 @@ export const EventComposer: React.FC<EventComposerProps> = ({
       {storedTraining
         ? 'Training uses this step-by-step form. Pick another type to use the single-page form; your changes carry over.'
         : !detailsStored
-          ? 'Training uses the step-by-step form. Your changes carry over, and Training Info opens with No course yet; saving adds the training details.'
+          ? // Defaults attach no session (_plan_new_session in the backend), so
+            // the hint says what a save on them does rather than promising one.
+            "Training uses the step-by-step form. Your changes carry over, and Training Info opens with No course yet. Saving adds training details only if you set some there; left as they are, attendance is credited under the event's title as Continuing Education."
           : editing.trainingAccess === 'readonly'
             ? 'Training uses the step-by-step form. Your changes carry over. The training details could not be loaded, so saving leaves them as they are.'
             : 'Training uses the step-by-step form. Your changes carry over, and Training Info opens on the training details this event kept from when it was Training; saving changes them.'}
