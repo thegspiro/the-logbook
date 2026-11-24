@@ -1,6 +1,208 @@
 # Security Review 11 — Inventory
 
-**Prefix:** `INV` · **Iteration:** 11 · **Reviewed:** 2026-08-28 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-16 (pass 6), 2026-10-06 (pass 7), 2026-10-13 (pass 8), 2026-10-15 (pass 9), 2026-10-19 (pass 10), 2026-10-23 (pass 11), 2026-10-26 (pass 12), 2026-10-29 (pass 13), 2026-11-01 (pass 14), 2026-11-06 (pass 15, watchdog pickup), 2026-11-19 (pass 16, watchdog pickup) · **PR:** [#1957](https://github.com/thegspiro/the-logbook/pull/1957) (pass 2), [#2188](https://github.com/thegspiro/the-logbook/pull/2188) (pass 3), [#2422](https://github.com/thegspiro/the-logbook/pull/2422) (pass 4), [#2561](https://github.com/thegspiro/the-logbook/pull/2561) (pass 5), [#2616](https://github.com/thegspiro/the-logbook/pull/2616) (pass 6), [#2966](https://github.com/thegspiro/the-logbook/pull/2966) (pass 7), [#3166](https://github.com/thegspiro/the-logbook/pull/3166) (pass 8), [#3272](https://github.com/thegspiro/the-logbook/pull/3272) (pass 9), [#3432](https://github.com/thegspiro/the-logbook/pull/3432) (pass 10), [#3580](https://github.com/thegspiro/the-logbook/pull/3580) (pass 11), [#3738](https://github.com/thegspiro/the-logbook/pull/3738) (pass 12), [#3823](https://github.com/thegspiro/the-logbook/pull/3823) (pass 13), [#3919](https://github.com/thegspiro/the-logbook/pull/3919) (pass 14), [#4106](https://github.com/thegspiro/the-logbook/pull/4106) (pass 15), pass 16 (this PR)
+**Prefix:** `INV` · **Iteration:** 11 · **Reviewed:** 2026-08-28 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-16 (pass 6), 2026-10-06 (pass 7), 2026-10-13 (pass 8), 2026-10-15 (pass 9), 2026-10-19 (pass 10), 2026-10-23 (pass 11), 2026-10-26 (pass 12), 2026-10-29 (pass 13), 2026-11-01 (pass 14), 2026-11-06 (pass 15, watchdog pickup), 2026-11-19 (pass 16, watchdog pickup), 2026-11-24 (pass 17, watchdog pickup) · **PR:** [#1957](https://github.com/thegspiro/the-logbook/pull/1957) (pass 2), [#2188](https://github.com/thegspiro/the-logbook/pull/2188) (pass 3), [#2422](https://github.com/thegspiro/the-logbook/pull/2422) (pass 4), [#2561](https://github.com/thegspiro/the-logbook/pull/2561) (pass 5), [#2616](https://github.com/thegspiro/the-logbook/pull/2616) (pass 6), [#2966](https://github.com/thegspiro/the-logbook/pull/2966) (pass 7), [#3166](https://github.com/thegspiro/the-logbook/pull/3166) (pass 8), [#3272](https://github.com/thegspiro/the-logbook/pull/3272) (pass 9), [#3432](https://github.com/thegspiro/the-logbook/pull/3432) (pass 10), [#3580](https://github.com/thegspiro/the-logbook/pull/3580) (pass 11), [#3738](https://github.com/thegspiro/the-logbook/pull/3738) (pass 12), [#3823](https://github.com/thegspiro/the-logbook/pull/3823) (pass 13), [#3919](https://github.com/thegspiro/the-logbook/pull/3919) (pass 14), [#4106](https://github.com/thegspiro/the-logbook/pull/4106) (pass 15), [#4445](https://github.com/thegspiro/the-logbook/pull/4445) (pass 16), pass 17 (this PR)
+
+---
+
+## Pass 17 (2026-11-24) — watchdog pickup, real delta (CSV-import dry-run preview, a new "never inspected" maintenance view, 3 already-shipped concurrency fixes), 0 fixed, 0 new findings, route-count correction, **documentation correction: INV-16/INV-17 wrongly re-opened by pass 16, re-confirmed RESOLVED**
+
+**Watchdog pickup.** The dedicated `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) remains unreachable (`ListAgents`, "No
+reachable agents"). A fresh check (`gh api search/issues
+q='repo:thegspiro/the-logbook is:pr is:open head:claude/security-review'` and
+`list_pull_requests`) found no open PR with a `claude/security-review-*`
+head — PR #4670 (Feature 10, Documents & legal, pass 17) had just merged, and
+row 11 (Inventory) was the next `⬜` in `PROGRESS.md`'s rotation table.
+
+**Branch-name deviation:** this cloud session's environment only allows
+pushing to its own pre-assigned branch (`claude/friendly-babbage-xstbnj`), not
+a freely-chosen `claude/security-review-inventory` name — same deviation as
+prior watchdog passes.
+
+Baseline `ff815adf9` (PR #4445's merge, pass 16), confirmed an ancestor of
+`origin/main` via `git merge-base --is-ancestor`.
+
+### Route count correction (two errors, not one, now resolved)
+
+AST-enumerating the five scope files (`inventory.py`, `inventory_kiosk.py`,
+`inventory_last_seen.py`, `inventory_nfc.py`, `labels.py`) against **pass
+16's own merge commit** (`ff815adf9`) gives **198** routes
+(151 + 4 + 2 + 29 + 12), not the **199** pass 16's text claimed for that exact
+commit. Pass 16's "150 + 4 + 2 + 29 + 3 + 11" breakdown has six numbers for
+five files — the stray `3` has no file behind it, so pass 16's own count was
+off by one at the moment it was written, not merely "199, unchanged since
+pass 15" as it asserted.
+
+Against current `origin/main`, the same AST walk gives **199**
+(152 + 4 + 2 + 29 + 12) — one more than the corrected baseline of 198, for a
+real reason: a new route, `GET /maintenance/never-inspected`
+(`inventory.py`), added this window (see below). So the count did change
+since pass 16, by exactly the route pass 16 could not have seen; it was pass
+16's arithmetic, not its "199" total, that was wrong. All 199 routes carry a
+recognized auth dependency (`get_current_user`, `require_permission`, or
+`require_all_permissions`), confirmed by walking every decorated function's
+signature/body by AST rather than sampling.
+
+### Real delta reviewed in full
+
+Tree diff `ff815adf9..origin/main` (not path-scoped `git log`, since several
+recent passes in this rotation have hit disconnected-history artifacts on
+this repo — confirmed clean here, but the tree-diff method avoids the
+question entirely) touches `inventory.py` (+98/−8) and `inventory_service.py`
+(+99/−17) in scope, plus 26 frontend files (+734/−176, below).
+
+1. **CSV import gets a `dry_run` preview (workflow review W43-5) — correct,
+   and factored to prevent the preview and the real import from drifting.**
+   `InventoryService.create_item`'s pre-write checks were extracted verbatim
+   into a new `validate_new_item(organization_id, item_data) -> Optional[str]`
+   that reads but writes nothing (including the XC-1 `_assert_item_fks_in_org`
+   org-validation call); `create_item` now calls it first. `POST
+/items/import?dry_run=true` runs each row through this same method instead
+   of `create_item`, so a row the real import would refuse is flagged in the
+   preview by the same logic, not a reimplementation of it. Three things
+   checked directly rather than assumed from the diff: (a) the audit event
+   (`inventory_items_imported`) is gated `if imported > 0 and not dry_run` —
+   a dry run never writes an audit record for something that didn't happen;
+   (b) `dry_run`'s FastAPI parameter uses `Annotated[bool, Query(...)] = False`
+   rather than a bare `= False` default — the module's own code comment
+   explains why (a direct Python call, as the import tests make, would
+   otherwise receive the `Query` sentinel object, which is truthy, and run a
+   silent dry run) and this is the correct fix for that specific footgun; (c)
+   `_repeated_in_file` guards the dry run only — a within-file duplicate
+   serial/asset-tag that the real import would still catch at its first
+   not-yet-committed row, which the dry run can't rely on since it writes
+   nothing.
+2. **`GET /maintenance/never-inspected` (workflow review W42-6) — new route,
+   correctly gated and org-scoped.** `require_permission("inventory.view")`,
+   and the backing `InventoryService.get_never_inspected` filters
+   `InventoryItem.organization_id == str(organization_id)` directly — no
+   client-supplied id anywhere in the query, so there is no by-id/XC-3
+   surface to validate. `limit` is `Query(200, ge=1, le=500)`, so the list is
+   bounded (checklist dimension 6).
+3. **Three already-shipped concurrency-correctness fixes, tracked as INV2-4/
+   INV2-5/INV2-6 in `docs/KNOWN_LIMITATIONS.md`, re-verified sound against the
+   live code rather than taken on the commit message:**
+   - **INV2-6** — `record_lot_recall`'s existing-active-recall check now reads
+     under `.with_for_update()` too (`inventory_service.py:~2604`), not only
+     the row it locks — the capacity-check-needs-the-count-locked-too shape
+     CLAUDE.md Pitfall #27 names. Two officers recalling the same lot at once
+     now serialize instead of both succeeding.
+   - **INV2-5** — `_consume_from_lots` and the write-off repay path add
+     `.execution_options(populate_existing=True)` to their `FOR UPDATE`
+     reads (`~4437`, `~4594`), so a lot this session already loaded earlier in
+     the same transaction is refreshed to the committed row the lock saw,
+     rather than decremented/credited from a stale cached quantity.
+   - **INV2-4** — `update_reorder_request` calls `reject_null_for_required(
+reorder, data)` immediately after the row-locked fetch and before any
+     field is read, so an explicit `null` on a required field (status,
+     quantity) is refused with a clear message instead of reaching the
+     workflow/floor checks as a falsy/`None` value and being answered with the
+     DB driver's own error text.
+4. **Impact-plan PDF export now carries a report number and the department's
+   letterhead identity line** (`report_number_for`/`department_identity`,
+   the owner's 2026-11-21 cross-cutting letterhead decision). Both helpers
+   were already re-verified in this lap's Documents & legal pass 17
+   (`report_number_for` lives in `document_provenance.py`, confirmed
+   shared infrastructure there). `department_identity(organization)` only
+   reads fields off the `organization` object the caller already holds
+   org-scoped (`org` here is the same org-scoped fetch pass 16 already
+   confirmed for the `logo` field) — no new query, no new exposure. The
+   export's audit event now also logs `report_number` alongside the existing
+   `{"format": "pdf"}` — an id, not new PII, consistent with Pitfall #33.
+
+### Correction: INV-16 and INV-17 — wrongly reopened by pass 16; re-confirmed RESOLVED
+
+Pass 16's text stated INV-16 and INV-17 were "Re-confirmed OPEN/FLAGGED,
+unchanged (owner decision pending)". That is wrong, and contradicts both this
+file's own pass 8 (2026-10-13: **"INV-16 — ✅ FIXED, confirmed sound"**,
+**"INV-17 — ✅ FIXED, confirmed sound"**) and `docs/KNOWN_LIMITATIONS.md`'s
+own entries — **"Resolved (owner decision, docket INV-16, 2026-10-11)"** and
+**"Resolved (owner decision, docket INV-17, 2026-10-11)"**, each with a named
+fix and a guard test. Passes 9 through 15 of this very file never re-flagged
+either one — only INV-22 appears in their standing-findings tables — so pass
+16 is the one pass that regressed, five weeks after the fact, apparently by
+reusing this file's much earlier (pre-pass-8) FLAGGED language rather than
+checking the current record.
+
+Re-verified directly against current code, not against either file's prior
+prose:
+
+- **INV-16** — `update_reorder_request` (`inventory_service.py:11107`) still
+  reads the row with `SELECT ... FOR UPDATE` + `populate_existing=True`
+  (serializing a plain edit against a concurrent transition/receipt) and still
+  refuses a `quantity_requested` below the committed `quantity_received`. The
+  code comment at the read even names the finding: `# INV-16: lock the row so
+this edit serializes...`. `tests/test_inventory_reorder_edit_lock.py` exists
+  and passed in this pass's scoped run.
+- **INV-17** — maintenance/inspection completion still routes through
+  `_apply_completion_to_item` (`~5325`) and the `open_only` query parameter
+  (`~5627`) added by the 2026-10-11/12 owner decisions, rather than always
+  creating a new record. `tests/test_inventory_maintenance_close_open.py`
+  exists and passed in this pass's scoped run.
+
+**Both are RESOLVED, not OPEN.** This pass corrects the record rather than
+re-deriving a fix for something already fixed. **INV-22** remains the sole
+standing finding (unbounded `.all()` in `get_fulfillment_options`/
+`get_requestable_categories`, owner-accepted 2026-10-05) — re-confirmed
+unaffected: neither function appears in the `inventory_service.py` diff this
+window (whose only touches are the four items above).
+
+### Frontend delta
+
+26 files, +734/−176 — two substantive pieces, both read in full, plus test
+files:
+
+- `InventoryMaintenancePage.tsx` adds a "Never Inspected" tab backed by the
+  new route, with its own category-name lookup (`||`, not `??`, for the
+  fallback — Pitfall #1) and a reason string computed client-side from fields
+  the item/category response already carries (no new data exposed).
+- `EquipmentCheckReportsPage.tsx` adds a "signature lines" export checkbox
+  that appends one query parameter to an existing, already-authorized export
+  URL. This page's backend (`equipment_check.py`) belongs to Feature 14
+  (Equipment check & shifts, row 14, not yet due in the rotation) — out of
+  this feature's declared backend scope, so the backend side of this param is
+  left to that feature's own pass; checked here only for this feature's own
+  boundary (no risky client-side pattern, no secret in the URL).
+
+Swept the full diff for every pattern checklist dimensions 4–5 flag —
+`dangerouslySetInnerHTML`, `window.confirm`/`alert`/`prompt`, `localStorage.`,
+a hand-rolled `Authorization:` header, a new `axios.create`/bare `fetch(`,
+`.toLocaleString`/`.toLocaleDateString`/`.toLocaleTimeString`, a `date-fns`
+import, `eval(`, raw `innerHTML` — **zero** matches across all 734 added
+lines.
+
+### Findings
+
+**0 fixed, 0 new findings.** Every real change this pass reviewed for the
+first time was already correct when shipped (same shape as pass 16). The one
+action this pass took was correcting pass 16's own documentation regression.
+
+| ID     | Status                                                         |
+| ------ | -------------------------------------------------------------- |
+| INV-16 | **Corrected to RESOLVED** (was wrongly marked OPEN by pass 16) |
+| INV-17 | **Corrected to RESOLVED** (was wrongly marked OPEN by pass 16) |
+| INV-22 | Re-confirmed OPEN, unchanged (owner-accepted)                  |
+
+### Schema & migration notes
+
+No migration in this feature's scope since pass 16 — `backend/app/models/inventory.py`
+has zero diff against baseline. 52 migration files landed repo-wide in this
+window, none touching an inventory table. `validate_migrations.py --strict`
+confirms a single head (see completion gate below).
+
+### Completion gate
+
+| Check                                                   | Result                                                            |
+| ------------------------------------------------------- | ----------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                           | ✅ 0 violations                                                   |
+| `black --check app/ tests/ alembic/`                    | ✅ 3507 files unchanged                                           |
+| `isort --check-only app/ tests/ alembic/`               | ✅ clean                                                          |
+| `python3 scripts/validate_migrations.py --strict`       | ✅ single head `66f64aabdda2`, 838 revisions                      |
+| `python3 scripts/check_route_permissions.py --strict`   | ✅ 339 routes, 0 errors, 0 warnings                               |
+| `pytest tests/ -k "inventory or nfc or kiosk or label"` | ✅ 2158 passed, 1 pre-existing environment-only skip (`py_vapid`) |
+| `cd frontend && npm run typecheck`                      | ✅ 0 errors                                                       |
+| `cd frontend && npm run lint`                           | ✅ 0 errors, 0 warnings                                           |
+| `npx vitest run src/modules/inventory`                  | ✅ 2009 passed (129 files)                                        |
 
 ---
 
