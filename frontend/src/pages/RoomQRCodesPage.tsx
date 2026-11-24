@@ -539,11 +539,11 @@ export default function RoomQRCodesPage() {
           </div>
           <div className="page-header-actions flex flex-wrap items-center gap-2">
             {canViewReaders && (
-              <Link to="/locations/card-readers" className="btn-secondary flex items-center gap-2 text-sm">
+              <Link to="/locations/card-readers" className="btn-secondary flex items-center gap-2">
                 <Nfc className="h-4 w-4" aria-hidden="true" /> Card Readers
               </Link>
             )}
-            <button onClick={() => window.print()} className="btn-primary flex items-center gap-2 py-2.5">
+            <button onClick={() => window.print()} className="btn-primary flex items-center gap-2">
               <Printer className="h-4 w-4" aria-hidden="true" /> Print All
             </button>
           </div>
