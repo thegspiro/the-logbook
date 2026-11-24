@@ -26,7 +26,7 @@ upgrade a member currently short of a rolling requirement who was told before
 the downgrade is not told again until they next meet it and lapse.
 
 Revision ID: 07abf8e6553b
-Revises: 986d6575af35
+Revises: 9c41e7b2d5a3
 Create Date: 2026-11-23 06:26:36.330988
 """
 
@@ -37,7 +37,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "07abf8e6553b"
-down_revision: Union[str, None] = "986d6575af35"
+down_revision: Union[str, None] = "9c41e7b2d5a3"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
