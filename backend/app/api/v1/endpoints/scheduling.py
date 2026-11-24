@@ -428,6 +428,7 @@ def _outreach_role_slots(org, needed: list[dict], roster: list[dict]) -> list[di
             "total": entry["count"],
             "filled": min(filled.get(entry["role"], 0), entry["count"]),
             "remaining": max(entry["count"] - filled.get(entry["role"], 0), 0),
+            "essential": entry["essential"],
         }
         for entry in needed
     ]

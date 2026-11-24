@@ -253,6 +253,8 @@ class StaffingRoleNeed(BaseModel):
 
     role: str = Field(..., min_length=1, max_length=100)
     count: int = Field(default=1, ge=1, le=50)
+    # Must be filled for the day to count as staffed. Omitted: essential.
+    essential: bool = True
 
 
 class EventRequestStaffingCreate(BaseModel):
@@ -292,6 +294,7 @@ class StaffingRoleStatus(BaseModel):
     total: int
     filled: int
     remaining: int
+    essential: bool = True
 
 
 class EventRequestStaffingResponse(UTCResponseBase):
@@ -301,6 +304,9 @@ class EventRequestStaffingResponse(UTCResponseBase):
     shift_date: Optional[datetime] = None
     slots_total: int = 0
     slots_filled: int = 0
+    # The essential roles' seats alone: staffed when these match.
+    essential_total: int = 0
+    essential_filled: int = 0
     roles: List[StaffingRoleStatus] = []
     volunteers: List[EventRequestVolunteerSignup] = []
     volunteer_call_sent_at: Optional[datetime] = None

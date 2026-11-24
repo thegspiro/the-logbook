@@ -25,8 +25,7 @@ import {
   setCacheIfCurrent,
   cacheWriteToken,
   isCacheWriteToken,
-  invalidateByPrefix,
-  getResourcePrefix,
+  invalidateAfterMutation,
   isCacheable,
   isRevalidating,
   markRevalidating,
@@ -315,8 +314,7 @@ api.interceptors.response.use(
 
     // Invalidate related cache entries after mutations
     if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method) && response.config.url) {
-      const prefix = getResourcePrefix(response.config.url);
-      invalidateByPrefix(prefix);
+      invalidateAfterMutation(response.config.url);
     }
 
     return response;

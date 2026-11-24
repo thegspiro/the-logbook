@@ -34,6 +34,8 @@ export interface TemplateSeatSpec {
   seat_type: ApparatusEventSeatType;
   count: number;
   note?: string | undefined;
+  /** Must be filled for the night to count as staffed; a seat that omits it is essential. */
+  is_essential: boolean;
 }
 
 export interface TemplateUnitSpec {
@@ -63,6 +65,7 @@ export interface TemplateSeat {
   seat_type: ApparatusEventSeatType;
   count: number;
   note: string | null;
+  is_essential: boolean;
 }
 
 export interface TemplateUnit {
@@ -180,6 +183,7 @@ export interface CrewSeat {
   name: string;
   seat_type: ApparatusEventSeatType;
   note: string | null;
+  is_essential: boolean;
   user_id: string | null;
   user_name: string | null;
   assignment_method: ApparatusEventSeatMethod | null;
@@ -203,6 +207,8 @@ export interface SeriesNight {
   start_datetime: string;
   filled: number;
   total: number;
+  essential_filled: number;
+  essential_total: number;
 }
 
 export interface CrewBoard {
@@ -281,6 +287,7 @@ export interface NightSeatSpec {
   name: string;
   seat_type: ApparatusEventSeatType;
   note?: string | undefined;
+  is_essential: boolean;
 }
 
 export interface NightUnitSpec {
@@ -313,6 +320,8 @@ export interface NightSummary {
   unit_numbers: string[];
   filled: number;
   total: number;
+  essential_filled: number;
+  essential_total: number;
   is_cancelled: boolean;
   attendance_finalized: boolean;
   checked_in: number;

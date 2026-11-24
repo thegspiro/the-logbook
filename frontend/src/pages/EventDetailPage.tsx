@@ -387,17 +387,6 @@ export const EventDetailPage: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [eventId, canManageAttendance, canViewAttendees]);
 
-  // After a volunteer signup: re-read the event without the page-wide loading
-  // state, so the roles' counts and "You are signed up" follow the change.
-  const refreshVolunteerSignup = async () => {
-    if (!eventId) return;
-    try {
-      setEvent(await eventService.getEvent(eventId));
-    } catch (err) {
-      toast.error(getErrorDetail(err) || 'You are signed up, but the page could not refresh. Reload to see it.');
-    }
-  };
-
   const fetchEvent = async () => {
     if (!eventId) return;
 
@@ -1844,20 +1833,9 @@ export const EventDetailPage: React.FC = () => {
             {/* Volunteers for an outreach event: its own signup sheet, or the
                 request's when it was scheduled from one. */}
             {event.can_staff_event ? (
-              <EventStaffingCard
-                eventId={event.id}
-                volunteerSignup={event.volunteer_signup}
-                isPast={isPastEvent}
-                onSignedUp={refreshVolunteerSignup}
-              />
+              <EventStaffingCard eventId={event.id} isPast={isPastEvent} />
             ) : (
-              event.volunteer_signup && (
-                <EventVolunteerSignupCard
-                  signup={event.volunteer_signup}
-                  isPast={isPastEvent}
-                  onSignedUp={refreshVolunteerSignup}
-                />
-              )
+              event.volunteer_signup && <EventVolunteerSignupCard eventId={event.id} isPast={isPastEvent} />
             )}
 
             {/* Community risk reduction done at this outreach event. */}

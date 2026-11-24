@@ -1,0 +1,39 @@
+{#- The home page's hero banner. index.md opts in with "template: home.html".
+    The banner sits under the tabs and spans the full width; the page's own
+    Markdown follows in the usual card. Links use the url filter, so they stay
+    relative like every other link in the site. -#}
+{% extends "main.html" %}
+
+{% block tabs %}
+  {{ super() }}
+  <section class="lb-hero">
+    <div class="md-grid lb-hero__inner">
+      <div class="lb-hero__copy">
+        <img class="lb-hero__logo" src="{{ 'images/logo-128.png' | url }}" alt="" width="128" height="128">
+        <h1 class="lb-hero__title">Run your whole department from one place.</h1>
+        <p class="lb-hero__lead">
+          The Logbook is a free, open-source records system for fire departments
+          and emergency services: training and compliance, shifts, members,
+          events, apparatus and equipment, on a server your department owns.
+        </p>
+        <div class="lb-hero__actions">
+          <a class="md-button lb-hero__primary" href="{{ 'features/' | url }}">See the features</a>
+          <a class="md-button lb-hero__secondary" href="{{ 'wiki/Installation/' | url }}">Install it</a>
+        </div>
+        <ul class="lb-hero__points">
+          <li>Free and open source</li>
+          <li>Runs on your own server</li>
+          <li>Works on any phone</li>
+        </ul>
+      </div>
+      <div class="lb-hero__shot">
+        <img src="{{ 'docs/training/images/00-04-dashboard-overview.png' | url }}" alt="The Logbook's member dashboard, with shifts, training and the department's updates" width="1440" height="900">
+      </div>
+    </div>
+  </section>
+{% endblock %}
+
+{#- The hero carries the page's h1, so the theme's fallback title is skipped. -#}
+{% block content %}
+  {{ page.content }}
+{% endblock %}

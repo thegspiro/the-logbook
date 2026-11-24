@@ -117,6 +117,38 @@ class TestUnhandledExceptionHandler:
         }
 
 
+class TestTheReference:
+    """A 500 names the request it came from, so a member can quote which one."""
+
+    async def test_the_request_id_is_returned_and_filed(
+        self, request_stub, captured_logs
+    ):
+        from app.core.logging import request_id_ctx
+
+        token = request_id_ctx.set("3f2a9c1e44aa0b12")
+        try:
+            response = await main.unhandled_exception_handler(
+                request_stub, ValueError("SELECT * FROM users")
+            )
+        finally:
+            request_id_ctx.reset(token)
+
+        assert json.loads(response.body) == {
+            "detail": "Internal server error",
+            "code": "LB-SYS-001",
+            "reference": "3f2a9c1e44aa0b12",
+        }
+        assert captured_logs.await_args.kwargs["extra_context"] == {
+            "reference": "3f2a9c1e44aa0b12"
+        }
+
+    async def test_no_reference_without_a_request_id(self, request_stub, captured_logs):
+        response = await main.unhandled_exception_handler(
+            request_stub, ValueError("boom")
+        )
+        assert "reference" not in json.loads(response.body)
+
+
 class TestValidationErrorHandler:
     """A 422 has to say what the field would have accepted.
 

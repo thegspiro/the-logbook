@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**423 tables · 6543 columns · 1406 foreign keys**
+**423 tables · 6545 columns · 1406 foreign keys**
 
 ---
 
@@ -112,11 +112,11 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 |---|---|---|---|
 | [`apparatus_event_seat_calls`](#apparatus_event_seat_calls) | `ApparatusEventSeatCall` | 9 | One "email members about open seats" send for a run of nights. |
 | [`apparatus_event_seat_requests`](#apparatus_event_seat_requests) | `ApparatusEventSeatRequest` | 11 | A member asking for a seat on a night that needs the coordinator's |
-| [`apparatus_event_template_seats`](#apparatus_event_template_seats) | `ApparatusEventTemplateSeat` | 8 | A named job on a template's apparatus, ``count`` seats wide ("Elf", |
+| [`apparatus_event_template_seats`](#apparatus_event_template_seats) | `ApparatusEventTemplateSeat` | 9 | A named job on a template's apparatus, ``count`` seats wide ("Elf", |
 | [`apparatus_event_template_units`](#apparatus_event_template_units) | `ApparatusEventTemplateUnit` | 5 | One apparatus on a template, with its seats. |
 | [`apparatus_event_templates`](#apparatus_event_templates) | `ApparatusEventTemplate` | 18 | A reusable plan for an apparatus event, scheduled onto any number of |
 | [`event_apparatus_plans`](#event_apparatus_plans) | `EventApparatusPlan` | 11 | Marks an ``Event`` as an apparatus night and carries the rules copied |
-| [`event_apparatus_seats`](#event_apparatus_seats) | `EventApparatusSeat` | 12 | One seat on one night's apparatus — open when ``user_id`` is NULL. |
+| [`event_apparatus_seats`](#event_apparatus_seats) | `EventApparatusSeat` | 13 | One seat on one night's apparatus — open when ``user_id`` is NULL. |
 | [`event_apparatus_units`](#event_apparatus_units) | `EventApparatusUnit` | 7 | One apparatus committed to one night. |
 
 ### Attendance Waiver Requests
@@ -2129,6 +2129,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `unit_id` | VARCHAR(36) | no | FK, IDX |  | → `apparatus_event_template_units.id` ON DELETE CASCADE |
 | `name` | VARCHAR(100) | no |  |  |  |
 | `seat_type` | VARCHAR(20) | no |  | `general` |  |
+| `is_essential` | BOOL | no |  | `1` |  |
 | `count` | INTEGER | no |  | `1` |  |
 | `note` | VARCHAR(300) | yes |  |  |  |
 | `sort_order` | INTEGER | no |  | `0` |  |
@@ -2227,6 +2228,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `name` | VARCHAR(100) | no |  |  |  |
 | `seat_type` | VARCHAR(20) | no |  | `general` |  |
 | `note` | VARCHAR(300) | yes |  |  |  |
+| `is_essential` | BOOL | no |  | `1` |  |
 | `sort_order` | INTEGER | no |  | `0` |  |
 | `user_id` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
 | `assignment_method` | VARCHAR(20) | yes |  |  |  |
