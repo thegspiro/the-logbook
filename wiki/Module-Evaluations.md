@@ -351,7 +351,7 @@ an evaluation where the evaluator is the only holder of the step's position —
 a department whose only Captain wrote it, say. So an `evaluations.manage`
 holder can name who takes an approval or calibration step on one evaluation:
 
-![The Who takes dialog for the calibration step, listing the members who may be named](images/evaluations-assign-step.png)
+![The Who takes Calibration dialog: whoever is named completes the step in place of the position's holders, chosen under Completed by](images/evaluations-assign-step.png)
 
 - On the evaluation's step list, a step not yet done shows **Assign** (or
   **Change**). The **Who takes "…"** dialog lists the members who may be

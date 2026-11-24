@@ -19,10 +19,12 @@
  */
 
 import { chromium } from "@playwright/test";
+import { execFile } from "node:child_process";
 import { existsSync } from "node:fs";
 import { mkdir } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { promisify } from "node:util";
 
 import { DEMO_CREDENTIALS } from "./manifest.mjs";
 import {
@@ -43,6 +45,29 @@ const REVIEWED_MEMBER = { username: "isolberg", password: "DemoMember!2026" };
 const REVIEWED_MEMBER_NAME = "Solberg";
 const PERIOD_LAST_YEAR = "2025";
 const PERIOD_THIS_YEAR = "2026";
+
+const execFileAsync = promisify(execFile);
+
+/**
+ * Shrink a PNG with pngquant, as capture.mjs does: a reduced palette takes
+ * most of the size off a flat UI screenshot with no visible difference.
+ * Missing pngquant is not fatal; the image is only larger.
+ */
+async function optimize(path) {
+  try {
+    await execFileAsync("pngquant", [
+      "--quality=70-92",
+      "--speed",
+      "1",
+      "--force",
+      "--output",
+      path,
+      path,
+    ]);
+  } catch {
+    // Left as captured.
+  }
+}
 
 const WIDE = { width: 1280, height: 900 };
 const PHONE = { width: 390, height: 844 };
@@ -234,7 +259,7 @@ const adminShots = [
   },
   {
     id: "evaluations-assign-step",
-    alt: "The Who takes dialog for the calibration step, listing the members who may be named",
+    alt: "The Who takes Calibration dialog: whoever is named completes the step in place of the position's holders, chosen under Completed by",
     route: async (page) =>
       `/reports/evaluations/${await evaluationId(page, PERIOD_THIS_YEAR)}`,
     prepare: async (page) => {
@@ -317,6 +342,7 @@ async function run(browser, credentials, shots, options) {
       const target = shot.clip ? shot.clip(page) : null;
       if (target) await target.screenshot({ path });
       else await page.screenshot({ path, fullPage: Boolean(shot.fullPage) });
+      await optimize(path);
       console.log(`ok   ${shot.id}`);
     } catch (error) {
       failed += 1;
