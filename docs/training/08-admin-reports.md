@@ -944,7 +944,38 @@ so a spreadsheet built on it keeps working. The **PDF**:
   department's logo and name, the report and its period _(2026-11-16)_;
 - shows times in the department's time zone, and who made it;
 - on a report that lists members, prints _"Confidential: contains member
-  records. Do not post or forward."_
+  records. Do not post or forward."_ — since 2026-11-23 at the top of every
+  page as well as in the footer;
+- _(2026-11-23)_ sets the department's mailing address, phone and FDID under
+  its name, from **Organization Settings**, and opens with a block of
+  **Report No.**, **Prepared by** (your name and rank), **Data as of** and the
+  report's settings, such as its period.
+
+**Report numbers** _(2026-11-23)_. Every PDF download gets its own number,
+such as `RPT-20261123-7K2Q` — the department's date and four characters. It
+is printed on page 1 and at the right of every later page's header, and the
+audit log records it with who downloaded the report and when. A loose page
+found later can be traced to the download it came from. Downloading the same
+report again gives a new number. The numbers are not a running sequence. A
+CSV has none.
+
+**Signature lines** _(2026-11-23)_. Tick **Add signature lines to PDF**
+beside the download buttons before you select **PDF**, and the report ends
+with **Prepared by**, **Reviewed by** and **Approved by** lines, each with a
+**Date** line, kept together on the last page. Your name and rank are printed
+under **Prepared by**; whoever reviews and approves signs the other two. Use
+it for a report going up the chain to be signed on paper. It starts unticked
+every time, because most downloads are working copies nobody signs, and the
+**CSV** ignores it. The same tick-box sits beside the PDF download on a
+member's training history, the training **Member Records** export and the
+equipment-check compliance and failure reports.
+
+> **Screenshot needed** (`08-125-report-signature-lines.png`): a report open
+> on the Reports page with **Add signature lines to PDF** ticked beside the
+> **CSV** and **PDF** buttons; and, as `08-126-report-pdf-signature-block.png`,
+> the last page of that PDF showing the **Prepared by** / **Reviewed by** /
+> **Approved by** lines with their date lines and the preparer's name under
+> the first.
 
 The download needs the same permissions as **Generate Report**. If the
 server refuses it, a message says why. A saved report downloads exactly what
@@ -2746,6 +2777,8 @@ Profiles let different groups be held to different standards.
      Required takes it out of this list;
    - **Required Admin Hours** — admin-hours categories and the hours required.
 3. Save.
+
+![A new compliance profile being filled in: Priority 10 with the amber warning that Line Officers also has priority 10 and which profile grades a member who matches both, and the Required and Optional requirement lists with one ticked in each](./images/08-124-profile-priority-tie-warning.png)
 
 How a profile grades the members it matches:
 

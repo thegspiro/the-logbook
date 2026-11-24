@@ -997,13 +997,15 @@ department's location list and another event already has it at that time,
 saving is refused. The message names up to three of the clashing events.
 Choose another room or time.
 
-**Drafts.** A draft is visible only to officers who can manage events. When it
+**Drafts.** A draft is visible only to officers who can manage events, and,
+_(2026-11-23)_ for a Training event, to training managers. When it
 is ready, open it and select **Publish**. Editing and saving a draft keeps it a
 draft; before 2026-10-26 the edit form did not know the event was a draft, and
 saving it published it. _(2026-11-15)_ Nobody can check in to a draft, by QR
 code, NFC tag, kiosk or self check-in, and its QR code does not work until it
 is published. Its folder and training session stay hidden from anyone who
-cannot manage events.
+cannot see the draft, and the training calendar leaves it out for them too.
+Only an officer who can manage events can publish it.
 
 _(2026-11-15)_ Nobody can check in to a draft: a QR scan, an NFC tap and a
 kiosk all refuse it with "Cannot check in to an unpublished event", and its QR
@@ -2394,6 +2396,30 @@ reads **Page 3 of 5** rather than **Page 3**, so anyone holding the loose
 pages can tell whether one is missing. The count is the minutes' own pages: PDF
 attachments appended at the back are not numbered.
 
+**Draft minutes say so on paper** _(2026-11-23)_. Until minutes are adopted
+they are not the record of the meeting, so **Download PDF** on a draft,
+circulated or returned set prints a pale diagonal **DRAFT** across every page
+of the minutes. The words underneath still read through it. Adopted minutes
+print without it, so a copy handed round at the next meeting cannot be
+mistaken for the approved record. PDF attachments added at the back are
+copied as they are, without the mark.
+
+The same update adds three things to every minutes PDF:
+
+- the department's mailing address, phone and FDID under its name on page 1,
+  from **Organization Settings** (blank ones are left out);
+- a **Report No.**, such as `RPT-20261123-7K2Q`, beside the heading on page 1
+  and at the right of every later page's header. Each download gets a new
+  one, and the audit log records which download it was, so a loose page can
+  be traced back to who printed it and when;
+- the outline's **Footer notice**, if it has one, printed at the top of every
+  page as well as at the foot.
+
+> **Screenshot needed** (`04-110-minutes-pdf-draft.png`): page 2 of a
+> **Download PDF** of circulated (not yet adopted) minutes, showing the pale
+> diagonal **DRAFT** over the attendance table and the report number at the
+> right of the page header.
+
 **Action-item email.** Meeting-record action items are emailed on the same
 schedule as the bell reminder. The department can opt out of this email under
 the minutes notification settings.
@@ -2901,11 +2927,7 @@ scheduling and communication.
      request of that type, or for an outreach event you created yourself; you
      can still change the roles before opening the sheet.
 
-   > **Screenshot needed** (`04-104-type-role-preset.png`): **Types & roles**
-   > with one type reading "Usually needs 2 × Tour Guide, 1 × Greeter" and
-   > another open for editing, showing **Add a role**, **Clear preset** and
-   > **Save roles**.
-
+   ![Event settings, Public Requests, Types & roles: Station Tour reading Usually needs 2 × Tour Guide, 1 × Greeter, and Fire Safety Demo open for editing with its Demonstrator and Educator rows, Add a role, Cancel, Clear preset and Save roles](./images/04-104-type-role-preset.png)
 4. Under **Handling** (**Request Handling**), set:
    - **Default Coordinator** — the member assigned every new request. The
      list shows each member's rank by name ("Jordan Avery — Firefighter").
@@ -3006,12 +3028,34 @@ On the request's page you can also:
    member through an out-of-date screen is refused with "Only current members
    can be chosen as coordinator".
 2. **Tick off checklist steps** as they are done. The first one ticked moves
-   the request from **Submitted** to **In Progress**.
+   the request from **Submitted** to **In Progress**. _(2026-11-22)_ Four of
+   the standard steps tick themselves from what has happened to the request,
+   and untick if it is undone, so the checklist cannot fall behind:
+
+   | Step                   | Ticked while                                                 |
+   | ---------------------- | ------------------------------------------------------------ |
+   | **Review Request**     | work on the request has started (it is past **New**)         |
+   | **Assign Coordinator** | the request has a coordinator                                |
+   | **Confirm Date**       | the event is scheduled (or the request is completed)         |
+   | **Arrange Volunteers** | every seat on the request's volunteer signup sheet is filled |
+
+   These steps show a line in italics under them, such as _"Ticks itself once
+   the event is scheduled."_, and cannot be ticked by hand. A postponed request
+   loses its **Confirm Date** tick, and a volunteer dropping out unticks
+   **Arrange Volunteers**. With no signup sheet, or one with no seats,
+   **Arrange Volunteers** stays a step you tick yourself, for a department
+   that finds its volunteers another way. **Plan Content** and **Prepare
+   Equipment** are always ticked by hand. A step you renamed keeps working the
+   same way; one you deleted is not shown. The ticks count in the list's
+   checklist progress and on the requester's status page too.
+
 3. **Schedule Event**: enter the **Start Date & Time**, **End Date & Time**
    and **Location / Room** (or "Off-site or none"), then select **Confirm &
    Create Calendar Event**. This creates a **Public Education** event on the
    department calendar. A room that is already booked at that time is
-   refused.
+   refused. _(2026-11-22)_ Under the two dates, **Quick Duration** buttons —
+   **1 hour**, **2 hours**, **4 hours**, **8 hours** — set the end from the
+   start, as on the event form. They are greyed out until a start is set.
 4. **Open volunteer signups** and **Email the Membership**, on a scheduled
    request, under **Volunteer Staffing**. The roles start from the request
    type's role preset, when it has one, or one of the first role; change
@@ -3034,11 +3078,7 @@ On the request's page you can also:
    the requester gave no email, **Contact** reads **No email given**, and
    **Email requester** offers their phone number instead.
 
-![A request in progress open in the drawer: the Schedule event, Email requester and More buttons under its title, the next step, and a part-done checklist](./images/04-99-event-request-drawer.png)
-
-> **Screenshot needed** (`04-102-event-request-page.png`, replacing the drawer
-> above): the request on its own page, with **All requests** above the title, the **Schedule event**, **Email
-> requester** and **More** buttons, the next step and a part-done checklist.
+![An outreach request on its own page: All requests above the title, the Schedule event, Email requester and More buttons, the next step, and a part-done checklist](./images/04-102-event-request-page.png)
 
 > **Send the requester their status link yourself.** Neither the confirmation
 > screen nor the default acknowledgement email gives the requester the status
@@ -3085,10 +3125,7 @@ How it differs from a public submission:
   requester** is refused. The coordinator's own emails still go. Call them,
   or copy the status link and send it another way.
 
-> **Screenshot needed** (`04-103-new-request-dialog.png`): the **New request**
-> dialog with **How it came in** set
-> to Phone call, a name and phone filled in, and the confirmation box
-> unticked because no email was given.
+![The New request dialog with How it came in set to Phone call, a requester name and phone filled in and no email, so Email the requester a confirmation is unticked and greyed with the line Needs an email address](./images/04-103-new-request-dialog.png)
 
 ### Volunteers for an outreach event you created yourself _(2026-11-21)_
 
@@ -3106,10 +3143,22 @@ open the same volunteer signup sheet a request can.
 3. Select **Open signups**.
 
 The card then shows how many have signed up for each role and who they are.
-Members claim a role from **Scheduling → Open Shifts**, and each one is marked
-**Going** on the event, as on a request's sheet. Unlike a request's sheet, an
-event's own sheet has no **Email the Membership** button yet: tell members it
-is on Open Shifts.
+Members sign up on the event's page or from **Scheduling → Open Shifts**
+(see [Signing up to volunteer at an outreach event](#signing-up-to-volunteer-at-an-outreach-event-2026-11-22)),
+and each one is marked **Going** on the event, as on a request's sheet. If you
+are going to help too, the card offers you the same **Sign me up** button.
+
+**Asking the membership for help** _(2026-11-23)_. Once the sheet is open,
+select **Email the Membership** on the card, as on a request's sheet. Choose
+who to ask by member class, membership status and positions (leave them empty
+to ask every current member), add an optional **Note**, and select **Send
+Request for Help**. The email gives the event's title, time and place, the
+roles still open, and a link to sign up. Members who have turned off these
+emails are skipped. **Last sent** beside the button shows when the call last
+went out, so a second organizer does not send it again by mistake. It is an
+email only, never a text. It is not offered on an event that came from a
+request (ask from the request instead), and is refused once the event is over
+or cancelled.
 
 - **An event scheduled from a request** is staffed from the request. Its card
   says so and links to **Open the request**; it cannot open a sheet of its
@@ -3120,9 +3169,7 @@ is on Open Shifts.
   Cancelling a whole recurring series does not yet do this; check Open
   Shifts after cancelling a series that had a sheet.
 
-> **Screenshot needed** (`04-105-event-volunteer-staffing.png`): the
-> **Volunteer staffing** card on an outreach event with an open sheet: "3 of 5 signed up", each role's count and the names of
-> the members who signed up.
+![The Volunteer staffing card on an outreach event created directly: 3 of 5 signed up, each role with how many it needs and has, and the members who signed up with the role each took](./images/04-105-event-volunteer-staffing.png)
 
 ### The CRR Catalogue
 
@@ -3196,6 +3243,48 @@ credits their time.
 An activity cannot be edited once recorded. To correct one, **Delete** it —
 which also removes the Admin Hours it credited — and record it again. You can
 delete activities you recorded; anyone who manages events can delete any.
+
+### Signing up to volunteer at an outreach event _(2026-11-22)_
+
+**Who can do this:** any member, within the sheet's signup rules.
+
+An outreach signup sheet asks what job you will do — tour guide, educator,
+greeter — rather than which seat you ride. There are three places to sign up,
+and they all work the same way:
+
+- **On the event's page.** An outreach event with an open sheet shows a
+  **Volunteer** card listing each role and how many are still needed, for
+  example "Tour Guide 1 of 3 — 2 still needed". Choose a role under **What
+  would you like to do?** and select **Sign me up**. When only one role has
+  room, the button names it — **Sign me up as Tour Guide** — and there is
+  nothing to choose. Once you are on the sheet, the card reads "You are signed
+  up as Tour Guide", with a link to **My Shifts**, which is where you give the
+  role up. The card is not shown on a cancelled event, and the button is gone
+  once the event is over or every role is filled.
+- **From the shift on the schedule.** Opening the sheet's shift shows **Sign
+  yourself up for this outreach event**, with the same role counts and the
+  same role choice. _(Before 2026-11-22 the shift offered a **Sign myself up**
+  button on each seat, which the server refused with "Choose what you would
+  like to do"; that button is no longer shown on an outreach sheet.)_
+- **From Scheduling → Open Shifts**, as before.
+
+Officers who can manage events see the organizer's **Volunteer staffing** card
+on the event instead, with the same **Sign me up** button for themselves. An
+officer seating someone else from the shift's **Assign someone to this shift**
+form chooses a **Role** rather than a position; **Fill All Open** is not
+offered on an outreach sheet, because each seat needs its own role.
+
+Whichever way you sign up, you are marked **Going** on the event. **A shift
+swap carries that with it** _(2026-11-23)_: when an officer approves a swap or
+a move, an offer is accepted, or an open swap is picked up, the member who
+gave the seat up goes back to **Not going** and the member who took it is
+marked **Going**. Before, the event's attendance list kept the old name until
+the sheet next changed.
+
+> **Screenshot needed** (`04-109-event-volunteer-signup.png`): an outreach
+> event's page as an ordinary member, showing the **Volunteer** card with two
+> roles, one with seats still needed, the **What would you like to do?** menu
+> and **Sign me up**.
 
 ### The Outreach Overview
 
@@ -3367,11 +3456,9 @@ you chose, in its own card under the figures, and **Export CSV** gains three
 columns: **Materials handed out**, **Photos** and **Outcome**. The printed
 summary does not include them.
 
-> **Screenshot needed** (`04-106-outreach-closeout.png` and
-> `04-107-materials-handed-out.png`): the **How it went** card on an outreach
-> event, with an outcome note, one apparatus ticked, two materials and **Photos taken, with
-> the host's consent** chosen; and the **Materials handed out** card on
-> Outreach Impact.
+![The How it went card on the pre-K station tour: the outcome note, Engine 1 ticked under Apparatus that attended, two materials handed out with their counts, and Photos taken, with the host's consent chosen](./images/04-106-outreach-closeout.png)
+
+![The Materials handed out card on Outreach Impact for this year: each item recorded at an event's close-out with the total handed out](./images/04-107-materials-handed-out.png)
 
 #### Feedback from requesters
 
@@ -3730,6 +3817,8 @@ Scheduled Date: October 7, 9:00 AM
 | Email template shows `{{something}}` instead of a value   | Use double curly braces with no spaces, and one of the supported fields: `{{contact_name}}`, `{{event_date}}`, `{{organization_name}}`, `{{outreach_type}}`                                                                                                                                  |
 | Requester cannot cancel from the status page              | A completed, declined or cancelled request cannot be changed                                                                                                                                                                                                                                 |
 | Pipeline tasks not visible to the requester               | **Show Checklist Progress to the Requester** is off by default. Turn it on under **Settings → Public Requests → Handling**                                                                                                                                                                   |
+| A checklist step cannot be ticked or unticked             | It ticks itself from the request's state; the italic line under it says when. See [Managing Requests](#managing-requests)                                                                                                                                                                    |
+| A phone-only request fails with "Internal server error"   | Some upgraded installations still required an email on requests. Updating to a release from 2026-11-22 or later repairs it the next time The Logbook starts; ask your administrator                                                                                                          |
 | Custom categories not on the event form or as filter tabs | Add them under **Event settings → Categories**, then switch each one on under **Visibility**                                                                                                                                                                                                 |
 | Calendar view not showing events                          | Check the month — use the arrows. The calendar also follows the type filter                                                                                                                                                                                                                  |
 | Attendance Trends shows no data                           | You need the **View analytics and dashboards** permission. Widen the **Period**                                                                                                                                                                                                              |
@@ -3807,6 +3896,12 @@ have moved, been renamed or work differently.
 - **The attendee list can be shared with members**, by name only, if the
   department chooses.
 - **Approved minutes are locked.** Use **Reopen for Correction**.
+- **A printed copy of minutes that are not yet adopted says DRAFT** across
+  every page _(2026-11-23)_. Adopted minutes print without it.
+- **Four outreach request checklist steps tick themselves** _(2026-11-22)_ —
+  **Review Request**, **Assign Coordinator**, **Confirm Date** and **Arrange
+  Volunteers** — and cannot be ticked by hand. A tick you made by hand on one
+  of them before is replaced by what the request's state says.
 - **The Minutes page links to the minutes** under each meeting, and the
   meeting's book icon opens existing minutes rather than starting another
   draft.

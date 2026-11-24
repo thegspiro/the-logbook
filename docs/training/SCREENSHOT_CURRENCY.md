@@ -1,5 +1,39 @@
 # Screenshot currency
 
+## Queued by the November 22 – 23 documentation pass
+
+Source: [CHANGE_AUDIT_2026-11](../CHANGE_AUDIT_2026-11.md#change-audit-november-22--23-2026).
+Nothing was captured by this pass. Numbers continue after the ids the open
+November 21 – 22 pass (#4568) reserves; check them against `images/` before
+saving.
+
+| Guide | Screen | Action |
+| --- | --- | --- |
+| 02 | Evaluation **Review history** card below **Last review**, three entries on two forms, each with its grade | Create `02-163-evaluation-review-history` |
+| 02 | The self-evaluation comparison card with two **Far apart** items | Create `02-164-evaluation-self-comparison` |
+| 02 | A Goals item being written: two goals with target dates and **Add a goal** | Create `02-165-evaluation-goals-list` |
+| 02 | `02-146-evaluation-period-results` (queued by #4568) | Widen the request: also show **Download signed PDFs** and **Grades by evaluator** |
+| 02 | `02-145-evaluation-last-review` (queued by #4568) | Widen the request: show a goal with its **Target:** date |
+| 02 | `02-66-compliance-matrix`: a certification cell now reads **On file** / **Expired** / **Not recorded** with its date | **Replace**; update the caption and the manifest text ("Nothing on file", "No date on record") |
+| 02 | `02-65-print-compliance`: certification columns print a short expiry under the mark, and the key has a new line | **Replace** |
+| 04 | An outreach event's page as an ordinary member: the **Volunteer** card with two roles, the "What would you like to do?" menu and **Sign me up** | Create `04-109-event-volunteer-signup` |
+| 04 | Page 2 of circulated (unapproved) minutes as a PDF: DRAFT across the page, the report number in the header | Create `04-110-minutes-pdf-draft` |
+| 04 | `04-105-event-volunteer-staffing` (queued by an earlier pass) | Widen the request: include **Email the Membership**, **Last sent** and the organizer's own **Sign me up** |
+| 08 | A report on the Reports page with **Add signature lines to PDF** ticked beside CSV and PDF | Create `08-125-report-signature-lines` |
+| 08 | The last page of that PDF: Prepared by / Reviewed by / Approved by lines | Create `08-126-report-pdf-signature-block` |
+| 01 | **Leave Requests → Calendar**: a month with a recorded leave, a "(requested)" entry, a "… covers …" stand-in, and the key | Create `01-68-leave-calendar` |
+| 01 | **Export leave records** card with From, To and **Download CSV** | Create `01-69-leave-export` |
+| 01 | Approver cover with "You decide leave requests and you are on leave …" and **Use these dates** | Create `01-70-leave-cover-prompt` |
+| 18 | Window form with Opens and Closes filled and both "… automatically at the scheduled time" boxes ticked | Create `18-10-window-auto-open-close` |
+| 18 | Status changes row with **Preview** and **Cancellation**, the cancellation email open | Create `18-11-preview-cancellation` |
+| 18 | `18-04-my-orders-unpaid`: the Zelle handle was clipped at its card's edge (#4573) | **Replace** |
+| 19 | `19-07-member-payment-method` | Check for the same clipping |
+| 14 | The emailed ballot: #4562 added a mocked `/elections/ballot/lookup` fixture, so it can now be captured with fake data | Optional `14-35-emailed-ballot`; if captured, drop guide 14's note on why there is no picture |
+| 07 | `07-06-form-builder`: the "One submission per person" box now sits beside its label's first line (#4574) | Check |
+| wiki | `Module-Training`'s "[SCREENSHOT NEEDED]" for the Compliance Matrix print page | When captured, show the expiry dates |
+
+**Made wrong by this range:** `02-66`, `02-65`, `18-04`.
+
 ## Captured 2026-11-22 — the shots still failing after the 2026-11-21 pass
 
 The 2026-11-21 capture left 95 shots failing, and three rows open: `14-22`,
@@ -223,26 +257,26 @@ of this pass; check them against `images/` before saving.
 
 | Guide | Screen | Action |
 | --- | --- | --- |
-| 04 | An outreach request on its own page: header, **All requests**, sections, the bottom action bar on a phone | **Replace** `04-99-event-request-drawer` (the drawer is gone) with `04-102-event-request-page`, and update the reference. Still open: the 2026-11-21 capture re-shot `04-99` as the request page at 1440px, but the rename, the reference and the phone action bar remain |
-| 04 | **New request** dialog: **Phone call**, no email, the confirmation box unticked and greyed | Create `04-103-new-request-dialog` |
-| 04 | Event Settings → Public Requests → **Types & roles**, one preset shown and one open for editing | Create `04-104-type-role-preset` |
-| 04 | **Volunteer staffing** card on an outreach event created directly, "3 of 5 signed up" with names | Create `04-105-event-volunteer-staffing` |
-| 04 | **How it went** card filled in; Outreach Impact **Materials handed out** card | Create `04-106-outreach-closeout`, `04-107-materials-handed-out` |
-| 04 | `04-20-event-requests` (now has **New request**), `04-100-community-engagement` (materials card), `04-101-guest-headcount` (How it went card beside it), `04-09-event-templates` (inactive card dashed, new badge colours) | Check |
-| 02 | My Training hours card "6.9/6 hrs/mo avg" with "69/72 hrs total" | Create `02-148-requirement-card-hours-average` |
-| 02 | Three certification cards: **On file** (Expires …), **Expired** (date), **Not recorded** | Create `02-149-requirement-card-certification-states` |
-| 02 | My Training **Optional** heading, badge and "Not required for compliance" | Create `02-150-optional-requirements-group` |
+| 04 | An outreach request on its own page: header, **All requests**, sections, the bottom action bar on a phone | **Replace** `04-99-event-request-drawer` (the drawer is gone) with `04-102-event-request-page`, and update the reference. Renamed, with its reference, on 2026-11-23. Still open: the phone action bar |
+| 04 | **New request** dialog: **Phone call**, no email, the confirmation box unticked and greyed | Created 2026-11-23 |
+| 04 | Event Settings → Public Requests → **Types & roles**, one preset shown and one open for editing | Created 2026-11-23 |
+| 04 | **Volunteer staffing** card on an outreach event created directly, "3 of 5 signed up" with names | Created 2026-11-23 |
+| 04 | **How it went** card filled in; Outreach Impact **Materials handed out** card | Created 2026-11-23 |
+| 04 | `04-20-event-requests` (now has **New request**), `04-100-community-engagement` (materials card), `04-101-guest-headcount` (How it went card beside it), `04-09-event-templates` (inactive card dashed, new badge colours) | Re-shot 2026-11-23; `04-09-event-templates` came out unchanged |
+| 02 | My Training hours card "6.9/6 hrs/mo avg" with "69/72 hrs total" | Created 2026-11-23, on the demo member's own hours requirement |
+| 02 | Three certification cards: **On file** (Expires …), **Expired** (date), **Not recorded** | Created 2026-11-23, from a mocked My Training response |
+| 02 | My Training **Optional** heading, badge and "Not required for compliance" | Created 2026-11-23, from a mocked My Training response |
 | 02 | Event template editor's **Training Details** section on a Training template | Optional `02-151-template-training-details` |
 | 02 | `02-108-monthly-hours-leave` (headline is now the average), `02-66-compliance-matrix` (an hours cell now leads with "3.7/2 hrs/mo avg"), `02-41-training-admin-reports` (Compliance Report card text) | Re-shot 2026-11-21: the average headline, the "hrs/mo avg" cell and the new card text are in frame |
 | 02 | `02-01-my-training`, `02-125-compliance-matrix-not-applicable` (replace if an hours cell shows), `02-75-compliance-forecast` (Current coloured by standing), `02-133-compliance-profile-positions` (now "Optional Requirements") | Checked, re-shot 2026-11-21 |
-| 02 | Evaluation step list with **Assign** and the **Who takes "…"** dialog | Create `02-144-evaluation-step-assign` |
-| 02 | **Last review** card on an evaluation | Create `02-145-evaluation-last-review` |
-| 02 | Conduct list with a period chosen: **Period results**, grade tiles, **Export CSV** (as a `view_all` holder) | Create `02-146-evaluation-period-results` |
-| 02 | **New template** dialog with "Annual Evaluation with Officer Sections" and its **Officer ranks** boxes | Create `02-147-evaluation-officer-starter` |
-| 08 | Compliance profile form with the amber "… also has priority N" warning and the Required / Optional lists | Create `08-124-profile-priority-tie-warning`. `08-70-compliance-profiles` re-shot 2026-11-21; no seeded profile has optional requirements, so no "Optional:" chips are in frame |
-| 03 | Close-out wizard step 1 as a shift officer without `scheduling.manage`: own Start/End/Hours disabled with the hint line | Create `03-138-closeout-own-row-locked`. `03-75-closeout-step1-attendance`, `03-45-finalize-checklist` re-shot 2026-11-21 |
+| 02 | Evaluation step list with **Assign** and the **Who takes "…"** dialog | Create `02-144-evaluation-step-assign`. Still open: needs evaluations seeded through the workflow |
+| 02 | **Last review** card on an evaluation | Create `02-145-evaluation-last-review`. Still open, as `02-144` |
+| 02 | Conduct list with a period chosen: **Period results**, grade tiles, **Export CSV** (as a `view_all` holder) | Create `02-146-evaluation-period-results`. Still open, as `02-144` |
+| 02 | **New template** dialog with "Annual Evaluation with Officer Sections" and its **Officer ranks** boxes | Created 2026-11-23 |
+| 08 | Compliance profile form with the amber "… also has priority N" warning and the Required / Optional lists | Created `08-124-profile-priority-tie-warning` 2026-11-23. `08-70-compliance-profiles` re-shot 2026-11-21; no seeded profile has optional requirements, so no "Optional:" chips are in frame |
+| 03 | Close-out wizard step 1 as a shift officer without `scheduling.manage`: own Start/End/Hours disabled with the hint line | Create `03-138-closeout-own-row-locked` (still open: needs a shift officer without `scheduling.manage`). `03-75-closeout-step1-attendance`, `03-45-finalize-checklist` re-shot 2026-11-21 |
 | 03 | History import Shifts tab: "You chose to add these members to that shift." with **Undo** | **CURRENT** 2026-11-23 as `03-139-history-import-existing-undo`. `wiki/images/history-import-shifts.png` checked: it shows the per-member **Same shift** / **Keep separate** question, a different one, and every control in it is still on the screen |
-| 01 | Leave request: **Ask a question**; the member's view with changed dates and **Accept these dates**; **Your leave** with **Your first day back** and **End my leave**; the escalation setting | Create `01-59-leave-request-ask-question`, `01-60-leave-request-changed-dates`, `01-61-leave-back-early`, `01-62-leave-escalation-setting` |
+| 01 | Leave request: **Ask a question**; the member's view with changed dates and **Accept these dates**; **Your leave** with **Your first day back** and **End my leave**; the escalation setting | Created 2026-11-23 |
 | 01 | `01-49-anonymize-member` (the Removed list has two more lines), `01-08-member-audit-history` (plain-word field names, new position wording) | **Replace** `01-49`: still open, it fails in the 2026-11-21 capture. `01-08` re-shot 2026-11-21 |
 | 01 | `01-29-status-change-modal` (only allowed statuses), `01-46-add-member-password-no-email` (icons replace ✓/○), `01-24-delete-member-modal` (applicant record and file lines) | Check `01-46`: still open, held back as an empty state on 2026-11-21. `01-29`, `01-24` re-shot 2026-11-21 |
 | 06 | `06-03` to `06-06` apparatus detail (buttons hidden for view-only users), `06-13-facility-maintenance` (cost in cents, scrolling filters), `06-14-facility-inspections` | Check `06-05`: still open, held back as an empty state on 2026-11-21. The rest re-shot 2026-11-21 |

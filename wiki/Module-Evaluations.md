@@ -130,6 +130,17 @@ optional, required or not offered, whether certain levels need a specific
 example, whether the member answers it in their self-evaluation, and its
 **weight** in the overall score.
 
+**Goals** _(2026-11-22)_. A goals item is a list: the evaluator selects **Add
+a goal** for each one (up to 20), writes it in **Goal _N_**, may set **Target
+date for goal _N_**, and can **Remove goal _N_**. A part cannot be submitted
+without at least one goal ("Set at least one goal in '…'."), and a blank goal
+is dropped on save. Readers and the PDF see a numbered list with "(by
+_date_)". Next year's **Last review** card and goal review take each goal
+separately, with its **Target:** date, labelled "…, goal 2" when the item held
+more than one. Goals written before then were one block of text: an
+unsubmitted part opens it as **Goal 1**, and a submitted part keeps it as
+signed and is read as one goal.
+
 **Figures.** An item can show one of the member's figures beside it, and you
 can set score bands so the figure suggests a rating (for example, under 10
 training hours suggests level 2). An evaluator who rates differently from the
@@ -279,6 +290,20 @@ their part.
   Either one finalizes the evaluation. Acknowledging is not agreeing, and the
   PDF says so.
 
+## Self-evaluation beside the evaluation
+
+_(2026-11-22)_ Once the member has submitted their self-evaluation, the
+evaluation page shows a **Self-evaluation beside the evaluation** card: each
+rated item the member answered, with **Self:** and **Evaluator:** ratings side
+by side, and **Far apart** on items two or more levels apart on a scale or
+opposite on meets / does not meet — the points to raise when the review is
+discussed. **Show only those** hides the rest. Unrated and not-applicable
+items are never marked. For the evaluator it follows their ratings as they
+change them, before saving. It is drawn from the two parts the page already
+shows, so it reveals nothing new: the evaluator sees it once the
+self-evaluation is submitted, the member once the evaluator's ratings are
+released to them. It is not on the PDF, which carries both parts in full.
+
 ## Naming who takes a step
 
 _(2026-11-16)_ Refusing the evaluator at calibration and approval would stall
@@ -324,6 +349,43 @@ card — how many are complete and how many stand at each grade — with **Expor
 CSV** (`evaluation-results.csv`, one row per evaluation; each export audited
 as `evaluation_period_exported`). `evaluations.manage` alone shows no grades.
 Your own evaluation is left out of the list and the export.
+
+### Grades by evaluator
+
+_(2026-11-23)_ At the foot of the **Period results** card, **Grades by
+evaluator** counts the period's finalized reviews at each of the five grades
+(Unsatisfactory to Outstanding): one line for the **Whole department**, then
+one per evaluator with their number of reviews in brackets, so a chief can see
+an evaluator who rates everyone the same before the results go further. It is
+counted from the same reviews and grades as the list and the CSV, your own
+left out; a review counts under the evaluator it stands under today; and a
+weighted-percentage form or one with no overall is counted as **Not on the
+five grades**. Nothing flags an evaluator: the department reads the spread
+itself (owner decision 2026-11-22). Needs `evaluations.view_all`
+(`GET /evaluations/grade-spread`).
+
+### Signed PDFs for a period
+
+_(2026-11-22)_ Beside **Export CSV**, **Download signed PDFs** downloads
+`evaluation-pdfs.zip` with the signed PDF of every finalized evaluation in the
+period — the copy as signed, without any later member response. It needs
+`evaluations.view_all` and asks the person to confirm their identity, because
+it hands over a period's personnel records at once; each download is audited
+(`evaluation_period_pdfs_exported`, with the count) and watched as a bulk
+export. Files are named _Member - Form - period end.pdf_; your own evaluation
+is left out, as on the list. A PDF that cannot be read from storage is named
+in **NOT INCLUDED.txt** inside the zip instead of failing the download.
+
+## Review history
+
+_(2026-11-23)_ For an `evaluations.view_all` holder, the evaluation page shows
+a **Review history** card below **Last review**: every other finalized review
+of the member, newest first and on any form, each with its period (a link to
+it), the form's name and **Overall:** the grade that stood (**No overall
+result** where the form has none). Grades on different forms sit side by side
+with the form named, since a member may have moved from one form to another.
+A review you could not open yourself is left out. It is not printed on the
+PDF.
 
 ## Grading by section
 
@@ -412,6 +474,11 @@ meetings were held). It is never shown as zero or 100% instead.
 
 **Can a finalized evaluation be edited?** Only by amending it, which reopens
 it from the evaluator onward and records why.
+
+**Can I keep a copy of a whole period's evaluations?** Yes, with
+`evaluations.view_all`: choose the period on **All evaluations** and select
+**Download signed PDFs** on the **Period results** card. See
+[Signed PDFs for a period](#signed-pdfs-for-a-period).
 
 **What does the member see of calibration?** The items that were flagged, once
 the evaluation reaches them, and nothing else.

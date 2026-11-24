@@ -248,6 +248,16 @@ default**:
   footer reads "Page N of M" _(2026-11-21, #4451)_, counting the minutes' own
   pages; appended PDF attachments carry no minutes footer. The PDF is laid out
   twice (once to count the pages), with attachments decoded once beforehand.
+  _(2026-11-23, #4588)_ Minutes that are not adopted — draft, circulated or
+  returned — print a pale diagonal **DRAFT** over every page of the minutes
+  (18% opacity, drawn over the content so table fills cannot hide it);
+  adopted minutes carry none, and appended PDF attachments are copied
+  unmarked. Every copy also prints the department's mailing address, phone and
+  FDID under its name, a per-download **Report No.** (`RPT-YYYYMMDD-XXXX`) on
+  page 1 and in each later page's header, recorded in the
+  `minutes_pdf_exported` audit row, and the outline's **Footer notice** at the
+  top of every page as well as the foot. See
+  [docs/PDF_REPORTS.md](https://github.com/thegspiro/the-logbook/blob/main/docs/PDF_REPORTS.md).
 - **Search** — the Minutes page's search box also finds words inside the minutes
   (sections, motions, action items), across the newest 500 sets the viewer may
   see; a quoted phrase must match as typed.

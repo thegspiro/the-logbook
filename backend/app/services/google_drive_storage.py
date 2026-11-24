@@ -86,6 +86,13 @@ def make_ref(drive_id: str, file_id: str, key: str) -> str:
     return f"{SCHEME}{drive_id}/{file_id}/{key}"
 
 
+def file_name_for(key: str) -> str:
+    """The name a stored file carries in the drive: its key, with ``/`` made
+    ``_``. ``drive_restore_relink`` matches a restored copy by it, so it must
+    not change for files already stored."""
+    return key.replace("/", "_")
+
+
 def _parse_key(raw: str) -> Mapping[str, Any]:
     try:
         info = json.loads(raw)
@@ -272,7 +279,7 @@ class GoogleDriveBackend(RemoteBackend):
         body = file_encryption.encrypt_bytes(plaintext)
         metadata = {
             "id": location.file_id,
-            "name": location.key.replace("/", "_"),
+            "name": file_name_for(location.key),
             "parents": [self._drive.parent],
             "mimeType": "application/octet-stream",
         }
@@ -396,6 +403,39 @@ class GoogleDriveBackend(RemoteBackend):
     def key_id(self, ref: str) -> Optional[bytes]:
         head, _stored = self._head(self._location(ref))
         return file_encryption.key_id_from_head(head)
+
+    def list_files(self) -> list[tuple[str, str]]:
+        """Every file outside the trash in the department's Shared Drive, as
+        ``(id, name)``, in every folder. Used to find files a person put back
+        from a copy (``drive_restore_relink``): those have new ids, and are
+        known only by the name ``put`` gave them."""
+        found: list[tuple[str, str]] = []
+        page: Optional[str] = None
+        while True:
+            params: dict[str, Any] = {
+                "corpora": "drive",
+                "driveId": self._drive.shared_drive_id,
+                "includeItemsFromAllDrives": "true",
+                "q": "trashed = false",
+                "fields": "nextPageToken, files(id, name)",
+                "pageSize": 1000,
+            }
+            if page:
+                params["pageToken"] = page
+            response = self._request(
+                "GET", f"{DRIVE_API}/files", "listing", params=params
+            )
+            if response.status_code != 200:
+                raise self._fail("listing", response)
+            body = response.json() or {}
+            for item in body.get("files") or []:
+                file_id, name = item.get("id"), item.get("name")
+                if isinstance(file_id, str) and _DRIVE_ID.match(file_id):
+                    if isinstance(name, str):
+                        found.append((file_id, name))
+            page = body.get("nextPageToken")
+            if not isinstance(page, str) or not page:
+                return found
 
     def delete(self, ref: str) -> bool:
         """Move the file to the Shared Drive's trash, which Google empties

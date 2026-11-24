@@ -405,6 +405,22 @@ added; `elections.manage` is enough; eligibility follows the election chosen).
   same tally the ballot check uses, so a meeting held before a member's
   current stint is left out of both the count and their list.
 
+## Evaluations — The Signed-PDF Button Follows the Status Filter, the Zip Does Not (2026-11-23)
+
+Found by the November 22 – 23 documentation pass; not fixed, because the right
+behaviour is a choice. On the evaluations list with a review period chosen,
+**Download signed PDFs** (#4570) is enabled only when a row the **Show** filter
+leaves visible is finalized (`finalizedCount` in `EvaluationListPage.tsx` counts
+the filtered list). The zip it downloads, `GET /evaluations/export-pdfs`, holds
+every finalized review in the period whatever the filter says. So with **Show**
+set to **In progress** the button is greyed out although the period has signed
+reviews to download.
+
+**For the owner:** either the zip follows the filter (send the status, and the
+button's rule is then right), or the button counts the whole period (it needs
+the period's finalized total, which the filtered list does not carry). Until
+then, set **Show** to **All** to download.
+
 ## Evaluations — Waiver Data Points in the Annual Review (2026-11-11)
 
 The annual review can show a member's requests to be excused from training
@@ -3239,14 +3255,18 @@ Still open:
   to protect them with the provider's tooling. A department that skips that
   has no second copy of its bucket. The same holds for a Google Shared Drive
   (2026-10-25).
-- **A copy of a Shared Drive cannot simply be put back (2026-10-25).** The
-  Logbook finds a Drive file by its id, and a file copied out and uploaded
-  again is a new file with a new id, so its record still points at the old
-  one. Nothing repoints references yet. Within 30 days the drive's own trash
-  restores a file with its id intact; after that, a copy kept elsewhere has
-  to be matched to its records by file name (each is named after its storage
-  path) and the references updated by hand. A bucket has no such gap: its
-  objects are found by key, so a mirror restores as it is.
+- ~~**A copy of a Shared Drive cannot simply be put back (2026-10-25).**~~
+  **Resolved 2026-11-24** (owner decision 2026-11-23). The Logbook finds a
+  Drive file by its id, and a file copied out and uploaded again is a new
+  file with a new id. `scripts/relink_restored_drive_files.py` now matches
+  restored files to their records by name (each is named after its storage
+  path), verifies each decrypts with the installation's file key, and
+  rewrites the references; dry run by default, `--apply` to write, safe to
+  run twice. **Still open:** a record with no file of its name, or with more
+  than one, is reported and left for a person; a renamed copy is not found;
+  and a copy taken under another installation's key will not verify. A
+  bucket has no such gap: its objects are found by key, so a mirror restores
+  as it is.
 - **A settings change reaches other workers within 30 seconds.** Each worker
   caches a department's storage view for that long; the worker that saved
   clears its own copy at once.
@@ -7607,16 +7627,19 @@ surfaced further gaps, all flagged rather than fixed in the same pass:
   due date from `TrainingService.evaluate_requirement_detail`, the only
   evaluator that computes one; it decides no status. Tests:
   `tests/test_compliance_export_period.py`.
-- **Compliance emails: a rolling requirement is in one non-compliance notice
-  per member, ever — open, found 2026-11-21.** A rolling requirement's window
-  ends on the grading day, which made both member emails repeat daily (the
-  reminder called it "due today", and the notice's key moved with the date).
-  The fix gives a rolling requirement no deadline reminder and keys its notice
-  on the requirement alone (`compliance_member_notices.py`). The cost: a member
-  who meets it, and months later falls short again, is not told again unless
-  the same notice is triggered by some other requirement, which then lists it.
-  Telling them again needs a recorded "met again" date to key on, which the
-  task does not keep. Tests: `tests/test_compliance_member_notices.py`.
+- **Compliance emails: a repeat lapse on a rolling requirement is emailed
+  again — ✅ resolved (owner decision 2026-11-23).** A rolling requirement's
+  window ends on the grading day, which made both member emails repeat daily;
+  the 2026-11-21 fix gave it no deadline reminder and keyed its notice on the
+  requirement alone, so a member was told once ever. The daily task now records
+  the last day it finds each member meeting each rolling requirement
+  (`rolling_requirement_last_met`, migration `07abf8e6553b`) and keys the notice
+  on that date: every day of one lapse shares a key, and a lapse after a
+  recovery is emailed once more. **Residual:** the dates start with the first
+  run after the upgrade, so a member already told about a rolling requirement
+  they are still short of on upgrade day keeps the bare key, and is told again
+  only after they next meet it and lapse; rolling requirements still get no deadline reminder. Tests:
+  `tests/test_compliance_member_notices.py` (`TestRollingRequirementLapsesAgain`).
 - **The Compliance Officer dashboard's forecast summary cards keep fixed
   colour bands — ✅ resolved 2026-11-21 (owner direction: follow the
   department's and the member's thresholds).** Each member's 30/60/90-day
@@ -9370,20 +9393,18 @@ single-page form. What it changes, and what it leaves:
   confirms.~~ **Resolved 2026-11-11:** the header leaves Create Session out
   for a viewer without `events.manage`, as the approved mockup draws it, and
   the Sessions tab still shows its notice naming the permission.
-- **A training manager can read a draft Training event's session, but not
-  the draft itself** (2026-11-23). `GET /training/sessions/by-event/{id}` now
-  answers `training.manage` for a draft whose type is Training, so the
-  session no longer reads as "No training details" to the officer who
-  administers it. **Default taken:** `GET /events/{id}` and the events list
-  still hide every draft from a caller without `events.manage`, as ADV-5 set
-  them, so a training manager without it cannot open a draft Training event
-  to see that session. Showing them the draft is a wider visibility change,
-  left for an owner decision (`tests/test_draft_event_side_paths.py`).
-- **The training-session calendar lists draft events' sessions.**
-  `GET /training/sessions/calendar` filters cancelled events but not drafts,
-  so any member can see a draft Training event's title and time there, which
-  `GET /events/{id}` hides from them (ADV-5). Found on 2026-11-23 and left
-  for its own change, since it alters what the calendar shows.
+- **Who sees a draft event** — ✅ **Resolved 2026-11-23 (owner decisions).**
+  One rule, `app/api/draft_visibility.py`, decides every read that shows an
+  event: `events.manage` sees every draft, `training.manage` sees drafts of
+  Training events, and nobody else sees a draft. A training manager without
+  `events.manage` now opens a draft Training event (`GET /events/{id}`, its
+  attachments, folder and training session) and sees draft Training events
+  in the events list; another type's draft stays hidden from them. The
+  training-session calendar, which listed every draft's title and time to
+  any member, and the training dashboard's upcoming-capacity list apply the
+  same rule. Seeing a draft is not acting on it: publishing still needs
+  `events.manage`, and every other action keeps its own permission
+  (`tests/test_draft_event_side_paths.py`, `EventsPage.test.tsx`).
 
 ## Events — Attendance-Lock Refusals (2026-09-30)
 
@@ -11326,6 +11347,31 @@ mirrored in the Multi-Tenant Isolation section above.
 
 ## LIFE-11 — Anonymizing a Member Leaves Their Separation Letter, With Home Address, in Documents (2026-11-10, app review A6 pass 6)
 
+**Resolved 2026-11-23** (owner decision of that date: option 1 for the
+letter, delete for the personal folder). Anonymisation and permanent delete
+both call `app.services.member_documents.erase_member_documents` before they
+change or remove the users row:
+
+- The member's separation letters are **redacted in place**: the stored HTML
+  loses the home address and the "Reason:" paragraph, and any remaining copy of
+  the member's street line or stored status reason. The item list and values
+  stay. They are rewritten rather than regenerated, because a regenerated
+  letter would list today's property, not the property owed on the day of the
+  drop. The member's name and membership number stay on the letter (owner
+  decision 2026-11-23): it records what that person owes.
+- Every folder the member owns under **Member Files** is deleted with its
+  sub-folders and documents, through the same code as the folder delete; the
+  files are queued on `pending_file_deletions`.
+
+**Accepted residuals:** a letter saved before 2026-11-23 has no link to its
+member, so it is found by its name, and, when the member has a membership
+number, also by that number (current or previous) printed in it. A letter whose
+name no longer matches (the member was renamed after the drop), or which does
+not print the member's number, is not found and keeps the address. A letter in
+a backup taken before the erasure is not changed.
+
+The original entry follows.
+
 Anonymization (`POST /users/{id}/anonymize`, `MemberAnonymizationService`)
 scrubs the member's personal data from a long list of tables but touches no
 `Document`. The property-return letter generated when the member was dropped is
@@ -11426,11 +11472,33 @@ request, kept 365 days) shipped with these gaps, each the narrower choice:
   the reader now treats any stored value as `off` (the next save stores
   `off`). If the meeting workflow ever takes documents, lift the refusal and
   the read coercion together.
-- **HEIC is stored as filed, not converted.** A decider on Windows may need
-  the HEIF extension to open an iPhone photo; nothing previews it in the page.
-- **The upload field sits in the request dialog and the document list on the
-  decision page; the policy screen sets both new settings.** There is no
-  preview of a document in the page: a decider downloads it.
+- **HEIC is stored as filed, not converted** _(owner approved conversion
+  2026-11-23; held for a licence ruling)_. A decider on Windows may need the
+  HEIF extension to open an iPhone photo, and the page cannot show one.
+  Conversion to JPEG at upload was built-ready but not shipped, because the
+  library's licence needs the owner's ruling first:
+  - `pillow-heif` 1.8.1 bundles libheif, libde265 and x265 in its wheels
+    (only glibc/libstdc++ from the system, so no apt packages and the image
+    would build), but its own `LICENSES_bundled.txt` says the binary wheels
+    are **GPLv2** as a whole, because of x265. This project is MIT and is
+    shipped as Docker images, which would then redistribute GPLv2 binaries.
+  - `pi-heif` 1.4.0, the decode-only build from the same repository
+    (`bigcat88/pillow_heif`), bundles only libheif and libde265 and is
+    **LGPLv3**; decoding is all conversion needs. HEVC decoding may also
+    carry patent questions.
+    **For the owner:** approve `pi-heif` (or `pillow-heif` despite GPLv2), or
+    keep HEIC as filed.
+- ~~**There is no preview of a document in the page.**~~ ✅ Resolved
+  2026-11-23 (owner decision): a JPEG or PNG opens in a dialog on the request
+  page, and a PDF in a new tab under the browser's own viewer. Both are a
+  copy fetched through the same authorised, audited download, held behind a
+  local `blob:` URL, never a public link, under the neutral file name.
+  **A PDF is not shown inside the page** (default taken): the app's
+  Content-Security-Policy allows `blob:` images but neither `blob:` frames
+  (`frame-src` falls back to `default-src 'self'`) nor objects
+  (`object-src 'none'`). Showing one in the page needs either `frame-src
+blob:` in the backend middleware and every `nginx.conf` policy, or a PDF.js
+  dependency: both owner decisions. HEIC has no view.
 
 ## Meetings — Business-Meeting Waiver Requests: Choices Made Without An Owner Ruling (2026-11-11)
 
@@ -11775,12 +11843,15 @@ each case; confirmed by the owner 2026-11-23):
   `submission_deleted`). The submission delete processes its rows right after
   the commit; the other two leave them to the hourly sweep. A file another row
   still names is kept.
-- **Deleting an event leaves its attachment files.** `EventService.delete_event`
-  and the series delete remove the row and every `events.attachments` file it
-  named stays on the volume, named by nothing. Found while closing the drill
-  undo above, which now queues them for the drills it deletes; the ordinary
-  event delete was out of that change's scope. Open for an owner decision on
-  whether event deletes should queue their files the same way.
+- ~~**Deleting an event leaves its attachment files.**~~ **Resolved
+  2026-11-24** (owner decision 2026-11-23): `EventService.delete_event` and
+  `delete_event_series` queue every `events.attachments` file on
+  `pending_file_deletions` in the delete's own transaction (`event_deleted`)
+  and remove them right after the commit; a file another event or any other
+  collected row still names is kept, and one that will not delete stays queued
+  for the hourly sweep. A refused delete (finalized attendance) queues nothing.
+  Not covered: an event's folder under Event Attachments in Documents, which
+  holds Documents of its own and is not deleted with the event.
 - ~~**A training record's own uploaded file has no removal route.**~~
   **Resolved 2026-11-21** (owner decision 2026-11-21, (d)):
   `DELETE /training/records/{id}/attachments/{entry}` and a Remove button in
@@ -11808,8 +11879,8 @@ each case; confirmed by the owner 2026-11-23):
   to `upload_relocation.collect_references` or to a commented allowlist, so
   the shared-file check's "every other row" is enforced rather than assumed.
 
-Related, still open: **LIFE-11** (the separation letter in Documents), and the
-Member Files personal-folder documents, which neither path touches.
+Related, closed 2026-11-23: **LIFE-11**. Both paths now redact the separation
+letters and delete the member's personal Member Files folder.
 
 ## Apparatus — Three Decisions From App Review B2 Pass 6 (2026-11-20)
 

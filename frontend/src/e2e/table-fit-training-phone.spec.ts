@@ -261,6 +261,9 @@ const myHistory = {
   years: [{ year: '2026', records: 3, hours: 373.5, months: [{ month: '2026-09', records: 3, hours: 373.5 }] }],
 };
 
+// rwd-table-narrow's threshold, 32rem.
+const NARROW_TIER_PX = 32 * 16;
+
 const MY_TRAINING_TABLES = [
   // The newest few records: a long course name, type, date, hours and a status
   // that can carry the reason an event withdrew its credit.
@@ -301,6 +304,14 @@ for (const table of MY_TRAINING_TABLES) {
           .filter({ has: page.getByRole('columnheader', { includeHidden: true, name: table.header, exact: true }) });
         await found.waitFor();
         await expectTableFitsItsCard(found, `${table.name} table`);
+        // Five short columns need about 31rem. Held to the 64rem tier, they
+        // were stacked cards on every tablet, in a card with room for them.
+        if (table.name === 'Recent training') {
+          const room = await found.evaluate((el) => el.closest('.rwd-table-container')?.clientWidth ?? 0);
+          if (room >= NARROW_TIER_PX) {
+            await expect(found.locator('thead'), `Recent training is cards in a ${room}px card`).toBeVisible();
+          }
+        }
       });
     }
   });

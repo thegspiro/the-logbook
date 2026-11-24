@@ -734,7 +734,7 @@ const Members: React.FC = () => {
             {/* Desktop table view */}
             <div className="card hidden overflow-hidden md:block">
               <div className="rwd-table-container overflow-x-auto">
-                <table className="rwd-table rwd-table-xwide w-full">
+                <table className="rwd-table rwd-table-xwide rwd-table-fields w-full">
                   <thead className="bg-theme-input-bg border-theme-surface-border border-b">
                     <tr>
                       {canPrintBadges && (
@@ -820,7 +820,7 @@ const Members: React.FC = () => {
                         className={`hover:bg-theme-surface-secondary cursor-pointer transition-colors ${selectedIds.has(member.id) ? 'bg-blue-500/5' : ''}`}
                       >
                         {canPrintBadges && (
-                          <td data-label="Select" className="py-4 pr-1 pl-4">
+                          <td data-label="Select" className="rwd-table-corner py-4 pr-1 pl-4">
                             <input
                               type="checkbox"
                               checked={selectedIds.has(member.id)}
@@ -830,7 +830,7 @@ const Members: React.FC = () => {
                             />
                           </td>
                         )}
-                        <td data-label="Member" className="px-6 py-4">
+                        <td data-label="Member" className="rwd-table-lead px-6 py-4">
                           <div className="flex items-center">
                             <Avatar
                               firstName={member.first_name}
@@ -881,8 +881,8 @@ const Members: React.FC = () => {
                                 </div>
                               )}
                               {contactInfoEnabled.show_email && member.email && (
-                                <div className="text-theme-text-muted flex items-center text-xs">
-                                  <Mail className="mr-1 h-3 w-3" />
+                                <div className="text-theme-text-muted flex items-center text-xs break-all">
+                                  <Mail className="mr-1 h-3 w-3 shrink-0" />
                                   {member.email}
                                 </div>
                               )}
