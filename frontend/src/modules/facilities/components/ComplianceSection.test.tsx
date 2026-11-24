@@ -149,9 +149,7 @@ describe('ComplianceSection refusals and discarding', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Create Checklist' }));
 
     await waitFor(() =>
-      expect(screen.getByRole('textbox', { name: /^Title/ })).toHaveAccessibleDescription(
-        expect.stringContaining('Value is too long.')
-      )
+      expect(screen.getByRole('textbox', { name: /^Title/ })).toHaveAccessibleDescription(/Value is too long\./)
     );
   });
 

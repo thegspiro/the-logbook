@@ -205,6 +205,74 @@ describe('CommunityEngagementTab', () => {
     expect(screen.getByTestId('search')).toHaveTextContent('?tab=community&period=all');
   });
 
+  it('shows community risk reduction for the period on screen', async () => {
+    getCommunityEngagement.mockResolvedValue(
+      report({
+        crr: {
+          activities: 2,
+          previous_activities: 1,
+          by_type: [
+            {
+              activity_type_id: 't-smoke',
+              name: 'Smoke alarm install',
+              activities: 2,
+              previous_activities: 1,
+              counts: [{ measure_id: 'm-alarms', label: 'Alarms installed', quantity: 5, previous_quantity: 3 }],
+            },
+          ],
+          by_tag: [
+            {
+              tag_id: 'tag-fire',
+              kind: 'risk',
+              label: 'Fire',
+              activities: 2,
+              counts: [
+                {
+                  measure_id: 'm-alarms',
+                  activity_type_name: 'Smoke alarm install',
+                  label: 'Alarms installed',
+                  quantity: 5,
+                },
+              ],
+            },
+          ],
+          by_zip: [
+            {
+              zip_code: '22046',
+              city: 'Falls Church',
+              state: 'VA',
+              latitude: 38.8856,
+              longitude: -77.1802,
+              activities: 1,
+              counts: [
+                {
+                  measure_id: 'm-alarms',
+                  activity_type_name: 'Smoke alarm install',
+                  label: 'Alarms installed',
+                  quantity: 3,
+                },
+              ],
+            },
+          ],
+          unplaced_activities: 1,
+        },
+      })
+    );
+    renderTab();
+
+    const section = await screen.findByRole('region', { name: 'Community risk reduction' });
+    expect(within(section).getByText('2 activities this year')).toBeInTheDocument();
+    expect(within(section).getByRole('listitem', { name: 'Smoke alarm install' })).toBeInTheDocument();
+    expect(within(section).getByRole('listitem', { name: '22046 Falls Church, VA' })).toBeInTheDocument();
+  });
+
+  it('leaves the CRR section out of a report that carries none', async () => {
+    renderTab();
+
+    await screen.findByRole('group', { name: 'People reached' });
+    expect(screen.queryByRole('region', { name: 'Community risk reduction' })).not.toBeInTheDocument();
+  });
+
   it('says nothing about change when there is no earlier period', async () => {
     getCommunityEngagement.mockResolvedValue(report({ period: 'all', previous: null }));
     renderTab('?tab=community&period=all');

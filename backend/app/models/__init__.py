@@ -80,6 +80,16 @@ from app.models.compliance_config import (
     ReportStatus,
 )
 from app.models.consent import ConsentType, UserConsent
+from app.models.crr import (
+    CrrActivity,
+    CrrActivityCount,
+    CrrActivityMeasure,
+    CrrActivityMember,
+    CrrActivityTag,
+    CrrActivityType,
+    CrrActivityTypeTag,
+    CrrTag,
+)
 from app.models.directory_account import (
     DirectoryAccountProvision,
     DirectoryAccountStatus,
@@ -144,6 +154,7 @@ from app.models.event_request import (
     EventRequest,
     EventRequestActivity,
     EventRequestEmailTemplate,
+    EventRequestFeedback,
     EventRequestStatus,
 )
 from app.models.external_shift_hours import (
@@ -821,6 +832,14 @@ __all__ = [
     "ApparatusEventSeatRequest",
     "ApparatusEventSeatRequestStatus",
     "ApparatusEventTemplate",
+    "CrrActivity",
+    "CrrActivityCount",
+    "CrrActivityMeasure",
+    "CrrActivityMember",
+    "CrrActivityTag",
+    "CrrActivityType",
+    "CrrActivityTypeTag",
+    "CrrTag",
     "ApparatusEventTemplateSeat",
     "ApparatusEventTemplateUnit",
     "EventApparatusPlan",
@@ -828,6 +847,7 @@ __all__ = [
     "EventApparatusUnit",
     "EventRequest",
     "EventRequestActivity",
+    "EventRequestFeedback",
     "EventRequestEmailTemplate",
     "EventRequestStatus",
     # Training models

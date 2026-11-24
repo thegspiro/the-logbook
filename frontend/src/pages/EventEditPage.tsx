@@ -31,6 +31,7 @@ import { EventType as EventTypeEnum } from '../constants/enums';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 import { getErrorDetail } from '../utils/errorHandling';
 import { withoutAttendanceLockedFields } from '../utils/eventAttendanceLock';
+import { onlyChangedSeriesFields } from '../utils/eventSeriesChanges';
 import { formatDateCustom, toLocalISODate } from '../utils/dateFormatting';
 import { useTimezone } from '../hooks/useTimezone';
 import { useAuthStore } from '../stores/authStore';
@@ -174,7 +175,10 @@ export const EventEditPage: React.FC = () => {
       const payload: EventUpdate = event?.attendance_finalized_at ? withoutAttendanceLockedFields(data) : data;
       const isRecurring = event?.is_recurring || event?.recurrence_parent_id;
       if (isRecurring && updateScope === 'future') {
-        const result = await eventService.updateFutureEvents(eventId, payload);
+        // Every later occurrence takes each field sent, so only what changed
+        // here goes: see onlyChangedSeriesFields.
+        const changed = event ? onlyChangedSeriesFields(payload, event) : payload;
+        const result = await eventService.updateFutureEvents(eventId, changed);
         toast.success(`Updated ${result.updated_count} event(s) in the series`);
       } else {
         await eventService.updateEvent(eventId, payload);

@@ -31,6 +31,18 @@ class Classification(unittest.TestCase):
         ]
         assert classify(paths) == NOTHING
 
+    def test_the_docs_site_runs_none_of_the_gated_suites(self):
+        # docs-site.yml tests it; nothing in ci.yml reads it.
+        paths = [
+            "docs-site/hooks/repo_links.py",
+            "docs-site/Dockerfile",
+            "docs-site/content/faq.md",
+        ]
+        assert classify(paths) == NOTHING
+
+    def test_a_docs_site_lookalike_is_not_the_docs_site(self):
+        assert classify(["docs-sites/x.py"]) == EVERYTHING
+
     def test_a_backend_change_skips_only_the_frontend_suites(self):
         assert classify(["backend/app/services/event_service.py"]) == {
             "backend": True,

@@ -375,3 +375,56 @@ class EventRequestEmailTemplate(Base):
     )
 
     __table_args__ = (Index("idx_email_tpl_org", "organization_id"),)
+
+
+class EventRequestFeedback(Base):
+    """A requester's answers to the department's feedback form, one per request.
+
+    Sent once a request is Completed, through the requester's status link.
+    The answers themselves are a ``FormSubmission`` of the department's
+    feedback form, so the Forms module's own screens can read them; this row
+    ties that submission to the request. ``request_id`` is unique: the response
+    is final once sent, and the constraint is what makes a second send (a
+    double tap, a retried POST) a refusal rather than a second response
+    (pitfall #36).
+
+    ``rating`` is the answer to the question the department named as the
+    rating, copied here when the response arrived, so the report's average
+    does not move when the form is later edited or a question removed.
+    """
+
+    __tablename__ = "event_request_feedback"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False
+    )
+    request_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("event_requests.id", ondelete="CASCADE"),
+        nullable=False,
+        unique=True,
+    )
+    form_id: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("forms.id", ondelete="SET NULL"), nullable=True
+    )
+    form_submission_id: Mapped[Optional[str]] = mapped_column(
+        String(36),
+        ForeignKey("form_submissions.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    rating: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    submitted_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    __table_args__ = (
+        Index(
+            "idx_event_req_feedback_org_submitted", "organization_id", "submitted_at"
+        ),
+    )
+
+    def __repr__(self):
+        return (
+            f"<EventRequestFeedback(request={self.request_id}, rating={self.rating})>"
+        )

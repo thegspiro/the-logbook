@@ -253,6 +253,10 @@ export interface CommunityReachTotals {
   members_involved: number;
   requests_received: number;
   requests_completed: number;
+  /** Requester feedback received in the period. */
+  feedback_responses?: number;
+  /** Mean rating among those responses; null when none carried one. */
+  average_rating?: number | null;
 }
 
 /** Events that recorded both an expected audience and sign-ins. */
@@ -308,6 +312,62 @@ export interface CommunityMaterial {
   quantity: number;
 }
 
+export interface CrrImpactTypeCount {
+  measure_id: string;
+  label: string;
+  quantity: number;
+  previous_quantity: number | null;
+}
+
+/** One activity type's CRR work in the period, against the previous one. */
+export interface CrrImpactType {
+  activity_type_id: string;
+  name: string;
+  activities: number;
+  previous_activities: number | null;
+  counts: CrrImpactTypeCount[];
+}
+
+/** A count's total within a tag or ZIP code, named with its activity type. */
+export interface CrrImpactCount {
+  measure_id: string;
+  activity_type_name: string;
+  label: string;
+  quantity: number;
+}
+
+export interface CrrImpactTag {
+  tag_id: string;
+  kind: 'risk' | 'population';
+  label: string;
+  activities: number;
+  counts: CrrImpactCount[];
+}
+
+export interface CrrImpactZip {
+  zip_code: string;
+  city: string | null;
+  state: string | null;
+  /** The ZIP's centre, from the bundled GeoNames data; null when unknown. */
+  latitude: number | null;
+  longitude: number | null;
+  activities: number;
+  counts: CrrImpactCount[];
+}
+
+/**
+ * Community risk reduction work in the report's period. `by_tag` counts an
+ * activity under every tag it carries, so its rows do not sum to `activities`.
+ */
+export interface CrrImpact {
+  activities: number;
+  previous_activities: number | null;
+  by_type: CrrImpactType[];
+  by_tag: CrrImpactTag[];
+  by_zip: CrrImpactZip[];
+  unplaced_activities: number;
+}
+
 export interface CommunityEngagement {
   /** The first four are all-time; everything after them follows `period`. */
   total_public_events: number;
@@ -323,11 +383,14 @@ export interface CommunityEngagement {
   upcoming_events: number;
   turnout: CommunityTurnout;
   granularity: 'month' | 'year';
+  /** Top of the rating question's scale, for "out of 5"; null when no rating question is set. */
+  rating_scale_max?: number | null;
   by_period: CommunityReachBucket[];
   by_type: CommunityTypeBucket[];
   /** Everything handed out across the period, one line per item, most first. */
   materials?: CommunityMaterial[];
   recent_events: CommunityEventReach[];
+  crr?: CrrImpact;
 }
 
 export type WidgetPeriod = 'month' | 'quarter' | 'year' | 'rolling_30';

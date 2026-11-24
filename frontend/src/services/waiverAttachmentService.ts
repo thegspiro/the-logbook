@@ -91,6 +91,15 @@ export const waiverAttachmentService = {
     return response.data;
   },
 
+  /** Remove one document from the caller's own pending request. Removing one
+   *  already gone changes nothing. Resolves to the request. */
+  async removeAttachment<T = unknown>(requestId: string, attachmentId: string): Promise<T> {
+    const response = await api.delete<T>(
+      `${BASE}/${encodeURIComponent(requestId)}/attachments/${encodeURIComponent(attachmentId)}`
+    );
+    return response.data;
+  },
+
   /** Fetch one document through the authenticated client and save it under its neutral name. */
   async downloadAttachment(requestId: string, attachment: WaiverAttachment): Promise<void> {
     const response = await api.get<Blob>(

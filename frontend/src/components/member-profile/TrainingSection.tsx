@@ -1,8 +1,9 @@
 import React from 'react';
 import { Link } from 'react-router';
-import { formatDate } from '../../utils/dateFormatting';
+import { formatCalendarDate } from '../../utils/dateFormatting';
 import { formatHours } from '../../utils/hoursFormatting';
-import type { TrainingRecord, ComplianceSummary } from '../../types/training';
+import type { TrainingRecord, ComplianceSummary, RequirementDetail } from '../../types/training';
+import { CertificationsList } from './CertificationsList';
 import { isCertificationExpired, isCertificationExpiringSoon } from '../../utils/certificationExpiry';
 import { getTrainingStatusLabel } from '../../utils/trainingColors';
 
@@ -11,6 +12,8 @@ interface TrainingSectionProps {
   trainings: TrainingRecord[];
   trainingsLoading: boolean;
   complianceSummary: ComplianceSummary | null;
+  /** The member's graded requirements, for the certifications list; empty hides it. */
+  requirements?: RequirementDetail[];
   tz: string;
 }
 
@@ -44,6 +47,7 @@ const TrainingSection: React.FC<TrainingSectionProps> = ({
   trainings,
   trainingsLoading,
   complianceSummary,
+  requirements = [],
   tz,
 }) => {
   // Shown muted: neither a pass nor a warning.
@@ -149,6 +153,7 @@ const TrainingSection: React.FC<TrainingSectionProps> = ({
           View Full History
         </Link>
       </div>
+      <CertificationsList requirements={requirements} />
       {trainingsLoading ? (
         <div className="flex h-24 items-center justify-center">
           <div className="text-theme-text-muted text-sm">Loading training records...</div>
@@ -173,7 +178,7 @@ const TrainingSection: React.FC<TrainingSectionProps> = ({
                     <p className="text-theme-text-secondary mt-1 text-sm">Cert #: {training.certification_number}</p>
                   )}
                   <div className="text-theme-text-secondary mt-2 flex flex-wrap gap-4 text-sm">
-                    {training.completion_date && <span>Completed: {formatDate(training.completion_date, tz)}</span>}
+                    {training.completion_date && <span>Completed: {formatCalendarDate(training.completion_date)}</span>}
                     {training.expiration_date && (
                       <span
                         className={
@@ -184,7 +189,7 @@ const TrainingSection: React.FC<TrainingSectionProps> = ({
                               : ''
                         }
                       >
-                        Expires: {formatDate(training.expiration_date, tz)}
+                        Expires: {formatCalendarDate(training.expiration_date)}
                       </span>
                     )}
                     {training.hours_completed > 0 && <span>{formatHours(training.hours_completed)} hrs</span>}

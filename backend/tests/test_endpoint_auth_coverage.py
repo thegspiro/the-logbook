@@ -64,6 +64,11 @@ ALLOWLISTED_PUBLIC = {
     ("event_requests.py", "submit_public_event_request"),
     ("event_requests.py", "check_request_status"),
     ("event_requests.py", "public_cancel_request"),
+    # The requester's feedback on a completed request, through the same status
+    # link: the token is the credential, per-IP rate limited like cancel, and
+    # it answers only for a Completed request whose department set a form.
+    ("event_requests.py", "get_request_feedback_form"),
+    ("event_requests.py", "send_request_feedback"),
     ("event_requests.py", "get_outreach_type_labels"),
     ("events.py", "get_public_calendar"),
     ("elections.py", "lookup_ballot_by_token"),

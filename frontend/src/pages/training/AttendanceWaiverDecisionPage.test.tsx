@@ -21,6 +21,7 @@ vi.mock('../../services/attendanceWaiverService', () => ({
 }));
 
 const mockDownload = vi.fn();
+const mockRemove = vi.fn();
 vi.mock('../../services/waiverAttachmentService', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../services/waiverAttachmentService')>();
   return {
@@ -28,6 +29,7 @@ vi.mock('../../services/waiverAttachmentService', async (importOriginal) => {
     waiverAttachmentService: {
       downloadAttachment: (...args: unknown[]) => mockDownload(...args) as unknown,
       addAttachments: vi.fn(),
+      removeAttachment: (...args: unknown[]) => mockRemove(...args) as unknown,
     },
   };
 });
@@ -106,6 +108,55 @@ describe('AttendanceWaiverDecisionPage', () => {
     renderAt('/attendance-waivers/req-1');
     await user.click(await screen.findByRole('button', { name: 'Download waiver-attachment-1.pdf' }));
     expect(mockDownload).toHaveBeenCalledWith('req-1', document);
+  });
+
+  // Owner decision 2026-11-23: the member may take a document off a pending
+  // request; the server says when (`can_remove_attachment`).
+  describe('removing a document', () => {
+    const filed = {
+      id: 'att-1',
+      ordinal: 1,
+      filename: 'waiver-attachment-1.pdf',
+      mime_type: 'application/pdf',
+      file_size: 2048,
+      uploaded_at: '2026-11-11T15:00:00Z',
+    };
+
+    beforeEach(() => {
+      mockRemove.mockReset();
+      mockRemove.mockResolvedValue({});
+    });
+
+    it('removes it after one confirmation and reloads the request', async () => {
+      mockGet.mockResolvedValue(request({ attachments: [filed], can_remove_attachment: true, can_decide: false }));
+      const user = userEvent.setup();
+      renderAt('/attendance-waivers/req-1');
+
+      await user.click(await screen.findByRole('button', { name: 'Remove waiver-attachment-1.pdf' }));
+      const dialog = screen.getByRole('dialog');
+      expect(mockRemove).not.toHaveBeenCalled();
+      await user.click(within(dialog).getByRole('button', { name: 'Remove document' }));
+
+      expect(mockRemove).toHaveBeenCalledWith('req-1', 'att-1');
+      expect(mockGet).toHaveBeenCalledTimes(2);
+    });
+
+    it('removes nothing when the member keeps it', async () => {
+      mockGet.mockResolvedValue(request({ attachments: [filed], can_remove_attachment: true, can_decide: false }));
+      const user = userEvent.setup();
+      renderAt('/attendance-waivers/req-1');
+
+      await user.click(await screen.findByRole('button', { name: 'Remove waiver-attachment-1.pdf' }));
+      await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Keep it' }));
+      expect(mockRemove).not.toHaveBeenCalled();
+    });
+
+    it('offers no remove control when the server does not allow it', async () => {
+      mockGet.mockResolvedValue(request({ attachments: [filed], can_remove_attachment: false }));
+      renderAt('/attendance-waivers/req-1');
+      expect(await screen.findByRole('button', { name: 'Download waiver-attachment-1.pdf' })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Remove waiver-attachment-1.pdf' })).not.toBeInTheDocument();
+    });
   });
 
   it('shows no documents section when none are filed and none can be', async () => {
