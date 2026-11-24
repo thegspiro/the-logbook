@@ -527,9 +527,7 @@ class AttendanceWaiverAttachmentService:
             try:
                 policy = await self.engine.get_policy(org_id)
                 days = policy.attachment_retention_days
-                outcome = await self._sweep_org(
-                    org_id, now - timedelta(days=days), now
-                )
+                outcome = await self._sweep_org(org_id, now - timedelta(days=days), now)
                 if outcome["attachment_ids"]:
                     await log_audit_event(
                         db=self.db,

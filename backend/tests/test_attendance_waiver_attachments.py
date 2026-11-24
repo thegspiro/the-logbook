@@ -655,9 +655,7 @@ class TestRetention:
             removed_at = datetime.fromisoformat(body["attachments_removed_at"])
             assert engine._utc(removed_at) == NOW
 
-    async def test_a_request_retention_never_touched_says_nothing(
-        self, as_user, dept
-    ):
+    async def test_a_request_retention_never_touched_says_nothing(self, as_user, dept):
         request_id = await _filed(as_user, dept)
         async with as_user(dept.member) as client:
             body = (await client.get(f"{BASE}/{request_id}")).json()
