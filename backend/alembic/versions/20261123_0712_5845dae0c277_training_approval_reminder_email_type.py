@@ -35,7 +35,7 @@ depends_on: Union[str, Sequence[str], None] = None
 _NEW_TEMPLATE_TYPES = ("training_approval_reminder",)
 
 # EmailTemplateType as this revision finds it (bfb747c095c3's ALL_TYPES; the
-# revisions between it and 0a4667186b2d add no template type).
+# revisions between it and 07abf8e6553b add no template type).
 # Written out rather than imported so a later edit to the enum cannot rewrite
 # this step.
 _EXISTING_TEMPLATE_TYPES = (
