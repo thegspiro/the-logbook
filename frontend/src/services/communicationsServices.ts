@@ -312,6 +312,62 @@ export interface CommunityMaterial {
   quantity: number;
 }
 
+export interface CrrImpactTypeCount {
+  measure_id: string;
+  label: string;
+  quantity: number;
+  previous_quantity: number | null;
+}
+
+/** One activity type's CRR work in the period, against the previous one. */
+export interface CrrImpactType {
+  activity_type_id: string;
+  name: string;
+  activities: number;
+  previous_activities: number | null;
+  counts: CrrImpactTypeCount[];
+}
+
+/** A count's total within a tag or ZIP code, named with its activity type. */
+export interface CrrImpactCount {
+  measure_id: string;
+  activity_type_name: string;
+  label: string;
+  quantity: number;
+}
+
+export interface CrrImpactTag {
+  tag_id: string;
+  kind: 'risk' | 'population';
+  label: string;
+  activities: number;
+  counts: CrrImpactCount[];
+}
+
+export interface CrrImpactZip {
+  zip_code: string;
+  city: string | null;
+  state: string | null;
+  /** The ZIP's centre, from the bundled GeoNames data; null when unknown. */
+  latitude: number | null;
+  longitude: number | null;
+  activities: number;
+  counts: CrrImpactCount[];
+}
+
+/**
+ * Community risk reduction work in the report's period. `by_tag` counts an
+ * activity under every tag it carries, so its rows do not sum to `activities`.
+ */
+export interface CrrImpact {
+  activities: number;
+  previous_activities: number | null;
+  by_type: CrrImpactType[];
+  by_tag: CrrImpactTag[];
+  by_zip: CrrImpactZip[];
+  unplaced_activities: number;
+}
+
 export interface CommunityEngagement {
   /** The first four are all-time; everything after them follows `period`. */
   total_public_events: number;
@@ -334,6 +390,7 @@ export interface CommunityEngagement {
   /** Everything handed out across the period, one line per item, most first. */
   materials?: CommunityMaterial[];
   recent_events: CommunityEventReach[];
+  crr?: CrrImpact;
 }
 
 export type WidgetPeriod = 'month' | 'quarter' | 'year' | 'rolling_30';

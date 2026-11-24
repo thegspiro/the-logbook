@@ -687,6 +687,10 @@ class EventResponse(EventBase, UTCResponseBase):
     # events.manage, on an outreach event that is not cancelled. Detail
     # endpoint only (owner decision, 2026-11-20).
     can_staff_event: bool = False
+    # May this caller record CRR activities on it and see the event's list:
+    # crr.record or events.manage, on an outreach event that is not cancelled
+    # (owner decisions, 2026-11-22). Detail endpoint only.
+    can_record_crr: bool = False
     # The event's live volunteer signup sheet as any member sees it, so they
     # can sign up from the event page. Detail endpoint only; None when there is
     # no sheet. Carries no other volunteer's name: that list stays behind

@@ -18,6 +18,7 @@ import { useSearchParams } from 'react-router';
 import PrintPageStyles from '../../components/print/PrintPageStyles';
 import { dashboardService } from '../../services/api';
 import type { CommunityEngagement, CommunityEventReach } from '../../services/api';
+import type { CrrImpact, CrrImpactCount } from '../../services/communicationsServices';
 import { useTimezone } from '../../hooks/useTimezone';
 import { formatDateCustom, formatNumber } from '../../utils/dateFormatting';
 import { formatHours } from '../../utils/hoursFormatting';
@@ -36,6 +37,9 @@ import {
   turnoutPercent,
   type ComparableFigure,
 } from './communityEngagement';
+
+/** "1 activity", "14 activities". */
+const activitiesText = (n: number): string => `${formatNumber(n)} ${n === 1 ? 'activity' : 'activities'}`;
 
 const PAPER: React.CSSProperties = {
   fontFamily: 'Georgia, "Times New Roman", serif',
@@ -85,6 +89,132 @@ const TableScroll: React.FC<{ label: string; children: React.ReactNode }> = ({ l
   <div className="overflow-x-auto" data-mobile-scroll-region role="region" aria-label={label} tabIndex={0}>
     {children}
   </div>
+);
+
+/** "Smoke alarm install · Alarms installed 5; Homes 2": a group's counts on one line. */
+const countsText = (counts: CrrImpactCount[]): string =>
+  counts.map((c) => `${c.activity_type_name} · ${c.label} ${formatNumber(c.quantity)}`).join('; ');
+
+/**
+ * The CRR breakdowns as tables, without the screen's map: a street map does
+ * not print reliably, and the ZIP table carries the same figures.
+ */
+const CrrPrintSection: React.FC<{ crr: CrrImpact }> = ({ crr }) => (
+  <>
+    <h2 style={SECTION}>Community risk reduction</h2>
+    {crr.activities === 0 ? (
+      <p style={{ margin: 0 }}>No CRR activities were recorded in this period.</p>
+    ) : (
+      <>
+        <TableScroll label="CRR activities by type">
+          <table style={{ ...TABLE, marginBottom: '8pt' }}>
+            <caption style={{ textAlign: 'left', fontWeight: 'bold', fontSize: '10pt', padding: '0 0 3pt 0' }}>
+              By activity ({activitiesText(crr.activities)})
+            </caption>
+            <thead>
+              <tr>
+                <th scope="col" style={HEAD}>
+                  Activity
+                </th>
+                <th scope="col" style={HEAD_NUM}>
+                  Activities
+                </th>
+                <th scope="col" style={HEAD}>
+                  Counts
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {crr.by_type
+                .filter((t) => t.activities > 0)
+                .map((t) => (
+                  <tr key={t.activity_type_id}>
+                    <th scope="row" style={{ ...CELL, fontWeight: 'normal' }}>
+                      {t.name}
+                    </th>
+                    <td style={NUM}>{formatNumber(t.activities)}</td>
+                    <td style={CELL}>
+                      {t.counts
+                        .filter((c) => c.quantity > 0)
+                        .map((c) => `${c.label} ${formatNumber(c.quantity)}`)
+                        .join('; ')}
+                    </td>
+                  </tr>
+                ))}
+            </tbody>
+          </table>
+        </TableScroll>
+        {crr.by_tag.length > 0 && (
+          <TableScroll label="CRR activities by risk and population">
+            <table style={{ ...TABLE, marginBottom: '8pt' }}>
+              <caption style={{ textAlign: 'left', fontWeight: 'bold', fontSize: '10pt', padding: '0 0 3pt 0' }}>
+                By risk and priority population (an activity counts under each of its tags)
+              </caption>
+              <thead>
+                <tr>
+                  <th scope="col" style={HEAD}>
+                    Tag
+                  </th>
+                  <th scope="col" style={HEAD_NUM}>
+                    Activities
+                  </th>
+                  <th scope="col" style={HEAD}>
+                    Counts
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {crr.by_tag.map((t) => (
+                  <tr key={t.tag_id}>
+                    <th scope="row" style={{ ...CELL, fontWeight: 'normal' }}>
+                      {t.label} ({t.kind === 'risk' ? 'risk' : 'population'})
+                    </th>
+                    <td style={NUM}>{formatNumber(t.activities)}</td>
+                    <td style={CELL}>{countsText(t.counts)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </TableScroll>
+        )}
+        {crr.by_zip.length > 0 && (
+          <TableScroll label="CRR activities by ZIP code">
+            <table style={{ ...TABLE, marginBottom: '8pt' }}>
+              <caption style={{ textAlign: 'left', fontWeight: 'bold', fontSize: '10pt', padding: '0 0 3pt 0' }}>
+                By ZIP code
+                {crr.unplaced_activities > 0 ? ` (${activitiesText(crr.unplaced_activities)} had no ZIP code)` : ''}
+              </caption>
+              <thead>
+                <tr>
+                  <th scope="col" style={HEAD}>
+                    ZIP code
+                  </th>
+                  <th scope="col" style={HEAD_NUM}>
+                    Activities
+                  </th>
+                  <th scope="col" style={HEAD}>
+                    Counts
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {crr.by_zip.map((z) => (
+                  <tr key={z.zip_code}>
+                    <th scope="row" style={{ ...CELL, fontWeight: 'normal' }}>
+                      {z.zip_code}
+                      {z.city || z.state ? ` ${[z.city, z.state].filter(Boolean).join(', ')}` : ''}
+                    </th>
+                    <td style={NUM}>{formatNumber(z.activities)}</td>
+                    <td style={CELL}>{countsText(z.counts)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </TableScroll>
+        )}
+      </>
+    )}
+  </>
 );
 
 interface Headline {
@@ -398,6 +528,8 @@ const CommunityEngagementPrintPage: React.FC = () => {
               );
             })
           )}
+
+          {report.crr && <CrrPrintSection crr={report.crr} />}
 
           <h2 style={SECTION}>Outreach events</h2>
           {events.length === 0 ? (

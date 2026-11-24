@@ -17,7 +17,7 @@
 
 import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router';
-import { Settings, Loader2, Globe, Clock, Tag, LayoutGrid, Users } from 'lucide-react';
+import { Settings, Loader2, Globe, Clock, Tag, LayoutGrid, ShieldCheck, Users } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { eventService, eventRequestService, userService } from '../services/api';
 import type {
@@ -33,6 +33,7 @@ import {
   CategoriesSection,
   OutreachSection,
   HourTrackingSection,
+  CrrCatalogueSection,
   AttendanceSection,
   PipelineSection,
   EmailSection,
@@ -61,7 +62,7 @@ const DEFAULT_CATEGORY_COLOR = 'bg-blue-100 text-blue-800 dark:bg-blue-500/20 da
 
 // ─── Section Definitions ───────────────────────────────────────────────────────
 
-type SectionKey = 'visibility' | 'categories' | 'attendance' | 'hour_tracking' | 'public_requests' | 'metrics';
+type SectionKey = 'visibility' | 'categories' | 'attendance' | 'hour_tracking' | 'public_requests' | 'crr' | 'metrics';
 
 const SECTIONS: SettingsSection<SectionKey, PublicRequestsPage>[] = [
   { key: 'visibility', label: 'Visibility', icon: Settings, description: 'Primary filter categories' },
@@ -85,6 +86,12 @@ const SECTIONS: SettingsSection<SectionKey, PublicRequestsPage>[] = [
       { key: 'handling', label: 'Handling', hint: 'Coordinator and checklist' },
       { key: 'emails', label: 'Emails', hint: 'What the requester is told' },
     ],
+  },
+  {
+    key: 'crr',
+    label: 'CRR Catalogue',
+    icon: ShieldCheck,
+    description: 'Community risk reduction activities, their counts and tags',
   },
   { key: 'metrics', label: 'Headline Metrics', icon: LayoutGrid, description: 'The four cards above this page' },
 ];
@@ -739,6 +746,8 @@ const EventsSettingsTab: React.FC<EventsSettingsTabProps> = ({ onMetricsSaved })
         );
       case 'hour_tracking':
         return <HourTrackingSection settings={settings} />;
+      case 'crr':
+        return <CrrCatalogueSection />;
       case 'metrics':
         return (
           <AdminMetricsSettings

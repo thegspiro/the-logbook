@@ -1897,8 +1897,9 @@ without a ruling:
   Outreach Impact counts by, so the two pages cannot disagree (pitfall #29). An
   apparatus night whose template uses a non-public type (business meeting,
   other) is therefore not on the Overview, though it stays on Apparatus Events.
-  Widening the rule would change Outreach Impact's counts too. "Tagged with a
-  CRR activity" joins the rule when Phase 3 adds activities.
+  Widening the rule would change Outreach Impact's counts too. Activities can
+  be recorded only on events the rule already counts, so it did not need
+  widening for CRR (part 3, 2026-11-23).
 - **"Closed out" is attendance finalized**, per the 2026-11-20 decision
   (completion on finalize). An event with a headcount but no finalize still
   shows as waiting; a draft never does.
@@ -1907,22 +1908,96 @@ without a ruling:
 - **New outreach event opens the ordinary event form** without a type preset;
   the form takes a template, not a type, from its address.
 
-Decided for later phases, not yet built:
+### CRR Activity Tracking — Owner Decisions (2026-11-22)
 
-- **Location data for CRR activities comes from a ZIP list bundled with the
-  app** (owner decision, 2026-11-21) — offline, so it works on Unraid and
-  air-gapped installs, and no ZIP code leaves the server.
-- **CRR activity tracking**, recordable both as an event and as a lightweight
-  log entry. A department-configurable catalogue (smoke and CO alarm installs,
-  home safety surveys, car seat inspections, extinguisher training, hands-only
-  CPR, Stop the Bleed, fall prevention, school programs), each activity tagged
-  by risk and by priority population, both lists configurable. Location starts
-  at a ZIP code that fills in city and state; an "add more detail" choice adds
-  the full address and resident contact, always encrypted at rest.
-- **Juvenile firesetter intervention** is a separate option a department
-  enables, shown as coming soon (pitfall #19: marked not yet in effect, with no
-  stored switch).
-- **CRR goals** — yearly targets per measure.
+Answers to the Phase 3 plan's questions, as they will be built:
+
+| Question                                  | Decision                                                                                                                                                                                                    |
+| ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Who records activities                    | The Community Outreach Team, and anyone holding `events.manage`                                                                                                                                             |
+| Who sees a resident's address and contact | The Community Outreach Manager and above; everyone else sees ZIP, city, state and counts                                                                                                                    |
+| How long resident details are kept        | Cleared automatically after a period the department sets, 24 months by default; the ZIP code is kept for audit                                                                                              |
+| Default counts                            | As listed in `app/services/crr_catalogue_defaults.py`                                                                                                                                                       |
+| Admin Hours                               | Each activity type credits a category the department chooses; with none chosen it follows the Public Education mapping. An activity attached to an event does not credit again, its attendance already does |
+| Repeat-visit lookup                       | Later                                                                                                                                                                                                       |
+| ZIP lookup                                | On when the department's own address is in the US; new entries start with the department's city and state                                                                                                   |
+| ZIP data                                  | GeoNames' US postal codes (CC BY 4.0), bundled; credit with a link in the app footer                                                                                                                        |
+
+**Part 1 — the catalogue (built 2026-11-22).** Events Settings → CRR
+Catalogue: activity types, their counts, and risk and priority-population
+tags, each department's own copy of the defaults, seeded the first time the
+catalogue is read. A built-in row is retired, never deleted. Managed with
+`events.manage`. The ZIP lookup (`GET /crr/zip-lookup/{zip}`) and its bundled
+data ship with it. Juvenile firesetter intervention shows as "Coming soon" with
+nothing stored.
+
+**Part 2 — activity logging (built 2026-11-22).** Events → CRR Activities
+(`/events/crr-activities`, also the hub's CRR Activities tab), a "Record an
+activity" card on an outreach event's page, and a link from the Outreach
+Overview. Two new permissions: `crr.record`, granted to the Community Outreach
+Team position and alongside every seeded `events.manage`, and
+`crr.view_contact`, granted to the Public Outreach position, the chief ranks
+and the president. The migration grants both to stored positions (pitfall #23).
+Boundaries drawn without a ruling:
+
+- **The screen records and deletes; it does not edit.** An activity's type,
+  event, time and members are fixed once recorded, because the members' Admin
+  Hours entries are written from them. `PATCH /crr/activities/{id}` changes
+  counts, tags, place, notes and resident details, but no screen calls it yet;
+  to correct an activity, delete it (which removes the hours it credited) and
+  record it again.
+- **Notes are treated as resident details.** They are encrypted, shown only
+  with `crr.view_contact`, and cleared with the details, because free text is
+  where a resident's name or condition turns up.
+- **Clearing is a daily task** (03:55 UTC). It clears address, name, phone,
+  email and notes on activities older than the period, keeps ZIP, city, state,
+  county and counts, and stamps the activity so the page says the details were
+  cleared. An activity that never held details is left unstamped. Details cannot
+  be added back to a cleared activity.
+- **Reading resident details is audited** (`crr.resident_details_viewed`, with
+  activity ids and no content), once per list or detail response that shows any.
+- **The event card shows to `crr.record` or `events.manage`** on an outreach
+  event that is not cancelled — the same rule a save is checked against.
+- **A member credited 0 minutes is recorded as taking part** but credits no
+  time.
+
+**Part 3 — Outreach Impact breakdowns (built 2026-11-23).** A Community risk
+reduction section on Outreach Impact, and on its print page. Owner decisions
+of 2026-11-23:
+
+| Question                       | Decision                                                                         |
+| ------------------------------ | -------------------------------------------------------------------------------- |
+| Which period                   | The page's own switch, with its comparison against the previous period           |
+| What a risk or population sums | Activities and each count's total; an activity counts under every tag it carries |
+| How ZIP codes are shown        | A list, and a street map from OpenStreetMap's tiles                              |
+| Export                         | Screen and print page only; the CSV stays the events list                        |
+
+Boundaries drawn without a ruling:
+
+- **The map loads only when someone presses Show map.** Opening it makes the
+  viewer's browser fetch tiles from `tile.openstreetmap.org`, which tells
+  OpenStreetMap the area being viewed; nothing else is sent. The CSP allows
+  that one host for images, and `tests/test_csp_map_tiles.py` holds the nginx
+  configs and the map to it. An air-gapped install sees the circles over a
+  blank background. OpenStreetMap's tile usage policy suits a department's
+  occasional use; a department that wants heavy use, or no outside contact,
+  needs a self-hosted tile server, which is not built.
+- **A circle sits at each ZIP code's centre,** sized by activities. It is not
+  a boundary shape: GeoNames gives a point per ZIP, and ZIP boundaries are
+  large data the app does not bundle.
+- **The print page has the tables, not the map.** A street map does not print
+  reliably.
+- **"Events with CRR activities count as outreach" changes nothing**, so the
+  shared outreach rule is not widened: an activity can only be recorded on an
+  event that already counts.
+- **Retired types, counts and tags still appear** when they have activity in
+  the period.
+
+Still to build: yearly goals per count (phase 4).
+
+**The footer credit is hidden on a phone,** with the rest of its line: a link
+on every page's footer would be a tap target under 44px on every route. The
+ZIP field carries a plain-text credit that a phone shows.
 
 ## Outreach Events — Edges Left by the 2026-11-20 Changes (All Closed)
 
@@ -9245,17 +9320,26 @@ single-page form. What it changes, and what it leaves:
   Training Info. The entry below still applies to an event made from a
   template: a library-course template saved with a blank instructor or
   expiry gets the course's.
-- **A template's lead instructor survives that member's anonymisation, as a
-  training session's instructor does.** `training_details` holds the
-  instructor's member id and name as JSON, and neither
-  `member_anonymization_service.py` nor `user_deletion_service.py` touches
-  it — nor `training_sessions.instructor`, the free-text name a session
-  stores beside its `instructor_id`, which has the same gap and was not
-  recorded before. Neither carries a foreign key, so a removed member leaves
-  a dangling id, which applying the template clears. Scrubbing both on
-  anonymisation is a change to the anonymisation service, left for an owner
-  decision. A department-template export writes `training_details` as null,
-  so neither the name nor an org-local course id leaves the installation.
+- ~~**A template's lead instructor survives that member's anonymisation, as a
+  training session's instructor does.**~~ **Resolved 2026-11-23** (owner
+  decision of that date). Anonymisation and permanent delete replace the
+  member's name with "Former member" in `event_templates.training_details`
+  (its `instructor_id` cleared), in `training_sessions.instructor` wherever
+  `instructor_id` is the member, and in each attendee's
+  `training_records.instructor` that still holds the name the session copied
+  onto it (`app.services.instructor_erasure`). "Former member" rather than a
+  blank keeps those records off the NFPA completeness report's
+  missing-instructor list. Migration `9c41e7b2d5a3` applied the same rule to
+  members anonymised before. **Not covered:** members permanently deleted
+  before 2026-11-23 (the delete cleared the sessions' `instructor_id`, so
+  nothing links their name back to them), a record written before
+  `source_event_id` existed, and a record or session whose instructor was
+  typed as free text with no `instructor_id`. The original entry read:
+  `training_details` holds the instructor's member id and name as JSON, and
+  neither `member_anonymization_service.py` nor `user_deletion_service.py`
+  touched it, nor `training_sessions.instructor`. A department-template
+  export writes `training_details` as null, so neither the name nor an
+  org-local course id leaves the installation.
 - **Under a library course, a blank Lead Instructor or Expiration is saved
   as the course's.** The backend reads `null` for those two as "use the
   course's value", on create and on edit, so an officer cannot clear either
