@@ -5,6 +5,53 @@ section at the top of the current month's page, and a new month starts a
 new page. The engineering audit behind each pass is in
 [`docs/CHANGE_AUDIT_2026-11.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-11.md).
 
+## Recent changes: November 23 – 24, 2026
+
+The engineering audit is
+[`docs/CHANGE_AUDIT_2026-11.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-11.md#change-audit-november-23--24-2026).
+
+- **Community risk reduction.** Departments can keep a catalogue of CRR
+  activities (smoke alarm installs, home safety visits and so on), log each
+  one with its counts, place and members, and see the results by activity,
+  risk and ZIP code, with a map, on Outreach Impact. Members logged get Admin
+  Hours. See [Events](Module-Events).
+- **Feedback from requesters.** Once an outreach request is completed, the
+  requester can be asked to rate the visit through a form you choose. The
+  answers show on the request and on Outreach Impact. See
+  [Public Programs](Public-Programs).
+- **Apparatus nights** can require a coordinator to approve each self
+  sign-up. Requests nobody answers lapse when the night is finalized.
+- **Draft events.** Training managers see draft Training events; members see
+  no drafts at all.
+- **Series edits** check the room for every occurrence they move, and copy
+  only the fields you changed.
+- **Waivers.** An officer is told at once that they cannot excuse
+  themselves. Cancelling or deleting a session now voids approved requests
+  too and gives them back toward the yearly limit. A correction to a session
+  already held keeps the approval. Members can view and remove their
+  supporting documents, and the queues load 50 at a time. See
+  [Training](Module-Training) and [Meeting Minutes](Module-Meeting-Minutes).
+- **Compliance agrees across screens.** Former members read **Not a Current
+  Member** instead of being graded. Shift Compliance hours count closed-out
+  shifts, the monthly average weights partly excused months, and a member who
+  misses a rolling requirement again is told again. See
+  [Compliance](Module-Compliance).
+- **Forms say what is wrong on the field** in the requirement editor, the
+  skill template builder, the course library, external training, crew
+  training and the Enhancements dialogs.
+- **Profiles and ID cards** list certifications with expiry dates, and My
+  Hours breaks your hours, shifts and calls down **by position**. See
+  [Member ID Cards](Member-ID-Cards) and [Scheduling](Module-Scheduling).
+- **Erasing a member** now deletes their personal Member Files folder, strips
+  the home address and reason from their separation letters, shows "Former
+  member" for classes they taught, and keeps excused meetings excused. The
+  Anonymize dialog lists all of this. Download anything you must keep first.
+  See [Privacy](Security-Privacy).
+- **Inventory import** checks every row before **Import** and lists the rows
+  it will skip. Report columns can be sorted from the keyboard.
+- **Documentation site.** The guides and these wiki pages are now published
+  at [thelogbook.us](https://thelogbook.us/).
+
 ## Recent changes: November 20 – 21, 2026
 
 The engineering audit is

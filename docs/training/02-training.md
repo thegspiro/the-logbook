@@ -352,9 +352,15 @@ How much of a month is excused is your department's
 [**Months on leave**](#months-on-leave--the-department-rule-2026-11-02)
 setting. Training you did while on leave still counts toward the total, and the
 summary line says how much of the total was earned on leave. The average is
-your pace in the months nothing excused, measured on those months' hours only.
-The pace still uses the department's full yearly hours. A partly excused
-month's bar is scaled to the part of the pace it still owes.
+your pace while active. A wholly excused month and its hours are left out.
+_(2026-11-23)_ A partly excused month counts as the part not excused, with
+all of its hours: half a month excused counts as half a month. The summary
+then reads, for example, "average 2 shifts/month in the 1.5 months not
+excused". Before, a partly excused month was left out of the average
+altogether. Hours in such a month cannot be split by the day, so the average
+can read slightly high. The pace still uses the department's full yearly
+hours. A partly excused month's bar is scaled to the part of the pace it still
+owes.
 
 These are the same months the card's "Adjusted for …" note counts when it
 reduces your target. The note names the reason: "3 months on leave", "1 waived
@@ -421,6 +427,15 @@ with a red asterisk.
 > there." Select **Record crew training** to log the drill once for the whole
 > crew. Each member present gets an entry waiting for a training officer's
 > approval; nobody is credited until it is approved.
+>
+> _(2026-11-23)_ **Record Crew Training** flags every problem at once, each on
+> its own field: a blank topic ("Enter what the training covered."), no date
+> or a date in the future, no length, or nobody ticked under **Members
+> present**. **Fix these before sending** at the top lists them and takes the
+> focus. Before, it showed one message at a time at the foot of the page.
+> Nothing is sent until every field is fixed, and a field the server refuses is
+> marked the same way. Reloading or closing the tab with a drill typed in makes
+> the browser ask first.
 
 > **Hint:** If you are submitting for a certification, attach the certificate.
 > It helps officers check and approve your record faster.
@@ -517,6 +532,18 @@ officer sees "No courses in your library yet" with a prompt to create one.
 — instructor, expiry, code, description, hours — and select **Update Course**.
 The field stays empty. An emptied category or materials list is also saved
 empty.
+
+**When the course form finds a problem** _(2026-11-23)_. **Add New Course**
+and **Edit Course** name each problem under its field — a blank name, negative
+hours, **Max Participants** below 1, or **Expires After (months)** that is not
+a whole number — and list them in **Check these fields** at the top. A new
+course is created only once nothing is flagged. Editing saves everything
+else: the form stays open and says, for example, _"Course saved, except code.
+Fix it and save again."_, the refused field keeps its stored value, and the
+library behind it refreshes. The name (255 characters), code (50) and
+instructor (255) count toward their limits as you type. **Expires After
+(months)** now accepts **0**. Escape, the **X** and **Cancel** ask before
+throwing typed changes away (**Keep editing** / **Discard changes**).
 
 **Deactivating a course** hides it from new training records. To bring it back,
 open **Filters**, tick **Show inactive courses**, and select **Reactivate** on
@@ -1407,7 +1434,15 @@ These actions credit pipeline progress without anyone editing the enrollment:
 > program stays completed if it was, and any phase the member reached is kept.
 > A correction that still leaves them at or above the target changes nothing.
 > A requirement a training officer marked **Verified** or **Waived** is never
-> reopened this way.
+> reopened this way, and neither is one with no number to fall below (a
+> certification or a checklist). If a later correction brings the member back
+> up to the target, the requirement completes again by itself. The officers
+> told are current members holding a training-officer role; the email goes to
+> those who have not turned off **Training officer duties** email, and its
+> wording is the
+> **Program Requirement Reopened** template under **Communications > Email
+> Templates > Training & Certifications**, which a department can switch off
+> there. The in-app notification is always sent.
 
 ### Viewing Your Own Progress (Members)
 
@@ -1470,6 +1505,34 @@ dialog checks what uses the requirement first.
     sessions, course classes, compliance profiles, waivers). A waiver that
     excused only this requirement is deactivated. Type the requirement's name
     to confirm. This cannot be undone.
+
+**When the requirement form finds a problem** _(2026-11-23)_. The requirement
+form (opened from **Curriculum → Requirements**, and from a program's
+**Requirements** tab) names each problem under its own field, and lists them
+all in **Fix these and save again** at the top. Before, it showed one message
+at a time in a pop-up that vanished and pointed at no field. The fields it
+checks are the name, the target the type needs (hours, shifts, calls, the
+evaluation counts, **Sessions to Attend (%)**, the passing score, or a course
+for a Courses requirement), who the requirement applies to, the
+grandfathering date and catch-up deadline, and a year outside 2020–2100.
+
+- **A new requirement is created only once nothing is flagged.** Nothing is
+  saved until you fix every field.
+- **Editing saves everything else.** If one field is refused, the rest of your
+  changes are saved, the form stays open and says, for example,
+  _"Requirement saved, except name. Fix it and save again."_ The refused field
+  keeps its stored value.
+- **A refused target holds back the type with it.** If the target is refused,
+  the requirement keeps its stored type and target, so a new type is never
+  saved with the wrong kind of target. The grandfathering date and the
+  catch-up deadline are likewise saved together or not at all.
+- **Saving for new members only** makes a new copy of the requirement (see
+  ["Who does this change apply to?"](#who-does-this-change-apply-to--saving-a-change-for-new-members-only)),
+  so it saves whole or not at all: _"Saving for new members makes a new copy,
+  so fix these first."_
+- **Closing asks first.** Escape, the **X** and **Cancel** ask before throwing
+  typed changes away (**Keep editing** / **Discard changes**). The name counts
+  toward its 255-character limit as you type.
 
 ### Requirement Types
 
@@ -1968,6 +2031,13 @@ attendance toward the requirement.
   duty shifts should not count toward them. Tick it on an Hours requirement
   that should appear on Shift Compliance.
 
+_(2026-11-23)_ On Shift Compliance a ticked **Hours** requirement is graded
+exactly like a Shifts one: hours on shifts an officer has **closed out**, plus
+counted outside shifts and approved pre-shift work on closed-out shifts,
+inside the requirement's own period, with training waivers and leave applied.
+Hours on a shift not yet closed out stop counting there until it is closed
+out.
+
 See [Shifts & Scheduling](./03-scheduling.md#compliance-report).
 
 ![Shift Credit on an Hours requirement: Shift attendance satisfies this requirement, unticked, with its help text](./images/02-115-shift-credit-box.png)
@@ -2028,6 +2098,19 @@ Open **Training Admin** from the Administration menu. The page is titled
 - recent submissions waiting for review.
 
 ![Training Officer Dashboard with summary cards and pending review queue](./images/02-17-officer-dashboard.png)
+
+**Dates on the dashboard cards** _(2026-11-23)_. Each row of **Upcoming
+Expirations** shows the expiry date beside the countdown, for example
+**Dec 19, 2026 · 26d**, so you can plan a renewal class without opening
+**Expiring Certs**. **Recent Completions** shows the completion date as
+**Nov 20, 2026**, and **Requirements Status** shows the due date the same way,
+or **Ongoing** for a requirement with no due date. These used to print dates
+as `2026-11-20`. They are calendar dates, so they never move a day for your
+timezone.
+
+**The Department Compliance figure has one decimal** _(2026-11-23)_, for
+example **66.7%**. It is the same figure the administration hub shows, so the
+two no longer differ by rounding.
 
 ### The top of the Training Administration page
 
@@ -2734,9 +2817,12 @@ like any other training, and the monthly hours show it under the month's
   recording their own leave is not emailed. The wording is the **Leave of
   Absence Notice** template under **Communications > Email Templates >
   Training & Certifications**.
-- **The Shift Compliance report** (Scheduling) — counts leaves of absence only,
-  as before, but now excuses each month by the same department rule, so a
-  month reads the same there as on the member's training screen.
+- **The Shift Compliance report** (Scheduling) — excuses each month by the
+  same department rule, so a month reads the same there as on the member's
+  training screen. _(2026-11-23)_ Its **hours** rows now also take training
+  waivers into account, as its shifts rows already did, and are measured over
+  the requirement's own period. Before, an hours row counted leaves of absence
+  only, and only on a rolling requirement.
 
 ### Months on leave — the department rule _(2026-11-02)_
 
@@ -2839,9 +2925,19 @@ any given day. It therefore gets no deadline reminder, unless a catch-up
 deadline protects the member. The non-compliance notice lists it once and
 does not list it again while it stays short. Before this fix, a member short
 of a rolling requirement was sent both emails every day, with the requirement
-"due today". One thing to know: a member who meets a rolling requirement and
-later falls short of it again is not sent a new notice for it alone. It
-appears again only in a notice that some other requirement triggers.
+"due today".
+
+**A rolling requirement missed again is notified again** _(2026-11-23)_. Each
+day The Logbook notes the last date each member met each rolling requirement.
+All the days of one lapse count as one, so the member is told once per lapse.
+If they catch up and later fall short again, that is a new lapse, and the
+non-compliance notice lists it again. Before, a member was told about a
+rolling requirement once, ever: falling short a second time a year later sent
+nothing unless some other requirement triggered a notice. The dates start
+with the first daily run after the upgrade, so a member who was already told
+before the upgrade is not emailed again until they have met the requirement
+once and then lapsed.
+
 Optional requirements are never in either email.
 
 > **Important.** If your department saved its compliance configuration with
@@ -3014,6 +3110,23 @@ waiting. Only the member and the people who decide it can open them, and the
 file name is not kept. They are deleted when the **Keep documents for**
 period ends after the decision; the request itself is kept.
 
+- **Viewing a document** _(2026-11-23)_. On the request's page, under
+  **Supporting documents**, a JPEG or PNG has a **View** (eye) button that
+  opens it in a window on the page, and a PDF's **View** button opens it in a
+  new browser tab. Either way it is a copy fetched through the same protected,
+  logged download as the **Download** button; nothing is published at a
+  public address, and the copy is let go when you close the window. A HEIC
+  photo has no **View** button, because most browsers cannot show one:
+  download it instead. If your browser blocks the new tab, it says _"Allow
+  pop-ups for this site to view the document, or download it."_
+- **Removing a document** _(2026-11-23)_. While your request is still
+  waiting, each of your documents on its page has a **Remove** (bin) button.
+  Confirm with **Remove document** (or **Keep it**); the document is taken off
+  the request and deleted, and the officers no longer see it. Once the request
+  is decided nothing can be removed. If your department requires a document,
+  the last one cannot be removed — file the replacement first. Only the member
+  who asked can remove a document.
+
 **Deciding** (the holders of the positions under **Who decides**, and the
 Chief and the President):
 
@@ -3062,6 +3175,11 @@ of every Training page it carries the number waiting on you. The email about
 each new request links to it too. Training officers also reach the same list
 from **Training Admin → Records → Waiver Requests**.
 
+_(2026-11-23)_ **Waiting for a decision** and the decided list each load 50
+requests at a time, with their own **Show more waiting requests** and **Show
+more decided requests** buttons. Before, a page of decided requests could come
+up short, and waiting requests past the 200th could not be reached at all.
+
 ### Asking a member for more information _(2026-11-13)_
 
 **Who can do this:** anyone who decides a member's request to be excused.
@@ -3107,16 +3225,37 @@ to _new date_. Do you still need to be excused?**
   least seven days from the notice: when an officer corrects the start of a
   session held weeks ago, the request no longer closes within the hour.
 
+**When an approval stands** _(2026-11-23)_. An **approved** request is not
+reopened when the move does not change your reason for missing the session:
+
+- **a correction to a session already held** — the start is changed after the
+  session had started, for example an officer fixing the recorded time
+  afterwards; or
+- **a move on the same day** — the new start falls on the same date, in your
+  department's timezone, as the old one.
+
+The approval stays, nobody is told, and the request just takes the session's
+new title, start and date. A **pending** request still comes back to you on
+any move.
+
 Officers cannot approve or deny the request until you confirm; their page says
 it is waiting for you. A request that was **denied** is not reopened. Confirm
 is refused if you have already checked in to the session: withdraw it instead.
+_(2026-11-23)_ Confirm is also refused for the same reasons a new request would
+be: if you have since been made exempt from training requirements, or the
+session no longer counts toward an attendance requirement that applies to you.
 See [Moving an event that members asked to be excused from](./04-events-meetings.md#moving-an-event-that-members-asked-to-be-excused-from-2026-11-13)
 for the officers' side.
 
 **When the session is cancelled** _(2026-11-16)_. Cancelling or deleting the
 session closes every request still pending for it; there is nothing left to be
-excused from. The member is told in the app and, from 2026-11-16, by email. A
-request already decided is kept as it was. _(2026-11-21)_ Undoing a historical
+excused from. The member is told in the app and, from 2026-11-16, by email.
+_(2026-11-23)_ An **approved** request is closed the same way and **given
+back**: it no longer counts toward the member's limit of waivers, and the
+member's notice says so ("It had been approved; since nothing is held, it no
+longer counts toward your limit of waivers."). Before, an approval for a
+session that never happened used up one of the member's waivers for the year.
+A **denied** request is kept as it was. _(2026-11-21)_ Undoing a historical
 import that created the session closes its requests the same way, and now
 emails the member too.
 
@@ -3174,6 +3313,15 @@ cannot.
 2. Choose the member and the leave type: **Leave of Absence**, **Medical**,
    **Military**, **Personal**, **Administrative**, **New Member** or
    **Other**.
+
+   _(2026-11-23)_ If you choose yourself, a note appears under the member
+   list at once: _"You cannot excuse your own requirements. Ask another
+   officer to record your waiver, or submit a leave request for someone else
+   to decide."_ The link opens **Leave Requests**, and **Create Waiver** stays
+   greyed out until you choose someone else. Before, you only learned this
+   from the refusal after filling in the whole form. For the same reason the
+   waiver list offers no **Edit** on your own leave.
+
 3. Set the date range, or tick **Permanent (no end date)** for a waiver that
    never ends. Permanent waivers show a purple **Permanent** badge.
 4. Under **Applies To**, tick one or both:
@@ -3223,7 +3371,9 @@ longer current.
   request; the notice links to the session's event page, or to nothing if the
   event has since been deleted.
 - **What is not copied.** A request the member withdrew, or one voided because
-  the session was cancelled or deleted, was never decided, so nobody is copied.
+  the session was cancelled or deleted, is not a decision, so nobody is
+  copied — not even when a cancelled session's request had already been
+  approved _(2026-11-23)_.
 - **Email.** The copy is sent under the **Training officer duties** email setting, so
   an officer who turned that off still sees it in the app.
 - **A position that was deleted** after being ticked is listed as "no longer
@@ -3244,16 +3394,28 @@ are those of the member's compliance profile when it sets its own, otherwise
 the department's compliance settings (100% compliant and 75% at risk when
 nothing is configured):
 
-| Indicator               | Meaning                                                                   |
-| ----------------------- | ------------------------------------------------------------------------- |
-| **Green (Compliant)**   | Compliant on the matrix: meets the compliant threshold                    |
-| **Yellow (At Risk)**    | At risk on the matrix: below the compliant threshold, at or above at-risk |
-| **Red (Non-Compliant)** | Non-compliant on the matrix: below the at-risk threshold                  |
-| **Not Applicable**      | No requirement grades the member                                          |
-| **Exempt**              | The member is marked exempt from compliance tracking                      |
+| Indicator                | Meaning                                                                   |
+| ------------------------ | ------------------------------------------------------------------------- |
+| **Green (Compliant)**    | Compliant on the matrix: meets the compliant threshold                    |
+| **Yellow (At Risk)**     | At risk on the matrix: below the compliant threshold, at or above at-risk |
+| **Red (Non-Compliant)**  | Non-compliant on the matrix: below the at-risk threshold                  |
+| **Not Applicable**       | No requirement grades the member                                          |
+| **Exempt**               | The member is marked exempt from compliance tracking                      |
+| **Not a Current Member** | _(2026-11-23)_ The person has left the department, so nothing grades them |
 
 The same colour shows on **My Crew** and on the member's printed training
 record.
+
+**Former members are not graded** _(2026-11-23)_. For anyone whose account is
+not current — any account status other than active or probationary, including
+the **Leave** and **Suspended** statuses — or whose account was deleted, the
+card reads **Not a Current Member** in grey: _"This person is not a current
+member of the department, so their training is not graded against the
+department's requirements."_ This comes before **Exempt**. On the member's **Training
+History** page, the officer's **Requirements** section says the same in place
+of the requirement list. Their training records are unchanged and still
+listed. Before, the card graded a former member against today's requirements,
+although the Compliance Matrix already left them out.
 
 The expiring-certificate figure is shown for information and does not set the
 colour. An expired certificate lowers the standing when a requirement grades
@@ -3941,6 +4103,12 @@ A member can email a link at most 10 times an hour. A submitted evaluation
 credits the program and reads as entered by the named preceptor through a
 preceptor link, and says so when the member made the link.
 
+_(2026-11-23)_ If a training officer types in the same evaluation at the
+moment the preceptor submits, the preceptor's answers are saved onto it and
+the link still closes, attached to the evaluation, with the submitting
+device's address and browser recorded. Before, that collision could leave the
+link open with no evaluation attached.
+
 **Credit and visibility.** A submitted outside-shift evaluation credits the
 member's program exactly as a department shift's does (above). The member sees
 it as soon as it is submitted, while the logged shift counts — there is no
@@ -4184,6 +4352,21 @@ this change any save un-verified it, so a provider whose schedule was edited
 silently stopped syncing on its own while **Sync Now** still worked. If a
 provider's last scheduled pull is older than its interval, open it and select
 **Test**.
+
+**When the provider form finds a problem** _(2026-11-23)_. **Add Provider**
+and **Edit Provider** name each problem under its field and list them in
+**Check these fields** at the top, instead of the browser's pop-up bubbles.
+**Add Provider** still needs a name, the API address, the key (the AccessToken
+for Vector Solutions) and, for Target Solutions, the API secret, and the
+address must be a full one starting with `https://` (or `http://`). A new
+provider is added only once nothing is flagged. Editing saves everything else
+and says, for example, _"Provider saved, except name. Fix it and save
+again."_; the refused field keeps its stored value. The name (255 characters)
+and address (500) count toward their limits. Closing a form with typed changes
+asks first, and **Add Provider** opens again at the choice of platform rather
+than on the half-filled form.
+**Clearing a provider's description now sticks**: before, the edit reported
+success and kept the old text.
 
 **Manual pulls are labelled** _(2026-11-18)_. In **Sync History**, a pull an
 officer started with **Sync Now** reads **Manual pull**. Before, it read
@@ -4489,6 +4672,21 @@ recertification pathways. Each pathway has:
 **Generate Tasks** looks for expiring certifications and creates the renewal
 tasks.
 
+**The Add dialogs say what is wrong on the field** _(2026-11-23)_. **Add
+Recertification Pathway** — and, the same way, **Add Competency Matrix**,
+**Add Instructor Qualification** and **Add Multi-Agency Exercise** — names
+each problem under its own field and moves to the first one: a blank name, a
+**Renewal Window (days)** outside 1–365, a **Grace Period (days)** outside
+0–365, negative **Required Hours**, a matrix with no **Position**, a
+qualification with no **Member**, an exercise with no **Exercise Date**, or a
+**Total Participants** that is not a whole number. Before, a pop-up message ("Name is required") vanished and
+pointed at no field. Nothing is created until every flagged field is fixed. A
+problem the server finds is shown on its field too, and anything else inside
+the dialog. Text boxes count toward their limits (names 255 characters,
+position 100). Enter submits, and Escape, the **X** or **Cancel** after typing
+asks **Keep editing** / **Discard changes**. A blank renewal window or grace
+period still takes the defaults above.
+
 ![Recertification pathways with renewal type, window and grace period](./images/02-68-recertification-pathways.png)
 
 ### Where A Member Sees Their Own Renewal Tasks
@@ -4653,6 +4851,10 @@ whether it has happened.
 
 - A taking-part organization does not need to use The Logbook. Its name is
   simply recorded on the exercise.
+- _(2026-11-23)_ A missing name or date, or a **Total Participants** that is
+  not a whole number, is named under its field and nothing is created until it
+  is fixed. **Add Matrix** and **Add Qualification** work the same way; see
+  [Recertification Pathways](#recertification-pathways).
 
 ---
 
@@ -4944,12 +5146,18 @@ Details**; the course is on **Training Info**.
 > active Training templates. Picking one fills the event's details and, when
 > the template saved them, **Training Info**: the course, training type,
 > credit hours, lead instructor and certification settings, and since
-> 2026-11-23 the requirement and program links, **Counts toward
-> attendance** and the completion settings. It replaces what was already
-> typed. A link no longer active is left out, with a note. If the template's course is no longer in the
-> Course Library, **Training Info** starts on **No course yet**; if its lead
-> instructor is no longer a current member, **Lead instructor** starts empty.
-> A note on **Training Info** says which. Templates are made and edited under
+> 2026-11-23 the category, the program and phase, the requirement link,
+> **Counts toward attendance** and the **Training completion** settings
+> (**Counts toward certification requirements**, **Start an in-progress
+> training record when members check in**, **Require sign-off** and its
+> **Approval deadline (days)**). It replaces what was already typed. If the
+> template's course is no longer in the Course Library, **Training Info**
+> starts on **No course yet**; if its lead instructor is no longer a current
+> member, **Lead instructor** starts empty. A category, program or requirement
+> that is no longer active, or a phase no longer in its program, is left out.
+> A note on **Training Info** says which. The session is still created; and if
+> one of those lists failed to load, the template's choice is kept rather than
+> dropped. Templates are made and edited under
 > **Events → ⋯ → Event Templates**, or with **More → Save as Template** on a
 > Training event's page (see
 > [Templates](./04-events-meetings.md#templates)).
@@ -6023,6 +6231,13 @@ have moved, been renamed or work differently.
 
 ### Works differently now
 
+- **Since 2026-11-23:** a member who falls short of a rolling requirement
+  again after catching up is sent a new non-compliance notice; cancelling a
+  session gives back an approved request to be excused instead of keeping it;
+  a former member's compliance card reads **Not a Current Member** rather than
+  a grade; and the training setup forms (requirements, courses, providers,
+  crew training and the Program Management **Add** dialogs) name each problem
+  on its field, and an edit saves everything except the refused field.
 - **Practical skills:** a department runs either Skills Testing or Shift
   report sign-offs. Under Skills Testing (the default), shift reports show no
   skills list.
