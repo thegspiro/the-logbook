@@ -1963,8 +1963,13 @@ the capped page column (a card is at most ~1278px on any screen), and a dialog
   (or the card that clips it) and **one tier** on the table: `-narrow` (cards
   under 32rem), `-wide` (64rem), `-xwide` (78rem), `-2xwide` (96rem). Pick it
   from a measurement: render with long, realistic data, read the table's
-  `width: min-content`, add ~4% for WebKit, whose text runs wider than
-  Chromium's, and take the smallest tier above that. `xwide` is 78rem, not
+  `width: min-content` in Chromium, and take the smallest tier that leaves
+  **about 8%** above it. Half of that is WebKit, whose text runs ~4% wider
+  than Chromium's; the other half is CI's WebKit, which can lay text out
+  wider again than the WebKit build you run locally. The scheduling coverage
+  table passed `--repeat-each=3` in local WebKit and failed on CI at 527px in
+  a 516px card on the 820px tablet, so a measurement within that margin of a
+  tier narrows further or takes the next tier. `xwide` is 78rem, not
   80rem, because a capped page column never gives a card 80rem; a table that
   needs more than ~1248px shows as cards on every screen of such a page.
 - **Narrow before you tier**, without hiding anything: let free text and long
