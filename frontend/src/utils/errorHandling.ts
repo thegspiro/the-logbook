@@ -10,6 +10,8 @@
 export interface AppError {
   message: string;
   code?: string | undefined;
+  /** Which request failed, on a server fault: the backend's request id, also on its log lines. */
+  reference?: string | undefined;
   status?: number | undefined;
   details?: Record<string, unknown> | undefined;
 }
@@ -44,6 +46,7 @@ interface HttpErrorResponse {
       detail?: string | ValidationErrorEntry[] | Record<string, unknown>;
       message?: string;
       code?: string;
+      reference?: string;
       details?: Record<string, unknown>;
     };
     status?: number;
@@ -201,6 +204,7 @@ export function toAppError(error: unknown): AppError {
     return {
       message,
       code: data?.code,
+      reference: data?.reference,
       status: response.status,
       details: retryAfter === undefined ? data?.details : { ...data?.details, retryAfter },
     };
@@ -241,7 +245,20 @@ export function toAppError(error: unknown): AppError {
 export function getErrorMessage(error: unknown, fallback = 'An error occurred'): string {
   const appError = toAppError(error);
   const message = appError.message || fallback;
-  return appError.code ? `${message} (Error code: ${appError.code})` : message;
+  return `${message}${supportSuffix(appError)}`;
+}
+
+/**
+ * " (Error code: LB-SYS-001, reference 3f2a9c1e44aa0b12)", or as much of it as
+ * the response carried. The code says what kind of error it was; the
+ * reference, sent only with a server fault, says which one, so IT can find
+ * that request in the backend log and on the Error Monitoring page.
+ */
+export function supportSuffix(appError: AppError): string {
+  if (!appError.code) return '';
+  return appError.reference
+    ? ` (Error code: ${appError.code}, reference ${appError.reference})`
+    : ` (Error code: ${appError.code})`;
 }
 
 /**
@@ -260,7 +277,7 @@ export function getSaveFailureMessage(error: unknown, action: string): string {
   if (appError.status === undefined || appError.status < 500) {
     return getErrorMessage(error, `Could not ${action}`);
   }
-  const code = appError.code ? ` (Error code: ${appError.code})` : '';
+  const code = supportSuffix(appError);
   return `Could not ${action}: the server hit a problem on its end. Your entries are still on this page, so try again in a moment. If it keeps happening, tell IT${code}.`;
 }
 
@@ -278,7 +295,7 @@ export function getLoadFailureMessage(error: unknown, what: string): string {
     return `Could not load ${what}. Check your connection and refresh the page.`;
   }
   const appError = toAppError(error);
-  const code = appError.code ? ` (Error code: ${appError.code})` : '';
+  const code = supportSuffix(appError);
   if (appError.status === 403) {
     const reason = getErrorDetail(error);
     return `You do not have permission to see ${what}.${reason ? ` ${reason}` : ''} Ask an administrator if you need it${code}.`;
@@ -308,7 +325,7 @@ export function getActionFailureMessage(error: unknown, action: string): string 
     return `Could not ${action}. Check your connection and try again.`;
   }
   const appError = toAppError(error);
-  const code = appError.code ? ` (Error code: ${appError.code})` : '';
+  const code = supportSuffix(appError);
   if (appError.status === 403) {
     const reason = getErrorDetail(error);
     return `You do not have permission to ${action}.${reason ? ` ${reason}` : ''} Ask an administrator if you need to${code}.`;

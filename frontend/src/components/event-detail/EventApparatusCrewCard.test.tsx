@@ -3,6 +3,7 @@ const mockClaim = vi.fn();
 const mockRelease = vi.fn();
 const mockAssign = vi.fn();
 const mockRemovePlan = vi.fn();
+const mockUpdatePlan = vi.fn();
 const mockEditorOptions = vi.fn();
 const mockSendSeatCall = vi.fn();
 const mockApprove = vi.fn();
@@ -18,6 +19,7 @@ vi.mock('../../services/api', () => ({
     releaseSeat: (...args: unknown[]) => mockRelease(...args) as unknown,
     assignSeat: (...args: unknown[]) => mockAssign(...args) as unknown,
     removePlan: (...args: unknown[]) => mockRemovePlan(...args) as unknown,
+    updateNightPlan: (...args: unknown[]) => mockUpdatePlan(...args) as unknown,
     sendSeatCall: (...args: unknown[]) => mockSendSeatCall(...args) as unknown,
     approveRequest: (...args: unknown[]) => mockApprove(...args) as unknown,
     declineRequest: (...args: unknown[]) => mockDecline(...args) as unknown,
@@ -72,8 +74,8 @@ const board = (overrides: Partial<CrewBoard> = {}): CrewBoard => ({
   night_number: 1,
   night_count: 2,
   series: [
-    { event_id: 'night-1', start_datetime: FUTURE_START, filled: 1, total: 4 },
-    { event_id: 'night-2', start_datetime: FUTURE_END, filled: 0, total: 4 },
+    { event_id: 'night-1', start_datetime: FUTURE_START, filled: 1, total: 4, essential_filled: 1, essential_total: 4 },
+    { event_id: 'night-2', start_datetime: FUTURE_END, filled: 0, total: 4, essential_filled: 0, essential_total: 4 },
   ],
   units: [
     {
@@ -88,6 +90,7 @@ const board = (overrides: Partial<CrewBoard> = {}): CrewBoard => ({
           name: 'Driver',
           seat_type: ApparatusEventSeatType.DRIVER,
           note: null,
+          is_essential: true,
           user_id: 'u-driver',
           user_name: 'J. Ramirez',
           assignment_method: 'self_signup',
@@ -100,6 +103,7 @@ const board = (overrides: Partial<CrewBoard> = {}): CrewBoard => ({
           name: 'Santa',
           seat_type: ApparatusEventSeatType.GENERAL,
           note: 'Suit is in the Station 1 closet',
+          is_essential: true,
           user_id: null,
           user_name: null,
           assignment_method: null,
@@ -112,6 +116,7 @@ const board = (overrides: Partial<CrewBoard> = {}): CrewBoard => ({
           name: 'Elf',
           seat_type: ApparatusEventSeatType.GENERAL,
           note: null,
+          is_essential: true,
           user_id: null,
           user_name: null,
           assignment_method: null,
@@ -124,6 +129,7 @@ const board = (overrides: Partial<CrewBoard> = {}): CrewBoard => ({
           name: 'Elf',
           seat_type: ApparatusEventSeatType.GENERAL,
           note: null,
+          is_essential: true,
           user_id: null,
           user_name: null,
           assignment_method: null,
@@ -203,7 +209,7 @@ describe('EventApparatusCrewCard', () => {
 
     expect(await screen.findByText('Outreach · not a shift')).toBeInTheDocument();
     expect(screen.getByText('Night 1 of 2 · from “Santamobile — Full” · 1 of 4 seats filled')).toBeInTheDocument();
-    const signUps = screen.getAllByRole('button', { name: /Sign me up/ });
+    const signUps = screen.getAllByRole('button', { name: /^Sign myself up as/ });
     expect(signUps).toHaveLength(3);
     expect(screen.queryByRole('button', { name: /Assign/ })).not.toBeInTheDocument();
 
@@ -217,7 +223,7 @@ describe('EventApparatusCrewCard', () => {
     renderWithRouter(<EventApparatusCrewCard eventId="night-1" timezone="America/New_York" />);
 
     await screen.findByText('Outreach · not a shift');
-    expect(screen.queryByRole('button', { name: /Sign me up/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Sign myself up/ })).not.toBeInTheDocument();
   });
 
   it('gives a coordinator assignment and night editing', async () => {
@@ -225,7 +231,7 @@ describe('EventApparatusCrewCard', () => {
     renderWithRouter(<EventApparatusCrewCard eventId="night-1" timezone="America/New_York" />);
 
     await screen.findByText('Outreach · not a shift');
-    expect(screen.getAllByRole('button', { name: 'Assign…' })).toHaveLength(3);
+    expect(screen.getAllByRole('button', { name: /^Assign someone as/ })).toHaveLength(3);
     expect(screen.getByRole('button', { name: 'Change…' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Clear' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Edit this night/ })).toBeInTheDocument();
@@ -236,7 +242,9 @@ describe('EventApparatusCrewCard', () => {
     renderWithRouter(<EventApparatusCrewCard eventId="night-1" timezone="America/New_York" />);
 
     expect(await screen.findByText(/crew’s hours are posted/)).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /Sign me up|Assign|Edit this night/ })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: /Sign myself up|Assign someone|Change…|Edit this night/ })
+    ).not.toBeInTheDocument();
   });
 
   it('links the other nights of the run', async () => {
@@ -353,6 +361,66 @@ describe('EventApparatusCrewCard', () => {
     expect(await screen.findByText(/hours won’t be credited/)).toBeInTheDocument();
   });
 
+  it('draws each seat as the crew board does, with "Open position" for an empty one', async () => {
+    mockGetBoard.mockResolvedValue(board());
+    renderWithRouter(<EventApparatusCrewCard eventId="night-1" timezone="America/New_York" />);
+
+    expect(await screen.findByText('J. Ramirez')).toBeInTheDocument();
+    expect(screen.getAllByText('Open position')).toHaveLength(3);
+  });
+
+  it('leaves where the hours go to the badges rather than repeating it below', async () => {
+    mockGetBoard.mockResolvedValue(board());
+    renderWithRouter(<EventApparatusCrewCard eventId="night-1" timezone="America/New_York" />);
+
+    expect(await screen.findByText('Hours: Community Outreach')).toBeInTheDocument();
+    expect(screen.queryByText(/Admin Hours → Community Outreach/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/never count as shift hours/)).not.toBeInTheDocument();
+  });
+
+  it('marks a non-essential seat optional and counts the essential seats first', async () => {
+    const base = board();
+    const unit = nth(base.units, 0);
+    mockGetBoard.mockResolvedValue({
+      ...base,
+      units: [
+        {
+          ...unit,
+          // The last Elf is welcome but optional.
+          seats: unit.seats.map((seat, index) =>
+            index === unit.seats.length - 1 ? { ...seat, is_essential: false } : seat
+          ),
+        },
+      ],
+    });
+    renderWithRouter(<EventApparatusCrewCard eventId="night-1" timezone="America/New_York" />);
+
+    expect(
+      await screen.findByText('Night 1 of 2 · from “Santamobile — Full” · Essential 1/3 · 1 of 4 filled')
+    ).toBeInTheDocument();
+    expect(screen.getByText('Optional position')).toBeInTheDocument();
+    expect(screen.getAllByText('Open position')).toHaveLength(2);
+  });
+
+  it('sends whether each seat is essential when a night is edited', async () => {
+    mockGetBoard.mockResolvedValue(board({ can_manage: true }));
+    mockEditorOptions.mockResolvedValue({ apparatus: [], categories: [], mapped_event_types: [] });
+    mockUpdatePlan.mockReset();
+    mockUpdatePlan.mockResolvedValue(board({ can_manage: true }));
+    const user = userEvent.setup();
+    renderWithRouter(<EventApparatusCrewCard eventId="night-1" timezone="America/New_York" />);
+
+    await user.click(await screen.findByRole('button', { name: /Edit this night/ }));
+    const essential = await screen.findAllByRole('checkbox', { name: /Essential/ });
+    expect(essential).toHaveLength(4);
+    await user.click(nth(essential, 3));
+    await user.click(screen.getByRole('button', { name: 'Save this night' }));
+
+    await waitFor(() => expect(mockUpdatePlan).toHaveBeenCalledTimes(1));
+    const payload = mockUpdatePlan.mock.calls[0]?.[1] as { units: { seats: { is_essential: boolean }[] }[] };
+    expect(nth(payload.units, 0).seats.map((seat) => seat.is_essential)).toEqual([true, true, true, false]);
+  });
+
   describe('when sign-ups need approval', () => {
     it('asks for a seat instead of taking it, and says so', async () => {
       mockGetBoard.mockResolvedValue(board({ require_signup_approval: true }));
@@ -366,7 +434,7 @@ describe('EventApparatusCrewCard', () => {
       renderWithRouter(<EventApparatusCrewCard eventId="night-1" timezone="America/New_York" />);
 
       expect(await screen.findByText('Sign-ups need approval')).toBeInTheDocument();
-      expect(screen.queryByRole('button', { name: /Sign me up/ })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /Sign myself up/ })).not.toBeInTheDocument();
       await user.click(nth(screen.getAllByRole('button', { name: /Ask for this seat/ }), 0));
 
       expect(mockClaim).toHaveBeenCalledWith('night-1', 'seat-santa');

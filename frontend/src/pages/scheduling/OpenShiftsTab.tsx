@@ -267,6 +267,13 @@ export const OpenShiftsTab: React.FC<OpenShiftsTabProps> = ({ onViewShift, refre
                 <div className="space-y-3">
                   {dayShifts?.map((shift) => {
                     const signupClosed = boardClosedReason(shift);
+                    // Already on this shift: the server refuses a second seat,
+                    // but only after the member has filled in the signup
+                    // dialog. Released seats are not in the roster, so a
+                    // member who gave theirs up is offered it again.
+                    const alreadySignedUp = Boolean(
+                      user?.id && shift.roster?.some((seat) => String(seat.user_id) === String(user.id))
+                    );
                     // Named per shift: a day can carry several, and every row's
                     // buttons otherwise read alike to a screen reader.
                     const when = `${formatCalendarDate(date, { weekday: 'short', month: 'short', day: 'numeric' })}, ${formatTime(shift.start_time, tz)}${shift.apparatus_unit_number ? ` (${shift.apparatus_unit_number})` : ''}`;
@@ -312,7 +319,11 @@ export const OpenShiftsTab: React.FC<OpenShiftsTabProps> = ({ onViewShift, refre
                             {/* This button had no gating at all — not even a
                               past-date check — so the open list offered a
                               signup on a shift that had already gone out. */}
-                            {signupClosed ? (
+                            {alreadySignedUp ? (
+                              <span className="inline-flex items-center gap-1 text-xs font-medium text-green-800 sm:text-sm dark:text-green-300">
+                                <Check className="h-4 w-4" aria-hidden="true" /> You&rsquo;re signed up
+                              </span>
+                            ) : signupClosed ? (
                               <span className="text-theme-text-muted max-w-[9rem] text-right text-xs sm:text-sm">
                                 {signupClosed}
                               </span>

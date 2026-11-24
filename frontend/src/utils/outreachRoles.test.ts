@@ -32,4 +32,16 @@ describe('outreach role presets', () => {
     expect(describePreset(TYPES[0]?.default_roles, ROLES)).toBe('2 × Tour Guide, 1 × retired_role');
     expect(describePreset(undefined, ROLES)).toBe('');
   });
+
+  it('names an optional role as optional', () => {
+    expect(
+      describePreset(
+        [
+          { role: 'tour_guide', count: 2 },
+          { role: 'greeter', count: 1, essential: false },
+        ],
+        ROLES
+      )
+    ).toBe('2 × Tour Guide, 1 × Greeter (optional)');
+  });
 });

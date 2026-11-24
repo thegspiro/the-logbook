@@ -14,6 +14,8 @@ strict: true
 
 theme:
   name: material
+  # Page templates of the site's own: home.html is the home page's hero.
+  custom_dir: overrides
   # Fonts and icons are bundled rather than fetched from Google Fonts, so the
   # pages make no third-party request and the CSP in nginx.conf can stay 'self'.
   font: false

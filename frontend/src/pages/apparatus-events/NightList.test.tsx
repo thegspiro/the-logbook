@@ -23,6 +23,9 @@ const night = (overrides: Partial<NightSummary> = {}): NightSummary => ({
   unit_numbers: ['E1'],
   filled: 1,
   total: 4,
+  // Every seat essential, as every seat was before seats could be optional.
+  essential_filled: 1,
+  essential_total: 4,
   is_cancelled: false,
   attendance_finalized: false,
   checked_in: 0,

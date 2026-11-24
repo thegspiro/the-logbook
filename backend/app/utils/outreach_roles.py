@@ -4,13 +4,21 @@
 stored shape, settled on every write rather than reconstructed by each reader
 (CLAUDE.md pitfall #20):
 
-    [{"role": "tour_guide", "count": 2}, {"role": "educator", "count": 1}]
+    [{"role": "tour_guide", "count": 2, "essential": true},
+     {"role": "photographer", "count": 1, "essential": false}]
+
+``essential`` (owner decision, 2026-11-23) says whether the role's seats must
+be filled for the day to count as staffed. A stored entry without it is
+essential, as every role was before the flag existed; every reader goes
+through ``normalize_staffing_roles``, which supplies it, so existing rows need
+no backfill to read correctly, and the next write stores it.
 
 Roles are department-configurable (``events.outreach_roles`` in organization
 settings), which is why nothing here validates a role name against a fixed
 list — the caller checks it against the department's own vocabulary. What this
 module guarantees is the *shape*: a list of ``{"role": str, "count": int}``
-with no duplicates, no blanks, and no count outside the seat limits.
+with no duplicates, no blanks, no count outside the seat limits, and an
+``essential`` flag on every entry.
 """
 
 from typing import Any, Dict, List, Optional
@@ -25,30 +33,38 @@ MAX_TOTAL_SEATS = 50
 
 
 def normalize_staffing_roles(roles: Any) -> List[Dict[str, Any]]:
-    """Return staffing needs as ``[{"role": str, "count": int}]``.
+    """Return staffing needs as ``[{"role": str, "count": int, "essential": bool}]``.
 
     Entries with no usable role name are dropped — they cannot be signed up
     for and would only inflate the seat count. Repeats of the same role are
     summed rather than kept apart, so "2 tour guides" and "1 tour guide" in one
-    payload become the three seats the sender clearly meant.
+    payload become the three seats the sender clearly meant; the merged role
+    is essential if either entry was, the reading that cannot leave a needed
+    seat unwatched.
     """
     if not isinstance(roles, list):
         return []
 
     merged: Dict[str, int] = {}
+    essential: Dict[str, bool] = {}
     for entry in roles:
         if isinstance(entry, str):
-            name, count = entry.strip(), 1
+            name, count, needed = entry.strip(), 1, True
         elif isinstance(entry, dict):
             name = str(entry.get("role") or "").strip()
             count = _seat_count(entry.get("count"))
+            needed = entry.get("essential") is not False
         else:
             continue
         if not name:
             continue
         merged[name] = min(merged.get(name, 0) + count, MAX_SEATS_PER_ROLE)
+        essential[name] = essential.get(name, False) or needed
 
-    return [{"role": name, "count": count} for name, count in merged.items()]
+    return [
+        {"role": name, "count": count, "essential": essential[name]}
+        for name, count in merged.items()
+    ]
 
 
 def total_seats(roles: Any) -> int:

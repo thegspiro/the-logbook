@@ -50,6 +50,9 @@ class TemplateSeatSpec(BaseModel):
     seat_type: ApparatusEventSeatType = ApparatusEventSeatType.GENERAL
     count: int = Field(1, ge=1, le=MAX_SEATS_PER_SEAT_ROW)
     note: Optional[str] = Field(None, max_length=300)
+    # Must be filled for the night to count as staffed. Omitted: essential,
+    # which every seat was before the flag existed.
+    is_essential: bool = True
 
     @field_validator("name")
     @classmethod
@@ -151,6 +154,7 @@ class TemplateSeatResponse(BaseModel):
     seat_type: ApparatusEventSeatType
     count: int
     note: Optional[str] = None
+    is_essential: bool = True
 
 
 class TemplateUnitResponse(BaseModel):
@@ -289,6 +293,7 @@ class CrewSeatResponse(BaseModel):
     name: str
     seat_type: ApparatusEventSeatType
     note: Optional[str] = None
+    is_essential: bool = True
     user_id: Optional[str] = None
     user_name: Optional[str] = None
     assignment_method: Optional[ApparatusEventSeatMethod] = None
@@ -313,6 +318,9 @@ class SeriesNight(UTCResponseBase):
     start_datetime: datetime
     filled: int
     total: int
+    # The essential seats alone: the night is staffed when these match.
+    essential_filled: int = 0
+    essential_total: int = 0
 
 
 class LastSeatCall(UTCResponseBase):
@@ -419,6 +427,7 @@ class NightSeatSpec(BaseModel):
     name: str = Field(..., min_length=1, max_length=100)
     seat_type: ApparatusEventSeatType = ApparatusEventSeatType.GENERAL
     note: Optional[str] = Field(None, max_length=300)
+    is_essential: bool = True
 
     @field_validator("name")
     @classmethod
@@ -486,6 +495,8 @@ class NightSummary(UTCResponseBase):
     unit_numbers: List[str]
     filled: int
     total: int
+    essential_filled: int = 0
+    essential_total: int = 0
     is_cancelled: bool
     attendance_finalized: bool
     checked_in: int
