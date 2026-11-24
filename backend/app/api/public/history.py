@@ -82,18 +82,6 @@ def _record_id() -> Any:
 
 
 #: Decades are named by their first year: 1950 for the 1950s.
-def _decade() -> Any:
-    return Query(None, ge=1700, le=2990, multiple_of=10)
-
-
-def _limit() -> Any:
-    return Query(25, ge=1, le=100)
-
-
-def _offset() -> Any:
-    return Query(0, ge=0, le=100_000)
-
-
 # The header nginx copies into ``frame-ancestors`` for /embed/history/<token>.
 EMBED_ANCESTORS_HEADER = "X-Embed-Frame-Ancestors"
 NO_EMBED = "'none'"
@@ -205,9 +193,9 @@ async def get_feed(
 @router.get("/people")
 async def list_people(
     request: Request,
-    decade: Optional[int] = _decade(),
-    limit: int = _limit(),
-    offset: int = _offset(),
+    decade: Optional[int] = Query(None, ge=1700, le=2990, multiple_of=10),
+    limit: int = Query(25, ge=1, le=100),
+    offset: int = Query(0, ge=0, le=100_000),
     api_key: PublicPortalAPIKey = Depends(authenticate_api_key),
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
@@ -250,9 +238,9 @@ async def get_honor_roll(
 @router.get("/photos")
 async def list_photos(
     request: Request,
-    decade: Optional[int] = _decade(),
-    limit: int = _limit(),
-    offset: int = _offset(),
+    decade: Optional[int] = Query(None, ge=1700, le=2990, multiple_of=10),
+    limit: int = Query(25, ge=1, le=100),
+    offset: int = Query(0, ge=0, le=100_000),
     api_key: PublicPortalAPIKey = Depends(authenticate_api_key),
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
@@ -281,9 +269,9 @@ async def get_photo(
 @router.get("/documents")
 async def list_documents(
     request: Request,
-    decade: Optional[int] = _decade(),
-    limit: int = _limit(),
-    offset: int = _offset(),
+    decade: Optional[int] = Query(None, ge=1700, le=2990, multiple_of=10),
+    limit: int = Query(25, ge=1, le=100),
+    offset: int = Query(0, ge=0, le=100_000),
     api_key: PublicPortalAPIKey = Depends(authenticate_api_key),
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
@@ -311,9 +299,9 @@ async def get_document(
 @router.get("/events")
 async def list_events(
     request: Request,
-    decade: Optional[int] = _decade(),
-    limit: int = _limit(),
-    offset: int = _offset(),
+    decade: Optional[int] = Query(None, ge=1700, le=2990, multiple_of=10),
+    limit: int = Query(25, ge=1, le=100),
+    offset: int = Query(0, ge=0, le=100_000),
     api_key: PublicPortalAPIKey = Depends(authenticate_api_key),
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
@@ -341,9 +329,9 @@ async def get_event(
 @router.get("/apparatus")
 async def list_apparatus(
     request: Request,
-    decade: Optional[int] = _decade(),
-    limit: int = _limit(),
-    offset: int = _offset(),
+    decade: Optional[int] = Query(None, ge=1700, le=2990, multiple_of=10),
+    limit: int = Query(25, ge=1, le=100),
+    offset: int = Query(0, ge=0, le=100_000),
     api_key: PublicPortalAPIKey = Depends(authenticate_api_key),
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
@@ -372,8 +360,8 @@ async def get_apparatus(
 @router.get("/articles")
 async def list_articles(
     request: Request,
-    limit: int = _limit(),
-    offset: int = _offset(),
+    limit: int = Query(25, ge=1, le=100),
+    offset: int = Query(0, ge=0, le=100_000),
     api_key: PublicPortalAPIKey = Depends(authenticate_api_key),
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
