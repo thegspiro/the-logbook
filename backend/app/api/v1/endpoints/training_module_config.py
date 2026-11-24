@@ -82,6 +82,7 @@ from app.services.training_waiver_service import (
 )
 from app.utils.org_timezone import resolve_org_today
 from app.utils.sql_search import LIKE_ESCAPE_CHAR, like_pattern
+from app.utils.training_attachments import removal_notices
 
 router = APIRouter()
 
@@ -888,6 +889,7 @@ async def get_my_training_summary(
                 ),
                 "submitted_at": s.submitted_at.isoformat() if s.submitted_at else None,
                 "reviewed_at": s.reviewed_at.isoformat() if s.reviewed_at else None,
+                "file_removals": removal_notices(s.attachments),
             }
             for s in submissions
         ]
@@ -1137,6 +1139,9 @@ async def get_my_training_records(
             "void_reason": r.void_reason,
             "source": source.kind,
             "source_label": source.label,
+            # Why a certificate on this record is gone (owner decision
+            # 2026-11-23): retention or the malware scan, and when.
+            "file_removals": removal_notices(r.attachments),
         }
         if show_hours:
             item["hours_completed"] = (
