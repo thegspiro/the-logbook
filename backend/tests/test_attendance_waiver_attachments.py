@@ -20,7 +20,7 @@ does, with the uploads volume pointed at a temporary directory. Pinned:
 import io
 import json
 import os
-from datetime import timedelta
+from datetime import datetime, timedelta
 from types import SimpleNamespace
 
 import pytest
@@ -613,6 +613,56 @@ class TestRetention:
             )
         ).fetchall()
         assert len(audits) == 1
+
+    # Owner decision 2026-11-23: the request says its documents were removed
+    # under retention, and when, to anyone who can see it.
+    async def test_the_request_records_what_retention_removed(
+        self, as_user, dept, db_session
+    ):
+        expired = await _filed(as_user, dept, count=2)
+        await _close(
+            db_session, expired, status=AttendanceWaiverStatus.APPROVED, days_ago=366
+        )
+        before = (
+            await db_session.execute(
+                select(AttendanceWaiverRequest.updated_at).where(
+                    AttendanceWaiverRequest.id == expired
+                )
+            )
+        ).scalar_one()
+
+        service = AttendanceWaiverAttachmentService(db_session)
+        await service.sweep(now=NOW)
+        await service.sweep(now=NOW + timedelta(days=1))
+
+        row = (
+            await db_session.execute(
+                select(AttendanceWaiverRequest)
+                .where(AttendanceWaiverRequest.id == expired)
+                .execution_options(populate_existing=True)
+            )
+        ).scalar_one()
+        assert row.attachments_removed_count == 2
+        assert engine._utc(row.attachments_removed_at) == NOW
+        # The retention clock reads updated_at; recording the removal must
+        # not restart it.
+        assert engine._utc(row.updated_at) == engine._utc(before)
+        for viewer in (dept.member, dept.officer):
+            async with as_user(viewer) as client:
+                body = (await client.get(f"{BASE}/{expired}")).json()
+            assert body["attachments"] == []
+            assert body["attachments_removed_count"] == 2
+            removed_at = datetime.fromisoformat(body["attachments_removed_at"])
+            assert engine._utc(removed_at) == NOW
+
+    async def test_a_request_retention_never_touched_says_nothing(
+        self, as_user, dept
+    ):
+        request_id = await _filed(as_user, dept)
+        async with as_user(dept.member) as client:
+            body = (await client.get(f"{BASE}/{request_id}")).json()
+        assert body["attachments_removed_count"] is None
+        assert body["attachments_removed_at"] is None
 
     async def test_a_department_period_is_honoured(self, as_user, dept, db_session):
         request_id = await _filed(as_user, dept)

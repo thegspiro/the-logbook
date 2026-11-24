@@ -93,4 +93,25 @@ describe('WaiverAttachmentList', () => {
     await user.click(screen.getByRole('button', { name: 'Remove waiver-attachment-1.pdf' }));
     expect(onRemove).toHaveBeenCalledWith(attachment);
   });
+
+  // Owner decision 2026-11-23: the request says retention removed documents.
+  it('says how many documents retention removed, and on which day', () => {
+    render(
+      <WaiverAttachmentList
+        requestId="r1"
+        attachments={[]}
+        removedCount={2}
+        removedAt="2025-11-09T12:00:00Z"
+      />
+    );
+    expect(screen.getByText('2 documents removed under retention on 11/9/2025.')).toBeInTheDocument();
+    expect(screen.queryByText('No documents are on file for this request.')).not.toBeInTheDocument();
+  });
+
+  it('uses the singular for one removed document', () => {
+    render(
+      <WaiverAttachmentList requestId="r1" attachments={[]} removedCount={1} removedAt="2025-11-09T12:00:00Z" />
+    );
+    expect(screen.getByText('1 document removed under retention on 11/9/2025.')).toBeInTheDocument();
+  });
 });
