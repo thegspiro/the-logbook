@@ -5320,6 +5320,54 @@ class TrainingRequirementOverride(Base):
     )
 
 
+class RollingRequirementLastMet(Base):
+    """The last day the daily compliance-notice task found a member meeting a
+    rolling requirement.
+
+    A rolling requirement has no period to key a non-compliance notice on:
+    its window ends on the grading day. Keying the notice on the requirement
+    alone stopped the daily repeat (#4482) but told a member only once ever.
+    The notice key carries this date instead (owner decision 2026-11-23), so
+    every day of one lapse shares a key and a lapse after a recovery has a new
+    one. Written by ``compliance_member_notices`` only; one row per member and
+    requirement, moved forward on each run that finds the requirement met.
+    """
+
+    __tablename__ = "rolling_requirement_last_met"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    user_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    requirement_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("training_requirements.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    # The department's date of the run, not a UTC timestamp: the key must not
+    # move with the hour the scheduler happened to run.
+    last_met_on: Mapped[date] = mapped_column(Date, nullable=False)
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    __table_args__ = (
+        # One row per member and requirement, so two runs racing past the
+        # lookup cannot both insert (pitfall 36).
+        UniqueConstraint(
+            "user_id", "requirement_id", name="uq_rolling_last_met_user_req"
+        ),
+    )
+
+
 # ============================================
 # Recertification Pathways
 # ============================================
