@@ -49,9 +49,16 @@ deadline it made the requirement "due today" on every run, and as part of a
 key it never repeated, so the member got a reminder and a notice daily. A
 rolling requirement is met or short on every day it is graded, and while it
 is short no date ahead of today would make it met, so it gets no deadline
-reminder (a catch-up deadline still counts) and its notice key is the
-requirement alone: a member is told once. One who meets it and later falls
-short again is not told again by this notice; see docs/KNOWN_LIMITATIONS.md.
+reminder (a catch-up deadline still counts).
+
+**A rolling requirement's notice key is the last day it was met** (owner
+decision 2026-11-23). Each run records, in ``rolling_requirement_last_met``,
+the department's date for every member it finds meeting a rolling
+requirement. A short one is keyed ``id|met:<that date>``: every day of one
+lapse shares the key, so the member is told once, and a lapse after a recovery
+has a later date, so they are told again, once. A member with no recorded date
+keeps the bare-id key used from 2026-11-21, so nobody already told is told
+again by the upgrade.
 """
 
 from __future__ import annotations
@@ -69,7 +76,11 @@ from sqlalchemy.orm import selectinload
 from app.core.config import settings
 from app.models.compliance_config import ComplianceConfig
 from app.models.notification import NotificationChannel, NotificationLog
-from app.models.training import TrainingRequirement, TrainingStatus
+from app.models.training import (
+    RollingRequirementLastMet,
+    TrainingRequirement,
+    TrainingStatus,
+)
 from app.models.user import Organization, User
 from app.services.email_policy import (
     EmailKind,
@@ -157,11 +168,18 @@ def requirement_deadline(
     return None
 
 
-def _unmet_key(req: TrainingRequirement, ev: RequirementEvaluation) -> str:
+def _unmet_key(
+    req: TrainingRequirement,
+    ev: RequirementEvaluation,
+    last_met_on: Optional[date] = None,
+) -> str:
     # A rolling requirement has no period to key on: its window_end is the
-    # grading day, which made a new key on every run.
+    # grading day, which made a new key on every run. The last day it was met
+    # stands in for the period: fixed for one lapse, later for the next.
     if _is_rolling(req):
-        return str(req.id)
+        if last_met_on is None:
+            return str(req.id)
+        return f"{req.id}|met:{last_met_on.isoformat()}"
     return f"{req.id}|{ev.window_end or ''}"
 
 
@@ -264,6 +282,55 @@ def _noticed(logs: Iterable[NotificationLog]) -> set[str]:
             continue
         told.update(str(k) for k in meta.get("unmet") or [])
     return told
+
+
+async def _record_rolling_met(
+    db: AsyncSession,
+    org_id: str,
+    graded_members: Sequence[MemberCompliance],
+    today: date,
+) -> dict[tuple[str, str], date]:
+    """Move each member's met date forward for the rolling requirements they
+    meet today, and return every member's last met date by
+    ``(user_id, requirement_id)``.
+
+    Run for every graded member, not just those emailed: the date is a fact
+    about the member, and a member who turns reminders back on is keyed from
+    it. Idempotent: a second run on the same day writes the same date. The
+    caller's commit is the one that keeps it, with the day's notices.
+    """
+    met_today = {
+        (str(g.member.id), str(req.id))
+        for g in graded_members
+        for req, ev in g.evaluations
+        if _is_rolling(req) and ev.status == TrainingStatus.COMPLETED.value
+    }
+    rows = (
+        (
+            await db.execute(
+                select(RollingRequirementLastMet).where(
+                    RollingRequirementLastMet.organization_id == org_id
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    by_key = {(str(r.user_id), str(r.requirement_id)): r for r in rows}
+    for user_id, requirement_id in met_today:
+        row = by_key.get((user_id, requirement_id))
+        if row is None:
+            row = RollingRequirementLastMet(
+                organization_id=org_id,
+                user_id=user_id,
+                requirement_id=requirement_id,
+                last_met_on=today,
+            )
+            db.add(row)
+            by_key[(user_id, requirement_id)] = row
+        elif row.last_met_on < today:
+            row.last_met_on = today
+    return {key: row.last_met_on for key, row in by_key.items()}
 
 
 async def _send(
@@ -401,6 +468,7 @@ async def _notify_non_compliant(
     graded: MemberCompliance,
     unmet: list[tuple[TrainingRequirement, RequirementEvaluation]],
     today: date,
+    last_met: dict[tuple[str, str], date],
 ) -> bool:
     member = graded.member
     subject = "You are not currently meeting your training requirements"
@@ -446,7 +514,10 @@ async def _notify_non_compliant(
         subject=subject,
         metadata={
             "org_date": today.isoformat(),
-            "unmet": sorted(_unmet_key(req, ev) for req, ev in unmet),
+            "unmet": sorted(
+                _unmet_key(req, ev, last_met.get((str(member.id), str(req.id))))
+                for req, ev in unmet
+            ),
         },
     )
     return True
@@ -471,6 +542,7 @@ async def send_member_compliance_notices(db: AsyncSession, org: Organization) ->
     graded_members = await grade_org_members(db, org_id, today, config)
     if not graded_members:
         return 0
+    last_met = await _record_rolling_met(db, org_id, graded_members, today)
     required_kinds = department_required_kinds(org)
     recipients = [
         g
@@ -513,12 +585,18 @@ async def send_member_compliance_notices(db: AsyncSession, org: Organization) ->
                 and ev.status not in UNGRADED_STATUSES
             ]
             noticed = _noticed(member_logs)
+            member_id = str(graded.member.id)
             new_keys = {
                 key
-                for key in (_unmet_key(req, ev) for req, ev in unmet)
+                for key in (
+                    _unmet_key(req, ev, last_met.get((member_id, str(req.id))))
+                    for req, ev in unmet
+                )
                 if not _already_noticed(key, noticed)
             }
-            if new_keys and await _notify_non_compliant(db, org, graded, unmet, today):
+            if new_keys and await _notify_non_compliant(
+                db, org, graded, unmet, today, last_met
+            ):
                 sent += 1
 
     await db.commit()

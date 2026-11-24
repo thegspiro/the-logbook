@@ -7660,16 +7660,19 @@ surfaced further gaps, all flagged rather than fixed in the same pass:
   due date from `TrainingService.evaluate_requirement_detail`, the only
   evaluator that computes one; it decides no status. Tests:
   `tests/test_compliance_export_period.py`.
-- **Compliance emails: a rolling requirement is in one non-compliance notice
-  per member, ever — open, found 2026-11-21.** A rolling requirement's window
-  ends on the grading day, which made both member emails repeat daily (the
-  reminder called it "due today", and the notice's key moved with the date).
-  The fix gives a rolling requirement no deadline reminder and keys its notice
-  on the requirement alone (`compliance_member_notices.py`). The cost: a member
-  who meets it, and months later falls short again, is not told again unless
-  the same notice is triggered by some other requirement, which then lists it.
-  Telling them again needs a recorded "met again" date to key on, which the
-  task does not keep. Tests: `tests/test_compliance_member_notices.py`.
+- **Compliance emails: a repeat lapse on a rolling requirement is emailed
+  again — ✅ resolved (owner decision 2026-11-23).** A rolling requirement's
+  window ends on the grading day, which made both member emails repeat daily;
+  the 2026-11-21 fix gave it no deadline reminder and keyed its notice on the
+  requirement alone, so a member was told once ever. The daily task now records
+  the last day it finds each member meeting each rolling requirement
+  (`rolling_requirement_last_met`, migration `07abf8e6553b`) and keys the notice
+  on that date: every day of one lapse shares a key, and a lapse after a
+  recovery is emailed once more. **Residual:** the dates start with the first
+  run after the upgrade, so a member already told about a rolling requirement
+  they are still short of on upgrade day keeps the bare key, and is told again
+  only after they next meet it and lapse; rolling requirements still get no deadline reminder. Tests:
+  `tests/test_compliance_member_notices.py` (`TestRollingRequirementLapsesAgain`).
 - **The Compliance Officer dashboard's forecast summary cards keep fixed
   colour bands — ✅ resolved 2026-11-21 (owner direction: follow the
   department's and the member's thresholds).** Each member's 30/60/90-day
@@ -9423,20 +9426,18 @@ single-page form. What it changes, and what it leaves:
   confirms.~~ **Resolved 2026-11-11:** the header leaves Create Session out
   for a viewer without `events.manage`, as the approved mockup draws it, and
   the Sessions tab still shows its notice naming the permission.
-- **A training manager can read a draft Training event's session, but not
-  the draft itself** (2026-11-23). `GET /training/sessions/by-event/{id}` now
-  answers `training.manage` for a draft whose type is Training, so the
-  session no longer reads as "No training details" to the officer who
-  administers it. **Default taken:** `GET /events/{id}` and the events list
-  still hide every draft from a caller without `events.manage`, as ADV-5 set
-  them, so a training manager without it cannot open a draft Training event
-  to see that session. Showing them the draft is a wider visibility change,
-  left for an owner decision (`tests/test_draft_event_side_paths.py`).
-- **The training-session calendar lists draft events' sessions.**
-  `GET /training/sessions/calendar` filters cancelled events but not drafts,
-  so any member can see a draft Training event's title and time there, which
-  `GET /events/{id}` hides from them (ADV-5). Found on 2026-11-23 and left
-  for its own change, since it alters what the calendar shows.
+- **Who sees a draft event** — ✅ **Resolved 2026-11-23 (owner decisions).**
+  One rule, `app/api/draft_visibility.py`, decides every read that shows an
+  event: `events.manage` sees every draft, `training.manage` sees drafts of
+  Training events, and nobody else sees a draft. A training manager without
+  `events.manage` now opens a draft Training event (`GET /events/{id}`, its
+  attachments, folder and training session) and sees draft Training events
+  in the events list; another type's draft stays hidden from them. The
+  training-session calendar, which listed every draft's title and time to
+  any member, and the training dashboard's upcoming-capacity list apply the
+  same rule. Seeing a draft is not acting on it: publishing still needs
+  `events.manage`, and every other action keeps its own permission
+  (`tests/test_draft_event_side_paths.py`, `EventsPage.test.tsx`).
 
 ## Events — Attendance-Lock Refusals (2026-09-30)
 
