@@ -142,6 +142,8 @@ POST   /api/v1/training/course-links                       # Link one name's rec
 POST   /api/v1/training/course-links/link-suggested        # Link every name that has a suggestion (training.manage)
 GET    /api/v1/training/course-links/history               # Recorded links, newest first (training.manage, 2026-11-19)
 POST   /api/v1/training/course-links/{link_id}/undo        # Undo a link once; records edited since are kept (training.manage, 2026-11-19)
+GET    /api/v1/training/double-credit                      # Possible double credit awaiting a decision, oldest first (training.manage, 2026-11-23)
+POST   /api/v1/training/double-credit/{flag_id}/keep-both  # Both records stand; a re-finalize does not raise the pair again (training.manage, 2026-11-23)
 POST   /api/v1/training/courses/{id}/classes/reorder       # Set the syllabus order (order only, not the dates) (training.manage)
 POST   /api/v1/training/courses/{id}/classes/autofill      # Recompute every day offset from a meeting pattern (training.manage)
 GET    /api/v1/training/stats/user/{user_id}               # User training stats
