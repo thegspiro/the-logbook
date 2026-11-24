@@ -231,6 +231,15 @@ old weighted total counted "Meets expectations" as 50%, so a department's
 earlier evaluation percentages are not comparable to the new grades. Do not
 film a pre-2026-11-04 form.]**
 
+**[PRODUCTION NOTE — 2026-11-23. Footage check, no narration change required.
+If the builder preview or an evaluation is on screen, a **Goals** item is now a
+list (**Add a goal**, a **Target date** per goal), not one text box, and an
+evaluation whose self-evaluation is submitted shows a **Self-evaluation beside
+the evaluation** card. Optional line after "then a PDF": _"Once the member's
+self-evaluation is in, the page lines it up beside the evaluator's ratings and
+marks where you're far apart."_ The period tools (grades by evaluator, signed
+PDFs, review history) belong to the Chief's script, Script 04.]**
+
 **[TRANSITION: Compliance and reporting]**
 
 ---

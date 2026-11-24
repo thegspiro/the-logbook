@@ -405,6 +405,22 @@ added; `elections.manage` is enough; eligibility follows the election chosen).
   same tally the ballot check uses, so a meeting held before a member's
   current stint is left out of both the count and their list.
 
+## Evaluations — The Signed-PDF Button Follows the Status Filter, the Zip Does Not (2026-11-23)
+
+Found by the November 22 – 23 documentation pass; not fixed, because the right
+behaviour is a choice. On the evaluations list with a review period chosen,
+**Download signed PDFs** (#4570) is enabled only when a row the **Show** filter
+leaves visible is finalized (`finalizedCount` in `EvaluationListPage.tsx` counts
+the filtered list). The zip it downloads, `GET /evaluations/export-pdfs`, holds
+every finalized review in the period whatever the filter says. So with **Show**
+set to **In progress** the button is greyed out although the period has signed
+reviews to download.
+
+**For the owner:** either the zip follows the filter (send the status, and the
+button's rule is then right), or the button counts the whole period (it needs
+the period's finalized total, which the filtered list does not carry). Until
+then, set **Show** to **All** to download.
+
 ## Evaluations — Waiver Data Points in the Annual Review (2026-11-11)
 
 The annual review can show a member's requests to be excused from training
@@ -3292,14 +3308,18 @@ Still open:
   to protect them with the provider's tooling. A department that skips that
   has no second copy of its bucket. The same holds for a Google Shared Drive
   (2026-10-25).
-- **A copy of a Shared Drive cannot simply be put back (2026-10-25).** The
-  Logbook finds a Drive file by its id, and a file copied out and uploaded
-  again is a new file with a new id, so its record still points at the old
-  one. Nothing repoints references yet. Within 30 days the drive's own trash
-  restores a file with its id intact; after that, a copy kept elsewhere has
-  to be matched to its records by file name (each is named after its storage
-  path) and the references updated by hand. A bucket has no such gap: its
-  objects are found by key, so a mirror restores as it is.
+- ~~**A copy of a Shared Drive cannot simply be put back (2026-10-25).**~~
+  **Resolved 2026-11-24** (owner decision 2026-11-23). The Logbook finds a
+  Drive file by its id, and a file copied out and uploaded again is a new
+  file with a new id. `scripts/relink_restored_drive_files.py` now matches
+  restored files to their records by name (each is named after its storage
+  path), verifies each decrypts with the installation's file key, and
+  rewrites the references; dry run by default, `--apply` to write, safe to
+  run twice. **Still open:** a record with no file of its name, or with more
+  than one, is reported and left for a person; a renamed copy is not found;
+  and a copy taken under another installation's key will not verify. A
+  bucket has no such gap: its objects are found by key, so a mirror restores
+  as it is.
 - **A settings change reaches other workers within 30 seconds.** Each worker
   caches a department's storage view for that long; the worker that saved
   clears its own copy at once.
@@ -11390,9 +11410,8 @@ change or remove the users row:
   the member's street line or stored status reason. The item list and values
   stay. They are rewritten rather than regenerated, because a regenerated
   letter would list today's property, not the property owed on the day of the
-  drop. The member's name and membership number stay on the letter: the owner
-  named the address and reason, and the letter is a claim against a named
-  person.
+  drop. The member's name and membership number stay on the letter (owner
+  decision 2026-11-23): it records what that person owes.
 - Every folder the member owns under **Member Files** is deleted with its
   sub-folders and documents, through the same code as the folder delete; the
   files are queued on `pending_file_deletions`.
@@ -11491,9 +11510,15 @@ request, kept 365 days) shipped with these gaps, each the narrower choice:
 - **A withdrawn or voided request is timed from its last change**
   (`updated_at`), since it has no decision time; an approved or denied one
   from its decision.
-- **The request page does not say documents were once filed** after retention
-  removes them. The `attendance_waiver_attachment_retention` audit entry
-  records which documents of which requests were deleted.
+- ~~**The request page does not say documents were once filed** after
+  retention removes them.~~ ✅ Resolved 2026-11-23 (owner decision): the sweep
+  records on each request how many documents it removed and when
+  (`attachments_removed_count`, `attachments_removed_at`, migration
+  `241c1cc27313`), and the request page shows "N documents removed under
+  retention on <date>" in the department's timezone to anyone who can see the
+  request. **A request swept before that migration still says nothing:** the
+  old retention audit entries list a department's requests and documents
+  together, so they cannot be split back into a count per request.
 - **Retention covers the training workflow only.** The business-meeting
   workflow files no documents; when it does, its own policy needs to be read
   by the sweep.
@@ -11877,12 +11902,15 @@ each case; confirmed by the owner 2026-11-23):
   `submission_deleted`). The submission delete processes its rows right after
   the commit; the other two leave them to the hourly sweep. A file another row
   still names is kept.
-- **Deleting an event leaves its attachment files.** `EventService.delete_event`
-  and the series delete remove the row and every `events.attachments` file it
-  named stays on the volume, named by nothing. Found while closing the drill
-  undo above, which now queues them for the drills it deletes; the ordinary
-  event delete was out of that change's scope. Open for an owner decision on
-  whether event deletes should queue their files the same way.
+- ~~**Deleting an event leaves its attachment files.**~~ **Resolved
+  2026-11-24** (owner decision 2026-11-23): `EventService.delete_event` and
+  `delete_event_series` queue every `events.attachments` file on
+  `pending_file_deletions` in the delete's own transaction (`event_deleted`)
+  and remove them right after the commit; a file another event or any other
+  collected row still names is kept, and one that will not delete stays queued
+  for the hourly sweep. A refused delete (finalized attendance) queues nothing.
+  Not covered: an event's folder under Event Attachments in Documents, which
+  holds Documents of its own and is not deleted with the event.
 - ~~**A training record's own uploaded file has no removal route.**~~
   **Resolved 2026-11-21** (owner decision 2026-11-21, (d)):
   `DELETE /training/records/{id}/attachments/{entry}` and a Remove button in

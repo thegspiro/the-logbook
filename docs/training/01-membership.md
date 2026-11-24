@@ -2431,6 +2431,19 @@ decided and when, when it was asked for, and any stand-in covering that
 member. It never includes reasons. One export covers at most five years, and
 each one is written to the audit log.
 
+The file is named for its dates, for example
+`leave-records-2026-11-01-to-2026-11-30.csv`. If the dates cover more than
+five years, the export is refused with "An export can cover at most 1830
+days; export the rest separately."
+
+> **Screenshots to create:** `01-68-leave-calendar.png`, **Leave Requests**
+> with **Calendar** chosen: a month showing a recorded leave, a request marked
+> **(requested)** and a **… covers …** stand-in, with the key above;
+> `01-69-leave-export.png`, **Export leave records** with **From**, **To** and
+> **Download CSV**; and `01-70-leave-cover-prompt.png`, **Approver cover** for
+> an approver on approved leave, with the "You decide leave requests and you
+> are on leave …" note and **Use these dates**.
+
 **Leave requested on the schedule** _(2026-11-21)_. When you assign someone
 to a shift, the member list marks anyone with an undecided leave request
 covering the shift's date as **leave requested**, and choosing them shows a

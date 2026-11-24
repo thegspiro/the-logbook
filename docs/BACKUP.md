@@ -168,10 +168,14 @@ stored reference names the file's id, and the files sit in one folder (the
 one chosen in the settings, or the drive's top level), each named after its
 storage path with `/` written as `_`. A copy taken with ordinary tools and
 uploaded back later is a **new file with a new id**, so the references still
-point at the old id and the Logbook cannot find it. Nothing repoints them
-yet. A copy elsewhere is still worth keeping: it is the only copy left if
-the drive or the Workspace account itself is lost, and the files can be
-matched back to their records by name. But it is not a one-step restore.
+point at the old id and the Logbook cannot find it until
+`scripts/relink_restored_drive_files.py` repoints them (2026-11-24): upload
+the copies back into the department's Shared Drive without renaming them,
+run it as a dry run, then with `--apply`. It matches each file to its records
+by name and is safe to run again after each batch — see
+[backend/scripts/README.md](../backend/scripts/README.md#relink_restored_drive_filespy).
+A copy elsewhere is worth keeping: it is the only copy left if the drive or
+the Workspace account itself is lost.
 
 **The drive's own trash keeps the id.** A file the Logbook deletes, or a
 person deletes in Drive, goes to the Shared Drive's trash for 30 days. A

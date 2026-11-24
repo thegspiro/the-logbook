@@ -2046,6 +2046,8 @@ class AttendanceWaiverService:
                     # The removal route's own rule (owner decision
                     # 2026-11-23): the member, while pending, and never the
                     # last document a policy requires.
+                    "attachments_removed_count": r.attachments_removed_count,
+                    "attachments_removed_at": r.attachments_removed_at,
                     "can_remove_attachment": own
                     and r.status == AttendanceWaiverStatus.PENDING
                     and len(files.get(str(r.id), []))

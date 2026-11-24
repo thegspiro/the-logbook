@@ -146,6 +146,15 @@ later, the container needs no change.
 `GET /healthz` answers `200 ok`. The image's `HEALTHCHECK` uses it, so Unraid
 and `docker ps` show the container as healthy once nginx is serving.
 
+## Look
+
+The site wears the application's design: [`content/stylesheets/extra.css`](./content/stylesheets/extra.css)
+copies the theme tokens from `frontend/src/styles/index.css` (the slate and
+red gradient, white cards, the red-800 primary, alert colours and the
+system font), and `content/images/` holds copies of the application's
+`logo-128.png` and `favicon.svg` from `frontend/public/`. When the
+application's theme or logo changes, update these copies too.
+
 ## Security headers
 
 [`nginx/security-headers.conf`](./nginx/security-headers.conf) sets a Content

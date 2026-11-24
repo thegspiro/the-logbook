@@ -57,6 +57,11 @@ export async function expectTableFitsItsCard(table: Locator, label: string): Pro
  *     right edge.
  *
  * Checked only where the table is stacked, at whatever width that is.
+ *
+ * A `rwd-table-fields` table in a wide card sets its fields out in a grid
+ * instead, where a cell is deliberately narrower than its row and its value
+ * sits under its label at the left. There the check is that every cell stays
+ * inside the card and holds its own content.
  */
 async function expectStackedRowsAligned(table: Locator, label: string): Promise<void> {
   const problems = await table.evaluate((el) => {
@@ -64,7 +69,22 @@ async function expectStackedRowsAligned(table: Locator, label: string): Promise<
     if (!thead || getComputedStyle(thead).display !== 'none') return [];
     const found: string[] = [];
     for (const tr of el.querySelectorAll<HTMLTableRowElement>('tbody tr')) {
-      const rowWidth = tr.getBoundingClientRect().width;
+      const rowBox = tr.getBoundingClientRect();
+      const rowWidth = rowBox.width;
+      if (getComputedStyle(tr).display === 'grid') {
+        for (const td of tr.querySelectorAll<HTMLTableCellElement>(':scope > td[data-label]')) {
+          const box = td.getBoundingClientRect();
+          if (getComputedStyle(td).display === 'none' || box.width === 0) continue;
+          const name = td.dataset.label ?? '';
+          if (box.left < rowBox.left - 1 || box.right > rowBox.right + 1) {
+            found.push(`${name}: field runs outside its card`);
+          }
+          if (td.scrollWidth > td.clientWidth + 1) {
+            found.push(`${name}: value is ${td.scrollWidth - td.clientWidth}px wider than its field`);
+          }
+        }
+        continue;
+      }
       for (const td of tr.querySelectorAll<HTMLTableCellElement>(':scope > td[data-label]')) {
         const style = getComputedStyle(td);
         const box = td.getBoundingClientRect();
