@@ -34,7 +34,7 @@ const ROSTER = MEMBER_NAMES.map(([firstName, lastName], i) => ({
 // the roster as a table.
 const XWIDE_TIER_PX = 78 * 16;
 
-// Where `rwd-table-fields` starts setting a reflowed card's fields in columns.
+// Where a tier table starts setting a reflowed card's fields in columns.
 const FIELDS_MIN_PX = 30 * 16;
 
 const CONTACT_INFO = { enabled: true, show_email: true, show_phone: true, show_mobile: true };

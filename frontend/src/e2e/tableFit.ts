@@ -58,7 +58,7 @@ export async function expectTableFitsItsCard(table: Locator, label: string): Pro
  *
  * Checked only where the table is stacked, at whatever width that is.
  *
- * A `rwd-table-fields` table in a wide card sets its fields out in a grid
+ * A wide, xwide or 2xwide table in a card of 30rem or more sets its fields out in a grid
  * instead, where a cell is deliberately narrower than its row and its value
  * sits under its label at the left. There the check is that every cell stays
  * inside the card and holds its own content.
