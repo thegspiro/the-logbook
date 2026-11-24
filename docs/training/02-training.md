@@ -210,6 +210,8 @@ example "62/72 hrs total".
 - The Compliance Matrix prints the same average for the same member. Both
   screens get it from the server, so they cannot disagree.
 
+![An hours requirement card on My Training: Annual Minimum Training Hours leading with the monthly average against the monthly pace needed, the total in hours on the line beneath, and its progress bar](./images/02-148-requirement-card-hours-average.png)
+
 **A certification reads as a state, not a count** _(2026-11-21)_. Instead of
 "1/1" or "0/1", a certification requirement reads:
 
@@ -221,6 +223,8 @@ example "62/72 hrs total".
 
 Before, a missing certificate was described as "expired" too.
 
+![Three certification requirement cards on My Training: Expired with the date it lapsed and Expired — Renew ASAP, Not recorded with its No certification on file warning, and On file with the date it expires](./images/02-149-requirement-card-certification-states.png)
+
 **Optional requirements** _(2026-11-21)_. If your compliance profile lists
 optional requirements, they appear under an **Optional** heading after the
 others: "Your department lists these for you. They do not count toward your
@@ -229,6 +233,8 @@ compliance** until it is complete. It is never shown as overdue or due soon,
 it does not change your percentage or your "X of Y requirements met", and no
 reminder email is sent for it. An officer sees the same group on your
 training, worded "Listed for this member by their compliance profile."
+
+![The Optional group under Training Requirements on My Training: the line saying the department lists these and they do not count toward compliance, and two cards with the Optional badge, one complete and one reading Not required for compliance](./images/02-150-optional-requirements-group.png)
 
 ### Upcoming Expirations & Due Dates
 
@@ -5737,6 +5743,8 @@ leadership section; everyone else is graded on the other three sections alone,
 which keep nearly the plain annual form's weights. If your department has no
 ranks set up yet, the dialog says so; set ranks up first. You can change the
 ranks later in the builder.
+
+![The New template dialog with Annual Evaluation with Officer Sections chosen as the starter: the Officer ranks tick boxes, none ticked yet, and Create and open builder greyed out until one is](./images/02-147-evaluation-officer-starter.png)
 
 ### How an evaluation moves
 

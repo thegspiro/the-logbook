@@ -889,6 +889,32 @@ Admin Hours, and change no existing row except the stored positions below.
 - **The bundled ZIP data grows** from about 1.5 MB to 2.2 MB: it now carries
   each ZIP code's centre, from the same GeoNames source and licence.
 
+### Erasing a member now redacts their separation letters and deletes their personal folder (2026-11-23)
+
+Nothing blocks a restart, and no migration ships with this change.
+
+- **Download anything you must keep before upgrading.** Anonymising a member,
+  and permanently deleting one, now deletes every folder the member owns under
+  **Member Files**, with its sub-folders and documents, files included (owner
+  decision of 2026-11-23, LIFE-11). A file another record still names is
+  kept. It cannot be recovered from the application afterwards.
+- The same two actions rewrite the member's **separation letters** in Member
+  Separations: the home address and the stated reason for leaving are removed
+  for good, and the item list and values stay. A letter saved before this
+  version has no link to its member, so it is found by its name ("Property
+  Return - <legal name> - <date>") and, when the member has a membership
+  number, by that number printed in it. Letters saved from now on record the
+  member.
+- A personal document that cannot be deleted (catalogued in History, or a
+  receipt a submitted finance record relies on) now refuses the anonymisation
+  (400) or the permanent delete (409), with nothing changed.
+- The `user_anonymized` audit event and the anonymise response gain
+  `separation_letters_redacted`, `personal_folders_deleted`,
+  `personal_documents_deleted` and `personal_document_files_queued`;
+  `user_hard_deleted` gains the first three. Integers only. Anonymising a
+  member with queued files is followed by a `pending_file_deletions_completed`
+  event.
+
 ### Leave: stand-in notices, a cover prompt, a calendar and an export (2026-11-22)
 
 Nothing blocks a restart. Migration `b6e3d1f47a29` adds three email template
