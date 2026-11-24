@@ -830,6 +830,20 @@ every authentication and public endpoint at once.
 Newest first. Nothing here blocks a restart — these are changes an operator
 should not have to discover by being surprised.
 
+### Deleting an event now deletes the files attached to it (2026-11-24)
+
+Nothing blocks a restart, and no migration ships with this change.
+
+- **Download any event attachment you must keep before deleting the event.**
+  Deleting an event, or a recurring series or the rest of one, now removes the
+  files uploaded to those events' Attachments from storage (owner decision of
+  2026-11-23). A file another event still lists is kept. The files cannot be
+  recovered from the application afterwards.
+- The event's folder under **Event Attachments** in Documents is not touched:
+  its documents stay where they are.
+- A file that cannot be removed straight away (an unreachable remote store)
+  is retried by the hourly `pending_file_deletions` sweep.
+
 ### Community risk reduction tracking, and a street map that loads tiles from OpenStreetMap (2026-11-23)
 
 Nothing blocks a restart. Migrations `89c0b481fe55` and `5c2e8a417d90` create

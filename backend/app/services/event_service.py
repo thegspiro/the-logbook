@@ -2900,6 +2900,7 @@ class EventService:
         )
 
         sheet_id = getattr(event, "staffing_shift_id", None)
+        queued_files = self._queue_attachment_files([event], organization_id)
         await self.db.delete(event)
         try:
             await self.db.commit()
@@ -2916,6 +2917,7 @@ class EventService:
                 "Refresh and try again."
             )
 
+        await self._remove_queued_files(queued_files, organization_id)
         await self._reverse_pipeline_after_commit(pending_reversals, organization_id)
         await self._send_waiver_notices(waiver_notices, organization_id)
         await self._stand_down_own_staffing(
@@ -2924,6 +2926,64 @@ class EventService:
             DELETED_SHEET_REASON,
         )
         return True
+
+    def _queue_attachment_files(
+        self, events: List[Event], organization_id: UUID | str
+    ) -> List[str]:
+        """Queue every stored file the *events*' attachments name; return the
+        new ``pending_file_deletions`` row ids.
+
+        Only adds to the session, so the rows commit with the delete and a
+        refused or rolled-back delete leaves none (owner decision 2026-11-23).
+        A file another event or any other collected row still names is kept
+        when the rows are processed.
+        """
+        from app.models.pending_file_deletion import PendingDeletionReason
+        from app.services.file_storage_service import StorageArea
+        from app.services.member_files import attachment_paths_by_area
+        from app.services.pending_file_deletions import enqueue
+
+        paths: Dict[str, StorageArea] = {}
+        for event in events:
+            paths.update(
+                attachment_paths_by_area(
+                    getattr(event, "attachments", None),
+                    organization_id,
+                    StorageArea.EVENT_ATTACHMENTS,
+                )
+            )
+        return enqueue(
+            self.db, str(organization_id), paths, PendingDeletionReason.EVENT_DELETED
+        )
+
+    async def _remove_queued_files(
+        self, ids: List[str], organization_id: UUID | str
+    ) -> None:
+        """Remove the files *ids* queued, once the delete has committed.
+
+        Never raises: what this cannot remove stays queued for the hourly
+        sweep, and a failure here must not turn a completed delete into an
+        error response.
+        """
+        if not ids:
+            return
+        from app.services import pending_file_deletions
+        from app.services.file_storage_service import StorageArea
+
+        await pending_file_deletions.process(
+            self.db,
+            str(organization_id),
+            ids,
+            areas=(StorageArea.EVENT_ATTACHMENTS,),
+        )
+        try:
+            await self.db.commit()
+        except Exception:
+            await self.db.rollback()
+            logger.exception(
+                "Could not record the file removals after deleting events in {}",
+                organization_id,
+            )
 
     async def _move_own_staffing(
         self, event: Event, organization_id: UUID | str
@@ -3057,6 +3117,7 @@ class EventService:
 
         # Read before the delete: the rows, and their sheet ids, are gone after.
         sheet_ids = self._own_sheet_ids(events)
+        queued_files = self._queue_attachment_files(list(events), organization_id)
         for event in events:
             await self.db.delete(event)
 
@@ -3075,6 +3136,7 @@ class EventService:
                 "deleting). Refresh and try again."
             )
 
+        await self._remove_queued_files(queued_files, organization_id)
         await self._reverse_pipeline_after_commit(pending_reversals, organization_id)
         await self._send_waiver_notices(waiver_notices, organization_id)
         for sheet_id in sheet_ids:
