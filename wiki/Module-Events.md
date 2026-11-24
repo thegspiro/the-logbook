@@ -1158,7 +1158,13 @@ opt-out applies. `GET /member-audience/options` and `POST
   credential; the Forms module's branching rules are enforced on submit; 409
   once sent), stored in `event_request_feedback` with the rating copied in.
   Officers read it at `GET /event-requests/{id}/feedback`, and the report adds
-  `feedback_responses`, `average_rating` and `rating_scale_max`.
+  `feedback_responses`, `average_rating` and `rating_scale_max`. _(2026-11-24)_
+  Each response notifies the request's coordinator, else the default
+  coordinator, else every current member holding `events.manage` (each must
+  hold it): a bell (`outreach_feedback`) written in the submit's transaction,
+  and after the commit the **Requester Feedback Received** email
+  (`outreach_feedback_received`, "Event officer duties"), subject prefixed
+  "Low rating: " at 3 or less out of 5. A failed email never fails the submit.
 
 ---
 

@@ -49,6 +49,7 @@ const CATEGORY_ALIASES: Record<string, string> = {
   event_update: 'events',
   event_validation: 'events',
   event_headcount: 'events',
+  outreach_feedback: 'events',
   attendance_request: 'events',
   attendance_request_update: 'events',
   series_end_reminder: 'events',

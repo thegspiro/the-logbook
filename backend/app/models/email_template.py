@@ -142,6 +142,9 @@ class EmailTemplateType(str, enum.Enum):
     # The morning after an outreach event ends with no guest headcount; see
     # email_templates_outreach.py.
     GUEST_HEADCOUNT_REMINDER = "guest_headcount_reminder"
+    # A requester sent feedback on a completed outreach request; see
+    # email_templates_outreach.py.
+    OUTREACH_FEEDBACK_RECEIVED = "outreach_feedback_received"
     # A correction took a member below a program requirement they had
     # completed; see email_templates_program_progress.py.
     PROGRAM_REQUIREMENT_REOPENED = "program_requirement_reopened"

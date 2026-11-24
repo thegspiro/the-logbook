@@ -830,6 +830,25 @@ every authentication and public endpoint at once.
 Newest first. Nothing here blocks a restart — these are changes an operator
 should not have to discover by being surprised.
 
+### Outreach requesters can send feedback, and the coordinator is told (2026-11-24)
+
+Nothing blocks a restart. Two migrations, both additive:
+
+- `0a4667186b2d` creates `event_request_feedback`, one row per answered
+  request. It skips when `event_requests` does not exist yet, since that table
+  is built by `create_all`. Downgrade drops it; the answers themselves stay as
+  form submissions in **Forms**.
+- `d41f7a2c9e58` adds `outreach_feedback_received` to
+  `email_templates.template_type` and `scheduled_emails.template_type`.
+  Downgrade deletes rows of that type, a department's edits included.
+
+Nothing is asked of requesters until a department chooses a feedback form
+under **Manage Events → Settings → Request Handling**, so an upgrade sends no
+email by itself. Once a form is chosen, each response sends the request's
+coordinator (or the default coordinator, or failing both every member who
+manages events) an email and an in-app notice. There is no backlog to catch
+up: only responses sent after the upgrade notify anyone.
+
 ### Community risk reduction tracking, and a street map that loads tiles from OpenStreetMap (2026-11-23)
 
 Nothing blocks a restart. Migrations `89c0b481fe55` and `5c2e8a417d90` create
