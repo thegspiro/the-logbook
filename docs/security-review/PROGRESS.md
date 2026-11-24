@@ -16,8 +16,8 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR (branch `claude/friendly-babbage-2isqey`), to be recorded by number in
-a second commit on this same branch**: Feature 03 (Public surface &
+**PR [#4643](https://github.com/thegspiro/the-logbook/pull/4643) (branch
+`claude/friendly-babbage-2isqey`)**: Feature 03 (Public surface &
 webhooks), pass 17 — watchdog pickup (the dedicated `/loop 30m
 /security-review` session, `session_011T1ZyyLrD5HagusgK9uDw2`, remains
 unreachable). **Branch-name deviation**, same as prior watchdog-run passes
