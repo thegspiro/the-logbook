@@ -9373,20 +9373,18 @@ single-page form. What it changes, and what it leaves:
   confirms.~~ **Resolved 2026-11-11:** the header leaves Create Session out
   for a viewer without `events.manage`, as the approved mockup draws it, and
   the Sessions tab still shows its notice naming the permission.
-- **A training manager can read a draft Training event's session, but not
-  the draft itself** (2026-11-23). `GET /training/sessions/by-event/{id}` now
-  answers `training.manage` for a draft whose type is Training, so the
-  session no longer reads as "No training details" to the officer who
-  administers it. **Default taken:** `GET /events/{id}` and the events list
-  still hide every draft from a caller without `events.manage`, as ADV-5 set
-  them, so a training manager without it cannot open a draft Training event
-  to see that session. Showing them the draft is a wider visibility change,
-  left for an owner decision (`tests/test_draft_event_side_paths.py`).
-- **The training-session calendar lists draft events' sessions.**
-  `GET /training/sessions/calendar` filters cancelled events but not drafts,
-  so any member can see a draft Training event's title and time there, which
-  `GET /events/{id}` hides from them (ADV-5). Found on 2026-11-23 and left
-  for its own change, since it alters what the calendar shows.
+- **Who sees a draft event** — ✅ **Resolved 2026-11-23 (owner decisions).**
+  One rule, `app/api/draft_visibility.py`, decides every read that shows an
+  event: `events.manage` sees every draft, `training.manage` sees drafts of
+  Training events, and nobody else sees a draft. A training manager without
+  `events.manage` now opens a draft Training event (`GET /events/{id}`, its
+  attachments, folder and training session) and sees draft Training events
+  in the events list; another type's draft stays hidden from them. The
+  training-session calendar, which listed every draft's title and time to
+  any member, and the training dashboard's upcoming-capacity list apply the
+  same rule. Seeing a draft is not acting on it: publishing still needs
+  `events.manage`, and every other action keeps its own permission
+  (`tests/test_draft_event_side_paths.py`, `EventsPage.test.tsx`).
 
 ## Events — Attendance-Lock Refusals (2026-09-30)
 
@@ -11329,6 +11327,32 @@ mirrored in the Multi-Tenant Isolation section above.
 
 ## LIFE-11 — Anonymizing a Member Leaves Their Separation Letter, With Home Address, in Documents (2026-11-10, app review A6 pass 6)
 
+**Resolved 2026-11-23** (owner decision of that date: option 1 for the
+letter, delete for the personal folder). Anonymisation and permanent delete
+both call `app.services.member_documents.erase_member_documents` before they
+change or remove the users row:
+
+- The member's separation letters are **redacted in place**: the stored HTML
+  loses the home address and the "Reason:" paragraph, and any remaining copy of
+  the member's street line or stored status reason. The item list and values
+  stay. They are rewritten rather than regenerated, because a regenerated
+  letter would list today's property, not the property owed on the day of the
+  drop. The member's name and membership number stay on the letter: the owner
+  named the address and reason, and the letter is a claim against a named
+  person.
+- Every folder the member owns under **Member Files** is deleted with its
+  sub-folders and documents, through the same code as the folder delete; the
+  files are queued on `pending_file_deletions`.
+
+**Accepted residuals:** a letter saved before 2026-11-23 has no link to its
+member, so it is found by its name, and, when the member has a membership
+number, also by that number (current or previous) printed in it. A letter whose
+name no longer matches (the member was renamed after the drop), or which does
+not print the member's number, is not found and keeps the address. A letter in
+a backup taken before the erasure is not changed.
+
+The original entry follows.
+
 Anonymization (`POST /users/{id}/anonymize`, `MemberAnonymizationService`)
 scrubs the member's personal data from a long list of tables but touches no
 `Document`. The property-return letter generated when the member was dropped is
@@ -11435,11 +11459,33 @@ request, kept 365 days) shipped with these gaps, each the narrower choice:
   the reader now treats any stored value as `off` (the next save stores
   `off`). If the meeting workflow ever takes documents, lift the refusal and
   the read coercion together.
-- **HEIC is stored as filed, not converted.** A decider on Windows may need
-  the HEIF extension to open an iPhone photo; nothing previews it in the page.
-- **The upload field sits in the request dialog and the document list on the
-  decision page; the policy screen sets both new settings.** There is no
-  preview of a document in the page: a decider downloads it.
+- **HEIC is stored as filed, not converted** _(owner approved conversion
+  2026-11-23; held for a licence ruling)_. A decider on Windows may need the
+  HEIF extension to open an iPhone photo, and the page cannot show one.
+  Conversion to JPEG at upload was built-ready but not shipped, because the
+  library's licence needs the owner's ruling first:
+  - `pillow-heif` 1.8.1 bundles libheif, libde265 and x265 in its wheels
+    (only glibc/libstdc++ from the system, so no apt packages and the image
+    would build), but its own `LICENSES_bundled.txt` says the binary wheels
+    are **GPLv2** as a whole, because of x265. This project is MIT and is
+    shipped as Docker images, which would then redistribute GPLv2 binaries.
+  - `pi-heif` 1.4.0, the decode-only build from the same repository
+    (`bigcat88/pillow_heif`), bundles only libheif and libde265 and is
+    **LGPLv3**; decoding is all conversion needs. HEVC decoding may also
+    carry patent questions.
+    **For the owner:** approve `pi-heif` (or `pillow-heif` despite GPLv2), or
+    keep HEIC as filed.
+- ~~**There is no preview of a document in the page.**~~ ✅ Resolved
+  2026-11-23 (owner decision): a JPEG or PNG opens in a dialog on the request
+  page, and a PDF in a new tab under the browser's own viewer. Both are a
+  copy fetched through the same authorised, audited download, held behind a
+  local `blob:` URL, never a public link, under the neutral file name.
+  **A PDF is not shown inside the page** (default taken): the app's
+  Content-Security-Policy allows `blob:` images but neither `blob:` frames
+  (`frame-src` falls back to `default-src 'self'`) nor objects
+  (`object-src 'none'`). Showing one in the page needs either `frame-src
+blob:` in the backend middleware and every `nginx.conf` policy, or a PDF.js
+  dependency: both owner decisions. HEIC has no view.
 
 ## Meetings — Business-Meeting Waiver Requests: Choices Made Without An Owner Ruling (2026-11-11)
 
@@ -11817,8 +11863,8 @@ each case; confirmed by the owner 2026-11-23):
   to `upload_relocation.collect_references` or to a commented allowlist, so
   the shared-file check's "every other row" is enforced rather than assumed.
 
-Related, still open: **LIFE-11** (the separation letter in Documents), and the
-Member Files personal-folder documents, which neither path touches.
+Related, closed 2026-11-23: **LIFE-11**. Both paths now redact the separation
+letters and delete the member's personal Member Files folder.
 
 ## Apparatus — Three Decisions From App Review B2 Pass 6 (2026-11-20)
 
