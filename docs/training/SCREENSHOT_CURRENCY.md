@@ -263,7 +263,7 @@ Nothing was captured by this pass.
 | 03 | My Shifts → **Hours**, new layout: cards with the two-colour split bar, year arrows, the "<year> at a glance" chart and its summary tiles | **Replace** `03-104-my-shifts-hours` (shows the always-visible table and no chart) |
 | 03 | **All shifts** list: a department shift labelled with the short name, outside shifts with a blue edge, one **Not counted** with its reason, the filter chips, **Log outside shift** | **Replace** `03-108-member-outside-shifts` (the card it shows was removed) |
 | 03 | Hours with outside hours: a card reading "N FCVFD" / "+24 with other departments", **All shifts** below | **Replace** `03-113-member-hours-with-outside` |
-| 03 | A month bar selected on the chart, its shifts highlighted in the list | Optional |
+| 03 | A month bar selected on the chart, its shifts highlighted in the list | **CURRENT** 2026-11-23 as `03-143-hours-month-selected` (October, the latest month with credited hours) |
 | 01 | Profile **Shift & Call History** in the new layout, officer view without **Log outside shift** | Optional |
 | 08 | Settings → Profile with **Short Name** and its hint | Create |
 | 03 | Shift template dialog reading "Template saved, except name" with the field flagged; the **Discard changes** confirmation | Create |
@@ -325,7 +325,7 @@ Nothing was captured by this pass.
 | --- | --- | --- |
 | 03 | Shift Planning → **Templates** tab: templates only, the heading's "make a pattern in **Shift patterns**" link, no Templates / Patterns switch | Check `03-12-shift-templates` and `03-129-template-reactivate`; replace either if it shows the old switch |
 | 03 | Shift Planning → **Patterns**: a pattern card with its **Edit** button; **Edit Pattern** open from it | Create; `03-133-pattern-form-template-inactive` was taken from the old Templates-tab form and should be re-shot from the Patterns tab |
-| 03 | My Shifts → **Past**: **Hours credited** / **Credited shifts** / **Avg hours/shift** tiles with "+N hrs awaiting close-out", a **Xh credited** pill and an amber **Xh · awaiting close-out** pill | Create (supersedes the 2026-11-09 Past row) |
+| 03 | My Shifts → **Past**: **Hours credited** / **Credited shifts** / **Avg hours/shift** tiles with "+N hrs awaiting close-out", a **Xh credited** pill and an amber **Xh · awaiting close-out** pill | **CURRENT** 2026-11-23 as `03-142-my-shifts-past-credited`, taken as the administrator: the demo member has no shift closed out, so its tiles read 0 |
 | 04 | **Check In Members** dialog with the new "credited from the scheduled start" line | Create |
 | 04 | Event settings → **Attendance** → **Mandatory event responses** with **Ask for a response** (60 days) and the error for an out-of-range value | Create |
 | 02 | Requirement **Member Categories** in a department with a Senior tier: **Operational members** selected, Senior ticked, the hint "Active, Probationary, Life and Senior Member" | Create (`02-135` stays valid for a department with no Senior tier) |
@@ -377,7 +377,7 @@ Nothing was captured.
 | 02    | Session Waivers settings; event-page "Request to be excused" card and **Ask to be excused**; waiver request queue and decision page; My Waiver Requests | Create                                              |
 | 02    | Evaluation form builder sources grouped with "(turned off)" and the scoring-gap note; a figure with its counts; requirement modal with a custom tier; monthly shifts on My Training | Create                                              |
 | 02    | Any capture of the Settings & Data tab row (now Manual Entry, Compliance, Import History)                                                      | Check                                               |
-| 03    | Preceptor link dialog with QR code; outside shift row with **Preceptor link**; close-out "A shift evaluation is still needed for:"              | Create                                              |
+| 03    | Preceptor link dialog with QR code; outside shift row with **Preceptor link**; close-out "A shift evaluation is still needed for:"              | Create. **Blocked 2026-11-23:** needs an outside shift by a member with an *active* EMT Field Internship enrollment, on a department with Evaluate shifts on. After a full seed every enrollment in that program reads completed (all ten were set between 05:37 and 05:41 UTC in one run), so no outside shift can need an evaluation, and no capture login (`nbelhaj`, `snolan`) is an intern. Why they complete is not yet traced |
 | 03    | `03-108`, `03-113` (outside-shift card has a button now)                                                                                         | Check                                               |
 | 04    | Documents History folder with **Managed in History**; draft request-form warning with its button; Email Templates **Meetings & Minutes** group | Create                                              |
 | 04    | `04-14-meeting-minutes` and Meeting Attendance: Voting column, Waiver requests / Waiver settings                                               | Check                                               |
@@ -494,7 +494,7 @@ Nothing was captured by this pass.
 | Guide | Screen                                                                       | Action          |
 | ----- | ---------------------------------------------------------------------------- | --------------- |
 | 03    | My Shifts **Upcoming** under month headers                                   | Replace `03-04` |
-| 03    | My Shifts **Past** with Year dropdown, hours chart, month headers            | Create          |
+| 03    | My Shifts **Past** with Year dropdown, hours chart, month headers            | Superseded by the 2026-11-17 Past row: **CURRENT** 2026-11-23 as `03-142-my-shifts-past-credited` |
 | 04    | Event attendance **Check In** dialog with **Add a member** on a closed event | Create          |
 | 02    | Training History records showing the source line                             | Create          |
 | 02    | Requirement card reading **No sessions held yet**                            | Create          |
@@ -510,7 +510,7 @@ Nothing was captured by this pass.
 
 | Guide | Screen                                                                         | Action  |
 | ----- | ------------------------------------------------------------------------------ | ------- |
-| 03    | My Shifts **Past** view with the Year dropdown, hours chart and month headings | Replace |
+| 03    | My Shifts **Past** view with the Year dropdown, hours chart and month headings | Superseded by the 2026-11-17 Past row: **CURRENT** 2026-11-23 as `03-142-my-shifts-past-credited` |
 | 02    | Pipeline wizard with the resume-draft notice and **Save draft**                | Create  |
 | 10    | A reflowed table (audit log) as cards at 390px                                 | Create  |
 
@@ -656,7 +656,7 @@ Nothing was captured by this pass.
 | 02    | Compliance Configure → **Thresholds** with **Months on leave**                                                                                      | Create  |
 | 02    | A member's Training History **Requirements** section with the **Leave of absence** box                                                              | Create  |
 | 02    | `02-108-monthly-hours-leave`: an excused month now keeps its hours and reads **Leave**                                                              | Replace |
-| 03    | Outside Apparatus settings with **Evaluate shifts on _agency_'s units**; an **Evaluation needed** badge                                             | Create  |
+| 03    | Outside Apparatus settings with **Evaluate shifts on _agency_'s units**; an **Evaluation needed** badge                                             | Create. **Blocked 2026-11-23:** needs an outside shift by a member with an *active* EMT Field Internship enrollment, on a department with Evaluate shifts on. After a full seed every enrollment in that program reads completed (all ten were set between 05:37 and 05:41 UTC in one run), so no outside shift can need an evaluation, and no capture login (`nbelhaj`, `snolan`) is an intern. Why they complete is not yet traced |
 | 05    | The **Before you print** checklist with **Printer resolution** (Code 128)                                                                           | Create  |
 
 ## Queued by the November 1 – 2 documentation pass

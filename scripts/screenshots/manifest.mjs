@@ -21928,6 +21928,51 @@ export const SHOTS = [
     fullPage: true,
   },
   {
+    id: "03-142-my-shifts-past-credited",
+    doc: "03-scheduling.md",
+    line: 429,
+    anchor:
+      "My Shifts on Past: the Hours credited, Credited shifts and Avg hours/shift tiles",
+    alt: "My Shifts on Past: the Year picker, the Hours credited, Credited shifts and Avg hours/shift tiles with the hours awaiting close-out beneath, the hours-by-month chart, and past shifts under month headers giving each month's shifts and credited hours, one shift's pill reading awaiting close-out in amber",
+    route: "/scheduling?tab=my-shifts",
+    // The administrator, not the demo member: the member has no shift closed
+    // out yet, so the credited tiles would read zero. The administrator has
+    // closed-out shifts and one still awaiting close-out, which is the pair
+    // the paragraph is about.
+    expect: "awaiting close-out",
+    prepare: async (page) => {
+      await page
+        .getByRole("button", { name: /^Past/ })
+        .click({ timeout: 20_000 });
+      await page
+        .getByRole("group", { name: /^Hours credited/ })
+        .first()
+        .waitFor({ timeout: 20_000 });
+      await page.waitForTimeout(500);
+    },
+    fullPage: true,
+  },
+  {
+    id: "03-143-hours-month-selected",
+    doc: "03-scheduling.md",
+    line: 508,
+    anchor: "The Hours view with one month's bar selected on the year chart",
+    alt: "The Hours view with October's bar selected on the year-at-a-glance chart, its tooltip giving the month's hours, shifts and calls: the other months dimmed, and October's shift highlighted in All shifts below",
+    route: "/scheduling?tab=my-shifts",
+    expect: { selector: 'button[aria-pressed="true"]' },
+    prepare: async (page) => {
+      await clickByName(/^Hours$/)(page);
+      // The latest month with any hours, so the shot does not depend on which
+      // month the demo is seeded in.
+      await page
+        .locator('[aria-label^="Hours by month"] button[aria-pressed]')
+        .last()
+        .click({ timeout: 20_000 });
+      await page.waitForTimeout(800);
+    },
+    fullPage: true,
+  },
+  {
     id: "06-28-facility-settings",
     doc: "06-apparatus-facilities.md",
     line: 919,
