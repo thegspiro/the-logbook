@@ -1930,11 +1930,11 @@ export interface SelfReportConfigUpdate {
  * Why a certificate file is no longer stored (owner decision 2026-11-23):
  * the department's retention policy or the malware scan deleted it, and when.
  */
-export const FileRemovalReason = {
-  RETENTION: 'retention',
-  MALWARE: 'malware',
-} as const;
-export type FileRemovalReason = (typeof FileRemovalReason)[keyof typeof FileRemovalReason];
+// Type only: the named constants are FILE_REMOVAL_REASON in
+// utils/fileRemoval.ts. A runtime value here would make every training page
+// that shows the notice load this module's chunk, which lands in the
+// first-load preload map (scripts/check-initial-bundle.mjs).
+export type FileRemovalReason = 'retention' | 'malware';
 
 export interface FileRemoval {
   /** ISO timestamp, UTC. */

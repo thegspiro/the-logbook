@@ -1,5 +1,10 @@
-import { FileRemovalReason } from '../types/training';
+import type { FileRemovalReason } from '../types/training';
 import { formatDate } from './dateFormatting';
+
+export const FILE_REMOVAL_REASON = {
+  RETENTION: 'retention',
+  MALWARE: 'malware',
+} as const satisfies Record<string, FileRemovalReason>;
 
 /**
  * The sentence shown where a certificate file used to be (owner decision
@@ -14,7 +19,7 @@ export function fileRemovalText(
   tz: string | undefined
 ): string {
   const on = removedAt ? ` on ${formatDate(removedAt, tz)}` : '';
-  if (reason === FileRemovalReason.MALWARE) {
+  if (reason === FILE_REMOVAL_REASON.MALWARE) {
     return `Certificate file removed by the malware scan${on}: it was found to be infected.`;
   }
   return `Certificate file removed under the department's retention policy${on}.`;
