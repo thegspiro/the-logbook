@@ -951,30 +951,32 @@ def _removal_refusal(record, entry, user) -> tuple[int, str] | None:
 
 def _sanitize_attachments(record, user) -> list:
     """Strip server file paths; expose only client-safe metadata, the entry's
-    id, its index, and whether this caller may remove it."""
-    return [
-        {
+    id, its index, and whether this caller may remove it. A removal marker
+    also carries when and why its file went."""
+    rows = []
+    for i, a in enumerate(record.attachments or []):
+        entry = a if isinstance(a, dict) else None
+        marker = entry is not None and is_removal_marker(entry)
+        row = {
             "index": i,
-            "id": a.get("id") if isinstance(a, dict) else None,
-            "file_name": a.get("file_name") if isinstance(a, dict) else a,
-            "file_type": a.get("file_type") if isinstance(a, dict) else None,
-            "file_size": a.get("file_size") if isinstance(a, dict) else None,
-            "uploaded_at": a.get("uploaded_at") if isinstance(a, dict) else None,
-            "removed_at": a.get("removed_at") if isinstance(a, dict) else None,
-            "removed_reason": (
-                a.get("removed_reason") if isinstance(a, dict) else None
-            ),
-            # A removal marker records why a file is gone; there is no file
-            # left to remove.
+            "id": entry.get("id") if entry else None,
+            "file_name": entry.get("file_name") if entry else a,
+            "file_type": entry.get("file_type") if entry else None,
+            "file_size": entry.get("file_size") if entry else None,
+            "uploaded_at": entry.get("uploaded_at") if entry else None,
+            # A marker records why a file is gone; there is nothing to remove.
             "can_remove": bool(
-                isinstance(a, dict)
-                and a.get("id")
-                and not is_removal_marker(a)
-                and _removal_refusal(record, a, user) is None
+                entry
+                and entry.get("id")
+                and not marker
+                and _removal_refusal(record, entry, user) is None
             ),
         }
-        for i, a in enumerate(record.attachments or [])
-    ]
+        if entry is not None and marker:
+            row["removed_at"] = entry.get("removed_at")
+            row["removed_reason"] = entry.get("removed_reason")
+        rows.append(row)
+    return rows
 
 
 @router.get("/records/{record_id}/attachments")
