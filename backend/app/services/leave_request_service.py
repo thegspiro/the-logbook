@@ -606,7 +606,11 @@ class LeaveRequestService:
             )
         # Locked so two covers for one approver, set at once, are checked for
         # overlap one after the other (pitfall #27). The lock is also the
-        # in-department check on the approver.
+        # in-department check on the approver. The overlap read below must
+        # also be a locking read: under REPEATABLE READ a plain SELECT
+        # answers from the snapshot taken before the lock (e.g. when
+        # ``get_current_user`` resolved the caller at the start of the
+        # request) and would miss the winner's just-committed insert.
         approver = (
             await self.db.execute(
                 select(User)
@@ -634,12 +638,14 @@ class LeaveRequestService:
             )
         clash = (
             await self.db.execute(
-                select(LeaveApproverCover.id).where(
+                select(LeaveApproverCover.id)
+                .where(
                     LeaveApproverCover.organization_id == org_id,
                     LeaveApproverCover.approver_id == approver_id,
                     LeaveApproverCover.start_date <= data.end_date,
                     LeaveApproverCover.end_date >= data.start_date,
                 )
+                .with_for_update()
             )
         ).first()
         if clash is not None:
