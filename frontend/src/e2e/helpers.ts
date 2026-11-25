@@ -4629,6 +4629,29 @@ const routes = ({
   ['**/api/v1/history/titles?**', (request) => (empty ? [] : withRetired(HISTORY_TITLES, request))],
   ['**/api/v1/history/sources?**', (request) => (empty ? [] : withRetired(HISTORY_SOURCES, request))],
   ['**/api/v1/history/clearance/steps', () => (empty ? [] : HISTORY_CLEARANCE_STEPS)],
+  // History settings → "Public website": the portal ready, two parts on, a
+  // widget link made and one department website listed.
+  [
+    '**/api/v1/history/public-settings',
+    () => ({
+      people: true,
+      honor_roll: true,
+      photos: false,
+      documents: false,
+      events: false,
+      apparatus: false,
+      articles: false,
+      timeline: false,
+      today: false,
+      widget_theme: 'auto',
+      widget_show_branding: true,
+      widget_link_exists: !empty,
+      widget_token_created_at: empty ? null : '2026-11-24T09:00:00Z',
+      portal_enabled: true,
+      portal_has_key: true,
+      widget_websites: empty ? [] : ['https://www.example-fd.org'],
+    }),
+  ],
   [
     '**/api/v1/history/clearance/positions',
     () => [
@@ -4793,6 +4816,28 @@ const routes = ({
   ],
   ['**/api/v1/history/timeline?**', () => (empty ? [] : [HISTORY_TIMELINE_ENTRY])],
   ['**/api/v1/history/today', () => (empty ? [] : [HISTORY_TIMELINE_ENTRY])],
+
+  // History phase 6: the article list.
+  [
+    '**/api/v1/history/articles?**',
+    () => ({
+      items: empty
+        ? []
+        : [
+            {
+              id: 'e2e-article-1',
+              title: 'The Elm Street station',
+              subtitle: 'A century on Elm Street',
+              byline: 'The department historian',
+              summary: 'How a two-bay firehouse became the department’s home.',
+              cover: null,
+              publication_level: 'members',
+              updated_at: '2026-11-22T12:00:00Z',
+            },
+          ],
+      total: empty ? 0 : 1,
+    }),
+  ],
 
   // Three pages now reject a payload that is valid JSON but not their declared
   // type, rather than substituting empty lists: an audit log that reads "no

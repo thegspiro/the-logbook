@@ -138,6 +138,12 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
         note: "Framed by the department's own website; open it directly to check the compact layout",
         isPublic: true,
       },
+      {
+        path: '/embed/history/:token',
+        label: 'History widget (embedded)',
+        note: 'The "Today in history" widget; reached by the secret link made under History settings → Public website',
+        isPublic: true,
+      },
       { path: '/ballot', label: 'Ballot voting', note: 'Token-based; reached from a ballot email', isPublic: true },
       { path: '/application-status/:token', label: 'Application status', isPublic: true },
       {
@@ -1336,6 +1342,25 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
       {
         path: '/history/events/:eventId/edit',
         label: 'Edit an event',
+        permission: 'history.manage',
+        module: 'history',
+      },
+      { path: '/history/articles', label: 'Articles', module: 'history' },
+      {
+        path: '/history/articles/new',
+        label: 'Write an article',
+        permission: 'history.manage',
+        module: 'history',
+      },
+      {
+        path: '/history/articles/:articleId',
+        label: 'Article',
+        module: 'history',
+        note: 'Members see only the photos and links that are published; the PDF and Word downloads hold the same page.',
+      },
+      {
+        path: '/history/articles/:articleId/edit',
+        label: 'Edit an article',
         permission: 'history.manage',
         module: 'history',
       },

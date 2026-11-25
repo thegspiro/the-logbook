@@ -14,6 +14,7 @@ import {
   Images,
   Landmark,
   Medal,
+  PenLine,
   Settings,
   Truck,
   Users,
@@ -22,10 +23,10 @@ import { Breadcrumbs } from '../../../components/ux/Breadcrumbs';
 import { SkeletonPage } from '../../../components/ux/Skeleton';
 import { useAuthStore } from '../../../stores/authStore';
 import { getErrorMessage } from '../../../utils/errorHandling';
-import { historyService } from '../services/api';
+import { historyArticleService, historyService } from '../services/api';
 import { PublicationBadge } from '../components/PublicationBadge';
 import { TodayInHistoryCard } from '../components/TodayInHistoryCard';
-import type { ClearanceRequest, HistoricalMemberSummary } from '../types';
+import type { ArticleSummary, ClearanceRequest, HistoricalMemberSummary } from '../types';
 
 export const HistoryHomePage: React.FC = () => {
   const { checkPermission } = useAuthStore();
@@ -34,6 +35,7 @@ export const HistoryHomePage: React.FC = () => {
   const [queue, setQueue] = useState<ClearanceRequest[]>([]);
   const [recent, setRecent] = useState<HistoricalMemberSummary[]>([]);
   const [drafts, setDrafts] = useState<HistoricalMemberSummary[]>([]);
+  const [articles, setArticles] = useState<ArticleSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -61,6 +63,23 @@ export const HistoryHomePage: React.FC = () => {
       cancelled = true;
     };
   }, [canManage]);
+
+  useEffect(() => {
+    let cancelled = false;
+    // The latest published pieces; drafts are on the article list. A failure
+    // here leaves the section out rather than the page.
+    historyArticleService
+      .listArticles({ limit: 10 })
+      .then((list) => {
+        if (!cancelled) setArticles(list.items.filter((a) => a.publication_level !== 'draft').slice(0, 5));
+      })
+      .catch(() => {
+        if (!cancelled) setArticles([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   if (loading) return <SkeletonPage />;
 
@@ -100,6 +119,10 @@ export const HistoryHomePage: React.FC = () => {
         <Link to="/history/events" className="card card-hover flex items-center gap-3 p-4">
           <Calendar className="h-5 w-5 shrink-0" aria-hidden="true" />
           <span className="text-theme-text-primary font-medium">Events</span>
+        </Link>
+        <Link to="/history/articles" className="card card-hover flex items-center gap-3 p-4">
+          <PenLine className="h-5 w-5 shrink-0" aria-hidden="true" />
+          <span className="text-theme-text-primary font-medium">Articles</span>
         </Link>
         <Link to="/history/apparatus" className="card card-hover flex items-center gap-3 p-4">
           <Truck className="h-5 w-5 shrink-0" aria-hidden="true" />
@@ -160,6 +183,31 @@ export const HistoryHomePage: React.FC = () => {
             Drafts
           </h2>
           <PersonList people={drafts} />
+        </section>
+      )}
+
+      {articles.length > 0 && (
+        <section aria-labelledby="articles-heading" className="card mb-6 p-4">
+          <h2
+            id="articles-heading"
+            className="text-theme-text-primary mb-3 flex items-center gap-2 text-lg font-semibold"
+          >
+            <PenLine className="h-5 w-5" aria-hidden="true" />
+            Latest articles
+          </h2>
+          <ul className="divide-theme-surface-border divide-y">
+            {articles.map((article) => (
+              <li key={article.id} className="flex flex-wrap items-center gap-2 py-2">
+                <Link
+                  to={`/history/articles/${article.id}`}
+                  className="touch-target-phone link-underline inline-flex items-center font-medium"
+                >
+                  {article.title}
+                </Link>
+                {article.byline && <span className="text-theme-text-secondary text-sm">By {article.byline}</span>}
+              </li>
+            ))}
+          </ul>
         </section>
       )}
 

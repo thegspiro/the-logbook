@@ -19,6 +19,7 @@ import { DocumentTile } from '../components/DocumentDetails';
 import { MediaTile } from '../components/MediaDetails';
 import { PublicationBadge } from '../components/PublicationBadge';
 import { PublicationPanel } from '../components/PublicationPanel';
+import { RelatedArticles } from '../components/RelatedArticles';
 import { RevisionList } from '../components/RevisionList';
 import { TimelineList } from '../components/TimelineList';
 import { historyApparatusService, historyDocumentService, historyMediaService, historyService } from '../services/api';
@@ -205,6 +206,7 @@ export const HistoryApparatusPage: React.FC = () => {
               </ul>
             </section>
           )}
+          <RelatedArticles query={{ apparatus_id: item.id }} headingId="apparatus-articles-heading" />
         </div>
 
         {full && (

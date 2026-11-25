@@ -13,6 +13,7 @@ import { SkeletonPage } from '../../../components/ux/Skeleton';
 import { getErrorMessage, toAppError } from '../../../utils/errorHandling';
 import { historyService } from '../services/api';
 import { ApparatusDetails } from '../components/ApparatusDetails';
+import { ArticleDetails } from '../components/ArticleDetails';
 import { ClearanceSteps } from '../components/ClearanceSteps';
 import { EventDetails } from '../components/EventDetails';
 import { DocumentDetails } from '../components/DocumentDetails';
@@ -20,6 +21,7 @@ import { MediaDetails } from '../components/MediaDetails';
 import { PersonDetails } from '../components/PersonDetails';
 import {
   isApparatusRecord,
+  isArticleRecord,
   isDocumentRecord,
   isEventRecord,
   type ClearanceDecisionKind,
@@ -87,7 +89,9 @@ export const HistoryClearanceReviewPage: React.FC = () => {
         <div className="card p-4">
           <h2 className="text-theme-text-primary mb-1 text-xl font-semibold">{review.request.record_label}</h2>
           <p className="text-theme-text-secondary mb-4 text-sm">As members would read it.</p>
-          {isEventRecord(review.record) ? (
+          {isArticleRecord(review.record) ? (
+            <ArticleDetails item={review.record} />
+          ) : isEventRecord(review.record) ? (
             <EventDetails item={review.record} />
           ) : isApparatusRecord(review.record) ? (
             <ApparatusDetails item={review.record} />

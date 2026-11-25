@@ -6,6 +6,7 @@
  * as on the API.
  */
 
+import { Suspense } from 'react';
 import { Route } from 'react-router';
 import { ProtectedRoute } from '../../components/ProtectedRoute';
 import { lazyWithRetry } from '../../utils/lazyWithRetry';
@@ -34,9 +35,13 @@ const HistoryTimelinePage = lazyWithRetry(() => import('./pages/HistoryTimelineP
 const HistoryEventsPage = lazyWithRetry(() => import('./pages/HistoryEventsPage'));
 const HistoryEventPage = lazyWithRetry(() => import('./pages/HistoryEventPage'));
 const HistoryEventFormPage = lazyWithRetry(() => import('./pages/HistoryEventFormPage'));
+const HistoryArticlesPage = lazyWithRetry(() => import('./pages/HistoryArticlesPage'));
+const HistoryArticlePage = lazyWithRetry(() => import('./pages/HistoryArticlePage'));
+const HistoryArticleFormPage = lazyWithRetry(() => import('./pages/HistoryArticleFormPage'));
 const HistoryApparatusListPage = lazyWithRetry(() => import('./pages/HistoryApparatusListPage'));
 const HistoryApparatusPage = lazyWithRetry(() => import('./pages/HistoryApparatusPage'));
 const HistoryApparatusFormPage = lazyWithRetry(() => import('./pages/HistoryApparatusFormPage'));
+const HistoryWidgetPage = lazyWithRetry(() => import('./pages/HistoryWidgetPage'));
 
 export function getHistoryRoutes() {
   return (
@@ -194,6 +199,38 @@ export function getHistoryRoutes() {
         }
       />
       <Route
+        path="/history/articles"
+        element={
+          <ProtectedRoute requiredModule="history" moduleLabel="History">
+            <HistoryArticlesPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/history/articles/new"
+        element={
+          <ProtectedRoute requiredPermission="history.manage" requiredModule="history" moduleLabel="History">
+            <HistoryArticleFormPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/history/articles/:articleId"
+        element={
+          <ProtectedRoute requiredModule="history" moduleLabel="History">
+            <HistoryArticlePage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/history/articles/:articleId/edit"
+        element={
+          <ProtectedRoute requiredPermission="history.manage" requiredModule="history" moduleLabel="History">
+            <HistoryArticleFormPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
         path="/history/apparatus"
         element={
           <ProtectedRoute requiredModule="history" moduleLabel="History">
@@ -286,5 +323,23 @@ export function getHistoryRoutes() {
         }
       />
     </>
+  );
+}
+
+/**
+ * The "Today in history" widget, the one History page another site may frame
+ * (see the /embed/history/ locations in the nginx configs). Public: its secret
+ * link is its only credential.
+ */
+export function getHistoryPublicRoutes() {
+  return (
+    <Route
+      path="/embed/history/:token"
+      element={
+        <Suspense fallback={null}>
+          <HistoryWidgetPage />
+        </Suspense>
+      }
+    />
   );
 }

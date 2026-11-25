@@ -739,6 +739,16 @@ app/api/v1/endpoints/history_events.py::person_timeline
 app/api/v1/endpoints/history_events.py::timeline
 app/api/v1/endpoints/history_events.py::timeline_decades
 app/api/v1/endpoints/history_events.py::today_in_history
+# History phase 6 (articles): reading a published article needs no permission,
+# as for every other History record. The list and the article filter to what is
+# published to members or the public unless the caller holds
+# history.view/manage/publish; a member's view keeps only the photos and links
+# they may read. The export prints that same view, never the research notes.
+# The revision list answers only a keeper or a clearance-step holder.
+app/api/v1/endpoints/history_articles.py::export_article
+app/api/v1/endpoints/history_articles.py::get_article
+app/api/v1/endpoints/history_articles.py::list_article_revisions
+app/api/v1/endpoints/history_articles.py::list_articles
 
 # Added 2026-11-04 (owner decisions of 2026-11-01). Each is meant for every
 # member and scoped inside the handler:

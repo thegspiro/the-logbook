@@ -2,7 +2,8 @@
  * The module's department-wide lists: historical titles (and which of them
  * reach the timeline), the clearance list a record passes before it is
  * published to the public, and the managed lists of sources, document types,
- * stations, apparatus types and event types.
+ * stations, apparatus types and event types; and what the department's own
+ * website may show ("Public website").
  */
 import React, { useCallback, useEffect, useState } from 'react';
 import { ArrowDown, ArrowUp, Plus, Trash2 } from 'lucide-react';
@@ -17,6 +18,7 @@ import type { ClearanceStep, HistoryTitle } from '../types';
 import { DocumentTypeListEditor } from '../components/DocumentTypeListEditor';
 import { ApparatusTypeListEditor, EventTypeListEditor, StationListEditor } from '../components/HistoryListEditors';
 import { SourceListEditor } from '../components/SourceListEditor';
+import { PublicWebsiteSettings } from '../components/PublicWebsiteSettings';
 
 interface DraftStep {
   name: string;
@@ -385,6 +387,7 @@ export const HistorySettingsPage: React.FC = () => {
         )}
       </section>
 
+      <PublicWebsiteSettings />
       <SourceListEditor />
       <DocumentTypeListEditor />
       <StationListEditor />

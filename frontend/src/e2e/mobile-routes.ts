@@ -1672,6 +1672,14 @@ export const ALL_ROUTES: RouteCheck[] = [
     permissions: ['history.manage'],
     expectText: 'What happened',
   },
+  { path: '/history/articles', maxSmallTargets: 0, maxTinyText: 0, expectText: 'A century on Elm Street' },
+  {
+    path: '/history/articles/new',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['history.manage'],
+    expectText: 'Add a reference',
+  },
   { path: '/history/apparatus', maxSmallTargets: 0, maxTinyText: 0, expectText: 'Hand-drawn hose reel' },
   {
     path: '/history/apparatus/new',

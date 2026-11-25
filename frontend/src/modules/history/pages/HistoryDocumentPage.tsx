@@ -20,6 +20,7 @@ import { saveBlob } from '../../../utils/saveBlob';
 import { ClearanceSteps } from '../components/ClearanceSteps';
 import { DocumentDetails } from '../components/DocumentDetails';
 import { PublicationBadge } from '../components/PublicationBadge';
+import { RelatedArticles } from '../components/RelatedArticles';
 import { RevisionList } from '../components/RevisionList';
 import { historyDocumentService, historyService } from '../services/api';
 import type { DocumentFullView, DocumentView } from '../types';
@@ -178,6 +179,7 @@ export const HistoryDocumentPage: React.FC = () => {
       <div className="grid gap-6 lg:grid-cols-[1fr_20rem]">
         <div className="card p-4">
           <DocumentDetails item={item} />
+          <RelatedArticles query={{ document_id: item.id }} headingId="document-articles-heading" className="mt-6" />
           {item.text_truncated && (
             <p className="text-theme-text-secondary mt-3 text-xs">
               This document is long: search covers its first pages, not all of it.

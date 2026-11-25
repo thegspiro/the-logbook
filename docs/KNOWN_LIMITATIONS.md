@@ -1311,6 +1311,59 @@ Phase 5, events, apparatus and timelines (2026-11-21), ships with these:
   in the description, which the clearance list checks before anything is
   public, or in the encrypted research notes.
 
+Phase 6, articles with PDF and Word export (2026-11-22 spec), ships with these:
+
+- **Only the archive's keepers write articles.** A member reads and exports
+  what is published to them; there is no member submission or draft-for-review
+  flow yet.
+- **Photos are blocks, not inline images.** A photo sits between paragraphs,
+  full or half width, never floated inside one, and only an archive photo can
+  be shown (not a recording, a film or an image from elsewhere). This keeps
+  every photo checked against its reader on every page and export.
+- **A public article shows only public photos.** It cannot be sent for public
+  clearance while it shows a photo that is not cleared for the public. A photo
+  withdrawn from the public afterwards is left out of the public copy rather
+  than holding the article back.
+- **Each article stands alone.** There are no series or collections, and no
+  timeline excerpts inside an article. An article is not placed on the
+  timeline or in "Today in history".
+- **A file names the archive's sources; it does not link them.** A link the
+  Historian typed in the text stays a link in both files, but the documents,
+  events and photos listed under Sources are named only: a printed copy has no
+  app to open them in.
+- **Exports are made on request and not kept.** Each download builds the file
+  again from the current article, at the reader's own visibility; nothing is
+  stored. The time it takes grows with the number of photos, each of which is
+  read and re-encoded.
+- **No new dependency.** ReportLab and python-docx were already installed.
+
+Phase 7, publishing outward (2026-11-24 spec), ships with these:
+
+- **One switch per part, no field list.** Clearance decides what a record
+  shows; the switches decide which parts of History the website can reach at
+  all. There is no per-field allowlist for History, unlike the portal's other
+  data.
+- **No text search, no RSS.** The cleared copies are stored as JSON, which
+  cannot be searched efficiently, so lists filter by decade only. The "what's
+  new" feed is JSON.
+- **Lists are built in memory.** Each call loads the department's public
+  records of the parts that are on and sorts them. Fine for a department's
+  public archive; tens of thousands of public records would want stored
+  sort keys.
+- **Recordings and films are listed, not played.** Their details and
+  thumbnails are given; no stream. No Word file for articles.
+- **Nothing is cached.** The security middleware's `no-store` holds for these
+  answers too, so the spec's "within the portal's cache time" is in practice
+  "on the next request". A busy website should cache on its own side.
+- **The widget is framed from the forms list** (owner decision, 2026-11-24):
+  the department's websites under Organization Settings → Forms, the list
+  embedded forms use. The Public Portal's own `allowed_origins` stays unread.
+- **A portal that is off answers 503, not 404,** on the API, as every other
+  portal route does. Signed files and the widget answer 404 in every refused
+  case.
+- **No public pages inside the app.** The department's own website shows the
+  records; only the widget is served by the app.
+
 ## Department Store — Decisions for the Owner (2026-11-13)
 
 From the department store follow-up

@@ -1828,6 +1828,7 @@ class SecurityMonitoringMiddleware:
     }
     EXPORT_ENDPOINT_TEMPLATES = (
         "/api/v1/finance/export/logs/{log_id}/imported",
+        "/api/v1/history/articles/{article_id}/export",
         "/api/v1/training/programs/programs/{program_id}/export",
     )
     _EXPORT_PATTERNS = tuple(

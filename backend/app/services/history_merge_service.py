@@ -37,6 +37,7 @@ from app.models.history import (
     HistoryRevision,
     PublicationLevel,
 )
+from app.services.history_article_service import HistoryArticleService
 from app.services.history_clearance_service import HistoryClearanceService
 from app.services.history_document_service import HistoryDocumentService
 from app.services.history_event_service import HistoryEventService
@@ -279,9 +280,10 @@ class HistoryMergeService:
         # with both keeps one tag.
         await HistoryMediaService(self.db).move_tags(other.id, keep.id)
         await HistoryDocumentService(self.db).move_tags(other.id, keep.id)
-        # Event links follow too; on an event with both, the kept person's
-        # link and role stay.
+        # Event and article links follow too; where both people are linked
+        # to one, the kept person's link (and on an event, role) stays.
         await HistoryEventService(self.db).move_members(other.id, keep.id)
+        await HistoryArticleService(self.db).move_members(other.id, keep.id)
         await self._move_references(keep, other, actor_id)
 
         # A plain DELETE: the periods and links have already moved, and the

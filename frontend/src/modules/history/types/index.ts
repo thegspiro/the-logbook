@@ -77,7 +77,7 @@ export const CLEARANCE_STATUS_LABELS: Record<ClearanceStatus, string> = {
 };
 
 export type ClearancePurpose = 'public' | 'review';
-export type ClearanceRecordType = 'member' | 'media' | 'document' | 'apparatus' | 'event';
+export type ClearanceRecordType = 'member' | 'media' | 'document' | 'apparatus' | 'event' | 'article';
 export type ClearanceDecisionKind = 'cleared' | 'returned';
 export type EditKind = 'minor' | 'substantial';
 
@@ -360,12 +360,17 @@ export interface ClearanceStep {
 }
 
 export type ClearanceReviewRecord =
-  HistoricalMemberMemberView | MediaMemberView | DocumentMemberView | ApparatusMemberView | EventMemberView;
+  | HistoricalMemberMemberView
+  | MediaMemberView
+  | DocumentMemberView
+  | ApparatusMemberView
+  | EventMemberView
+  | ArticleMemberView;
 
 export interface ClearanceReview {
   request: ClearanceRequest;
-  /** A person, photo, document, apparatus or event, as members would read
-   * it: which one is `request.record_type`. */
+  /** A person, photo, document, apparatus, event or article, as members
+   * would read it: which one is `request.record_type`. */
   record: ClearanceReviewRecord;
 }
 
@@ -850,6 +855,10 @@ export const isApparatusRecord = (record: ClearanceReviewRecord): record is Appa
 export const isEventRecord = (record: ClearanceReviewRecord): record is EventMemberView =>
   'start_date' in record && 'members' in record;
 
+/** Whether a clearance review's record is an article: only an article has
+ * blocks. */
+export const isArticleRecord = (record: ClearanceReviewRecord): record is ArticleMemberView => 'blocks' in record;
+
 // --- Phase 5: managed lists (stations, apparatus types, event types) ---
 
 /** One entry of a managed list. Sources and document types have this shape too. */
@@ -1199,4 +1208,215 @@ export interface TimelineEntry {
 export interface TimelineDecade {
   decade: number;
   count: number;
+}
+
+// --- Phase 6: articles ---
+
+export const ArticleBlockKind = {
+  TEXT: 'text',
+  PHOTO: 'photo',
+} as const;
+export type ArticleBlockKind = (typeof ArticleBlockKind)[keyof typeof ArticleBlockKind];
+
+export const ArticlePhotoSize = {
+  FULL: 'full',
+  HALF: 'half',
+} as const;
+export type ArticlePhotoSize = (typeof ArticlePhotoSize)[keyof typeof ArticlePhotoSize];
+
+export interface ArticleSummary {
+  id: string;
+  title: string;
+  subtitle: string | null;
+  byline: string | null;
+  summary: string | null;
+  /** Only when the caller may see the cover photo. */
+  cover: MediaSummary | null;
+  publication_level: PublicationLevel;
+  updated_at: string;
+}
+
+export interface ArticleList {
+  items: ArticleSummary[];
+  total: number;
+}
+
+export interface ArticleBlockView {
+  id: string;
+  kind: ArticleBlockKind;
+  /** A text block's sanitized HTML. */
+  html: string | null;
+  /** A photo block's photo, when the caller may see it. In the editor's view
+   * a photo since deleted or withdrawn is kept with `media` empty. */
+  media: MediaSummary | null;
+  media_id?: string | null | undefined;
+  caption: string | null;
+  size: ArticlePhotoSize;
+}
+
+export interface ArticleMemberLink {
+  member_id: string;
+  display_name: string;
+}
+
+/** An archive item an article draws on, for its Sources list. */
+export interface ArticleSource {
+  kind: 'document' | 'event' | 'photo';
+  id: string;
+  title: string;
+}
+
+interface ArticleCatalogue {
+  id: string;
+  title: string;
+  subtitle: string | null;
+  byline: string | null;
+  summary: string | null;
+  cover: MediaSummary | null;
+  citations: string[];
+  publication_level: PublicationLevel;
+  updated_at: string;
+  blocks: ArticleBlockView[];
+  /** Each link only where the caller may read the record it points at. */
+  members: ArticleMemberLink[];
+  events: EventSummary[];
+  apparatus: ApparatusTag[];
+  documents: DocumentSummary[];
+  sources: ArticleSource[];
+}
+
+export interface ArticleMemberView extends ArticleCatalogue {
+  view: 'member';
+}
+
+export interface ArticleFullView extends ArticleCatalogue {
+  view: 'full';
+  cover_media_id: string | null;
+  research_notes: string | null;
+  published_at: string | null;
+  revision_number: number;
+  public_revision_number: number | null;
+  public_changes_pending: boolean;
+  /** Titles of the photos it shows that are not public; it cannot go for
+   * public clearance until this is empty. */
+  photos_not_public: string[];
+  clearance_required: boolean;
+  cleared_for_public: boolean;
+  clearance: ClearanceRequest | null;
+  can_edit: boolean;
+  can_publish: boolean;
+  created_at: string;
+}
+
+export type ArticleView = ArticleFullView | ArticleMemberView;
+
+export interface ArticleBlockWrite {
+  kind: ArticleBlockKind;
+  html?: string | undefined;
+  media_id?: string | undefined;
+  caption?: string | null | undefined;
+  size?: ArticlePhotoSize | undefined;
+}
+
+/** An article's fields. Update payloads send `null` to clear. */
+export interface ArticleFields {
+  title?: string | undefined;
+  subtitle?: string | null | undefined;
+  byline?: string | null | undefined;
+  summary?: string | null | undefined;
+  cover_media_id?: string | null | undefined;
+  citations?: string[] | null | undefined;
+  research_notes?: string | null | undefined;
+}
+
+/** The body and link sets an article write may replace. One omitted stays. */
+export interface ArticleLinks {
+  blocks?: ArticleBlockWrite[] | undefined;
+  member_ids?: string[] | undefined;
+  event_ids?: string[] | undefined;
+  apparatus_ids?: string[] | undefined;
+  document_ids?: string[] | undefined;
+}
+
+export interface ArticleCreate extends ArticleFields, ArticleLinks {
+  title: string;
+}
+
+export interface ArticleUpdate extends ArticleFields, ArticleLinks {
+  edit_kind?: EditKind | undefined;
+  edit_note?: string | undefined;
+}
+
+export type ArticleSort = 'updated' | 'title';
+
+export interface ArticleQuery {
+  search?: string | undefined;
+  member_id?: string | undefined;
+  event_id?: string | undefined;
+  apparatus_id?: string | undefined;
+  document_id?: string | undefined;
+  media_id?: string | undefined;
+  level?: PublicationLevel | undefined;
+  sort?: ArticleSort | undefined;
+  limit?: number | undefined;
+  offset?: number | undefined;
+}
+
+export type ArticleExportFormat = 'pdf' | 'docx';
+
+// --- Public website (phase 7) ---
+
+export type PublicWidgetTheme = 'auto' | 'light' | 'dark';
+
+/** Each part of History the department's website may show. */
+export interface HistoryPublicSwitches {
+  people: boolean;
+  honor_roll: boolean;
+  photos: boolean;
+  documents: boolean;
+  events: boolean;
+  apparatus: boolean;
+  articles: boolean;
+  timeline: boolean;
+  today: boolean;
+}
+
+export interface HistoryPublicSettings extends HistoryPublicSwitches {
+  widget_theme: PublicWidgetTheme;
+  widget_show_branding: boolean;
+  widget_link_exists: boolean;
+  widget_token_created_at: string | null;
+  portal_enabled: boolean;
+  portal_has_key: boolean;
+  /** The department's websites (Organization Settings → Forms), the only pages that may show the widget. */
+  widget_websites: string[];
+}
+
+export type HistoryPublicSettingsUpdate = Partial<HistoryPublicSwitches> & {
+  widget_theme?: PublicWidgetTheme | undefined;
+  widget_show_branding?: boolean | undefined;
+};
+
+export interface HistoryWidgetEntry {
+  key: string;
+  kind: string;
+  date: string;
+  precision: DatePrecision;
+  circa: boolean;
+  label: string;
+  detail: string | null;
+  years_ago: number;
+  anniversary: string;
+  /** The anniversary's day in words ("March 4"), written by the server. */
+  anniversary_label: string;
+}
+
+/** What the "Today in history" widget shows. */
+export interface HistoryWidgetToday {
+  mode: 'today' | 'week' | 'none';
+  date: string;
+  entries: HistoryWidgetEntry[];
+  theme: PublicWidgetTheme;
+  organization_name: string | null;
+  has_logo: boolean;
 }

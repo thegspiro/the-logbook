@@ -27,6 +27,7 @@ from app.core.utils import ensure_found, handle_service_errors
 from app.models.history import (
     HistoricalMember,
     HistoryApparatus,
+    HistoryArticle,
     HistoryDocument,
     HistoryEvent,
     HistoryMedia,
@@ -35,6 +36,7 @@ from app.models.history import (
 from app.models.user import Position, User
 from app.schemas.history import (
     ApparatusMemberView,
+    ArticleMemberView,
     ClearanceDecide,
     ClearanceRequestResponse,
     ClearanceReview,
@@ -71,6 +73,10 @@ from app.services.history_apparatus_service import (
     RECORD_APPARATUS,
     HistoryApparatusService,
 )
+from app.services.history_article_service import (
+    RECORD_ARTICLE,
+    HistoryArticleService,
+)
 from app.services.history_clearance_service import (
     HistoryClearanceService,
     record_path,
@@ -103,7 +109,12 @@ from app.utils.markdown_render import render_markdown
 router = APIRouter()
 
 ClearanceRecord = Union[
-    HistoricalMember, HistoryMedia, HistoryDocument, HistoryApparatus, HistoryEvent
+    HistoricalMember,
+    HistoryMedia,
+    HistoryDocument,
+    HistoryApparatus,
+    HistoryEvent,
+    HistoryArticle,
 ]
 ClearanceReviewRecord = Union[
     HistoricalMemberMemberView,
@@ -111,6 +122,7 @@ ClearanceReviewRecord = Union[
     DocumentMemberView,
     ApparatusMemberView,
     EventMemberView,
+    ArticleMemberView,
 ]
 
 _PERSON = "Person"
@@ -179,9 +191,14 @@ async def _managed_person(
 async def _clearance_record(
     db: AsyncSession, organization_id: str, record_type: str, record_id: str
 ) -> tuple[Optional[ClearanceRecord], str]:
-    """The person, media item, document, apparatus or event a clearance
-    request is about, in the department, and the label its notices and review
-    page use."""
+    """The person, media item, document, apparatus, event or article a
+    clearance request is about, in the department, and the label its notices
+    and review page use."""
+    if record_type == RECORD_ARTICLE:
+        article = await HistoryArticleService(db).get_article(
+            organization_id, record_id
+        )
+        return (article, article.title) if article else (None, "")
     if record_type == RECORD_EVENT:
         event = await HistoryEventService(db).get_event(organization_id, record_id)
         return (event, event.title) if event else (None, "")
@@ -1134,7 +1151,15 @@ async def review_clearance_request(
     if record is None:
         raise HTTPException(status_code=404, detail="Record not found")
     review_view: ClearanceReviewRecord
-    if isinstance(record, HistoryEvent):
+    if isinstance(record, HistoryArticle):
+        # As for an event: the reviewer reads the article, its photos and its
+        # links as members will, draft or not.
+        review_view = ArticleMemberView(
+            **HistoryArticleService(db).member_view(
+                replace(viewer, can_view_archive=True), record
+            )
+        )
+    elif isinstance(record, HistoryEvent):
         # As for a photo: the reviewer reads the event and its links as
         # members will, draft or not.
         review_view = EventMemberView(

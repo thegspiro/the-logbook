@@ -56,7 +56,7 @@ import { getGrantsFundraisingRoutes } from './modules/grants-fundraising/routes'
 import { getIPSecurityRoutes } from './modules/ip-security/routes';
 import { getFinanceRoutes } from './modules/finance/routes';
 import { getMedicalScreeningRoutes } from './modules/medical-screening/routes';
-import { getHistoryRoutes } from './modules/history/routes';
+import { getHistoryPublicRoutes, getHistoryRoutes } from './modules/history/routes';
 import { getTestingRoutes } from './modules/testing/routes';
 
 // Loading fallback component
@@ -193,6 +193,7 @@ function App() {
                 ============================================ */}
                     {getProspectiveMembersPublicRoutes()}
                     {getFormsPublicRoutes()}
+                    {getHistoryPublicRoutes()}
                     {getEventsPublicRoutes()}
                     {getElectionsPublicRoutes()}
                     {getFacilitiesPublicRoutes()}

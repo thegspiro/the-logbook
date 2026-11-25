@@ -21,6 +21,7 @@ import { saveBlob } from '../../../utils/saveBlob';
 import { ClearanceSteps } from '../components/ClearanceSteps';
 import { MediaDetails } from '../components/MediaDetails';
 import { PublicationBadge } from '../components/PublicationBadge';
+import { RelatedArticles } from '../components/RelatedArticles';
 import { RevisionList } from '../components/RevisionList';
 import { historyMediaService, historyService } from '../services/api';
 import { CONSENT_STATE_LABELS, type MediaFullView, type MediaView } from '../types';
@@ -208,6 +209,7 @@ export const HistoryMediaItemPage: React.FC = () => {
       <div className="grid gap-6 lg:grid-cols-[1fr_20rem]">
         <div className="card p-4">
           <MediaDetails item={item} />
+          <RelatedArticles query={{ media_id: item.id }} headingId="media-articles-heading" className="mt-6" />
         </div>
 
         {full && (

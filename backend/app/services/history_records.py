@@ -1,8 +1,8 @@
 """
-Publication and change history for the phase 5 records: events and
-historical apparatus.
+Publication and change history for the phase 5 and 6 records: events,
+historical apparatus and articles.
 
-The same rules as people, photos and documents, written once for the two new
+The same rules as people, photos and documents, written once for the newer
 record types rather than copied into each:
 
 * every write adds a numbered revision to ``history_revisions``;
@@ -26,6 +26,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.history import (
     HistoryApparatus,
+    HistoryArticle,
     HistoryClearanceRequest,
     HistoryEvent,
     HistoryRevision,
@@ -41,7 +42,7 @@ _LEVEL_ORDER = [
 READABLE_BY_MEMBERS = (PublicationLevel.MEMBERS, PublicationLevel.PUBLIC)
 
 #: The records this base serves; each subclass names its own.
-RecordT = TypeVar("RecordT", HistoryApparatus, HistoryEvent)
+RecordT = TypeVar("RecordT", HistoryApparatus, HistoryArticle, HistoryEvent)
 
 
 def can_read_record(can_view_archive: bool, record: Any) -> bool:

@@ -26,12 +26,14 @@ from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.core.utils import list_within_detail_limit
 from app.models.history import (
     ClearanceDecisionKind,
     ClearancePurpose,
     ClearanceStatus,
     HistoricalMember,
     HistoryApparatus,
+    HistoryArticle,
     HistoryClearanceDecision,
     HistoryClearanceRequest,
     HistoryClearanceStep,
@@ -49,6 +51,7 @@ RECORD_PATHS = {
     "document": "/history/documents/{id}",
     "apparatus": "/history/apparatus/{id}",
     "event": "/history/events/{id}",
+    "article": "/history/articles/{id}",
 }
 REVIEW_PATH = "/history/clearance/{id}"
 
@@ -272,16 +275,38 @@ class HistoryClearanceService:
             HistoryDocument,
             HistoryApparatus,
             HistoryEvent,
+            HistoryArticle,
         ],
         purpose: ClearancePurpose,
         actor_id: str,
     ) -> tuple[HistoryClearanceRequest, list[str]]:
         """Open a request for the record's current revision: a person, a
-        photo or media item, a document, an apparatus or an event.
+        photo or media item, a document, an apparatus, an event or an article.
+
+        An article cannot go for public clearance while it shows a photo that
+        is not itself public: the clearance list would be clearing a page the
+        public could only ever see with holes in it (owner-approved spec,
+        2026-11-22).
 
         Returns the request and the members to tell it is their turn.
         """
-        if isinstance(person, HistoryEvent):
+        if isinstance(person, HistoryArticle):
+            record_type = "article"
+            if purpose == ClearancePurpose.PUBLIC:
+                from app.services.history_article_service import (
+                    HistoryArticleService,
+                )
+
+                hidden = HistoryArticleService.photos_not_public(person)
+                if hidden:
+                    raise ValueError(
+                        list_within_detail_limit(
+                            "Clear these photos for the public first, or take "
+                            "them out of the article: ",
+                            [p["title"] for p in hidden],
+                        )
+                    )
+        elif isinstance(person, HistoryEvent):
             record_type = "event"
         elif isinstance(person, HistoryApparatus):
             record_type = "apparatus"

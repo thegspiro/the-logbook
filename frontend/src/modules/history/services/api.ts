@@ -73,6 +73,16 @@ import type {
   TimelineDecade,
   TimelineEntry,
   TimelineKind,
+  ArticleCreate,
+  ArticleExportFormat,
+  ArticleFullView,
+  ArticleList,
+  ArticleQuery,
+  ArticleSummary,
+  ArticleUpdate,
+  ArticleView,
+  HistoryPublicSettings,
+  HistoryPublicSettingsUpdate,
 } from '../types';
 
 const api = createApiClient();
@@ -218,6 +228,28 @@ export const historyService = {
   async listClearancePositions(): Promise<{ id: string; name: string }[]> {
     const { data } = await api.get<{ id: string; name: string }[]>(`${BASE}/clearance/positions`);
     return asArray(data);
+  },
+
+  // --- Public website ---
+
+  async getPublicSettings(): Promise<HistoryPublicSettings> {
+    const { data } = await api.get<HistoryPublicSettings>(`${BASE}/public-settings`);
+    return { ...data, widget_websites: asArray(data.widget_websites) };
+  },
+
+  async updatePublicSettings(values: HistoryPublicSettingsUpdate): Promise<HistoryPublicSettings> {
+    const { data } = await api.put<HistoryPublicSettings>(`${BASE}/public-settings`, values);
+    return { ...data, widget_websites: asArray(data.widget_websites) };
+  },
+
+  /** A new widget link. Its secret is returned this once. */
+  async makeWidgetLink(): Promise<string> {
+    const { data } = await api.post<{ token: string }>(`${BASE}/public-settings/widget-link`);
+    return data.token;
+  },
+
+  async removeWidgetLink(): Promise<void> {
+    await api.delete(`${BASE}/public-settings/widget-link`);
   },
 
   async replaceClearanceSteps(steps: { name: string; position_id: string }[]): Promise<ClearanceStep[]> {
@@ -779,6 +811,78 @@ export const historyEventService = {
   async relatedTo(query: { member_id?: string; apparatus_id?: string }): Promise<EventSummary[]> {
     const { data } = await api.get<EventList>(`${BASE}/events`, { params: { ...query, limit: 200 } });
     return asArray(data.items);
+  },
+};
+
+// --- Phase 6: articles ---
+
+function normalizeArticle<T extends ArticleView>(data: T): T {
+  return {
+    ...data,
+    blocks: asArray(data.blocks),
+    citations: asArray(data.citations),
+    members: asArray(data.members),
+    events: asArray(data.events),
+    apparatus: asArray(data.apparatus),
+    documents: asArray(data.documents),
+    sources: asArray(data.sources),
+  };
+}
+
+export const historyArticleService = {
+  async listArticles(query: ArticleQuery = {}): Promise<ArticleList> {
+    const { data } = await api.get<ArticleList>(`${BASE}/articles`, { params: query });
+    return { items: asArray(data.items), total: data.total };
+  },
+
+  async getArticle(id: string): Promise<ArticleView> {
+    const { data } = await api.get<ArticleView>(`${BASE}/articles/${id}`);
+    return normalizeArticle(data);
+  },
+
+  async createArticle(payload: ArticleCreate): Promise<ArticleFullView> {
+    const { data } = await api.post<ArticleFullView>(`${BASE}/articles`, payload);
+    return normalizeArticle(data);
+  },
+
+  async updateArticle(id: string, payload: ArticleUpdate): Promise<ArticleFullView> {
+    const { data } = await api.patch<ArticleFullView>(`${BASE}/articles/${id}`, payload);
+    return normalizeArticle(data);
+  },
+
+  async deleteArticle(id: string): Promise<void> {
+    await api.delete(`${BASE}/articles/${id}`);
+  },
+
+  async publish(id: string, level: 'members' | 'public'): Promise<ArticleFullView> {
+    const { data } = await api.post<ArticleFullView>(`${BASE}/articles/${id}/publish`, { level });
+    return normalizeArticle(data);
+  },
+
+  async unpublish(id: string, level: 'draft' | 'members'): Promise<ArticleFullView> {
+    const { data } = await api.post<ArticleFullView>(`${BASE}/articles/${id}/unpublish`, { level });
+    return normalizeArticle(data);
+  },
+
+  async listRevisions(id: string): Promise<Revision[]> {
+    const { data } = await api.get<Revision[]>(`${BASE}/articles/${id}/revisions`);
+    return asArray(data);
+  },
+
+  /** The articles a person, event, apparatus, document or photo is in. */
+  async relatedTo(
+    query: Pick<ArticleQuery, 'member_id' | 'event_id' | 'apparatus_id' | 'document_id' | 'media_id'>
+  ): Promise<ArticleSummary[]> {
+    const { data } = await api.get<ArticleList>(`${BASE}/articles`, { params: { ...query, limit: 200 } });
+    return asArray(data.items);
+  },
+
+  async exportArticle(id: string, format: ArticleExportFormat): Promise<Blob> {
+    const { data } = await api.get<Blob>(`${BASE}/articles/${id}/export`, {
+      params: { format },
+      responseType: 'blob',
+    });
+    return data;
   },
 };
 

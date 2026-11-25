@@ -16,6 +16,7 @@ import { getErrorMessage, toAppError } from '../../../utils/errorHandling';
 import { EventDetails } from '../components/EventDetails';
 import { PublicationBadge } from '../components/PublicationBadge';
 import { PublicationPanel } from '../components/PublicationPanel';
+import { RelatedArticles } from '../components/RelatedArticles';
 import { RevisionList } from '../components/RevisionList';
 import { historyEventService, historyService } from '../services/api';
 import type { EventFullView, EventView } from '../types';
@@ -153,6 +154,7 @@ export const HistoryEventPage: React.FC = () => {
       <div className="grid gap-6 lg:grid-cols-[1fr_20rem]">
         <div className="card p-4">
           <EventDetails item={item} />
+          <RelatedArticles query={{ event_id: item.id }} headingId="event-articles-heading" className="mt-6" />
         </div>
 
         {full && (
