@@ -471,6 +471,18 @@ export interface MemberShiftHistory {
   external_total: number;
 }
 
+/** What crediting past outreach sheets does (`applied`), or would do. */
+export interface OutreachCreditSummary {
+  applied: boolean;
+  sheets: number;
+  sheets_waiting_for_event: number;
+  sheets_awaiting_finalize: number;
+  volunteers: number;
+  attendance_updated: number;
+  entries_credited: number;
+  hours: number;
+}
+
 export interface SchedulingWidgetSummary {
   timezone: string;
   window_start: string;
@@ -1021,6 +1033,16 @@ export const schedulingService = {
 
   async getSummary(): Promise<SchedulingSummary> {
     const response = await api.get<SchedulingSummary>('/scheduling/summary');
+    return response.data;
+  },
+  /** What crediting past outreach sheets through their events would do. Changes nothing. */
+  async previewOutreachCredit(): Promise<OutreachCreditSummary> {
+    const response = await api.get<OutreachCreditSummary>('/scheduling/outreach-credit');
+    return response.data;
+  },
+  /** Credit past outreach sheets through their events. Safe to repeat. */
+  async runOutreachCredit(): Promise<OutreachCreditSummary> {
+    const response = await api.post<OutreachCreditSummary>('/scheduling/outreach-credit');
     return response.data;
   },
   /** Log a shift the signed-in member worked for another department. */

@@ -823,6 +823,22 @@ class ShiftsListResponse(BaseModel):
 # ============================================
 
 
+class OutreachCreditSummary(BaseModel):
+    """What crediting past outreach sheets does, or would do.
+
+    ``applied`` is False for the preview, which changes nothing.
+    """
+
+    applied: bool
+    sheets: int
+    sheets_waiting_for_event: int
+    sheets_awaiting_finalize: int
+    volunteers: int
+    attendance_updated: int
+    entries_credited: int
+    hours: float
+
+
 class SchedulingSummary(BaseModel):
     """Schema for scheduling module summary.
 

@@ -883,8 +883,20 @@ input:is(.form-checkbox, [class~='h-4']) {
      text only, and a button label is not large text. red-800 measures
      8.35:1 and clears AAA. Changed app-wide on 2026-08-23 rather than per
      screen: a primary button that is one red on the store and another
-     everywhere else reads as two different actions. */
+     everywhere else reads as two different actions.
+
+     The transparent border matches btn-secondary's 1px one. Without it a
+     filled button was 40px on a desktop and its Cancel beside it 42px, so
+     every dialog footer and header pair sat 2px out of line. Only with a mouse
+     on a wide screen, the complement of the touch query below. On a phone or
+     touch screen both are already 44px tall, and there the border's 2px of
+     width pushed "Add Storage Area" past its half of a phone header row. The
+     same holds for the other filled buttons below. */
   @apply focus:ring-theme-focus-ring rounded-lg bg-red-800 px-4 py-2 text-white shadow-sm transition-all duration-150 ease-out hover:bg-red-900 hover:shadow-md focus:ring-2 focus:outline-hidden active:scale-[0.97] disabled:pointer-events-none disabled:opacity-50;
+
+  @media (min-width: 768px) and (pointer: fine) {
+    border: 1px solid transparent;
+  }
 
   /* Grow to the 44px touch minimum on phones and touch screens. Applied
      inside the query so mouse-driven desktop button density is untouched;
@@ -916,6 +928,10 @@ input:is(.form-checkbox, [class~='h-4']) {
 @utility btn-success {
   @apply focus:ring-theme-focus-ring rounded-lg bg-green-800 px-4 py-2 text-white shadow-sm transition-all duration-150 ease-out hover:bg-green-900 hover:shadow-md focus:ring-2 focus:outline-hidden active:scale-[0.97] disabled:pointer-events-none disabled:opacity-50;
 
+  @media (min-width: 768px) and (pointer: fine) {
+    border: 1px solid transparent;
+  }
+
   /* Grow to the 44px touch minimum on phones and touch screens. Applied
      inside the query so mouse-driven desktop button density is untouched;
      inline-flex centres the label in the taller box, which a plain min-height
@@ -931,6 +947,10 @@ input:is(.form-checkbox, [class~='h-4']) {
 @utility btn-info {
   @apply focus:ring-theme-focus-ring rounded-lg bg-blue-800 px-4 py-2 text-white shadow-sm transition-all duration-150 ease-out hover:bg-blue-900 hover:shadow-md focus:ring-2 focus:outline-hidden active:scale-[0.97] disabled:pointer-events-none disabled:opacity-50;
 
+  @media (min-width: 768px) and (pointer: fine) {
+    border: 1px solid transparent;
+  }
+
   /* Grow to the 44px touch minimum on phones and touch screens. Applied
      inside the query so mouse-driven desktop button density is untouched;
      inline-flex centres the label in the taller box, which a plain min-height
@@ -945,6 +965,10 @@ input:is(.form-checkbox, [class~='h-4']) {
 
 @utility btn-warning {
   @apply focus:ring-theme-focus-ring rounded-lg bg-amber-800 px-4 py-2 text-white shadow-sm transition-all duration-150 ease-out hover:bg-amber-900 hover:shadow-md focus:ring-2 focus:outline-hidden active:scale-[0.97] disabled:pointer-events-none disabled:opacity-50;
+
+  @media (min-width: 768px) and (pointer: fine) {
+    border: 1px solid transparent;
+  }
 
   /* Grow to the 44px touch minimum on phones and touch screens. Applied
      inside the query so mouse-driven desktop button density is untouched;

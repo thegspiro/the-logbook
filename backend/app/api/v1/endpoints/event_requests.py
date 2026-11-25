@@ -14,7 +14,7 @@ their workflow.
 import copy
 import html as _html
 from datetime import datetime, timezone
-from typing import Optional
+from typing import TYPE_CHECKING, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from loguru import logger
@@ -121,6 +121,11 @@ from app.utils.org_timezone import (
     org_today,
     scheduling_timezone,
 )
+
+if TYPE_CHECKING:
+    # Only for the helper's annotation; the handlers import Event where they
+    # query it.
+    from app.models.event import Event
 
 router = APIRouter(prefix="/event-requests", tags=["event-requests"])
 
@@ -1371,6 +1376,54 @@ async def add_comment(
     }
 
 
+async def _crew_move_conflicts(
+    db: AsyncSession,
+    event: Optional["Event"],
+    start: datetime,
+    end: datetime,
+    organization_id: str,
+    acknowledged: bool,
+) -> List[str]:
+    """Refuse to carry an apparatus crew onto a date where its apparatus is
+    committed, until the coordinator has seen why.
+
+    A request's crew rides on its calendar event, so moving the request moves
+    the crew. Adding the crew checked the apparatus for conflicts; a later
+    move did not, and could quietly put the engine on two events at once. The
+    same rule as scheduling nights and adding a crew applies: a conflict is a
+    warning the coordinator may accept, never a block.
+
+    Raises 409 with the conflicts listed, in the shape adding a crew answers,
+    when there are any and they were not acknowledged. Returns the reasons
+    that were acknowledged, for the activity log, or an empty list.
+    """
+    if event is None:
+        return []
+    conflicts = await ApparatusEventService(db).check_move_conflicts(
+        str(event.id), start, end, str(organization_id)
+    )
+    if not conflicts:
+        return []
+    if not acknowledged:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "message": (
+                    "The apparatus crew on this request would conflict on the "
+                    "new date. Review the conflicts and confirm to move anyway."
+                ),
+                "conflicts": [c.model_dump() for c in conflicts],
+            },
+        )
+    return [c.reason for c in conflicts]
+
+
+def _with_acknowledged_conflicts(notes: str, reasons: List[str]) -> str:
+    if not reasons:
+        return notes
+    return f"{notes}. Apparatus conflict accepted: {' '.join(reasons)}"
+
+
 @router.patch("/{request_id}/schedule")
 async def schedule_request(
     request_id: str,
@@ -1480,6 +1533,18 @@ async def schedule_request(
         data.event_date, data.event_end_date, existing_event, org
     )
     event_request.event_end_date = end_datetime
+
+    # Before anything moves: the calendar entry carries any apparatus crew,
+    # so the new window is the crew's too. Nothing is committed yet, so a
+    # refusal leaves the request exactly as it was.
+    accepted_conflicts = await _crew_move_conflicts(
+        db,
+        existing_event,
+        data.event_date,
+        end_datetime,
+        str(current_user.organization_id),
+        data.acknowledge_conflicts,
+    )
 
     # Optionally create a calendar event
     if data.create_calendar_event:
@@ -1609,15 +1674,19 @@ async def schedule_request(
         action="scheduled",
         old_status=old_status,
         new_status=EventRequestStatus.SCHEDULED.value,
-        notes=data.notes
-        # The confirmed date is stored UTC; the activity log is read by people,
-        # in the department's time -- it said 11 PM for a 7 PM event.
-        or f"Scheduled for {format_in_org_timezone(data.event_date, org)}",
+        notes=_with_acknowledged_conflicts(
+            data.notes
+            # The confirmed date is stored UTC; the activity log is read by
+            # people, in the department's time -- it said 11 PM for a 7 PM event.
+            or f"Scheduled for {format_in_org_timezone(data.event_date, org)}",
+            accepted_conflicts,
+        ),
         details={
             "event_date": data.event_date.isoformat(),
             "location_id": data.location_id,
             "location_name": location_name,
             "event_id": event_id,
+            "apparatus_conflicts_accepted": accepted_conflicts,
         },
         performed_by=current_user.id,
     )
@@ -1681,6 +1750,7 @@ async def postpone_request(
     )
     org = org_result.scalar_one_or_none()
 
+    accepted_conflicts: List[str] = []
     if data.new_event_date:
         event_request.event_date = data.new_event_date
         # Resolved and stored for the same reason `schedule_request` does it: a
@@ -1689,11 +1759,22 @@ async def postpone_request(
         # `sync_staffing_shift_date` assuming two hours while
         # `sync_calendar_event_date` preserved the linked entry's own span. Both
         # now read one answer off the request.
+        linked_event = await get_linked_calendar_event(db, event_request)
         event_request.event_end_date = resolve_confirmed_end(
             data.new_event_date,
             data.new_event_end_date,
-            await get_linked_calendar_event(db, event_request),
+            linked_event,
             org,
+        )
+        # Same check as schedule_request, before the move: the crew rides on
+        # the calendar entry. A cancelled entry is not moved, so it has none.
+        accepted_conflicts = await _crew_move_conflicts(
+            db,
+            linked_event if linked_event and not linked_event.is_cancelled else None,
+            data.new_event_date,
+            event_request.event_end_date,
+            str(current_user.organization_id),
+            data.acknowledge_conflicts,
         )
     else:
         # Clear the date — it's TBD
@@ -1705,6 +1786,7 @@ async def postpone_request(
         notes += (
             f" — tentatively rescheduled to {data.new_event_date.strftime('%B %d, %Y')}"
         )
+        notes = _with_acknowledged_conflicts(notes, accepted_conflicts)
 
     activity = EventRequestActivity(
         request_id=event_request.id,
@@ -1717,6 +1799,7 @@ async def postpone_request(
             "new_date": (
                 data.new_event_date.isoformat() if data.new_event_date else None
             ),
+            "apparatus_conflicts_accepted": accepted_conflicts,
         },
         performed_by=current_user.id,
     )

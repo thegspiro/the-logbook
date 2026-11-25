@@ -35,6 +35,7 @@ import {
 import { ReachByPeriodChart, ReachByTypeBars, ReachLegend } from './community-engagement/CommunityCharts';
 import { ChangeBadge } from './community-engagement/ChangeBadge';
 import CrrImpactSection from './community-engagement/CrrImpactSection';
+import OutreachGoalsSection from './community-engagement/OutreachGoalsSection';
 
 const Kpi: React.FC<{
   icon: React.ElementType;
@@ -285,6 +286,8 @@ const CommunityEngagementTab: React.FC = () => {
           </ul>
         </section>
       )}
+
+      {data.goals && <OutreachGoalsSection goals={data.goals} />}
 
       {data.crr && (
         <CrrImpactSection crr={data.crr} periodLabel={(option?.label ?? '').toLowerCase()} against={against} />

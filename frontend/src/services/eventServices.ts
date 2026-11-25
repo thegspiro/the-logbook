@@ -924,6 +924,7 @@ export const eventRequestService = {
       location_id?: string | undefined;
       notes?: string | undefined;
       create_calendar_event?: boolean | undefined;
+      acknowledge_conflicts?: boolean | undefined;
     }
   ): Promise<{ message: string; status: string; event_date: string; event_id?: string }> {
     const response = await api.patch<{ message: string; status: string; event_date: string; event_id?: string }>(
@@ -934,7 +935,12 @@ export const eventRequestService = {
   },
   async postponeRequest(
     requestId: string,
-    data: { reason?: string | undefined; new_event_date?: string | undefined; new_event_end_date?: string | undefined }
+    data: {
+      reason?: string | undefined;
+      new_event_date?: string | undefined;
+      new_event_end_date?: string | undefined;
+      acknowledge_conflicts?: boolean | undefined;
+    }
   ): Promise<{ message: string; status: string }> {
     const response = await api.patch<{ message: string; status: string }>(
       `/event-requests/${requestId}/postpone`,

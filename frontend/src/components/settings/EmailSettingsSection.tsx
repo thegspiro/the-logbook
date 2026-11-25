@@ -234,7 +234,7 @@ const EmailSettingsSection: React.FC<EmailSettingsSectionProps> = ({
                     : {}),
                 }))
               }
-              className={`flex items-center gap-2 rounded-lg border-2 px-3 py-2.5 text-sm font-medium transition-colors ${
+              className={`flex items-center gap-2 rounded-lg border-2 px-3 py-2.5 text-left text-sm font-medium transition-colors ${
                 emailSettings.platform === p.id
                   ? 'border-theme-accent-blue bg-theme-accent-blue-muted text-theme-accent-blue'
                   : 'border-theme-surface-border text-theme-text-secondary hover:border-theme-surface-hover'

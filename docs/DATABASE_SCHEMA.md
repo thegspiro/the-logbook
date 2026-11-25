@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**424 tables · 6555 columns · 1411 foreign keys**
+**425 tables · 6564 columns · 1414 foreign keys**
 
 ---
 
@@ -693,6 +693,14 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | Table | Model | Columns | Purpose |
 |---|---|---|---|
 | [`organization_officers`](#organization_officers) | `OrganizationOfficer` | 11 | One department office and the member who currently holds it. |
+
+### Outreach_Goal
+
+<sub>`app/models/outreach_goal.py`</sub>
+
+| Table | Model | Columns | Purpose |
+|---|---|---|---|
+| [`outreach_goals`](#outreach_goals) | `OutreachGoal` | 9 |  |
 
 ### Passkey
 
@@ -10404,6 +10412,35 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 - UNIQUE `uq_org_officer_org_office` (`organization_id`, `office_key`)
 
+## Outreach_Goal
+
+### `outreach_goals`
+
+**OutreachGoal** · `app/models/outreach_goal.py`
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK |  | → `organizations.id` ON DELETE CASCADE |
+| `year` | INTEGER | no |  |  |  |
+| `measure_id` | VARCHAR(36) | yes | FK, IDX |  | → `crr_activity_measures.id` ON DELETE CASCADE |
+| `outreach_metric` | VARCHAR(30) | yes |  |  |  |
+| `target` | INTEGER | no |  |  |  |
+| `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `created_at` | DATETIME | no |  | `now()` |  |
+| `updated_at` | DATETIME | no |  | `now()` |  |
+
+**Indexes**
+
+- `ix_outreach_goals_measure` (`measure_id`)
+
+**Constraints**
+
+- CHECK `ck_outreach_goals_ck_outreach_goals_one_target`: `(measure_id IS NULL) <> (outreach_metric IS NULL)`
+- CHECK `ck_outreach_goals_ck_outreach_goals_target`: `target > 0`
+- UNIQUE `uq_outreach_goals_measure` (`organization_id`, `year`, `measure_id`)
+- UNIQUE `uq_outreach_goals_metric` (`organization_id`, `year`, `outreach_metric`)
+
 ## Passkey
 
 ### `user_passkeys`
@@ -14257,7 +14294,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 Every foreign key in the schema, grouped by the table it points at — the map of which id lives where.
 
-### → `users` (505 references)
+### → `users` (506 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -14620,6 +14657,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `org_chart_nodes` | `updated_by` | SET NULL | yes |
 | `organization_officers` | `updated_by` | SET NULL | yes |
 | `organization_officers` | `user_id` | SET NULL | yes |
+| `outreach_goals` | `created_by` | SET NULL | yes |
 | `password_history` | `user_id` | CASCADE | no |
 | `pledges` | `created_by` | RESTRICT | yes |
 | `program_enrollments` | `enrolled_by` | SET NULL | yes |
@@ -14767,7 +14805,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `xapi_statements` | `user_id` | SET NULL | yes |
 | `zeffy_campaign_links` | `created_by` | SET NULL | yes |
 
-### → `organizations` (342 references)
+### → `organizations` (343 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -15013,6 +15051,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `org_chart_nodes` | `organization_id` | CASCADE | no |
 | `organization_locks` | `organization_id` | CASCADE | no |
 | `organization_officers` | `organization_id` | CASCADE | no |
+| `outreach_goals` | `organization_id` | CASCADE | no |
 | `pending_file_deletions` | `organization_id` | CASCADE | no |
 | `pledges` | `organization_id` | CASCADE | no |
 | `positions` | `organization_id` | CASCADE | no |
@@ -15892,6 +15931,13 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `check_item_deployed_lots` | `template_item_id` | CASCADE | no |
 | `shift_equipment_check_items` | `template_item_id` | SET NULL | yes |
 
+### → `crr_activity_measures` (2 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `crr_activity_counts` | `measure_id` | RESTRICT | no |
+| `outreach_goals` | `measure_id` | CASCADE | yes |
+
 ### → `crr_tags` (2 references)
 
 | From table | Column | On delete | Nullable |
@@ -16152,12 +16198,6 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
 | `course_cohort_missed_classes` | `cohort_member_id` | CASCADE | no |
-
-### → `crr_activity_measures` (1 references)
-
-| From table | Column | On delete | Nullable |
-|---|---|---|---|
-| `crr_activity_counts` | `measure_id` | RESTRICT | no |
 
 ### → `donations` (1 references)
 

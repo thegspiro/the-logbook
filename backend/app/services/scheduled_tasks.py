@@ -7486,6 +7486,7 @@ async def run_shift_auto_checkout(db: AsyncSession) -> Dict[str, Any]:
     from app.core.utils import generate_uuid
     from app.models.notification import NotificationChannel, NotificationLog
     from app.models.training import Shift, ShiftAttendance
+    from app.services.outreach_sheet_credit import sync_sheet_attendance
 
     now = datetime.now(dt_timezone.utc)
     lookback = now - timedelta(hours=2)
@@ -7505,6 +7506,7 @@ async def run_shift_auto_checkout(db: AsyncSession) -> Dict[str, Any]:
     for org, org_id in targets:
         org_reminders = 0
         org_checkouts = 0
+        closed_outreach_sheets: list[str] = []
 
         try:
             await _refresh_if_expired(db, org)
@@ -7610,6 +7612,8 @@ async def run_shift_auto_checkout(db: AsyncSession) -> Dict[str, Any]:
                         **(shift.activities or {}),
                         "auto_checkout_completed": True,
                     }
+                    if shift.is_outreach:
+                        closed_outreach_sheets.append(str(shift.id))
 
             # Commit this org's checkouts/reminders before the next org. The
             # deferred single commit meant the rollback below discarded EVERY
@@ -7617,6 +7621,23 @@ async def run_shift_auto_checkout(db: AsyncSession) -> Dict[str, Any]:
             # reminders next run) — the CRON-1 rollback turned into cross-org
             # data loss.
             await db.commit()
+
+            # An outreach sheet's hours are credited through its event, and the
+            # check-out just written is what completes them. After the commit,
+            # and per sheet, so a failure costs one sheet's credit until the
+            # next compare-and-correct and never the checkouts above. Safe to
+            # repeat: the mirror settles the same rows on a second run.
+            for sheet_id in closed_outreach_sheets:
+                try:
+                    await sync_sheet_attendance(db, sheet_id, org_id)
+                    await db.commit()
+                except Exception as e:
+                    await db.rollback()
+                    logger.warning(
+                        "Could not credit outreach attendance for shift {}: {}",
+                        sheet_id,
+                        e,
+                    )
 
         except Exception as e:
             logger.error(

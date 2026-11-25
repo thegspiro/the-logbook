@@ -3,6 +3,7 @@ export { default as CategoriesSection } from './CategoriesSection';
 export { default as OutreachSection } from './OutreachSection';
 export { default as HourTrackingSection } from './HourTrackingSection';
 export { default as CrrCatalogueSection } from './CrrCatalogueSection';
+export { default as OutreachGoalsSettings } from './OutreachGoalsSettings';
 export { default as AttendanceSection } from './AttendanceSection';
 export { default as PipelineSection } from './PipelineSection';
 export { default as EmailSection } from './EmailSection';

@@ -4881,6 +4881,13 @@ class EventService:
                 await training.lock_for_event_finalize(event, organization_id)
             )
 
+        # A volunteer's time is kept on the event's signup sheet, and is
+        # carried onto their RSVP as it is recorded. Run once more here, under
+        # the lock, so the roster read below cannot miss a sheet check-in
+        # whose own mirror failed, or one recorded before the request had an
+        # event to credit (owner decision, 2026-11-24).
+        await self._mirror_staffing_sheet(event, organization_id)
+
         # Two different sets, and conflating them is what left whole
         # categories of attendee uncredited:
         #
@@ -5001,36 +5008,10 @@ class EventService:
 
         # Auto-credit event hours to admin hours categories via mappings.
         # A Training event is credited to training records above instead.
-        admin_hours_service = AdminHoursService(self.db)
-        event_type_val = event.event_type.value if event.event_type else None
         admin_credited = [] if credits_training else attended
         for rsvp in admin_credited:
-            # Same clamp as above: the window handed to admin hours has to
-            # match the duration credited, or the two disagree on the record.
-            check_in_time = self._credited_check_in_time(event, rsvp)
-            # The same rule as training credit, so an explicit 0 override
-            # credits nothing here either rather than falling through to the
-            # measured minutes.
-            duration = self.credited_minutes(event, rsvp, effective_end)
-            if not check_in_time or duration is None or duration <= 0:
-                continue
-            check_out_time = self._credited_check_out_time(
-                rsvp, check_in_time, effective_end
-            )
             try:
-                await admin_hours_service.credit_event_attendance(
-                    organization_id=str(event.organization_id),
-                    user_id=str(rsvp.user_id),
-                    event_id=str(event.id),
-                    rsvp_id=str(rsvp.id),
-                    event_title=event.title or "Event",
-                    check_in_at=check_in_time,
-                    check_out_at=check_out_time,
-                    duration_minutes=duration,
-                    event_type=event_type_val,
-                    custom_category=event.custom_category,
-                    resync=True,
-                )
+                await self.credit_admin_hours_for_rsvp(event, rsvp, effective_end)
             except Exception:
                 logger.exception("Failed to credit admin hours for RSVP {}", rsvp.id)
 
@@ -5046,6 +5027,63 @@ class EventService:
         await self._complete_request_after_finalize(event, finalized_by)
 
         return outcome
+
+    async def _mirror_staffing_sheet(
+        self, event: Event, organization_id: UUID | str
+    ) -> None:
+        """Carry the event's signup sheet attendance onto its RSVPs.
+
+        Part of finalize's own transaction, under the event lock, and not
+        swallowed: a volunteer left off the roster would be finalized without
+        credit, behind a lock, which is the outcome finalize exists to prevent.
+        """
+        from app.services.outreach_sheet_credit import (
+            event_sheet_id,
+            sync_sheet_attendance,
+        )
+
+        sheet_id = await event_sheet_id(self.db, event)
+        if sheet_id:
+            await sync_sheet_attendance(self.db, sheet_id, str(organization_id))
+            await self.db.flush()
+
+    async def credit_admin_hours_for_rsvp(
+        self, event: Event, rsvp: EventRSVP, effective_end: datetime
+    ) -> int:
+        """Write one attendee's credited time to the admin hours ledger.
+
+        Shared by finalize and by the outreach sheet mirror
+        (``outreach_sheet_credit``), so both credit an attendee by the same
+        rules (pitfall #29). Always a resync: an entry already there for this
+        RSVP is corrected in place, which is what makes a second call a no-op
+        (pitfall #36). Returns the number of entries created or updated. The
+        caller holds the event's row lock and commits.
+        """
+        # Same clamp as the duration: the window handed to admin hours has to
+        # match the duration credited, or the two disagree on the record.
+        check_in_time = self._credited_check_in_time(event, rsvp)
+        # The same rule as training credit, so an explicit 0 override credits
+        # nothing here either rather than falling through to the measured
+        # minutes.
+        duration = self.credited_minutes(event, rsvp, effective_end)
+        if not check_in_time or duration is None or duration <= 0:
+            return 0
+        check_out_time = self._credited_check_out_time(
+            rsvp, check_in_time, effective_end
+        )
+        return await AdminHoursService(self.db).credit_event_attendance(
+            organization_id=str(event.organization_id),
+            user_id=str(rsvp.user_id),
+            event_id=str(event.id),
+            rsvp_id=str(rsvp.id),
+            event_title=event.title or "Event",
+            check_in_at=check_in_time,
+            check_out_at=check_out_time,
+            duration_minutes=duration,
+            event_type=event.event_type.value if event.event_type else None,
+            custom_category=event.custom_category,
+            resync=True,
+        )
 
     async def _complete_request_after_finalize(
         self, event: Event, finalized_by: UUID | str | None
