@@ -16,8 +16,9 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR #<pending> (branch `claude/security-review-security-audit-ip`)**:
-Feature 28 (Security, audit & IP), pass 15 — watchdog pickup (the dedicated
+**PR [#4705](https://github.com/thegspiro/the-logbook/pull/4705) (branch
+`claude/security-review-security-audit-ip`)**: Feature 28 (Security, audit
+& IP), pass 15 — watchdog pickup (the dedicated
 `/loop 30m /security-review` session, `session_011T1ZyyLrD5HagusgK9uDw2`,
 remains unreachable, confirmed via `ListAgents` → "No reachable agents").
 
