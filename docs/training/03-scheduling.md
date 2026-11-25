@@ -868,7 +868,7 @@ assignment is dropped."_ The request may still be denied, so you are not
 stopped. You are told now so the seat does not empty without warning later. See
 [Membership > Leave of Absence](./01-membership.md#leave-of-absence).
 
-_Screenshot still to make: `03-141-assign-leave-requested.png`, the **Assign
+_Screenshot still to make: `03-157-assign-leave-requested.png`, the **Assign
 someone** form with a member marked **— leave requested** chosen and the
 amber note under the member picker._
 

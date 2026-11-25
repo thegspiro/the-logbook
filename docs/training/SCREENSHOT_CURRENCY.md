@@ -117,7 +117,7 @@ of this pass; check them against `images/` before saving.
 | 01 | **Leave Requests** with the **Approver cover** card: one cover in effect with **End cover**, above the Stand-in / First day away / Last day away form | Create `01-63-leave-approver-cover` |
 | 01 | History: the Timeline with a decade open and Milestones boxes; the event form (People with a Role, Apparatus, Photos and documents); an apparatus page with Unit numbers and Timeline; the Dashboard's **Today in history** card | Create `01-64-history-timeline`, `01-65-history-event-form`, `01-66-history-apparatus-page`, `01-67-today-in-history-dashboard` |
 | 01 | Any positions capture showing **Public Outreach** or **Community Education / Outreach Team** | **Replace** if found: the seeded names are now Community Outreach Manager / Team |
-| 03 | **Assign someone** with a member marked "— leave requested" and the amber note | Create `03-141-assign-leave-requested` |
+| 03 | **Assign someone** with a member marked "— leave requested" and the amber note | Create `03-157-assign-leave-requested` |
 | 03 | `03-58-assign-member-form`, `03-05-assignment-form` (only if seed data has a pending leave request), `03-22-equipment-check-builder` (bar wraps), `wiki/images/history-import-rows.png` | Check |
 | 16 | The staffing step's **Paired with the hours already imported** block | Check the staffing-step image, if the guide has one; otherwise optional Create |
 | 05 | Maintenance **Never Inspected** tab with the explanation line and two rows, each with **Log Maintenance** | Create `05-155-maintenance-never-inspected` |

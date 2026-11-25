@@ -1409,6 +1409,17 @@ credited automatically.
 > **What if no mapping is set for an event type?** Its attendance is not
 > credited to admin hours.
 
+> **Volunteers on an outreach signup sheet are credited here too**
+> _(2026-11-24)_. When a member checks in and out on the sheet in Scheduling,
+> that time is copied onto their attendance at the event, and the event's
+> mapping decides where the hours go when the event is ended. It is no longer
+> counted as shift hours. A sheet on an event type with no mapping credits
+> nothing. A new department starts with **Public Education** mapped to
+> Community Outreach and **Fundraiser** to Fundraising; **Social** and
+> **Ceremony** have no mapping until you add one.
+> See [Time on an outreach sheet](./03-scheduling.md#open-shifts) in the
+> scheduling guide.
+
 > **Training events are not offered here.** Their attendance is credited to
 > training records when attendance is finalized. An older training mapping is
 > still listed, labelled **Not in effect**, and credits nothing. Delete it
@@ -1662,10 +1673,17 @@ needs, and how many of each.
 
 1. Select **New template**.
 2. Name it (for example _Santamobile — Full_), pick the **Event type** and
-   the **Admin Hours category** the crew's time should go to.
+   the **Admin Hours category** the crew's time should go to. **Default
+   start** and **Length (hours)** fill in each night you schedule from it;
+   the length is typed in hours, so a three-and-a-half-hour run is **3.5**
+   _(2026-11-23; it was minutes before)_.
 3. Choose an apparatus, then list its seats. Seat names are free text. Mark
    the seat that drives as **Driver · EVOC**; every other seat is **General**.
-   Set a **Count** for seats you need more than one of (Elf × 4).
+   Set a **Count** for seats you need more than one of (Elf × 4). Each seat
+   has an **Essential** tick, on by default _(2026-11-23)_: untick a seat
+   that is welcome but that the night can run without, such as a fourth
+   Elf. Any seat can be optional, the Driver included. **Note for members**,
+   on its own line under the seat, is shown on the crew card.
 4. Choose the **Driver EVOC rule**:
    - **Enforce** — only members at the apparatus's required EVOC level, or
      with an approved driver exception, can take the Driver seat. The same
@@ -1686,8 +1704,12 @@ needs, and how many of each.
 
 1. On the template's card, select **Schedule nights**.
 2. Give the run a title (for example _Santamobile 2026_) and add each night:
-   date, start time, length, and the route or place. **Repeat weekly** adds
-   the same night a week apart.
+   the date, **Starts**, **Hours** and the **Route or place**. **Add a
+   night** adds one more. To add several at once, type how many in **More
+   nights after the last one** and select **Every day** (nights in a row,
+   as a Santamobile usually runs) or **Every week** _(2026-11-23)_. The new
+   nights copy the last night's start time, hours and route, so change the
+   first night before you repeat it.
 3. If the apparatus is already committed at that time — another apparatus
    night, or a status that is out of service — the night is flagged with the
    reason. You can still go ahead by ticking **Schedule anyway** once you have
@@ -1695,25 +1717,61 @@ needs, and how many of each.
 4. Select **Create** _n_ **nights**. Each night is its own event with its own
    crew, so a member can sign up for Monday and not Wednesday.
 
+> **Screenshot needed** (`04-120-schedule-nights-every-day.png`): **Schedule
+> nights** for a Santamobile template after **Every day** added three nights:
+> four consecutive dates with the same **Starts**, **Hours** of 3.5 and
+> **Route or place** each on its own line, and **More nights after the last
+> one** with **Every day** and **Every week** beneath.
+
 Each night can be changed on its own afterwards. On the night's event page,
-**Edit this night** adds or removes seats, changes the EVOC rule or the hours
-category, and **Remove crew** takes the apparatus off an event while nobody
-holds a seat. The template and the other nights are not touched.
+**Edit this night** adds or removes seats, marks a seat essential or not
+(**Essential: must be filled for this night to count as staffed**), changes
+the EVOC rule or the hours category, and **Remove crew** takes the apparatus
+off an event while nobody holds a seat. The template and the other nights are
+not touched.
+
+**How full a night is** _(2026-11-23)_. The **Upcoming nights** list colours
+each night by its essential seats: green once every essential seat is filled,
+amber while some are open, red while none is filled. Optional seats do not
+change the colour. When a night has some optional seats the badge reads, for
+example, **Essential 2/3 · 3 of 6 filled**, and the crew card's heading gives
+the same count; when every seat is essential it reads **3 of 6 seats
+filled**. A night with no essential seats
+at all is coloured by how many seats are filled. Before this change a night
+with two seats open read red, as urgent as an empty one. Seats from before the
+upgrade are all essential, so existing nights read as they did.
 
 ### Taking a seat (members)
 
-Open the night's event. The **Apparatus & Crew** card lists every seat. Select
-**Sign myself up** on an open seat; you are added as going to the event. Select
-**Give up my spot** to give it back before the night (once you have checked in,
-the coordinator corrects attendance instead). You can hold one seat per night.
+Open the night's event. The **Apparatus & Crew** card lists every seat the
+way the shift crew board does _(2026-11-23)_: the member holding it, with
+**(You)** beside your own, or **Open position** (**Optional position** for a
+seat the night can run without). Essential seats are listed first. Select
+**Sign myself up** on an open seat; you are added as going to the event.
+Select **Give up my spot** to give it back before the night (once you have
+checked in, the coordinator corrects attendance instead). You can hold one
+seat per night. On a phone the buttons read **Sign up** and **Give up**.
+
+On a run of several nights, the **Nights:** row under the card's heading
+links to the other nights, each coloured by how full it is; the night you are
+on has a ring round it.
 
 A Driver seat under **Enforce** is offered only to members who meet the
 apparatus's EVOC level or hold an approved exception. If you are not eligible,
 the seat says so.
 
-Coordinators see **Assign…** and **Change…** on every seat. For a Driver seat,
-the list starts with the members who qualify, each judged by the same EVOC
-rule the seat uses.
+Coordinators see **Assign someone** on an open seat, and **Change…** and
+**Clear** on a filled one (until the member has checked in). For a Driver
+seat, the list starts with the members who qualify, each judged by the same
+EVOC rule the seat uses.
+
+> **Screenshot needed** (`04-119-apparatus-crew-card-essential.png`): a
+> Santamobile night's **Apparatus & Crew** card as a coordinator, its heading
+> reading **Night 2 of 4 · from "Santamobile — Full" · Essential 2/3 · 3 of 6
+> filled**, the **Nights:** chips in green, amber and red with the current one
+> ringed, a filled Driver seat with the **Driver · EVOC** badge, one seat
+> marked **(You)** with **Give up my spot**, an open essential seat with
+> **Assign someone** and an open Elf seat reading **Optional position**.
 
 ### Approving sign-ups (coordinators)
 
@@ -2089,6 +2147,14 @@ withdraw the request instead.
    are deleted too. You can't undo this." Select **Delete Event** (**Delete
    This and Future** or **Delete Entire Series** for the other two choices), or
    **Keep Event** to back out.
+
+> **Deleting an event deletes its attached files** _(2026-11-24)_. Files on
+> the event's **Attachments** card are removed from storage with the event,
+> or with every event a series delete removes. A file another event still
+> lists is kept. The dialog says so, and the files cannot be recovered
+> afterwards, so download any you need to keep first. The event's
+> folder under **Event Attachments** in Documents is not touched. A delete
+> that is refused (for example, finalized attendance) removes nothing.
 
 > **What if I want to keep the history?** **Delete all events** removes every
 > occurrence, past ones included. To keep the past, choose **Delete this and
@@ -3029,7 +3095,10 @@ scheduling and communication.
      then reads, for example, "Usually needs 2 × Tour Guide, 1 × Greeter".
      **Edit roles** changes it and **Clear preset** removes it. A preset uses
      only the outreach roles listed on the same screen and holds at most 50
-     people.
+     people. Each role has an **Essential** tick, on by default
+     _(2026-11-23)_: untick a role that is welcome but that the event can run
+     without, and the type reads "… 1 × Greeter (optional)". A sheet started
+     from the preset keeps the choice.
      It is where a signup sheet starts when you open volunteer signups for a
      request of that type, or for an outreach event you created yourself; you
      can still change the roles before opening the sheet.
@@ -3169,7 +3238,14 @@ On the request's page you can also:
 4. **Open volunteer signups** and **Email the Membership**, on a scheduled
    request, under **Volunteer Staffing**. The roles start from the request
    type's role preset, when it has one, or one of the first role; change
-   them before you open the sheet. Members claim a role from **Scheduling →
+   them before you open the sheet, and untick **Essential** on a role the
+   visit can run without _(2026-11-23)_. Once the sheet is open, the request
+   shows a badge such as **Essential 2/3 · 3 of 5 filled**, coloured by the
+   essential roles (green when all are filled, amber when some are, red when
+   none is), and lists essential roles first; an optional role reads, for
+   example, "Greeter (optional) 0 of 1 — 1 open" rather than "still needed".
+   The **Arrange Volunteers** checklist step still waits for every seat,
+   optional ones included. Members claim a role from **Scheduling →
    Open Shifts**, which lists outreach signup sheets up to 60 days ahead
    (duty shifts, 30) _(2026-11-21)_, so a sheet booked weeks out is there to
    claim. A member who claims a role is also marked **Going** on the event,
@@ -3255,14 +3331,28 @@ open the same volunteer signup sheet a request can.
    event that is not cancelled.
 2. Under **Start from**, pick a request type to use its role preset, or set
    the roles yourself: a role, how many, and **Add a role** for another (at
-   most 50 people in all).
+   most 50 people in all). Untick **Essential** on a role the event can run
+   without, such as a second greeter _(2026-11-23)_.
 3. Select **Open signups**.
 
-The card then shows how many have signed up for each role and who they are.
+The card then lists every seat on the sheet, one row each, the way the shift
+crew board does _(2026-11-23)_: the member holding it, or **Open position**
+(**Optional position** for a role that is not essential) with **Sign myself
+up**. Essential roles come first. Above the rows, a badge gives how many have
+signed up — **Essential 2/3 · 3 of 5 signed up** when some roles are optional
+— coloured green once every essential seat is filled, amber while some are
+open and red while none is, and how many seats are still open.
+
+- **Assign someone**, on an open seat, seats a member you choose in that
+  seat's role. It is shown to officers who can assign shifts (the same
+  permission the crew board uses).
+- **Give up my spot**, on your own seat, asks first (**Give up your spot?**,
+  with **Keep it**) and then opens the seat again.
+
 Members sign up on the event's page or from **Scheduling → Open Shifts**
 (see [Signing up to volunteer at an outreach event](#signing-up-to-volunteer-at-an-outreach-event-2026-11-22)),
 and each one is marked **Going** on the event, as on a request's sheet. If you
-are going to help too, the card offers you the same **Sign me up** button.
+are going to help too, take a seat with **Sign myself up** like anyone else.
 Volunteers do not count against the event's **Max Attendees**: the sheet's own
 role counts limit the crew. A guest a volunteer adds does take a place, and is refused if the event
 has no room left, because a volunteer is never put on the waitlist. A member
@@ -3281,9 +3371,13 @@ email only, never a text. It is not offered on an event that came from a
 request (ask from the request instead), and is refused once the event is over
 or cancelled.
 
-- **An event scheduled from a request** is staffed from the request. Its card
-  says so and links to **Open the request**; it cannot open a sheet of its
-  own.
+- **An event scheduled from a request** is staffed from the request; it
+  cannot open a sheet of its own. Once the request's sheet is open, the card
+  shows that sheet's seats, with the same **Sign myself up**, **Assign
+  someone** and **Give up my spot**. Before then it reads "Volunteer signups
+  are not open yet." with a link, **Open them from the request**. _(Before
+  2026-11-23 the card said "This event came from a public request, so its
+  volunteers are arranged there.")_
 - **Moving the event**, by editing its time or with **Postpone**, moves its
   sheet with it. **Cancelling or deleting the
   event** stands the sheet down and tells the members who had signed up.
@@ -3299,18 +3393,32 @@ or cancelled.
 **Manage Events → Settings → Outreach Goals** sets targets for the calendar
 year: how many **Events held**, **People reached** or **Member hours**, or how
 much of any CRR count (for example, **Smoke alarm install · Alarms installed**:
-200). Choose **last year**, **this year** or **next year** across the top.
+200). The three year buttons across the top are last year, this year and
+next year; an older year's goals are not shown here.
 
-- **Add a goal**: choose the **Figure** and type the **Target**. Each figure
-  can have one goal a year.
-- **Target**, beside each goal, changes it; **Remove** takes the goal away
-  without touching the work counted toward it.
+- **Add a goal for** _year_: choose the **Figure** (the Outreach Impact
+  figures, then each CRR activity's counts) and type the **Target**, a whole
+  number, then select **Add goal**. Each figure can have one goal a year, so a
+  figure that already has one is not offered again.
+- **Target**, beside each goal, changes it: type the new number and select
+  **Save**. **Remove** asks first (**Remove this goal?**, with **Keep it**)
+  and takes the goal away without touching the work counted toward it.
 
 Each goal shows how far it has got, a bar with a mark where it should be by
 now, and whether it is **On pace**, **Behind pace** or **Met**. Pace assumes
 the work is spread evenly through the year, so a goal for seasonal work can
 read as behind for part of it. Once the year is over, a goal is **Met** or
 **Missed**.
+
+**Set goals** (or **Edit goals**) on Outreach Impact's goals section, and on
+the Overview's goals card when no goal is set, opens this screen.
+
+> **Screenshot needed** (`04-117-outreach-goals-settings.png`): **Settings →
+> Outreach Goals** for this year, with the year buttons, two goals (one
+> outreach figure, one CRR count) each showing its bar with the pace mark and
+> an **On pace** or **Behind pace** label, their **Target** boxes with
+> **Save** and **Remove**, and **Add a goal for** the year below with the
+> **Figure** list open.
 
 ### The CRR Catalogue
 
@@ -3407,24 +3515,31 @@ greeter — rather than which seat you ride. There are three places to sign up,
 and they all work the same way:
 
 - **On the event's page.** An outreach event with an open sheet shows a
-  **Volunteer** card listing each role and how many are still needed, for
-  example "Tour Guide 1 of 3 — 2 still needed". Choose a role under **What
-  would you like to do?** and select **Sign me up**. When only one role has
-  room, the button names it — **Sign me up as Tour Guide** — and there is
-  nothing to choose. Once you are on the sheet, the card reads "You are signed
-  up as Tour Guide", with a link to **My Shifts**, which is where you give the
-  role up. The card is not shown on a cancelled event, and the button is gone
-  once the event is over or every role is filled.
+  **Volunteer staffing** card with one row per seat _(2026-11-23)_: who holds
+  it, or **Open position** with **Sign myself up** (on a phone, **Sign up**).
+  The role is named on each row, so pick the row for the job you want, for
+  example a **Tour Guide** seat. A seat for a role marked optional reads
+  **Optional position**, and essential roles are listed first. Once you are
+  on the sheet, your row shows **(You)** and **Give up my spot**, which asks
+  you to confirm, and the card reads "You are signed up as Tour Guide. You
+  can give your spot up above, or from My Shifts." The card is not shown on a
+  cancelled event, and offers no seat once the event is over or after you
+  hold one. _(Until 2026-11-23 this card listed role counts with a **What
+  would you like to do?** menu and **Sign me up**, and the role could be given
+  up only from My Shifts.)_
 - **From the shift on the schedule.** Opening the sheet's shift shows **Sign
-  yourself up for this outreach event**, with the same role counts and the
-  same role choice. _(Before 2026-11-22 the shift offered a **Sign myself up**
+  yourself up for this outreach event**, with each role's count and a role
+  choice (**What would you like to do?**). An optional role reads, for
+  example, **Greeter (1 open, optional)**, and essential roles are listed
+  first. On the schedule board, an open seat on the sheet is named by its
+  role and claims that role; when more than one role is open the panel says
+  "Choose a role above to sign up." instead of offering a single button. _(Before 2026-11-22 the shift offered a **Sign myself up**
   button on each seat, which the server refused with "Choose what you would
   like to do"; that button is no longer shown on an outreach sheet.)_
 - **From Scheduling → Open Shifts**, as before.
 
 Officers who can manage events see the organizer's **Volunteer staffing** card
-on the event instead, with the same **Sign me up** button for themselves. An
-officer seating someone else from the shift's **Assign someone to this shift**
+on the event instead, with the same seat rows. An officer seating someone else from the shift's **Assign someone to this shift**
 form chooses a **Role** rather than a position; **Fill All Open** is not
 offered on an outreach sheet, because each seat needs its own role.
 
@@ -3436,9 +3551,9 @@ marked **Going**. Before, the event's attendance list kept the old name until
 the sheet next changed.
 
 > **Screenshot needed** (`04-109-event-volunteer-signup.png`): an outreach
-> event's page as an ordinary member, showing the **Volunteer** card with two
-> roles, one with seats still needed, the **What would you like to do?** menu
-> and **Sign me up**.
+> event's page as an ordinary member, showing the **Volunteer staffing** card
+> with its seat rows: two filled seats, open **Tour Guide** seats each with
+> **Sign myself up**, and one **Optional position** seat.
 
 ### The Outreach Overview
 
@@ -3471,8 +3586,10 @@ it.
   request each came from. On a phone, the month shows how many events each day
   has, and the week is a list of days.
 - **This year at a glance** — the four Outreach Impact figures, with a link to
-  the full report, and this year's [goals](#outreach-goals) furthest behind
-  pace.
+  the full report, and beneath them **Goals for** this year: the
+  [goals](#outreach-goals) furthest behind pace, or "Every goal is on pace or
+  met." **All goals** opens Outreach Impact; with no goal set, **Set goals**
+  opens the settings screen.
 
 An outreach event is the same one Outreach Impact counts: a public education,
 fundraiser, ceremony or social event, or any event a request was scheduled
@@ -3576,8 +3693,14 @@ The printed summary carries the same three lists, without the map.
 
 **Goals.** Above the community risk reduction lists, **Goals for** this year
 shows each [goal](#outreach-goals) against its target and pace. It always
-shows the calendar year, whichever period you chose. The printed summary lists
-each goal with what it reached and whether it was met.
+shows the calendar year, whichever period you chose, and **Edit goals** (or
+**Set goals**) opens the settings screen. The printed summary lists each goal
+in a table with its **Target**, what it **Reached** and its **Status**.
+
+> **Screenshot needed** (`04-118-outreach-impact-goals.png`): **Outreach
+> Impact** with the **Goals for** this year section above the CRR
+> activities: three goals, one **On pace**, one **Behind pace** with its bar
+> short of the pace mark, and one **Met**, with **Edit goals** at the right.
 
 > **Screenshot needed** (`04-113-crr-impact-map.png`): the **CRR activities**
 > section of **Outreach Impact** for this year, with **By activity** showing

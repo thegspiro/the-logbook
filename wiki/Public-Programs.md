@@ -150,7 +150,12 @@ well?**, and **What could we do better?** shown at a rating of 3 or less), and
 choose the **Rating question**. Each requester answers once. Answers appear on
 the request under **Requester feedback**, and **Outreach Impact** shows the
 average rating and how many responded. A template you attached to the
-Completed trigger yourself is sent as written, without the link. See
+Completed trigger yourself is sent as written, without the link.
+_(2026-11-24)_ Each answer emails the request's coordinator (or the
+**Default Coordinator**, or failing both every member who manages events) and
+puts a notice in their bell; a rating of 3 or less out of 5 starts the subject
+with **Low rating:**. Reword it, or turn it off for the department, under
+**Requester Feedback Received** in **Email Templates**. See
 [Events & Meetings → Feedback from requesters](https://github.com/thegspiro/the-logbook/blob/main/docs/training/04-events-meetings.md#feedback-from-requesters).
 
 ---
@@ -568,7 +573,9 @@ Thank you for your commitment to safety!
 
 - **Start simple** — You don't need all program types on day one. Start with your 2-3 most common requests and add more as needed.
 - **Review templates quarterly** — Update email templates with current addresses, phone numbers, and seasonal information.
-- **Track metrics** — **Community Outreach > Outreach Impact** reports requests received and completed, people reached and member hours for any period; the **Overview** page shows what is waiting on you now. Also watch average time to schedule. This data helps justify volunteer coordinator positions.
+- **Track metrics** — **Community Outreach > Outreach Impact** reports requests received and completed, people reached and member hours for any period; the **Overview** page shows what is waiting on you now. _(2026-11-24)_ **Events Admin > Settings > Outreach Goals** sets yearly targets for events held, people reached, member hours or any CRR count, and both pages show whether each is on pace.
+- **Mark the roles you can do without** — _(2026-11-23)_ untick **Essential** on a role in a type's preset or on the request's sheet (a second greeter, say). The request's staffing badge then turns green once the essential roles are filled, while **Arrange Volunteers** still waits for every seat.
+- **Volunteer time counts as outreach** — _(2026-11-24)_ members who check in on a request's signup sheet are credited through the event to the Admin Hours category its type maps to, not as shift hours. Also watch average time to schedule. This data helps justify volunteer coordinator positions.
 - **Delegate** — If one coordinator is overwhelmed, reassign requests to other qualified members.
 
 ### For Public Forms

@@ -6,8 +6,9 @@
 #
 # Isolation, and why each piece is there:
 # - logbook-docs is attached ONLY to docs-internal, an `internal` network: it
-#   has no route to the internet, the LAN, the host or any other container, and
-#   it publishes no port. The only thing that can reach it is the tunnel.
+#   has no route to the internet, the LAN or any other container, and it
+#   publishes no port. Only the tunnel reaches it, and the Docker host itself,
+#   which can reach every container's internal address.
 # - logbook-docs-tunnel joins docs-internal to reach the site and docs-egress
 #   to reach Cloudflare. It carries this site only, so a problem with the
 #   application's tunnel (or this one) does not cross over.

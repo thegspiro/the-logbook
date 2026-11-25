@@ -898,7 +898,14 @@ are the same ones each member sees on **My Shifts > Hours** for the same days.
 The **Position** list narrows the table to one seat and states its total; the
 CSV and PDF carry every row. Because it lists every member's hours, it also
 needs **scheduling.report**, the permission that shows one member another's
-hours history.
+hours history; without it the card is not shown. The four cards above the
+table are **Total Hours**, **Shifts**, **Calls** and **Members**, and a period
+with nothing credited reads "No credited shifts in this period."
+
+> **Screenshot needed** (`08-128-report-hours-by-position.png`): the **Hours
+> by Position** report for a month, its four cards, the **Position** list set
+> to Driver/Operator with that seat's total beside it, and the table below
+> showing only Driver/Operator rows.
 
 > **Important: two reports measure training-program progress, not
 > compliance.** **Program Requirement Progress** and the **Program Progress by
@@ -982,7 +989,7 @@ every time, because most downloads are working copies nobody signs, and the
 member's training history, the training **Member Records** export and the
 equipment-check compliance and failure reports.
 
-> **Screenshot needed** (`08-125-report-signature-lines.png`): a report open
+> **Screenshot needed** (`08-130-report-signature-lines.png`): a report open
 > on the Reports page with **Add signature lines to PDF** ticked beside the
 > **CSV** and **PDF** buttons; and, as `08-126-report-pdf-signature-block.png`,
 > the last page of that PDF showing the **Prepared by** / **Reviewed by** /
@@ -1018,8 +1025,19 @@ the rows to the report's own order. An arrow beside the heading shows the
 current order. The headings are now buttons, so you can also Tab to one and
 press **Enter** or **Space**, and a screen reader announces which column the
 report is sorted by. Before, only a mouse could sort, and pressing a heading a
-third time just flipped the order again. Sorting is not available on a phone,
-where the results are cards.
+third time just flipped the order again.
+
+_Corrected 2026-11-24._ **On a phone, sort with Sort by.** Where the results
+are cards, the column headings are hidden, so a **Sort by** list appears above
+the cards instead. It offers **Default order** and each column the report can
+be sorted by, named as its heading is. The arrow button beside it switches
+between ascending and descending; it is greyed out while **Default order** is
+chosen. Picking another column keeps the direction you had. Before, a report
+could not be sorted on a phone at all.
+
+> **Screenshot needed** (`08-129-report-card-sort.png`): a report on a phone,
+> its results as cards, with the **Sort by** list above them set to a column
+> and the direction button beside it showing the descending arrow.
 
 **A Source column where rows can come from an import** _(2026-11-19)_. Two
 reports say where each row came from in their **CSV** and **PDF** downloads
@@ -2263,6 +2281,17 @@ technical trace.
 
 ![Error Monitor page listing recent application errors](./images/08-11-error-monitor.png)
 
+**Finding the failure a member quotes** _(2026-11-23)_. An unexpected server
+failure now ends its message with a code and a reference, for example
+"(Error code: LB-SYS-001, reference 3f2a9c1e44aa0b12)". The code says what
+kind of failure it was; the reference names that one request. Open the
+server's row with **Details** and the reference is under **Reference**
+_(2026-11-25)_. It is also in the file **Export Errors** downloads, as
+`reference` in that row's `context`. Your IT administrator can also find it
+in the backend log, on the "Unhandled …" line
+and as `request_id` on every log line of that request. See
+[Error codes](../ERROR_CODES.md).
+
 ### What reaches this page
 
 | Source             | What is recorded                                                                                                       |
@@ -2516,7 +2545,9 @@ inventory notices, create equipment-check reminders, extend recurring event
 series, reset training-program recertifications (daily), expire overdue
 training-program enrollments (daily, notifying the member and their training
 officers), and send training-program deadline warnings (weekly, on each
-program's own schedule).
+program's own schedule), and remind training officers of a training session's
+sign-off still waiting 7 and 14 days after it was finalized (daily, email
+only; _2026-11-23_).
 
 **There is no Scheduled Tasks page for a department.** The tasks run across
 every department on the installation, so starting one by hand is for the

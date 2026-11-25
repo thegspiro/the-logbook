@@ -289,6 +289,18 @@ The shared API client automatically:
 
 Module-scoped services (e.g., `modules/scheduling/services/api.ts`) use `createApiClient()` for the same interceptor setup.
 
+**A write clears the cache it changes, through any client** _(2026-11-23)_.
+After a successful POST/PUT/PATCH/DELETE, both the global client and every
+`createApiClient()` instance call `invalidateAfterMutation`
+(`utils/apiCache.ts`), which clears the written resource's cached GETs plus
+those named for it in `RELATED_PREFIXES` — a `/scheduling` or
+`/event-requests` write also clears `/events` and `/dashboard`, so a signup
+made through the Scheduling client no longer leaves the event page and the
+dashboard stale for up to 30 seconds. `toCachePath` maps a module request onto
+the cache's `/api/v1` keys. A new cross-resource dependency (a write in one
+module that changes what another module's GET returns) belongs in
+`RELATED_PREFIXES`.
+
 ---
 
 ## Building for Production

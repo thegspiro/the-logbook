@@ -42,10 +42,13 @@ requests, templates, analytics, and the public outreach request pipeline.
   [Recruitment Events and Prospect Provenance](#recruitment-events-and-prospect-provenance)
 - **Booking prevention** — the server refuses an event that double-books a
   location
-- **Event attachments** — the API stores, lists and serves attachments
-  (`/events/{id}/attachments`) and the detail page lists them, but no screen
-  uploads one: the create form says "Files can't be attached from the app
-  yet."
+- **Event attachments** — the event page's **Attachments** card uploads
+  (**Attach file**, for anyone who can manage events), lists and removes them
+  (`/events/{id}/attachments`); the create form does not take files.
+  _(2026-11-24)_ Deleting an event, or a series or the rest of one, deletes
+  its attached files from storage too (queued on `pending_file_deletions`,
+  retried hourly); a file another event still lists is kept, and the event's
+  folder under Event Attachments in Documents is not touched.
 - **Reminders** — configurable multi-tier reminders (e.g. 24 hours and 1 hour
   before) with a chosen audience. See
   [Reminders and Notifications](#reminders-and-notifications)
@@ -1098,20 +1101,33 @@ Administration → Community Outreach → Apparatus Events**
   Elf × 4), the Driver seat's **EVOC rule** (Enforce / Warn only / Don't
   check), whether members may self sign-up, and the **Admin Hours category**
   the crew's time goes to. **Duplicate** copies a template with per-seat
-  counts, for a smaller or larger version.
+  counts, for a smaller or larger version. Lengths are entered in hours
+  (stored in minutes) _(2026-11-23)_.
+- **Essential seats** _(2026-11-23)_ — each seat (template, or one night in
+  **Edit this night**) is **Essential** unless unticked; any seat may be
+  optional, the Driver included. Essential seats are listed first; an open
+  optional seat reads **Optional position**. The night list colours a night
+  by its essential seats (green all filled, amber some, red none; a night with
+  none falls back to how many seats are filled) and reads "Essential 2/3 · 3
+  of 6 filled" when some seats are optional. Seats from before the upgrade
+  are all essential.
 - **Schedule nights** turns a template into one or many ordinary events, each
-  with its own crew (`event_apparatus_plans` / `_units` / `_seats`). A night
-  whose apparatus is on another apparatus night, or out of service, is
-  flagged; the coordinator can schedule over it.
-- **Crew card** on the event page: members take or leave an open seat
+  with its own crew (`event_apparatus_plans` / `_units` / `_seats`). **More
+  nights after the last one** with **Every day** or **Every week** adds
+  nights copying the last one's start, hours and route. A night whose
+  apparatus is on another apparatus night, or out of service, is flagged; the
+  coordinator can schedule over it.
+- **Crew card** on the event page, laid out like the shift crew board: members
+  **Sign myself up** on an open seat or **Give up my spot**
   (`apparatus_events.signup`), which also sets their RSVP; coordinators
-  assign, clear, **Edit this night** (this night only) and **Remove crew**
-  (while no seat is filled). The Driver seat uses the same EVOC rule and
-  driver exceptions as shift driver assignment.
+  **Assign someone**, **Change…**, **Clear**, **Edit this night** (this night
+  only) and **Remove crew** (while no seat is filled). Other nights in the
+  run are chips coloured by how full each is. The Driver seat uses the same
+  EVOC rule and driver exceptions as shift driver assignment.
 - **Hours**: check in as usual, then **Finalize Attendance**. A night's
   category **replaces** the event type's Admin Hours mapping — never both.
 - **Coordinator approves self sign-ups** (per template, copied to each night,
-  changeable in Edit this night): **Sign me up** becomes **Ask for this seat**
+  changeable in Edit this night): **Sign myself up** becomes **Ask for this seat**
   and records an `apparatus_event_seat_requests` row while the seat stays
   open. Several members may ask for one seat; **Approve** seats one and
   declines the rest (`POST …/events/{id}/requests/{rid}/approve`, `/decline`
@@ -1279,11 +1295,15 @@ so an apparatus night on a non-public event type is not on it.
   a calendar event and book a room, with double-booking prevention.
   _(2026-11-22)_ **Quick Duration** buttons (1, 2, 4, 8 hours) set the end
   from the start, as on the event form.
-- **Signing up to volunteer** _(2026-11-22)_ — an outreach event with a live
-  signup sheet shows members a **Volunteer** card on its page: each role and
-  how many are still needed, a role choice (**What would you like to do?**)
-  and **Sign me up**. Officers who can manage events get the same button on
-  the **Volunteer staffing** card. The shift's detail panel on the schedule
+- **Signing up to volunteer** _(2026-11-22; seat board 2026-11-23)_ — an
+  outreach event with a live signup sheet shows a **Volunteer staffing** card
+  listing one row per seat, as the shift crew board does: the holder, or
+  **Open position** / **Optional position** with **Sign myself up** for the
+  seat's role. A member's own seat has **Give up my spot** (confirmed first);
+  users with `scheduling.assign` get **Assign someone** on an open seat.
+  Officers who can manage events see the same board inside their **Volunteer
+  staffing** card, including on an event scheduled from a request once the
+  request's sheet is open (before then it links to the request). The shift's detail panel on the schedule
   offers the same role choice (**Sign yourself up for this outreach event**)
   instead of the per-seat **Sign myself up**, which named no role and was
   refused; an officer assigning someone there picks a **Role**, and **Fill
@@ -1299,6 +1319,16 @@ so an apparatus night on a non-public event type is not on it.
   audience picker, optional note and **Send Request for Help** as a request's
   sheet. **Last sent** shows the time of the last call. Email only. Refused on
   a cancelled or past event and on an event staffed from a request.
+- **Essential roles** _(2026-11-23)_ — each role on a request's sheet, an
+  event's own sheet or a type's preset is **Essential** unless unticked. The
+  seat board and the request's staffing summary list essential roles first and
+  colour by them ("Essential 2/3 · 3 of 5 filled"); the role picker shows an
+  optional role as "(1 open, optional)". **Arrange Volunteers** still waits
+  for every seat.
+- **In Scheduling, a sheet is named by its event** _(2026-11-24)_ — with a
+  **Community outreach** tag, each seat by its role, and its time credited as
+  outreach hours through the event rather than shift hours. See
+  [Scheduling](Module-Scheduling#community-outreach-signup-sheets).
 - **Volunteer staffing** — for a scheduled request, open a volunteer signup
   sheet (an open-to-all shift on the confirmed date, filled through the
   ordinary Open Shifts flow, which lists outreach sheets 60 days ahead rather
@@ -1444,7 +1474,6 @@ Settings are stored in `organization.settings.events`; nested JSON writes use
 
 ## Known Limitations
 
-- **Attachments** can be uploaded through the API only; no screen uploads one.
 - **Waitlist promotion** notifies the promoted member in-app only (no email)
   and writes no `rsvp_history` row.
 - **Analytics' "Avg Attendance Rate"** pools upcoming events with past ones in

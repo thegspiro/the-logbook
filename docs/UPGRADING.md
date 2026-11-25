@@ -172,6 +172,14 @@ Behaviour that changes on upgrade, with no setting to restore the old one:
   self-report's record (#4617). It credits the member and lists the pair
   under **Records → Possible Double Credit** for an officer to decide. Until
   someone decides, both records count.
+- **Outreach signup sheet time stops counting as shift hours** (owner
+  decision of 2026-11-24, #4671). This includes sheets worked before the
+  upgrade, so a member's shift hours, **Department hours this month** and
+  shift compliance can drop as soon as the new release starts. Nothing is
+  credited as outreach hours on upgrade. To credit past sheets, an officer
+  with `scheduling.manage` runs **Check past outreach sheets** under
+  Scheduling Administration → Settings → General → **Community outreach
+  hours**. Later sheets are credited when their event is finalized.
 
 ### The History widget needs an nginx location in a self-managed proxy (2026-11-24)
 
