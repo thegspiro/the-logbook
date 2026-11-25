@@ -16,7 +16,44 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR (this iteration, branch `claude/security-review-scheduling-p16`)**:
+**PR [#4691](https://github.com/thegspiro/the-logbook/pull/4691) (branch
+`claude/security-review-events-requests-p16`)**:
+Feature 16 (Events & requests), pass 16 — watchdog pickup (the dedicated
+`/loop 30m /security-review` session, `session_011T1ZyyLrD5HagusgK9uDw2`,
+remains unreachable, confirmed via `ListAgents` → "No reachable agents").
+
+PR #4690 (Feature 15, Scheduling, pass 16) merged (`4ef3491a5`) before this
+iteration started; row 15 marked ✅ above. A fresh `list_pull_requests`
+(state=open) found no `claude/security-review-*` head open, so this
+iteration continued to Step 1: row 16 (Events & requests) was the next ⬜
+row.
+
+Baseline `cf6e2f0d` (PR #4473's merge, pass 15). This window carries the
+"Community Outreach" expansion across several features at once; of this
+feature's own declared files, real delta in `events.py` (8 new routes),
+`event_requests.py` (5 new routes), `event_service.py`,
+`event_request_service.py`, `community_engagement_service.py`,
+`models/event.py`/`event_request.py`, `schemas/event.py`/`event_request.py`,
+plus four new files (`services/outreach_feedback_service.py`,
+`outreach_feedback_notice_service.py`, `outreach_calendar_service.py`,
+`event_staffing_service.py`, all added to the declared scope). **0 fixed, 0
+new findings** — the new public feedback routes are token-gated,
+rate-limited and idempotent under a unique-constraint backstop; every new
+client-supplied FK (coordinator, apparatus template, apparatus ids) is
+validated in-org before being stored; the new standalone signup-sheet
+routes lock before their read-then-write and reuse the request-sheet's own
+already-reviewed helpers; every new migration is `create_all`-tolerant and
+settles existing rows before narrowing a column. Full write-up:
+`docs/security-review/EV-16-events-requests.md`'s **Pass 16** section.
+
+Row 16 → ✅ (pending this PR's merge); next is Feature 17 (Training core) —
+re-check `list_pull_requests` fresh rather than trusting this note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 15, Scheduling, pass 16, PR #4690, merged), preserved for history</summary>
+
+**PR [#4690](https://github.com/thegspiro/the-logbook/pull/4690) (branch
+`claude/security-review-scheduling-p16`)**:
 Feature 15 (Scheduling), pass 16 — watchdog pickup (the dedicated `/loop 30m
 /security-review` session, `session_011T1ZyyLrD5HagusgK9uDw2`, remains
 unreachable, confirmed via `ListAgents` → "No reachable agents").
@@ -42,9 +79,10 @@ already correctly org-scoped, permission-gated, lock-ordered (Pitfall #27)
 and idempotent (Pitfall #36) on inspection. Full write-up:
 `docs/security-review/SCH-15-scheduling.md`'s **Pass 16** section.
 
-Row 15 → ✅ (pending this PR's merge); next is Feature 16 (Events &
-requests) — re-check `list_pull_requests` fresh rather than trusting this
-note.
+Row 15 → ✅ (merged); next was Feature 16 (Events & requests) — this
+entry's own pass above.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 14, Equipment check & shifts, pass 17, PR #4685, merged), preserved for history</summary>
@@ -28161,7 +28199,7 @@ iteration's commit" rule.
 | 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`, `apparatus_events.py` (new, pass 24)                                                                                                                                                                                                                   | ✅     |
 | 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                                                                                                                                                           | ✅     |
 | 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                                                                                                                                                      | ✅     |
-| 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                                                                                                                                                             | ⬜     |
+| 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                                                                                                                                                             | ✅     |
 | 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`, `knowledge_tests.py` (added pass 12), `shift_evaluation_templates.py`/`shift_evaluations.py` (added pass 13), `api/public/shift_evaluations.py` (added pass 15)                                                        | ⬜     |
 | 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py`, `training_module_config.py` (added pass 14), `attendance_waiver_requests.py` (31 routes, added pass 17)                              | ⬜     |
 | 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3855 L)                                                                                                                                                                                                                                                | ⬜     |
