@@ -82,9 +82,9 @@ if (!DEMO_CREDENTIALS.password) {
 }
 
 async function settle(page) {
-  await page
-    .waitForLoadState("networkidle", { timeout: 15_000 })
-    .catch(() => {});
+  // Not caught: a page that never goes idle fails its shot through the
+  // per-shot try/catch, rather than being photographed half-loaded.
+  await page.waitForLoadState("networkidle", { timeout: 15_000 });
   // Fonts and the lazy route chunk settle a beat after the network does.
   await page.waitForTimeout(500);
 }
