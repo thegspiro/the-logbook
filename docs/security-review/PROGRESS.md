@@ -16,6 +16,44 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#4699](https://github.com/thegspiro/the-logbook/pull/4699) (branch
+`claude/security-review-meetings-minutes`)**: Feature 24 (Meetings &
+minutes), pass 15 — watchdog pickup (the dedicated
+`/loop 30m /security-review` session,
+`session_011T1ZyyLrD5HagusgK9uDw2`, remains unreachable, confirmed via
+`ListAgents` → "No reachable agents").
+
+PR #4698 (Feature 23, Medical supplies, pass 22) was fully green on every
+CI check (`CI Success` passing on its current head, `mergeable_state`
+`clean`), with only the same bot-quota-failure comments seen on every
+recent pass (Codex "unable to review", Copilot "usage limits", no actual
+findings) — merged by this watchdog as squash commit `6ecb75180`; row 23
+marked ✅ above. A fresh `list_pull_requests` (state=open) found no
+`claude/security-review-*` head open, so this iteration continued to Step
+1: row 24 (Meetings & minutes) was the next ⬜ row.
+
+Baseline `f571296e3` (pass 14's own merge, PR #4507). All thirteen files
+pass 14 named in scope are byte-identical to pass 14 (98 routes,
+re-enumerated by AST, unchanged). Real delta, all traced against the
+meeting side specifically: a redundant index dropped by a guarded
+migration; `GET .../policy` no longer exposes who decides a waiver request
+to every member (a real over-exposure, fixed); the approver queue's
+`state=pending|decided` split stays correctly org/workflow-scoped and
+fixes a real bug; a shared not-counted-refusal check and an idempotent
+reconfirmation correction, both behaviorally unchanged for meetings; a
+minutes-PDF report number stamped from a shared, non-sequential-by-design
+module, recorded in the audit event as an id; and three new
+attachment-removal fields that are inert for the meeting workflow
+(`takes_documents=False`). **0 fixed, 0 new findings.** Full write-up:
+`docs/security-review/MM-24-meetings-minutes.md`'s **Pass 15** section.
+
+Row 24 → ✅ (pending this PR's merge); next is Feature 25 (Messaging &
+notifications) — re-check `list_pull_requests` fresh rather than trusting
+this note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 23, Medical supplies, pass 22, PR #4698, merged), preserved for history</summary>
+
 **PR [#4698](https://github.com/thegspiro/the-logbook/pull/4698) (branch
 `claude/security-review-medical-supplies`)**: Feature 23 (Medical
 supplies), pass 22 — watchdog pickup (the dedicated
@@ -52,6 +90,8 @@ findings.** Full write-up:
 Row 23 → ✅ (pending this PR's merge); next is Feature 24 (Meetings &
 minutes) — re-check `list_pull_requests` fresh rather than trusting this
 note.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 22, Grants & fundraising, pass 16, PR #4697, merged), preserved for history</summary>
