@@ -1,6 +1,6 @@
-# Security Review — Feature 29: Reports & Analytics (pass 8; see later `## Pass N` sections for subsequent passes, most recently pass 16)
+# Security Review — Feature 29: Reports & Analytics (pass 8; see later `## Pass N` sections for subsequent passes, most recently pass 17)
 
-**Prefix:** `RPT6` · **Rotation pass:** 16 (this file also carries passes 8–15) · **Reviewed:** 2026-11-22 · **PR:** (this PR)
+**Prefix:** `RPT6` · **Rotation pass:** 17 (this file also carries passes 8–16) · **Reviewed:** 2026-11-25 · **PR:** (this PR)
 
 **Backend:** `api/v1/endpoints/reports.py` (8 routes), `analytics.py` (3),
 `platform_analytics.py` (1), `dashboard.py` (14), `labels.py` (12) — 38 routes
@@ -1766,6 +1766,145 @@ closeout/materials/headcount read path behind the new export route;
 | `cd frontend && npm run typecheck`                                                                                                                                                                                                                                                                                                                                                         | ✅ 0 errors                                                                                                                   |
 | `cd frontend && npm run lint`                                                                                                                                                                                                                                                                                                                                                              | ✅ 0 errors/warnings                                                                                                          |
 | `npx vitest run src/modules/reports src/pages/AnalyticsDashboardPage.test.tsx src/pages/Dashboard.test.tsx src/components/labels/LabelPrintPage.test.tsx src/components/labels/barcodeGeometry.test.ts src/components/labels/printerDpi.test.ts src/pages/PlatformAnalyticsPage.test.tsx`                                                                                                  | ✅ 438 passed (33 files)                                                                                                      |
+
+Next in rotation: Feature 30 (Onboarding — `api/v1/onboarding.py`, 26 unauth
+bootstrap routes).
+
+## Pass 17 (2026-11-25) — watchdog pickup, real delta (Hours by Position report, Outreach Impact CRR/feedback/goals additions), 0 fixed, 0 new findings; `evaluations.py` growth (34→49 routes) recorded for the next absorbing pass
+
+**Step 0/1.** `list_pull_requests` (state `open`) returned zero PRs with a
+`claude/security-review-*` head. PR #4705 (Feature 28, Security, audit & IP,
+pass 15) had already merged (`264bf154c`), and row 29 (Reports & analytics)
+was confirmed the next `⬜` row on a freshly fetched `main`.
+
+**Baseline:** pass 16's own commit, `cd811e934`. `analytics.py`,
+`platform_analytics.py`, `labels.py`, `label_service.py`,
+`label_printer_service.py`, `dashboard_widget_service.py`,
+`attendance_dashboard_service.py`'s own voting-eligibility change, `report_export.py`'s
+provenance plumbing and `schemas/reports.py`'s `signature_lines` flag are all
+pass-16 work, already reviewed — confirmed byte-identical to pass 16's own
+head where named, not re-read.
+
+**Real delta, diffed file by file against that baseline:**
+
+- **`reports_service.py` (+147, new `position_hours` report).** A new
+  "Hours by Position" report (owner decisions, 2026-11-24) showing each
+  member's credited shift hours/shifts/calls by seat, sourced from
+  `SchedulingService.get_department_position_totals` (the same query the
+  member's own My Hours screen uses, Pitfall #29) plus
+  `ExternalShiftHoursService.counted_totals_by_user` for time credited on
+  another department's apparatus. Both are called with the route's own
+  `organization_id` (never client-supplied) and both underlying queries
+  filter `Shift.organization_id`/`ExternalShiftHours.organization_id`
+  directly — read in full, not assumed. The member-name query is scoped
+  `User.organization_id == str(organization_id)`. Registered in
+  `saved_report_schedule.py`'s `PII_REPORT_PERMISSIONS` map as
+  `"position_hours": "scheduling.report"`, the same shape `admin_hours`
+  already uses, with a comment stating why: it shows one member's hours to
+  another. `_enforce_report_pii_permission` gates all five existing report
+  call sites (`generate`, `export`, `saved` create/update, scheduled run),
+  so this is wired the same way as every other PII report type, not a new
+  pattern. **No finding.**
+- **`dashboard.py`/`community_engagement_service.py` (+81/+79, Outreach
+  Impact additions).** Three new pieces of the `GET /community-engagement`
+  response (no new route; the schema and service both grew to feed the
+  existing, already-gated `events.manage` route):
+  - **CRR impact** (`CrrImpactService.breakdown`, new file, read in full):
+    activity counts by type/tag/ZIP for the period, against the previous
+    one. Every query (`_activities`, `_catalogue`'s types/measures/tags)
+    filters `organization_id` directly — four separate queries, four
+    separate filters, confirmed by grep per query, not assumed from the
+    first one.
+  - **Feedback ratings** (`OutreachFeedbackService.rating_totals`/
+    `configured`): `rating_totals` filters
+    `EventRequestFeedback.organization_id`; `configured` resolves the
+    org's own feedback form via `_form(str(organization.id), ...)`, never a
+    client-supplied form id.
+  - **Outreach goals** (`OutreachGoalService.progress`/`window_totals`):
+    every query (`_organization`, `_get`, `_measure`, `progress`'s own
+    reads) filters `organization_id`; `window_totals` reuses
+    `CommunityEngagementService._held_events`/`_totals` so a goal's
+    "people reached" figure cannot drift from the report's own number
+    beside it (Pitfall #29, by design per the method's own docstring).
+
+  All three are called from `report()` with the `organization_id` already
+  resolved at the top of that method from the route's `current_user` — none
+  takes a client-supplied org id. **No finding.**
+- **`reports.py`/`report_export.py`/`schemas/reports.py` (+12/+6/+3) —
+  pure plumbing for the two service additions above** (the new report-type
+  dispatch entry, the export schema's `signature_lines` already seen at
+  pass 16 for a different purpose, nothing export-specific new here beyond
+  what pass 16 already verified). No route count change: AST
+  re-enumeration below is still 38.
+
+### Route inventory — re-enumerated by AST from source, 38 routes, unchanged from pass 16
+
+8 (`reports.py`) + 3 (`analytics.py`) + 1 (`platform_analytics.py`) + 14
+(`dashboard.py`) + 12 (`labels.py`) = **38**. No new route this pass — the
+new report type dispatches through the existing `POST /reports/generate`/
+`/export`/saved-report routes, and the Outreach Impact additions extend the
+existing `GET /dashboard/community-engagement` response.
+
+### Verified good ✅ (no findings; this pass's own checks)
+
+- **`position_hours`'s PII gate is wired identically to every other
+  PII-bearing report type** — `PII_REPORT_PERMISSIONS["position_hours"] =
+  "scheduling.report"`, checked at all five call sites via the shared
+  `_enforce_report_pii_permission`/scheduled-sender path, same mechanism
+  pass 14 verified for `admin_hours`.
+- **Every new aggregate this pass (CRR, feedback, goals, position hours)
+  is reached only through a server-resolved `organization_id`** — traced
+  each call chain from the route handler (`current_user.organization_id`)
+  down to the SQL `WHERE`, not inferred from the function signature alone.
+- **`window_totals`'s reuse of the report's own totals function (Pitfall
+  #29)** closes the exact class of drift this file's own Pass 15 fixed
+  (RPT6-29-5/6) for a different pair of screens — a goal's figure and the
+  report's figure for the same window cannot disagree, because they are
+  the same call.
+- **No new banned pattern in this pass's frontend delta**
+  (`window.confirm`/`alert`/`prompt`, `dangerouslySetInnerHTML`,
+  `document.write`, `eval(`, bare `toHaveBeenCalledWith()`) — grepped
+  across the full frontend diff against the pass-16 baseline, zero hits.
+
+### Cross-feature, found while tracing this pass's own frontend — not this feature's scope, recorded for the owning pass
+
+- **`evaluations.py` (member performance evaluations) has grown from the
+  34 routes SEC-00 counted at its pass-16 sweep to 49 today.** This
+  feature's own Evaluations UI (routed under `/reports/evaluations/*`, so
+  in scope for Reports & analytics' frontend) now calls six routes that
+  did not exist at that count: `GET /periods/{id}/reassign-options`,
+  `GET /periods/{id}/reassign-preview`, `POST /periods/{id}/reassign`
+  (`evaluations.manage`, the mutating one also `require_stepup`),
+  `GET /grade-spread`, `GET /export-pdfs` (`evaluations.view_all`, the PDF
+  export also step-up) and `GET /{evaluation_id}/history`
+  (`evaluations.view_all`). Checked these six specifically — correct
+  permission decorator, `current_user.organization_id` passed into the
+  service layer rather than a client-supplied id, matching the module's
+  own docstring — but this is a light check of the six routes this
+  feature's frontend reaches, not a seven-dimension pass over the other
+  ~9 new routes or the module as a whole. Recorded in `PROGRESS.md`'s "New
+  modules with no rotation row yet" paragraph so the Feature 17 fold-in
+  (or a fresh SEC-00 sweep) picks up where this pass left off, rather than
+  the module going another lap unreviewed.
+- Standing flagged items (LBL-29-2, LBL-29-4, DASH-2, RPT-5c/6/7) all
+  re-checked against this pass's byte-identical `labels.py`/`analytics.py`/
+  `platform_analytics.py`/`reports_service.py`'s untouched report
+  generators — unchanged.
+
+### Completion gate (Pass 17)
+
+| Check | Result |
+| --- | --- |
+| `flake8 app/ tests/ alembic/` (`flake8==7.4.1`) | ✅ 0 violations |
+| `black --check app/ tests/ alembic/` (`black==26.10.1`) | ✅ clean |
+| `isort --check-only app/ tests/ alembic/` (`isort==9.0.2`) | ✅ clean |
+| `python3.13 scripts/validate_migrations.py --strict` | ✅ 844 revisions, single head `e9cf8ab7e4e4` |
+| `python3.13 scripts/generate_schema_docs.py --check` | ✅ up to date |
+| `python3 scripts/check_route_permissions.py --strict` (repo root) | ✅ 344 routes, 0 errors, 0 warnings |
+| `pytest tests/ -q -k "reports or label or analytics or dashboard or attendance_dashboard or pipeline or prospect_privacy or membership_pipeline or dues_overdue or saved_report or evaluation or meeting or minutes or outreach or community_engagement or leave or crr"` | ✅ 5227 passed, 1 pre-existing skip (`py_vapid`), up from pass 16's 4863 |
+| `cd frontend && npm run typecheck` | ✅ 0 errors |
+| `cd frontend && npm run lint` | ✅ 0 errors/warnings |
+| `npx vitest run src/modules/reports src/pages/AnalyticsDashboardPage.test.tsx src/pages/Dashboard.test.tsx src/components/labels/LabelPrintPage.test.tsx src/components/labels/barcodeGeometry.test.ts src/components/labels/printerDpi.test.ts src/pages/PlatformAnalyticsPage.test.tsx` | ✅ 470 passed (36 files), up from pass 16's 438/33 |
 
 Next in rotation: Feature 30 (Onboarding — `api/v1/onboarding.py`, 26 unauth
 bootstrap routes).
