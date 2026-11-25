@@ -3515,3 +3515,120 @@ No other source file under this feature's scope changed behavior this pass
 beyond what is traced above. Everything above was landed by other
 (non-rotation) work and independently re-verified here against all seven
 `CHECKLIST.md` dimensions for the meeting side specifically.
+
+## Pass 16 (2026-11-25) — watchdog pickup, raced with #4699 (same baseline,
+already merged); 1 fixed (test coverage, no code defect), 0 newly flagged
+
+Watchdog pickup of `/loop 30m /security-review`: the dedicated loop session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) remains unreachable. This pass's own
+review of Feature 24 (baseline `f571296e3`, PR #4507) ran concurrently with
+another watchdog session's pass 15 — both started from the same `⬜` row
+24 after PR #4698 (Medical supplies) merged, and both reached the same
+conclusion on every item pass 15's write-up above covers (the index drop,
+the policy-redaction fix, the queue-state split, `_not_counted_refusal`,
+`_correction_keeps_decision`, the report-number/letterhead PDF addition,
+the inert attachment fields). Pass 15 pushed PR #4699 first; by the time
+this pass went to open its own PR, `main` already carried `13b59d5dc`
+(pass 15's merge) and row 24 was already ✅. Re-fetched `main` and
+confirmed: no code in this feature's scope changed between pass 15's
+baseline and its merge (`git diff --stat f571296e3..13b59d5dc` over the
+same file list this pass had already been reading is identical to pass
+15's own list), so this pass's independent read is not stale — it is the
+same delta, read twice, by two sessions that did not know about each
+other. This section does not repeat pass 15's analysis of those items;
+see the **Pass 15** section above for each one's own trace.
+
+**One real difference: this pass additionally traced
+`void_pending_for_events`'s new handling of an *approved* request**, which
+pass 15's write-up lists `attendance_waiver_service.py`'s diff size but
+does not describe this specific change. Owner decision (2026-11-23): when
+a meeting is cancelled or deleted, an **approved** waiver request is now
+voided too (previously only pending ones were), freeing the cap slot it
+held, and — the part with no prior write-up — the minutes-record
+`MeetingAttendee` row the approval had written is unwound by a new
+`_unapply_meeting_waiver` helper. Traced in full:
+
+- **Lock order matches this file's Pitfall #27 discipline:**
+  `_unapply_meeting_waiver` locks the `Meeting` row(s) for the request's
+  event, then the `MeetingAttendee` row(s) filtered by
+  `waiver_request_id == str(request.id)`, both org-scoped — the same order
+  `grant_meeting_waiver` itself uses — and runs inside
+  `void_pending_for_events`'s own pre-existing lock on the request rows.
+  **Verified good.**
+- **Scope is exactly the row the request wrote:** filtered on
+  `waiver_request_id`, so a row the Secretary excused by hand (no
+  `waiver_request_id`) is untouched and `present` is never cleared,
+  matching `_apply_meeting_waiver`'s own stated invariant. **Verified
+  good.**
+- **Idempotent on redelivery (Pitfall #36):** the request's own
+  `reconfirm_requested_at` is cleared in the same change, and the attendee
+  lookup is by `waiver_request_id`, which `_unapply_meeting_waiver` itself
+  clears — a second delivery of the same cancellation/deletion finds no
+  attendee row left to touch. **Verified good.**
+- **No test exercised the attendee-row half of this path.** The existing
+  `TestEventLifecycle` tests (renamed by the same commit, before either
+  pass started, to `test_cancelling_voids_pending_and_approved` /
+  `test_deleting_voids_both_and_keeps_the_rows`) assert only the request's
+  own status flip to `VOIDED`. Neither test calls `make_minutes_record`
+  first, so `grant_meeting_waiver` had written zero `MeetingAttendee` rows
+  in either scenario — `_unapply_meeting_waiver` had nothing to unwind in
+  either test, and the behavior the owner decision and the method's own
+  docstring describe ("a meeting waiver it wrote comes off the minutes
+  record") was unverified by any test, in either this pass or pass 15.
+  **Fixed this pass:** added
+  `TestEventLifecycle::test_cancelling_an_approved_request_takes_the_waiver_off_the_minutes`,
+  which creates a minutes record, approves a request (asserting the
+  attendee becomes `excused=True` with `waiver_request_id` set), cancels
+  the event, and asserts the attendee row is unwound (`excused=False`,
+  `waiver_reason`/`waiver_request_id`/`waiver_granted_by`/
+  `waiver_granted_at` all `None`). Per CLAUDE.md Pitfall #37, seen to fail
+  first: with the `_unapply_meeting_waiver` call in
+  `void_pending_for_events` temporarily replaced with `pass`, the new test
+  failed on `assert attendee.excused is False` (got `True`, i.e. the
+  production code without the call left the member excused on a meeting
+  that will never be held); restored (confirmed `git diff` showed no
+  remaining change to the service file), the test and the full 49-test
+  file pass. This is a test-coverage fix, not a code defect — the
+  production behavior was already correct by manual trace — so it is
+  reported as 1 fixed (coverage) rather than a vulnerability.
+
+**1 fixed (test coverage), 0 newly flagged.**
+
+### Confirmed still open / still flagged, unchanged
+
+- **`minutes.view_executive` tier** — still a product/role decision, not
+  touched. **FLAGGED**, unchanged.
+- **MM2-3** (app-review) — still out of this rotation's scope. Not
+  re-derived.
+- **`reports_service.py`'s department-overview `open_meeting_items` count**
+  (MM-21's sibling gap, flagged for Feature 29/Reports & analytics) —
+  confirmed the only change to `reports_service.py` in this window is an
+  unrelated new "Hours by Position" scheduling report, no reference to
+  `open_meeting_items` or any meeting/minutes table. Still **FLAGGED** for
+  that rotation slot.
+
+`docs/KNOWN_LIMITATIONS.md`'s MM-9, MM-17, MM-19, MM-20 and MM5-4 entries:
+unchanged since pass 15's re-read. No edit needed.
+
+### Completion gate (pass 16)
+
+| Check                                                                                                                                       | Result                                                                        |
+| -------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| `flake8 app/ tests/ alembic/`                                                                                                                | clean (0 violations)                                                          |
+| `black --check app/ tests/ alembic/`                                                                                                        | clean                                                                          |
+| `isort --check-only app/ tests/ alembic/`                                                                                                    | clean                                                                          |
+| `python3 scripts/validate_migrations.py --strict`                                                                                           | PASSED — 844 revisions, single head `e9cf8ab7e4e4`                            |
+| `python3 scripts/check_route_permissions.py --strict` (repo root)                                                                           | 344 routes, 0 errors, 0 warnings                                              |
+| `python3 scripts/generate_schema_docs.py --check`                                                                                           | up to date                                                                    |
+| backend tests, scope (`-k "meeting or minutes or minute or quorum or attendance_dashboard or motion or action_item or attendance_waiver"`)  | 2,193 passed, 1 skipped (pre-existing, `py_vapid`); +1 over pass 15's 2,192   |
+| `cd frontend && npm run typecheck`                                                                                                           | 0 errors                                                                      |
+| `cd frontend && npm run lint`                                                                                                                | 0 errors, 0 warnings (`--max-warnings 10`)                                    |
+| `npx vitest run src/modules/minutes`                                                                                                        | 497 passed (61 files)                                                         |
+
+The new regression test was additionally run on its own, twice: once
+against the service code with `_unapply_meeting_waiver`'s call site
+temporarily replaced with `pass` (failed, as required by Pitfall #37), and
+once restored (`git diff` on the service file empty, confirming an exact
+revert; passed), before the full scope suite above was run once more
+against the final tree. No other source file under this feature's scope
+changed behavior beyond what pass 15 and this section both trace.

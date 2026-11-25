@@ -46,6 +46,17 @@ section.
 Row 25 → ✅ (pending this PR's merge); next is Feature 26 (Forms) —
 re-check `list_pull_requests` fresh rather than trusting this note.
 
+**Concurrent with this PR, a second watchdog session's own pickup of row
+24 landed as PR [#4700](https://github.com/thegspiro/the-logbook/pull/4700)
+and merged while this PR was still open** — a race, not an error: that
+session started from the same pass-14 baseline (`f571296e3`, PR #4507) and
+reached the same conclusions `main` already carried via `13b59d5dc`, and
+additionally found and fixed one test-coverage gap (`1 fixed, 0 flagged`;
+see `docs/security-review/MM-24-meetings-minutes.md`'s **Pass 16** section).
+Row 24 stays ✅; this merge's conflict in this file was resolved by merging
+`main` into this branch per the rotation's own Step 0 rule, keeping both
+log entries below in append order.
+
 <details>
 <summary>Superseded — prior Open PR note (Feature 24, Meetings & minutes, pass 15, PR #4699, merged), preserved for history</summary>
 
@@ -28710,6 +28721,67 @@ pass 14 exactly.
 
 Row 25 → ✅ (pending this PR's merge). Next is Feature 26 (Forms) —
 re-check `list_pull_requests` fresh rather than trusting this note.
+
+### 2026-11-25 — Feature 24 (Meetings & minutes, pass 15) merged (PR #4699) while this pass was independently reviewing the same row; pass 16 adds the one thing pass 15 missed: 1 fixed (test coverage, no code defect), 0 new findings
+
+Watchdog pickup (the dedicated `/loop 30m /security-review` session,
+`session_011T1ZyyLrD5HagusgK9uDw2`, remains unreachable, confirmed via
+`ListAgents` → "No reachable agents"). This review started from the same
+baseline (`f571296e3`, pass 14's merge, PR #4507) and the same `⬜` row 24
+as another watchdog session's own pickup — both sessions independently
+re-verified the identical real delta (the policy-redaction fix, the
+decider-queue `state` split, the redundant index drop, the shared
+not-counted-refusal/reconfirmation helpers, the minutes-PDF report number,
+the inert attachment fields) and reached the same verdict on each. That
+other session pushed PR #4699 first, which merged as `13b59d5dc` — marking
+row 24 ✅ — while this review was still in progress. `list_pull_requests`
+(state=open) at that point showed nothing open, confirming the race rather
+than an overlooked open PR this session should have tended instead.
+
+Rather than discard the work, re-fetched `main` and confirmed nothing in
+this feature's scope changed between this pass's baseline and pass 15's
+merge, so the review remained current. One thing pass 15's write-up did
+not trace: `void_pending_for_events`'s new handling of an **approved**
+waiver request (owner decision 2026-11-23) — voiding it too on a
+cancelled/deleted meeting, and unwinding the minutes-record
+`MeetingAttendee` row the approval had written, via a new
+`_unapply_meeting_waiver` helper. Lock order (meeting row, then attendee
+row, both org-scoped, inside the caller's existing lock — Pitfall #27),
+scope (only the row carrying the request's own `waiver_request_id`, never
+the Secretary's own hand-written excusal) and idempotency on redelivery
+(Pitfall #36, via the request's own `reconfirm_requested_at` clear and the
+`waiver_request_id` clear that makes a second run a no-op) all traced and
+verified good.
+
+**Found and fixed a test-coverage gap:** neither this pass, pass 15, nor
+the commit that introduced the behavior had a test that created a minutes
+record before exercising `TestEventLifecycle`'s cancel/delete scenarios,
+so `grant_meeting_waiver` had nothing written and `_unapply_meeting_waiver`
+had nothing to unwind in any existing test — the specific behavior the
+owner decision and the method's own docstring describe ("a meeting waiver
+it wrote comes off the minutes record") was unverified. Added
+`test_cancelling_an_approved_request_takes_the_waiver_off_the_minutes` to
+`backend/tests/test_meeting_waiver_requests.py`; per CLAUDE.md Pitfall #37,
+seen to fail with the `_unapply_meeting_waiver` call temporarily replaced
+with `pass` (failed on `assert attendee.excused is False`, got `True`),
+restored and the full 49-test file passes. This is a test-coverage fix,
+not a code defect — the production behavior was already correct by manual
+trace.
+
+Standing flagged items (`minutes.view_executive` tier, MM2-3, the
+`reports_service.py` `open_meeting_items` gap for Feature 29) re-confirmed
+accurate and unchanged. Completion gate: flake8/black/isort clean,
+migrations valid (844 revisions, single head), route-permissions check
+clean (344 routes, unchanged from pass 15), schema docs up to date, scoped
+backend pytest clean (2,193 passed, 1 pre-existing skip — the +1 over pass
+15's 2,192 is this pass's own new test), frontend typecheck/lint clean,
+`vitest run src/modules/minutes` clean (61 files, 497 tests). Full
+write-up: `docs/security-review/MM-24-meetings-minutes.md`'s **Pass 16**
+section.
+
+Row 24 was already ✅ before this pass started (via #4699); next is
+Feature 25 (Messaging & notifications) — re-check `list_pull_requests`
+fresh rather than trusting this note.
 
 ### 2026-11-25 — Feature 17 (Training core, pass 16) merged (PR #4692); Feature 18 (Training extended, pass 16): watchdog pickup, first full review of `attendance_waiver_requests.py` now that PR #4481 merged, 0 fixed, 0 new findings
 
