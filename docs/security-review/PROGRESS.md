@@ -16,6 +16,51 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#4696](https://github.com/thegspiro/the-logbook/pull/4696) (branch
+`claude/security-review-admin-hours-p16` — the plain
+`claude/security-review-admin-hours` collided with an old, abandoned
+branch from pass 9, PR #3450, closed but never merged)**: Feature 21
+(Admin hours), pass 16 — watchdog pickup (the dedicated
+`/loop 30m /security-review` session, `session_011T1ZyyLrD5HagusgK9uDw2`,
+remains unreachable, confirmed via `ListAgents` → "No reachable agents").
+
+PR #4695 (Feature 20, Compliance, pass 16) was fully green on every CI
+check (`CI Success` passing on its current head, `mergeable_state`
+`clean`), with only the same bot-quota-failure comments seen on every
+recent pass (Codex "unable to review", Copilot "usage limits", no actual
+findings) — merged by this watchdog as squash commit `74f6fd0d7`; row 20
+marked ✅ above. A fresh `list_pull_requests` (state=open) found no
+`claude/security-review-*` head open, so this iteration continued to Step
+1: row 21 (Admin hours) was the next ⬜ row.
+
+Baseline `fd8ba8c53` (pass 15's own merge, PR #4500). Two backend files and
+two frontend files carried a real delta; both endpoint/schema files are
+byte-identical to pass 15 — no new route, no new permission string. The
+real work: a new credited-hours source, Community Risk Reduction (CRR)
+activity logging, lets a logged outreach activity credit the members who
+carried it out (every client-supplied member id validated in-org and
+active before crediting, per Pitfall #14c/#32; the credited category
+resolved org-scoped; deletion scoped to the activity and `entry_method` so
+a hand-re-entered entry survives); and `get_requirement_progress`'s profile
+resolution now calls Feature 20's new shared `admin_hours_profile()`
+instead of a local filter/sort — a pure function over already org-scoped
+arguments, so no new query. Frontend delta is two UI-only files (a
+header-row wrap fix, an AA/AAA contrast correction, an `aria-label` on an
+existing tab strip) — no new API call. A new unclaimed cross-feature
+module (CRR, 622-line endpoint plus a sizeable frontend footprint) was
+found and recorded, the same way Apparatus Events was at pass 15 (now
+resolved — folded into row 13 at pass 24). Route surface 30/30 (17+13),
+unchanged; endpoint file byte-identical to pass 15. **0 fixed, 0 new
+findings.** Full write-up: `docs/security-review/AH-21-admin-hours.md`'s
+**Pass 16** section.
+
+Row 21 → ✅ (pending this PR's merge); next is Feature 22 (Grants &
+fundraising) — re-check `list_pull_requests` fresh rather than trusting
+this note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 20, Compliance, pass 16, PR #4695, merged), preserved for history</summary>
+
 **PR [#4695](https://github.com/thegspiro/the-logbook/pull/4695) (branch
 `claude/security-review-compliance`)**: Feature 20 (Compliance), pass 16 —
 watchdog pickup (the dedicated `/loop 30m /security-review` session,
@@ -64,6 +109,8 @@ write-up: `docs/security-review/CMP-20-compliance.md`'s **Pass 16** section.
 
 Row 20 → ✅ (pending this PR's merge); next is Feature 21 (Admin hours) —
 re-check `list_pull_requests` fresh rather than trusting this note.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 19, Skills testing, pass 16, PR #4694, merged), preserved for history</summary>
@@ -28369,7 +28416,7 @@ iteration's commit" rule.
 | 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py`, `training_module_config.py` (added pass 14), `attendance_waiver_requests.py` (21 routes, corrected pass 16; added pass 15)             | ✅     |
 | 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3855 L)                                                                                                                                                                                                                                                | ✅     |
 | 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`, `training_compliance.py` (declared scope since pass ≤11)                                                                                                                                                                             | ✅     |
-| 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                                                                                                                                                      | ⬜     |
+| 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                                                                                                                                                      | ✅     |
 | 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`, `zeffy.py`/`zeffy_service.py`/`zeffy_sync_service.py` (added pass 13)                                                                                                                                                      | ⬜     |
 | 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                                                                                                                                                                 | ⬜     |
 | 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`, `meeting_waiver_requests.py` (added pass 14)                                                                                                                                                                                                             | ⬜     |
@@ -28423,22 +28470,34 @@ than being re-discovered piecemeal by SEC-00 or another feature's table-write
 slice again. Folded into Feature 27's declared scope above (row 27) so a
 future pass's accumulated-scope diff covers it by default.
 
-**Apparatus Events, flagged unclaimed by Feature 21's pass 15, no rotation
-row yet:** a new module (`endpoints/apparatus_events.py`, 20 routes, all
-gated `apparatus_events.manage`/`.signup`; `services/apparatus_event_service.py`,
-1,578 L; `models/apparatus_event.py`; `schemas/apparatus_event.py`) landed
-(commit `a80760942`, "Add apparatus events backend") with no feature row
-covering it — outreach that rolls an apparatus with a named crew, scheduling
-them onto `Event` nights, with its own `EventApparatusPlan`/
-`ApparatusEventTemplate` tables. Admin Hours' pass 15
-(`docs/security-review/AH-21-admin-hours.md`'s **Pass 15** section) found and
-traced only the slice touching its own `AdminHoursCategory` table (both
-org-scoped, no finding) — the module as a whole has not had a
-seven-dimension pass. Its permission prefix (`apparatus_events`) and its
-dependency on the `Apparatus`/EVOC model both point to Feature 13 (Apparatus
-& NFC) as the natural home, the same way Historical Data Import's
-`integrations` prefix pointed it to Feature 27; a future pass should fold it
-into row 13's declared scope rather than leaving it to be rediscovered.
+**Apparatus Events, flagged unclaimed by Feature 21's pass 15: now resolved.**
+Row 13 (Apparatus & NFC) absorbed it at pass 24 — see that row's own
+`(new, pass 24)` annotation. No further action needed.
+
+**Community Risk Reduction (CRR), flagged unclaimed by Feature 21's pass
+16, no rotation row yet:** a new module (`endpoints/crr.py`, 622 L, gated
+`events.manage`/`crr.record`; `services/crr_activity_service.py`, 649 L;
+`services/crr_catalogue_service.py`; `models/crr.py`; `schemas/crr.py`;
+migration `20261122_1613_5c2e8a417d90`) landed (commit `43c12880d`,
+2026-11-22) with no feature row covering it — logging outreach activities
+(resident contacts, public-education events, home inspections) against a
+department-defined catalogue of activity types/measures/tags, with
+resident-detail fields encrypted at rest and gated behind
+`crr.view_contact`, a retention/clearing job, a ZIP-code lookup, and a
+sizeable frontend footprint (`pages/crr/`, `pages/community-engagement/`,
+an `events-settings` catalogue editor). Admin Hours' pass 16
+(`docs/security-review/AH-21-admin-hours.md`'s **Pass 16** section) found
+and traced only the slice touching its own `AdminHoursEntry`/
+`AdminHoursCategory` tables (client-supplied member ids validated in-org
+and active before crediting, category resolved org-scoped, deletion scoped
+to the activity and `entry_method`; no finding) — the module as a whole has
+not had a seven-dimension pass. Its permission prefix
+(`events.manage`/`crr.record`) and its dependency on `Event` (an activity
+may be recorded against an outreach event) both point to Feature 16
+(Events & requests) as the natural home, the same way Apparatus Events' and
+Historical Data Import's own permission prefixes pointed them to theirs; a
+future pass should fold it into row 16's declared scope rather than leaving
+it to be rediscovered.
 
 ---
 
