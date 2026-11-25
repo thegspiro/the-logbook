@@ -5,21 +5,162 @@
 (pass 5), 2026-09-17 (pass 6), 2026-10-06 (pass 7), 2026-10-14 (pass 8),
 2026-10-15 (pass 9), 2026-10-19 (pass 10), 2026-10-23 (pass 11), 2026-10-26
 (pass 12), 2026-10-29 (pass 13), 2026-11-02 (pass 14), 2026-11-06
-(pass 15), 2026-11-20 (pass 16) · **PR:**
+(pass 15), 2026-11-20 (pass 16), 2026-11-25 (pass 17) · **PR:**
 [#1842](https://github.com/thegspiro/the-logbook/pull/1842) (pass 1),
 [#2625](https://github.com/thegspiro/the-logbook/pull/2625) (pass 6, 0
 fixed, 0 flagged, merged), [#2970](https://github.com/thegspiro/the-logbook/pull/2970)
 (pass 7, 0 fixed, 0 new findings), [#3195](https://github.com/thegspiro/the-logbook/pull/3195) (pass 8, 1 fixed, 0 flagged),
-[#3290](https://github.com/thegspiro/the-logbook/pull/3290) (pass 9, 0 fixed, 0 new findings), [#3435](https://github.com/thegspiro/the-logbook/pull/3435) (pass 10, 0 fixed, 0 new findings, merged), [#3602](https://github.com/thegspiro/the-logbook/pull/3602) (pass 11 — watchdog pickup, 0 fixed, 0 new findings), [#3741](https://github.com/thegspiro/the-logbook/pull/3741) (pass 12 — watchdog pickup, 0 fixed, 1 flagged, merged), [#3837](https://github.com/thegspiro/the-logbook/pull/3837) (pass 13 — watchdog pickup, 0 fixed, 0 new findings, merged), [#3927](https://github.com/thegspiro/the-logbook/pull/3927) (pass 14 — watchdog pickup, 0 fixed, 0 new findings, merged), [#4111](https://github.com/thegspiro/the-logbook/pull/4111) (pass 15 — watchdog pickup, 0 fixed, 0 new findings, merged), pass 16 PR recorded in `PROGRESS.md`
+[#3290](https://github.com/thegspiro/the-logbook/pull/3290) (pass 9, 0 fixed, 0 new findings), [#3435](https://github.com/thegspiro/the-logbook/pull/3435) (pass 10, 0 fixed, 0 new findings, merged), [#3602](https://github.com/thegspiro/the-logbook/pull/3602) (pass 11 — watchdog pickup, 0 fixed, 0 new findings), [#3741](https://github.com/thegspiro/the-logbook/pull/3741) (pass 12 — watchdog pickup, 0 fixed, 1 flagged, merged), [#3837](https://github.com/thegspiro/the-logbook/pull/3837) (pass 13 — watchdog pickup, 0 fixed, 0 new findings, merged), [#3927](https://github.com/thegspiro/the-logbook/pull/3927) (pass 14 — watchdog pickup, 0 fixed, 0 new findings, merged), [#4111](https://github.com/thegspiro/the-logbook/pull/4111) (pass 15 — watchdog pickup, 0 fixed, 0 new findings, merged), [#4464](https://github.com/thegspiro/the-logbook/pull/4464) (pass 16 — watchdog pickup, 0 fixed, 0 new findings, merged), pass 17 PR recorded in `PROGRESS.md`
 
 **Backend:** `api/v1/endpoints/equipment_check.py` (54 routes, unchanged from
-pass 10), `api/v1/endpoints/shift_completion.py` (22 routes, unchanged from
-pass 14),
-`services/equipment_check_service.py` (6,934 L, unchanged pass 15, +15/−23
-this pass), `services/shift_completion_service.py` (2,134 L, +332/−30
-pass 15, +10/−1 this pass)
-**Frontend:** in-app (no dedicated module directory)
+pass 10; +15/−4 this pass), `api/v1/endpoints/shift_completion.py` (22
+routes, unchanged from pass 14),
+`services/equipment_check_service.py` (6,934 L, unchanged pass 15/16/17),
+`services/shift_completion_service.py` (2,134 L, +332/−30 pass 15,
+unchanged pass 16/17), `services/equipment_check_pdf.py` (+18 this pass,
+shared `document_provenance.py` plumbing only)
+**Frontend:** in-app (no dedicated module directory) — this pass's real
+touches are `modules/inventory/pages/EquipmentCheckReportsPage.tsx` (+45/−18)
+and `.../EquipmentCheckTemplateBuilder.tsx` (+12/−3, both in the Inventory
+module per pass 3's move), plus `pages/scheduling/ShiftReportsTab.tsx`
+(+13/−6)
 **Migrations:** none this iteration to this feature's own tables
+
+---
+
+## Pass 17 (2026-11-25) — watchdog pickup, found and corrected a pass-16 documentation regression on EC-17, 0 fixed, 0 new findings
+
+**Watchdog pickup.** The dedicated `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) remains unreachable, confirmed via
+`ListAgents` ("No reachable agents"). PR #4684 (Feature 13, Apparatus &
+NFC, pass 24) had already merged (owner-merged directly, not by a Claude
+session); a fresh `gh api search/issues` for an open `claude/security-review-`
+head branch returned 0 results, and row 14 (Equipment check & shifts) was
+confirmed the next `⬜` row on a freshly pulled `main`.
+
+**Baseline** `2a5ca8e31` (PR #4464's merge, pass 16). `git diff --numstat`
+across the declared scope plus a widened sweep (see below) found real
+changes in exactly one declared file, `equipment_check.py` (+15/−4), and
+one adjacent file not previously listed in this feature's own header,
+`equipment_check_pdf.py` (+18/−0); `shift_completion.py` and both service
+files are byte-identical to pass 16.
+
+### Documentation correction (the main finding of this pass): pass 16 wrongly re-flagged EC-17 as OPEN
+
+Pass 16's own text (line 166 of this file, now above) reads **"EC-17
+re-confirmed OPEN/FLAGGED, unaffected,"** describing "the underlying gap (no
+forced re-review for a review-off department)" as untouched. That
+contradicts this same file's own **pass 13** section (2026-10-29), which
+moved EC-17 from FLAGGED to **FIXED** after reading `f53f766a`'s
+`_return_edited_report_to_review` in full and running
+`TestAnEditedReportGoesBackToReview` and its three neighboring
+parametrized tests directly — and it contradicts `docs/KNOWN_LIMITATIONS.md`'s
+own EC-17 entry, headed "resolved 2026-10-27" since that date. Passes 14,
+15 and 16 never repeated the FLAGGED language until pass 16 did, with no
+code change in the window to justify reopening it.
+
+Re-verified directly against the live code rather than trusting either
+prior pass's say-so: `ShiftCompletionService.update_report` still computes
+`content_changed` against the pre-write row and calls
+`_return_edited_report_to_review` exactly as pass 13 described; a
+`flagged` report always returns to `pending_review`, and an `approved` one
+returns to review **only when** `TrainingModuleConfigService.get_config(...)
+.report_review_required` is true — otherwise it stays approved, which is
+the 2026-10-27 owner decision (an edited approved report is routed the same
+way a freshly-submitted one would be under the department's own review
+setting), not an unresolved gap. Ran
+`test_an_approved_report_stays_approved_where_review_is_off` directly: it
+passes, and it is the test that proves this is the intended, decided
+behavior rather than a residual hole. **Corrected the record: EC-17 is
+RESOLVED**, matching pass 13 and `KNOWN_LIMITATIONS.md`; the pass-16
+wording above is superseded by this entry, not deleted, per this
+rotation's own "preserve prior passes" convention.
+
+### `equipment_check.py` / `equipment_check_pdf.py` — the signature-lines PDF option, reviewed at this feature's boundary; already-verified shared helpers
+
+Commits `daeb28002` ("Give every document its department identity, a
+report number and a handling banner") and `79e184c98` ("Offer signature
+lines on report PDFs, by a tick-box at download") thread two new,
+server-derived values — `report_number` (`document_provenance
+.report_number_for`, dated in the org's own timezone, no client input) and
+`prepared_by` (`document_provenance.preparer_label`, an org-scoped rank
+lookup) — through `export_pdf`'s three report branches and into
+`equipment_check_pdf.py`'s four PDF generators, plus a `signature_lines:
+bool` query flag that only changes whether the PDF ends with blank sign-off
+lines. Both helpers were already read end to end by this lap's Documents &
+legal (PR #4670) and Inventory (PR #4678) passes; re-confirmed at this
+feature's own call site only, per the skill's boundary-review convention
+for shared cross-cutting code: `export_pdf`'s permission dependency
+(`require_permission("inventory.check_view")`) is unchanged, no new query
+parameter reaches SQL or a file path, and `signature_lines`/`report_number`
+never carry free text. No new finding.
+
+### Frontend — cosmetic, no new security surface
+
+`EquipmentCheckReportsPage.tsx`'s `SignatureLinesOption` tick-box (a
+shared, already-reviewed component) and its two export-URL assemblies
+(`...(signatureLines ? { signature_lines: 'true' } : {})`) only toggle the
+query flag above; `EquipmentCheckTemplateBuilder.tsx`'s changes are a
+touch-target fix, a `flex-shrink-0` → `min-w-0` wrap fix at 768px, and a
+visually-hidden `<h1>` for assistive technology. `ShiftReportsTab.tsx`'s
+`shiftReportLabel`/`outreachTitle` change is a display-only label swap
+(shows an outreach event's own title instead of the apparatus name for a
+shift linked to an apparatus-events night — the feature this lap's
+Apparatus & NFC pass 24 already reviewed end to end) rendered as plain
+React text, auto-escaped. Grepped the full diff for every dimension 4–5
+risky pattern: zero matches.
+
+### Scope re-verification — no undiscovered feature this time
+
+Widened the sweep beyond the four declared files (the way this lap's
+Apparatus & NFC pass 24 found an entire undeclared feature) by searching
+every backend commit in the window for `equipment`/`shift_completion`/
+`shift_report` and checking each matched file's actual diff: 24 migration
+files and `services/equipment_readiness_service.py`,
+`services/equipment_request_notifications.py`, and both schema files
+matched by name but are **byte-identical** to pass 16 (pre-existing files
+touched by commits elsewhere in those same commits' diffs, not by this
+feature). Only `equipment_check.py` and `equipment_check_pdf.py` actually
+changed. **Routes re-enumerated by AST** (not grep): `equipment_check.py`
+54, `shift_completion.py` 22 — both unchanged, matching pass 16's header.
+Every one of the 76 routes carries a recognized auth dependency —
+`require_permission`/`require_all_permissions` directly, or (for
+`get_pending_review_reports`, `get_flagged_reports`, `review_report`,
+`batch_review_reports`) the feature's own `require_report_reviewer`
+dependency, which fails closed (403) unless the caller holds
+`training.manage` or the department's configured reviewer role — read in
+full, unchanged since its introduction.
+
+**EC-8 re-confirmed OPEN/owner-accepted** (changelog-only by-id reads, no
+org filter — harmless), unaffected. **EC-7/EC-11** remain resolved per the
+2026-10-11 owner decision, unaffected. No migration in the window touches
+`shift_completion_reports`, `shift_template_equipment_checks`, or any
+`shift_equipment_check*`/`equipment_check*` table.
+
+**0 fixed, 0 new findings.** The one status change this pass is the EC-17
+documentation correction above — a record fix, not a code fix, since the
+underlying behavior was never wrong.
+
+**Completion gate:** `flake8`/`black --check`/`isort --check-only` on
+`app/ tests/ alembic/` (all three run, matching CI's pins) all clean;
+`validate_migrations.py --strict` — 840 revisions, single head
+`d41f7a2c9e58`; `check_route_permissions.py --strict` (repo root) — 339
+routes, 0 errors/0 warnings; scoped backend pytest (`-k "equipment or
+shift_completion or shift_report or shift_template"`, both the
+no-database and `integration`-marked halves, run under `python3.13`) — 591
+
+- 321 = 912 passed, 1 pre-existing environment-only skip (`py_vapid`) in
+  each half; standing guard suites (capacity locking, org-scoping ratchet,
+  LIKE escaping, CSV sweep, migration chain, `create_all`-table tolerance,
+  account-status gates, log-call shape, baseline member grants) — 209
+  passed; `npm run typecheck` (via `tsc-native.mjs`) — 0 errors; `npm run
+lint` — 0 errors, 0 warnings; scoped `npx vitest run` (the inventory
+  module's equipment-check files plus every shift-report-adjacent
+  page/component) — 373 passed (28 files).
+
+Row 14 → ✅ (pending this PR's merge); next is Feature 15 (Scheduling) —
+re-check `list_pull_requests`/`gh api search/issues` fresh rather than
+trusting this note.
 
 ---
 

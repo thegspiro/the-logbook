@@ -16,6 +16,62 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR (number recorded in the next commit on this branch)**: Feature 14
+(Equipment check & shifts), pass 17 — watchdog pickup (the dedicated
+`/loop 30m /security-review` session, `session_011T1ZyyLrD5HagusgK9uDw2`,
+remains unreachable, confirmed via `ListAgents`, "No reachable agents").
+**Branch-name deviation**, same as prior watchdog-run passes recorded here:
+this session's environment restricts pushes to its own assigned branch
+(`claude/friendly-babbage-xstbnj`) rather than a freely-chosen
+`claude/security-review-equipment-check-shifts` name.
+
+PR #4684 (Feature 13, Apparatus & NFC, pass 24 — 0 fixed, 0 new findings)
+had already merged (directly by the repository owner, `thegspiro`, not by
+any Claude session) before this iteration started; row 13 marked ✅ above.
+A fresh `gh api search/issues` found no `claude/security-review-*` head
+open, so this iteration continued to Step 1: row 14 (Equipment check &
+shifts) was the next ⬜ row.
+
+Baseline `2a5ca8e31` (PR #4464's merge, pass 16). The declared scope showed
+real change in exactly one file, `equipment_check.py` (+15/−4: the
+already-reviewed-elsewhere `document_provenance.py` report-number/
+prepared-by plumbing and a `signature_lines` PDF option), plus one adjacent
+file not previously named in this feature's header,
+`services/equipment_check_pdf.py` (+18/−0, the same plumbing threaded into
+the PDF generators). A widened sweep of every `equipment`/`shift_completion`/
+`shift_report` backend touch in the window found 24 migrations and three
+other services/schemas matched by name but byte-identical to pass 16 — no
+undiscovered feature this time, unlike Apparatus & NFC's pass 24.
+
+**The main finding of this pass is a documentation correction, not a code
+fix:** pass 16 had wrongly re-marked **EC-17** "OPEN/FLAGGED" — contradicting
+this same file's own **pass 13**, which moved EC-17 to FIXED on 2026-10-29
+after reading the fix in full and running its four tests directly, and
+contradicting `docs/KNOWN_LIMITATIONS.md`'s EC-17 entry, headed "resolved
+2026-10-27" since that date. Re-verified directly against the live
+`ShiftCompletionService.update_report`/`_return_edited_report_to_review`
+and ran `test_an_approved_report_stays_approved_where_review_is_off`
+directly: the code is unchanged and correct — a review-off department
+leaving an edited approval alone is the 2026-10-27 owner decision, not an
+unresolved gap. **Corrected the record: EC-17 is RESOLVED.** This is the
+same class of pass-16 regression Inventory's pass 17 (PR #4678) found and
+fixed for INV-16/INV-17 — both in the same lap, suggesting whatever
+produced pass 16's text across these two features repeated the same
+mistake rather than it being feature-specific.
+
+**0 fixed, 0 new findings** on the code itself — every route (76,
+re-enumerated by AST) still carries a recognized auth dependency, the new
+PDF plumbing is server-derived with no free text, and the frontend delta is
+cosmetic. Full write-up: `docs/security-review/EC-14-equipment-check-shifts.md`'s
+**Pass 17** section.
+
+Row 14 → ✅ (pending this PR's merge); next is Feature 15 (Scheduling) —
+re-check `list_pull_requests`/`gh api search/issues` fresh
+rather than trusting this note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 13, Apparatus & NFC, pass 24, PR #4684, merged), preserved for history</summary>
+
 **PR [#4684](https://github.com/thegspiro/the-logbook/pull/4684) (branch
 `claude/friendly-babbage-xstbnj`)**: Feature 13
 (Apparatus & NFC), pass 24 — watchdog pickup (the dedicated `/loop 30m
@@ -66,9 +122,9 @@ reviewed. Full write-up: `docs/security-review/AP-13-apparatus-nfc.md`'s
 **Pass 24** section, which also updates this file's own declared backend/
 frontend/migration scope to name the new files explicitly.
 
-Row 13 → ✅ (pending this PR's merge); next is Feature 14 (Equipment check
-& shifts) — re-check `list_pull_requests`/`gh api search/issues` fresh
-rather than trusting this note.
+Row 13 → ✅ (merged); next was Feature 14 (Equipment check & shifts).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 12, Facilities, pass 17, PR #4683, merged), preserved for history</summary>
@@ -28096,7 +28152,7 @@ iteration's commit" rule.
 | 11  | Inventory                 | INV    | `endpoints/inventory.py` (7089 L), `inventory_service.py`                                                                                                                                                                                                                             | ✅     |
 | 12  | Facilities                | FAC    | `endpoints/facilities.py` (4394 L), `facilities_service.py`                                                                                                                                                                                                                           | ✅     |
 | 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`, `apparatus_events.py` (new, pass 24)                                                                                                                                                                                                                   | ✅     |
-| 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                                                                                                                                                           | ⬜     |
+| 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`, `services/equipment_check_pdf.py` (shared `document_provenance.py` plumbing, added pass 17)                                                                                                                                              | ✅     |
 | 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                                                                                                                                                      | ⬜     |
 | 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                                                                                                                                                             | ⬜     |
 | 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`, `knowledge_tests.py` (added pass 12), `shift_evaluation_templates.py`/`shift_evaluations.py` (added pass 13), `api/public/shift_evaluations.py` (added pass 15)                                                        | ⬜     |
