@@ -16,6 +16,39 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR #<pending> (branch `claude/security-review-forms`)**: Feature 26
+(Forms), pass 15 — watchdog pickup (the dedicated `/loop 30m
+/security-review` session, `session_011T1ZyyLrD5HagusgK9uDw2`, remains
+unreachable, confirmed via `ListAgents` → "No reachable agents").
+
+PR #4701 (Feature 25, Messaging & notifications, pass 15) was fully green
+on every CI check (`CI Success` passing on its current head,
+`mergeable_state` `clean`, after a merge-conflict resolution in this file
+against a concurrent watchdog session's PR #4700 landing on row 24 — see
+below), with only the same bot-quota-failure comments seen on every recent
+pass — merged by this watchdog as squash commit `d7d0cc0e0`; row 25 marked
+✅ above. A fresh `list_pull_requests` (state=open) found no
+`claude/security-review-*` head open (the one open PR, #4702, is an
+unrelated docs pass), so this iteration continued to Step 1: row 26
+(Forms) was the next ⬜ row.
+
+Baseline `2d97d8402` (pass 14's own merge, PR #4541). All six declared
+backend scope files are byte-identical to pass 14 except
+`utils/embed_origins.py`, which gains one additive helper
+(`department_embed_origins`) consumed only by the already-reviewed History
+widget — Forms' own `valid_embed_origins` function is untouched. Two
+frontend files carry real but out-of-scope-or-cosmetic content: a new
+`publicFormFields.ts` type helper owned by Membership pipeline/Events &
+requests (both ✅), and a purely cosmetic checkbox-alignment fix in
+`FormsPage.tsx`. **0 fixed, 0 new findings.** Full write-up:
+`docs/security-review/FORM-26-forms.md`'s **Pass 15** section.
+
+Row 26 → ✅ (pending this PR's merge); next is Feature 27 (Integrations) —
+re-check `list_pull_requests` fresh rather than trusting this note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 25, Messaging & notifications, pass 15, PR #4701, merged), preserved for history</summary>
+
 **PR [#4701](https://github.com/thegspiro/the-logbook/pull/4701) (branch
 `claude/security-review-messaging-notifications`)**: Feature 25 (Messaging
 & notifications), pass 15 — watchdog pickup (the dedicated
@@ -56,6 +89,8 @@ see `docs/security-review/MM-24-meetings-minutes.md`'s **Pass 16** section).
 Row 24 stays ✅; this merge's conflict in this file was resolved by merging
 `main` into this branch per the rotation's own Step 0 rule, keeping both
 log entries below in append order.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 24, Meetings & minutes, pass 15, PR #4699, merged), preserved for history</summary>
@@ -28587,7 +28622,7 @@ iteration's commit" rule.
 | 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                                                                                                                                                                 | ✅     |
 | 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`, `meeting_waiver_requests.py` (added pass 14)                                                                                                                                                                                                             | ✅     |
 | 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                                                                                                                                                         | ✅     |
-| 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                                                                                                                                                               | ⬜     |
+| 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                                                                                                                                                               | ✅     |
 | 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`, `historical_import.py` (33 routes incl. undo, added pass 14), `historical_staffing_*.py`, `historical_import_undo.py` (added pass 14)                                                                                                        | ⬜     |
 | 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`, `audit_ship_service.py`                                                                                                                                                                                 | ⬜     |
 | 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                                                                                                                                                                    | ⬜     |
@@ -28668,6 +28703,54 @@ it to be rediscovered.
 ---
 
 ## Log
+
+### 2026-11-25 — Feature 25 (Messaging & notifications, pass 15) merged (PR #4701, after resolving a concurrent-session merge conflict); Feature 26 (Forms, pass 15): watchdog pickup, near-zero delta (additive History-widget helper, two out-of-scope/cosmetic frontend changes), 0 fixed, 0 new findings
+
+Scheduled watchdog check-in — the dedicated `/loop 30m /security-review`
+session (`session_011T1ZyyLrD5HagusgK9uDw2`) remains unreachable per
+`ListAgents`. PR #4701 (Feature 25, Messaging & notifications, pass 15) hit
+a merge conflict in this file against PR #4700 (a second, independent
+watchdog session's own concurrent pickup of Feature 24, pass 16 — see that
+entry below) landing on `main` while #4701 was still open; resolved by
+merging `main` into the `claude/security-review-messaging-notifications`
+branch and combining both the Open-PR and Log entries in append order
+(never rebase/force-push, per the rotation's own Step 0 rule). Once CI was
+green on the merge-resolved head (`mergeable_state` `clean`), this watchdog
+merged it as squash commit `d7d0cc0e0`; row 25 marked ✅. A fresh
+`list_pull_requests` (state=open) found no `claude/security-review-*` head
+open (the one open PR, #4702, is an unrelated docs pass), so this iteration
+continued to Step 1: row 26 (Forms) was the next `⬜` row.
+
+Baseline `2d97d8402` (pass 14's own merge, PR #4541). All six declared
+backend scope files are byte-identical to pass 14 except
+`utils/embed_origins.py` (+10, pure addition): a new
+`department_embed_origins` helper reuses the unchanged
+`valid_embed_origins` to serve the department history/honor-roll widget
+(owner decision 2026-11-24) — Forms' own embed validation is untouched,
+and `history.py` and its siblings are an already-reviewed unclaimed module
+(`SEC-00-cross-cutting-baseline.md`'s passes 16-17), not re-reviewed here.
+Two frontend files carry real content, both out of Forms' own concern: a
+new `publicFormFields.ts` type helper consumed only by Membership
+pipeline's and Events & requests' own public pages (both ✅), and a
+cosmetic checkbox-alignment fix in `FormsPage.tsx` (three multi-line
+checkbox labels gain `items-start`/`mt-0.5` so the box aligns with the
+label's first line). **0 fixed, 0 new findings.** Full write-up:
+`docs/security-review/FORM-26-forms.md`'s **Pass 15** section.
+
+**Completion gate:** `flake8==7.4.1`/`black==26.10.1 --check`/
+`isort==9.0.2 --check-only` on `app/ tests/ alembic/` all clean.
+`validate_migrations.py --strict` — 844 revisions, single head
+`e9cf8ab7e4e4`. `check_route_permissions.py --strict` — 344 routes, 0
+errors/warnings. `generate_schema_docs.py --check` — up to date. Scoped
+backend pytest (`-k "form or applicant_field or sensitive_field or embed
+or event_request or outreach"`) — 1874 passed, 1 pre-existing
+environment-only skip (`py_vapid`). `npm run typecheck` — 0 errors. `npm
+run lint` — 0 errors, 0 warnings. `npx vitest run src/components/forms
+src/pages/FormsPage.*.test.tsx src/hooks/useRanks.test.ts` — 13 files, 67
+tests passed, matching pass 14 exactly.
+
+Row 26 → ✅ (pending this PR's merge). Next is Feature 27 (Integrations) —
+re-check `list_pull_requests` fresh rather than trusting this note.
 
 ### 2026-11-25 — Feature 24 (Meetings & minutes, pass 15) merged (PR #4699); Feature 25 (Messaging & notifications, pass 15): watchdog pickup, near-zero delta (two new email-template registrations, cosmetic frontend), 0 fixed, 0 new findings
 
