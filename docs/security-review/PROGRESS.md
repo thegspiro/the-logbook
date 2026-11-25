@@ -16,12 +16,37 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**None.** PR #4678 (Feature 11, Inventory, pass 17 — 0 fixed, 0 new findings)
-merged since the last iteration (`gh api search/issues`, 0 results for an
-open `claude/security-review-*` head). Row 11 marked ✅ below; next is
-Feature 12 (Facilities) — this pass's own PR number is recorded here once
-opened, re-checked fresh by whichever iteration reads this next rather than
-trusted from this note.
+**PR [#4683](https://github.com/thegspiro/the-logbook/pull/4683) (branch
+`claude/friendly-babbage-xstbnj`)**: Feature 12
+(Facilities), pass 17 — watchdog pickup (the dedicated `/loop 30m
+/security-review` session, `session_011T1ZyyLrD5HagusgK9uDw2`, remains
+unreachable). **Branch-name deviation**, same as prior watchdog-run passes
+recorded here: this session's environment restricts pushes to its own
+assigned branch rather than a freely-chosen
+`claude/security-review-facilities` name.
+
+PR #4678 (Feature 11, Inventory, pass 17 — 0 fixed, 0 new findings) had
+already merged before this iteration started; row 11 marked ✅ above. A
+fresh `gh api search/issues` found no `claude/security-review-*` head open,
+so this iteration continued to Step 1: row 12 (Facilities) was the next ⬜
+row.
+
+Baseline `c5a93595d` (PR #4446's merge, pass 16), confirmed an ancestor of
+`origin/main`. Real delta: app-review's B4 pass 6 (`9d17c46d8`) fixed FAC2-9
+(a maintenance record's `system_id` now validated against its own
+facility, not just the org — a genuine XC-1-shaped tightening, fails
+closed), FAC2-7 (dashboard/list queries now filter out archived facilities'
+inspections) and FAC2-10 (a `floor=0` filter bug), all already correct when
+reviewed; a shared `documents_service.py` member-erasure extraction already
+reviewed by this lap's Documents & legal pass; and a mobile-UX frontend
+rollout (touch targets, contrast, `?dueWithin=30` deep link). No new route
+(102, unchanged), no permission or schema change. **0 fixed, 0 new
+findings.** FAC-30 remains the only standing (owner-accepted) item. Full
+write-up: `docs/security-review/FAC-12-facilities.md`'s **Pass 17** section.
+
+Row 12 → ✅ (pending this PR's merge); next is Feature 13 (Apparatus & NFC)
+— re-check `list_pull_requests`/`gh api search/issues` fresh rather than
+trusting this note.
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 11, Inventory, pass 17, PR #4678, merged), preserved for history</summary>
