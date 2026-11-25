@@ -147,11 +147,11 @@ test.describe('Inventory items — Unavailable table', () => {
 // the left and value on the right. Location carried `max-w-[160px]` on its
 // <td>, which capped that whole row: its label and "-" sat together in a
 // 160px box on the left while Condition, above it, spanned the card.
+//
+// Phone only: from a 30rem card up the row is a grid of fields, where a cell is
+// narrower than its card on purpose (see `expectStackedRowsAligned`).
 test.describe('Inventory items — stacked Location row spans the card', () => {
-  for (const viewport of [
-    { name: 'iPhone 390x844', width: 390, height: 844 },
-    { name: 'iPad portrait 820x1180', width: 820, height: 1180 },
-  ]) {
+  for (const viewport of [{ name: 'iPhone 390x844', width: 390, height: 844 }]) {
     test(`/inventory/admin/items — ${viewport.name}`, async ({ page }) => {
       await page.setViewportSize(viewport);
       await signIn(page, { permissions: PERMISSIONS });

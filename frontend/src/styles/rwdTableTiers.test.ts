@@ -84,10 +84,10 @@ describe('rwd-table container-query tiers', () => {
     }
   });
 
-  // `rwd-table-fields` turns a wide reflowed card into a grid of fields. It can
+  // A wide reflowed card becomes a grid of fields. That can
   // only apply while its tier has the table reflowed, so it repeats per tier
   // for the same reason the tiers do, and can drift the same way.
-  describe('rwd-table-fields', () => {
+  describe('field columns in a wide card', () => {
     const FIELD_TIERS = TIERS.filter(({ cls }) => cls !== 'rwd-table-narrow');
     const fieldsBlockFor = (width: string): string =>
       bodyOf(`@container rwd-table (width >= 30rem) and (width < ${width}) {`).body;
@@ -95,7 +95,7 @@ describe('rwd-table container-query tiers', () => {
     it.each(FIELD_TIERS)('has a $cls block that ends where the tier does, at $width', ({ cls, width }) => {
       const body = fieldsBlockFor(width);
       expect(body, `no fields block for the ${width} tier`).not.toBe('');
-      expect(body).toContain(`.rwd-table.${cls}.rwd-table-fields :is(tbody, tfoot) tr`);
+      expect(body).toContain(`.rwd-table.${cls} :is(tbody, tfoot) tr`);
       expect(body).toMatch(/display:\s*grid/);
     });
 

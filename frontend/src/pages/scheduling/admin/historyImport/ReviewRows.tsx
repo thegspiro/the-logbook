@@ -231,7 +231,7 @@ const InlineWhenCells: React.FC<
           }}
         >
           {times.length > 0 ? (
-            <div className="flex items-center gap-1">
+            <div className="flex flex-wrap items-center gap-1">
               {times.map((field, index) => (
                 <React.Fragment key={field}>
                   {index > 0 && <span aria-hidden="true">–</span>}

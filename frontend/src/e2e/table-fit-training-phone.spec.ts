@@ -306,10 +306,10 @@ for (const table of MY_TRAINING_TABLES) {
         await expectTableFitsItsCard(found, `${table.name} table`);
         // Five short columns need about 31rem. Held to the 64rem tier, they
         // were stacked cards on every tablet, in a card with room for them.
-        if (table.name === 'Recent training') {
+        if (!table.history) {
           const room = await found.evaluate((el) => el.closest('.rwd-table-container')?.clientWidth ?? 0);
           if (room >= NARROW_TIER_PX) {
-            await expect(found.locator('thead'), `Recent training is cards in a ${room}px card`).toBeVisible();
+            await expect(found.locator('thead'), `${table.name} is cards in a ${room}px card`).toBeVisible();
           }
         }
       });
