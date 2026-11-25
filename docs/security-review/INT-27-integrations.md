@@ -1,6 +1,153 @@
 # Security Review — Integrations
 
-**Prefix:** `INT` · **Iteration:** 27 · **Reviewed:** 2026-11-22 (pass 14, this PR), 2026-11-11 (pass 13, PR #4235, merged), 2026-11-03 (pass 12, PR #3996, merged), 2026-10-30 (pass 11, PR merged as `9ae9e594`), 2026-10-27 (pass 10, PR #3782), 2026-10-24 (pass 9, PR #3641), 2026-10-20 (pass 8, PR #3467), 2026-10-17 (pass 7, rotation pass 7), 2026-10-07 (pass 6, rotation pass 7), 2026-10-04 (pass 5, rotation pass 5), 2026-09-13 (pass 4, rotation pass 4), 2026-09-06 (pass 3, rotation pass 3), 2026-08-31 (pass 2, rotation pass 2) · **PR:** this PR (pass 14); #4235 (pass 13, merged, head `7d1fe151`); #3996 (pass 12, merged `3bd09ed02`); pass 11 (merged, `9ae9e594`); #3782 (pass 10, merged); #3641 (pass 9, merged); #3467 (pass 8, merged); #3375 (pass 7); #2988 (pass 6); #2892 (pass 5); #2508 (pass 4); #2307 (pass 3); #2087 (pass 2, merged); #1910 (pass 1, merged)
+**Prefix:** `INT` · **Iteration:** 27 · **Reviewed:** 2026-11-25 (pass 15, this PR), 2026-11-22 (pass 14, PR #4543, merged), 2026-11-11 (pass 13, PR #4235, merged), 2026-11-03 (pass 12, PR #3996, merged), 2026-10-30 (pass 11, PR merged as `9ae9e594`), 2026-10-27 (pass 10, PR #3782), 2026-10-24 (pass 9, PR #3641), 2026-10-20 (pass 8, PR #3467), 2026-10-17 (pass 7, rotation pass 7), 2026-10-07 (pass 6, rotation pass 7), 2026-10-04 (pass 5, rotation pass 5), 2026-09-13 (pass 4, rotation pass 4), 2026-09-06 (pass 3, rotation pass 3), 2026-08-31 (pass 2, rotation pass 2) · **PR:** this PR (pass 15); #4543 (pass 14, merged, head `b554d86d0`); #4235 (pass 13, merged, head `7d1fe151`); #3996 (pass 12, merged `3bd09ed02`); pass 11 (merged, `9ae9e594`); #3782 (pass 10, merged); #3641 (pass 9, merged); #3467 (pass 8, merged); #3375 (pass 7); #2988 (pass 6); #2892 (pass 5); #2508 (pass 4); #2307 (pass 3); #2087 (pass 2, merged); #1910 (pass 1, merged)
+
+---
+
+## Pass 15 (2026-11-25) — webhook audit-log org attribution, undo now cleans up orphaned attachments, outside-agency pagination; 0 fixed, 0 new findings (watchdog pickup)
+
+**Watchdog pickup.** The dedicated `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) remains unreachable (`ListAgents`, "No
+reachable agents"). PR #4703 (Feature 26, Forms, pass 15) had already merged
+clean (after GitHub's merge API returned several transient 500/502 errors
+before one retried attempt actually went through server-side); a fresh
+`list_pull_requests` (state `open`) found no `claude/security-review-*` head
+(the one open PR, #4702, is an unrelated docs pass), and row 27 was the next
+pending feature on a freshly fetched `main`.
+
+**Baseline `b554d86d0`** (pass 14's own merge, PR #4543). A per-file content
+diff across this feature's full declared scope (all ten route files,
+`historical_import.py`, every `historical_staffing_*.py`/
+`historical_import_*.py` service file, `services/integration_services/`, both
+models/schemas directories, and the frontend module) found real content in
+seven files, all read in full below; every other declared-scope file is
+byte-identical to pass 14.
+
+### `api/public/integrations_webhook.py` / `api/public/salesforce_webhook.py` — audit events now carry `organization_id`
+
+All three inbound webhook handlers (Documenso, Cal.com, Salesforce) now pass
+`organization_id=str(integration.organization_id)` to their `log_audit_event`
+call — the same fix pass 14 itself credited to `zeffy_webhook.py`, applied
+here to close the matching gap. `integration` is the row `_load_integration`
+resolved from the request's own `integration_id` path param filtered on
+`integration_type` and `enabled.is_(True)` (unchanged since pass 13); its
+`organization_id` is the row's own column, never client-supplied, so this
+only makes an existing, already-authenticated-by-webhook-secret event visible
+in the right department's own audit views — no new trust decision. **No
+finding.**
+
+### `historical_import_service.py` (+8) — a "create" decision now keeps the name the reviewer typed
+
+`_apply_member_resolutions` (the step that turns a reviewer's "create this
+member" decision into a real `User` row) now also stores `first_name`/
+`last_name` on the recorded `{"action": "map", "user_id": ...}` decision,
+written via the same `copy.deepcopy` + reassignment pattern the function
+already used (Pitfall #12 unaffected — confirmed by re-reading the full
+function, not just the diff hunk). Purely additive data for the undo path
+below; no new query, no new route.
+
+### `historical_import_undo.py` (+46) — undoing a training-record or drill deletion now queues its attachments for removal
+
+Two of the undo service's delete helpers (training-record deletion and
+drill/event deletion) now collect each deleted row's `attachments` via
+`member_files.attachment_paths_by_area` and queue them with
+`pending_file_deletions.enqueue`, tagged `PendingDeletionReason.HISTORICAL_IMPORT_UNDONE`
+— closing a real gap: before this change, undoing an import left any file an
+officer had since attached to the imported record as an orphan on disk with
+no row pointing at it. Traced end-to-end:
+
+- `attachment_paths_by_area` only reads the `attachments` field of the
+  specific `records`/`events` rows this call is already deleting (the same
+  rows `_delete_ids` removes immediately after), so it cannot name a file
+  belonging to a row outside this undo step's own already-org-scoped set.
+- `pending_file_deletions.enqueue` only adds to the session — the rows are
+  written by the caller's own commit, in the undo's own transaction, so a
+  rolled-back undo queues nothing (confirmed by reading `enqueue`'s docstring
+  and body, not assumed).
+- The actual file removal (`pending_file_deletions._process`, run later by
+  the hourly sweep) calls `member_files.referenced_elsewhere()` before
+  deleting any path — a file another current row still names (e.g. a
+  training record kept because `changed_since` protected it) is kept, not
+  deleted. This is pre-existing, already-reviewed shared infrastructure (the
+  same mechanism the member hard-delete path uses); this pass's delta is
+  only a new producer into an already-safe queue, not a new deletion
+  mechanism.
+- Both new call sites pass `org_id` — the undo service's own, already
+  established as org-scoped by pass 13 and re-confirmed unchanged this pass
+  (every other query in the file is byte-identical to pass 14). **No
+  finding.**
+
+### Frontend — `ReviewRows.tsx` / `ReviewShifts.tsx` / their test file — pagination and layout, no new API surface
+
+`ReviewShifts.tsx` replaces a hard "first 200, see the Rows tab for the rest"
+cap on the outside-agency-hours list with real pagination
+(`EXTERNAL_PAGE_SIZE = 50`, the existing shared `<Pagination>` component),
+plus `aria-labelledby` on the section; `ReviewRows.tsx` gets two layout fixes
+(`flex-wrap` on a time-range cell, a `min-w-0` wrapper so a status cell's
+button row can wrap instead of overflowing). All three changes are read
+against their full diff: no new `fetch`/service call, no
+`window.confirm`/`alert`/`prompt`, no `dangerouslySetInnerHTML`. The new test
+(`ShiftHistoryImportReviewPage.test.tsx`) exercises the pagination change
+directly — asserts the "first 200" message is gone and both the first and
+last pages render the right entries. **No finding.**
+
+Route surface re-enumerated by AST across all eleven scope files: **72
+routes** (12 `integrations.py` + 9 `salesforce_sync.py` + 1 `calcom_sync.py`
++ 4 `mcp_keys.py` + 4 `google_workspace.py` + 2 `google_calendar_oauth.py` +
+2 `outlook_calendar_oauth.py` + 2 `api/public/calendar.py` + 2
+`api/public/integrations_webhook.py` + 1 `api/public/salesforce_webhook.py`
++ 33 `historical_import.py`), unchanged from pass 14; ten of the eleven
+files are byte-identical to pass 14 so every auth/permission dependency
+pass 14 already enumerated is unregressed.
+
+## Verified good ✅ (re-confirmed, not re-derived)
+
+Every item under this heading in pass 14 — INT-1 through INT-5, the
+Salesforce OAuth flow, SOQL injection defense, instance-URL domain pinning,
+tenant isolation across all eleven route files, no secret exposure, the
+Historical Data Import org-scoping/idempotency and its undo service's
+per-query org-scoping pass 14 itself traced — re-checked against the current
+tree. Ten of the eleven route files and every model/schema file are
+byte-identical to the pass-14 baseline; the mechanisms pass 14 credited are
+therefore unregressed, not re-derived.
+
+## Confirmed still open — nothing needing a product decision
+
+- **INT-5** (uninvoked `KNOWN_WEBHOOK_DOMAINS` chat-webhook allowlist) —
+  re-verified unchanged, still an explicit owner behavior decision.
+- **INT-28** (LOW, test coverage — `test_historical_import_undo.py` has no
+  explicit cross-organization case) — unchanged from pass 14; this pass again
+  traced every query the undo service's two newly-touched delete helpers run
+  (above) and found each one already org-scoped by construction, so there is
+  still no known unscoped query for such a test to catch today.
+
+## Findings
+
+**0 fixed, 0 new findings.** Three small, independent, correctness-and-
+security-adjacent changes since pass 14 — webhook audit events now carry the
+right `organization_id`, undoing an import now cleans up orphaned attachments
+through the same already-reviewed `pending_file_deletions` queue member
+deletion uses, and a decision record keeps the reviewer's typed name for a
+cleaner re-create after undo — all traced end-to-end and found correct; a
+frontend pagination fix with its own new regression test; everything else in
+the feature's declared scope is byte-identical to pass 14.
+
+## Completion gate
+
+| Check                                                                                                                                                                                                                                                                                                     | Result                                                        |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------- |
+| `flake8==7.4.1 app/ tests/ alembic/`                                                                                                                                                                                                                                                                      | ✅ 0 violations                                                |
+| `black==26.10.1 --check app/ tests/ alembic/`                                                                                                                                                                                                                                                             | ✅ clean                                                       |
+| `isort==9.0.2 --check-only app/ tests/ alembic/`                                                                                                                                                                                                                                                          | ✅ clean                                                       |
+| `python3.13 scripts/validate_migrations.py --strict`                                                                                                                                                                                                                                                      | ✅ 844 revisions, single head `e9cf8ab7e4e4`                   |
+| `python3.13 scripts/check_route_permissions.py --strict`                                                                                                                                                                                                                                                  | ✅ 344 routes, 0 errors/warnings                               |
+| `python3.13 scripts/generate_schema_docs.py --check`                                                                                                                                                                                                                                                      | ✅ up to date                                                  |
+| backend scoped suite (`-k "integration or salesforce or calcom or documenso or paypal or webhook or connector or mcp_key or google_calendar or google_workspace or ical or calendar or outlook or directory_account or microsoft_365 or directory or zeffy or historical_import or historical_staffing"`) | ✅ 13,560 passed, 24 environment-only skips, 0 failed (up from pass 14's 12,923/24) |
+| `npm run typecheck`                                                                                                                                                                                                                                                                                       | ✅ 0 errors                                                    |
+| `npm run lint`                                                                                                                                                                                                                                                                                            | ✅ exit 0, under max-warnings                                  |
+| `npx vitest run src/pages/IntegrationsPage.test.tsx src/pages/historicalImport src/pages/scheduling/admin/historyImport`                                                                                                                                                                                  | ✅ 157 passed (4 files, up from pass 14's 156)                 |
+
+Next in rotation: Feature 28 (Security, audit & IP).
 
 ---
 
