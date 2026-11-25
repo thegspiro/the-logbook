@@ -1,6 +1,6 @@
-# Security Review — Feature 30: Onboarding (passes 7–14)
+# Security Review — Feature 30: Onboarding (passes 7–15)
 
-**Prefix:** `ONB5` · **Rotation pass:** 14 (prior: module-audit iteration 25,
+**Prefix:** `ONB5` · **Rotation pass:** 15 (prior: module-audit iteration 25,
 app-review B25 (4 passes), security-review pass 1 — PR #1913 + follow-up
 (`docs/security-review/ONB2-30-onboarding.md`), pass 2 — PR #2093
 (`docs/security-review/ONB-30-onboarding.md`), passes 3–5 — PRs #2358, #2521,
@@ -8,11 +8,12 @@ app-review B25 (4 passes), security-review pass 1 — PR #1913 + follow-up
 pass 7 — PR #3381, pass 8 — PR #3517 (both `docs/security-review/ONB4-30-onboarding.md`
 and this file), pass 9 — PR #3658 + recovery PR #3686 (ONB6-30-1/2/3, both this
 file), pass 10 — PR #3785, pass 11 — PR #3856, pass 12 — PR #4003, pass 13 —
-PR #4240) ·
+PR #4240, pass 14 — PR #4558) ·
 **Reviewed:** 2026-10-17 (pass 7), 2026-10-21 (pass 8), 2026-10-24 (pass 9,
 watchdog pickup), 2026-10-25 (pass 9 recovery), 2026-10-27 (pass 10, watchdog
 pickup), 2026-10-30 (pass 11, watchdog pickup), 2026-11-04 (pass 12, watchdog
-pickup), 2026-11-11 (pass 13), 2026-11-22 (pass 14, watchdog pickup)
+pickup), 2026-11-11 (pass 13), 2026-11-22 (pass 14, watchdog pickup), 2026-11-25
+(pass 15, watchdog pickup)
 
 **Backend (pass 13):** `backend/app/api/v1/onboarding.py` (3,295 L, **26**
 unauthenticated bootstrap routes — unchanged count and auth posture from
@@ -55,6 +56,103 @@ one real backend change is `org_template_registry.py` (+7/−1), read in full
 with its `TableSpec`/`null_columns` mechanism. **Frontend (pass 14):**
 `frontend/src/modules/onboarding/pages/positionTemplates.ts` (+4/−4, read in
 full) is the only frontend change under the feature's declared tree.
+
+---
+
+## Pass 15 (2026-11-25) — watchdog pickup, 0 fixed, 0 new findings; one cross-feature recovery-script addition verified good
+
+**Step 0.** The dedicated loop session for this rotation
+(`session_011T1ZyyLrD5HagusgK9uDw2`) is unreachable (confirmed via
+`ListAgents` → "No reachable agents"). `list_pull_requests` (state=open)
+returned zero results repo-wide — no PR at all, let alone one with a
+`claude/security-review-` head. The rotation table on a freshly-pulled
+`origin/main` already showed rows 00–29 ✅ and row 30 (Onboarding) as the
+first `⬜` row; the "Open PR" narrative at the top of `PROGRESS.md` still
+described PR #4706 (Feature 29, Reports & analytics, pass 17) as open, but
+its merge commit (`fd57d95fb`) is the current tip of `main` — a stale note
+left behind because the iteration that writes it commits the update to its
+own feature branch, not to `main`. Cleared in this pass's own commit per the
+rotation's documented "no PR for a tracker-only edit" rule.
+
+**Scope check.** Pass 14 landed as PR #4558, merge commit `2248da3bf`.
+`git diff --stat 2248da3bf..HEAD`, restricted to this feature's full declared
+file list (backend + frontend, as passes 7–14 defined it), found a real diff
+in exactly one file: `backend/app/services/google_drive_storage.py` (+41/−1).
+Every other declared file (`onboarding.py`, `services/onboarding.py`,
+`models/onboarding.py`, `utils/onboarding_security.py`,
+`email_test_helper.py`, `email_providers.py`, `microsoft_oauth.py`,
+`template_service.py`, `org_template_service.py`, `org_template_registry.py`,
+`key_custody_service.py`, `system_notices.py` and its endpoint/schema,
+`upload_scanning.py`, `schemas/organization.py`, and the full frontend
+`modules/onboarding/` tree) is byte-identical since pass 14.
+
+- **`google_drive_storage.py:89-95,407-437` — a new `file_name_for` helper and
+  `GoogleDriveBackend.list_files()`, added to support a new offline recovery
+  path, not reachable from onboarding's own bootstrap routes.** `grep -rn
+"list_files\|drive_restore_relink\|file_name_for" backend/app/api/v1/onboarding.py
+backend/app/services/onboarding.py` — zero hits; neither function is called
+  from this feature's own code. They exist only because `google_drive_storage.py`
+  sits in Onboarding's declared scope (the wizard's file-storage step can
+  configure this backend), the same reason `upload_scanning.py` and
+  `key_custody_service.py` are declared but usually untouched. The actual
+  caller is a new sibling file, `backend/app/services/drive_restore_relink.py`
+  (242 L, read in full) plus the CLI entry point
+  `backend/scripts/relink_restored_drive_files.py` (93 L, read in full): an
+  operator-run, `docker exec`-only script (no HTTP route, no decorator, not
+  reachable from the web surface this rotation otherwise reviews) that
+  repoints a department's stored Drive references onto files a person put
+  back from a copy after the original fell out of Drive's 30-day trash.
+  Traced for the properties that would matter if it _were_ reachable: every
+  candidate file is verified by reading it back and decrypting with this
+  installation's file key before any row is repointed
+  (`drive_restore_relink._verified`, refuses a file with no file-encryption
+  header outright — the Logbook never writes a Drive file unencrypted, so an
+  unencrypted same-named upload cannot be accepted as a match); a candidate
+  path is additionally checked against `file_storage.resolve(...,
+organization_id, ...)` before being eligible for relinking, so a reference
+  cannot be repointed outside its own organization's storage area
+  (`report.outside_storage`, XC-3's shape, satisfied here even though no
+  by-id query is involved); ambiguous (more than one same-named file) or
+  unverifiable matches are reported and left untouched rather than guessed at
+  (the module's own stated design); a dry run is the default and the apply
+  path is idempotent (`report.rows_updated` skips rows already pointing at a
+  live file, so a second run changes nothing — Pitfall #36). **Verified good,
+  no finding** — a correctness/recoverability tool with no security
+  dimension specific to Onboarding, and no new reachable surface.
+
+**Route inventory re-enumerated by AST from source** (not carried forward):
+walked every `@router.{get,post,put,patch,delete}` decorator in
+`onboarding.py` directly — **26 routes**, identical method/path/function set
+and auth-dependency shape to passes 7–14. `check_route_permissions.py
+--strict`: 344 routes repo-wide, 0 errors/warnings (grew from 338 at pass
+14 — other features' new routes, not this one's).
+
+**Still OPEN (by design), unchanged, re-confirmed via the byte-identical
+diff:** **ONB-7** (no numeric rate cap specifically on `/session/roles`
+beyond the 200-item size cap). `ITTeamMemberRequest.email`
+(`onboarding.py:507`) is still `str`, not `EmailStr` (intentionally loose,
+matching `create_it_team_users`'s skip-if-invalid behavior).
+
+**0 new findings.**
+
+### Completion gate (pass 15)
+
+| Check                                                                                                                                                                                                                            | Result                                         |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------- |
+| `python3.13 -m flake8 app/ tests/ alembic/` (CI-pinned)                                                                                                                                                                          | ✅ 0 violations                                |
+| `python3.13 -m black --check app/ tests/ alembic/` (CI-pinned)                                                                                                                                                                   | ✅ clean, 3,541 files unchanged                |
+| `python3.13 -m isort --check-only app/ tests/ alembic/` (CI-pinned)                                                                                                                                                              | ✅ clean                                       |
+| `python3 scripts/validate_migrations.py --strict`                                                                                                                                                                                | ✅ 844 revisions, single head `e9cf8ab7e4e4`   |
+| `python3 scripts/check_route_permissions.py --strict`                                                                                                                                                                            | ✅ 344 routes, 0 errors/warnings               |
+| `pytest tests/ -q -k "onboard or org_template or template_service or key_custody or system_notices or gmail_service_account or email_provider or encrypt_email or position_kind or position_seeding or drive_restore or relink"` | ✅ 750 passed, 1 skipped (pywebpush, env-only) |
+| `cd frontend && npm run typecheck`                                                                                                                                                                                               | ✅ 0 errors                                    |
+| `cd frontend && npm run lint` (`--max-warnings 10`)                                                                                                                                                                              | ✅ 0 errors/warnings                           |
+| `npx vitest run src/modules/onboarding`                                                                                                                                                                                          | ✅ 509 passed (44 files)                       |
+
+No `KNOWN_LIMITATIONS.md` change needed. Rotation row 30 → ✅ (pending this
+PR's merge). Next: Feature 31 (Scheduled tasks) — unless a later watchdog
+pass already advanced further; check `list_pull_requests` fresh rather than
+trusting this note.
 
 ---
 

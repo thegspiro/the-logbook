@@ -16,6 +16,18 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**None.** PR #4706 (Feature 29, Reports & analytics, pass 17) merged clean
+as squash commit `fd57d95fb` — confirmed by `fd57d95fb` being the current
+tip of `origin/main`, not by trusting this row. Row 29 marked ✅ above. A
+fresh `list_pull_requests` (state=open) found nothing open repo-wide. This
+iteration (watchdog pickup — the dedicated `/loop 30m /security-review`
+session, `session_011T1ZyyLrD5HagusgK9uDw2`, remains unreachable, confirmed
+via `ListAgents` → "No reachable agents") continued to Step 1: row 30
+(Onboarding) was the next ⬜ row. See the Log below for its pass 15 entry.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 29, Reports & analytics, pass 17, PR #4706, merged), preserved for history</summary>
+
 **PR [#4706](https://github.com/thegspiro/the-logbook/pull/4706) (branch
 `claude/security-review-reports-analytics`)**: Feature 29 (Reports &
 analytics), pass 17 — watchdog pickup (the dedicated
@@ -69,6 +81,8 @@ feature.
 
 Row 29 → ✅ (pending this PR's merge); next is Feature 30 (Onboarding) —
 re-check `list_pull_requests` fresh rather than trusting this note.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 28, Security, audit & IP, pass 15, PR #4705, merged), preserved for history</summary>
@@ -28759,7 +28773,7 @@ iteration's commit" rule.
 | 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`, `historical_import.py` (33 routes incl. undo, added pass 14), `historical_staffing_*.py`, `historical_import_undo.py` (added pass 14)                                                                                                        | ✅     |
 | 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`, `audit_ship_service.py`                                                                                                                                                                                 | ✅     |
 | 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`, `crr.py`/`outreach_goals.py` (17+4 routes, folded in pass 17 — see below)                                                                                                                         | ✅     |
-| 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (26 unauth bootstrap routes)                                                                                                                                                                                                                                   | ⬜     |
+| 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (26 unauth bootstrap routes)                                                                                                                                                                                                                                   | ✅     |
 | 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                                                                                                                                                         | ⬜     |
 | 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                                                                                                                                                        | ⬜     |
 | 33  | Core infrastructure       | CORE   | `core/security_middleware.py`, `core/database.py`, `core/config.py`                                                                                                                                                                                                                   | ⬜     |
@@ -28876,6 +28890,75 @@ it to be rediscovered.
 ---
 
 ## Log
+
+### 2026-11-25 — Feature 29 (Reports & analytics, pass 17) merged (PR #4706); Feature 30 (Onboarding, pass 15): watchdog pickup, near-zero delta (a Drive-restore recovery script's own helpers in `google_drive_storage.py`), 0 fixed, 0 new findings
+
+Scheduled watchdog check-in — the dedicated `/loop 30m /security-review`
+session (`session_011T1ZyyLrD5HagusgK9uDw2`) remains unreachable per
+`ListAgents` → "No reachable agents". PR #4706 (Feature 29, Reports &
+analytics, pass 17) had already merged as squash commit `fd57d95fb`
+(confirmed as the current tip of `origin/main`, not assumed from the
+tracker's own stale "Open PR" note). A fresh `list_pull_requests`
+(state=open) found nothing open repo-wide, so this iteration continued to
+Step 1: row 30 (Onboarding) was the next `⬜` row.
+
+Baseline `2248da3bf` (pass 14's own merge, PR #4558). `git diff --stat`
+against pass 14, restricted to this feature's full declared file list
+(backend + frontend), found a real diff in exactly one file:
+`backend/app/services/google_drive_storage.py` (+41/−1) — a new
+`file_name_for` helper and `GoogleDriveBackend.list_files()`. Neither is
+called from `onboarding.py` or `services/onboarding.py` (confirmed by
+`grep`); they exist to support a new sibling file,
+`backend/app/services/drive_restore_relink.py`, and its CLI entry point
+`backend/scripts/relink_restored_drive_files.py` — an operator-run,
+`docker exec`-only recovery tool (no HTTP route) that repoints a
+department's Drive file references after a person restores a file from a
+copy rather than from Drive's own trash. Read both in full: every
+candidate match is verified by decrypting it with the installation's file
+key before relinking (refusing anything without the Logbook's own
+file-encryption header), a candidate is additionally required to resolve
+inside its own organization's storage area before being eligible, ambiguous
+or unverifiable matches are reported and left untouched rather than guessed
+at, and a dry run is the default with an idempotent apply path. **Verified
+good, no finding** — a correctness/recoverability tool with no security
+dimension specific to Onboarding and no new reachable web surface. Every
+other declared file (`onboarding.py`, `services/onboarding.py`,
+`models/onboarding.py`, `utils/onboarding_security.py`,
+`email_test_helper.py`, and the rest of the usually-untouched list, plus the
+full frontend `modules/onboarding/` tree) is byte-identical since pass 14.
+
+Route inventory re-enumerated by AST: 26 routes, identical to passes 7–14.
+`check_route_permissions.py --strict`: 344 routes repo-wide, 0
+errors/warnings. Still OPEN by design, unchanged: ONB-7 (no numeric rate cap
+on `/session/roles` beyond the 200-item size cap);
+`ITTeamMemberRequest.email` intentionally `str`, not `EmailStr`. **0 new
+findings.** Full write-up: `docs/security-review/ONB5-30-onboarding.md`'s
+**Pass 15** section.
+
+**Completion gate:** `flake8`/`black --check`/`isort --check-only` on
+`app/ tests/ alembic/` — clean. `validate_migrations.py --strict` — 844
+revisions, single head `e9cf8ab7e4e4`. `check_route_permissions.py
+--strict` — 344 routes, 0 errors/warnings. Scoped backend pytest (`-k
+"onboard or org_template or template_service or key_custody or
+system_notices or gmail_service_account or email_provider or encrypt_email
+or position_kind or position_seeding or drive_restore or relink"`) — 750
+passed, 1 pre-existing environment-only skip (`py_vapid`). `npm run
+typecheck` — 0 errors. `npm run lint` — 0 errors, 0 warnings. `npx vitest
+run src/modules/onboarding` — 509 passed (44 files), unchanged from pass 14.
+
+Row 30 → ✅ (pending this PR's merge). Next is Feature 31 (Scheduled tasks)
+— re-check `list_pull_requests` fresh rather than trusting this note.
+
+**Housekeeping, not a rotation event:** a stray, un-PR'd branch
+(`claude/security-review-forms`) was found on the remote, pushed by an
+earlier concurrent watchdog session (`session_01AAxg2j8cVTgDh6npZkHWa8`)
+after Forms' own pass 15 had already merged as PR #4703 — its two commits
+duplicate that already-landed pass under the same pass number rather than
+advancing to pass 16, and its content (0 fixed, 0 new findings) adds
+nothing. Left untouched rather than deleted (no open PR references it, so
+it blocks nothing, and deleting another session's branch is a destructive
+action this iteration has no explicit instruction to take) — noted here so
+a future iteration does not mistake it for live work.
 
 ### 2026-11-25 — Feature 28 (Security, audit & IP, pass 15) merged (PR #4705); Feature 29 (Reports & analytics, pass 17): watchdog pickup, real delta (Hours by Position report, Outreach Impact CRR/feedback/goals), 0 fixed, 0 new findings; `evaluations.py` growth (34→49 routes) recorded for the next absorbing pass
 
