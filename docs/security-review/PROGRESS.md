@@ -16,9 +16,10 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**Feature 34 (Frontend shared), pass 17** — watchdog pickup (the dedicated
-`/loop 30m /security-review` session remains unreachable). PR link recorded
-in a follow-up commit on this same branch, once opened.
+**PR [#4711](https://github.com/thegspiro/the-logbook/pull/4711) (branch
+`claude/security-review-frontend-shared-p16b`)**: Feature 34 (Frontend
+shared), pass 17 — watchdog pickup (the dedicated `/loop 30m
+/security-review` session remains unreachable).
 
 PR #4710 (Feature 33, Core infrastructure, pass 16) was confirmed merged on a
 freshly fetched `main` (`ce354045b`, merge commit) before this iteration
