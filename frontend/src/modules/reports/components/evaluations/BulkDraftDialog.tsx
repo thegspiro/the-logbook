@@ -124,7 +124,14 @@ export const BulkDraftDialog: React.FC<BulkDraftDialogProps> = ({ isOpen, onClos
       size="xl"
       onSubmit={submit}
       footer={
-        <div className="flex justify-end gap-2">
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          {/* Beside the button it explains: at the foot of a long member list
+              it sat out of sight while the button stayed greyed out. */}
+          {preview && !result && missingEvaluator && (
+            <p id="bulk-draft-blocked" className="text-theme-text-secondary mr-auto text-xs">
+              Choose an evaluator for each ticked member who has none, or untick them.
+            </p>
+          )}
           {!result && (
             <button type="button" className="btn-secondary" onClick={onClose}>
               Cancel
@@ -135,7 +142,12 @@ export const BulkDraftDialog: React.FC<BulkDraftDialogProps> = ({ isOpen, onClos
               Done
             </button>
           ) : preview ? (
-            <button type="submit" className="btn-primary" disabled={busy || selected.length === 0 || missingEvaluator}>
+            <button
+              type="submit"
+              className="btn-primary"
+              disabled={busy || selected.length === 0 || missingEvaluator}
+              aria-describedby={missingEvaluator ? 'bulk-draft-blocked' : undefined}
+            >
               Draft {selected.length} {selected.length === 1 ? 'evaluation' : 'evaluations'}
             </button>
           ) : (
@@ -268,11 +280,6 @@ export const BulkDraftDialog: React.FC<BulkDraftDialogProps> = ({ isOpen, onClos
                 );
               })}
             </ul>
-            {missingEvaluator && (
-              <p className="text-theme-text-secondary text-xs">
-                Choose an evaluator for each ticked member who has none, or untick them.
-              </p>
-            )}
           </>
         )}
       </div>

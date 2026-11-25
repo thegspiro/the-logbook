@@ -22,7 +22,12 @@ describe('evaluationsService', () => {
 
   it('reads draft options from their route, with every list present', async () => {
     mockGet.mockResolvedValue({ data: {} });
-    await expect(evaluationsService.draftOptions()).resolves.toEqual({ members: [], evaluators: [], periods: [] });
+    await expect(evaluationsService.draftOptions()).resolves.toEqual({
+      members: [],
+      evaluators: [],
+      periods: [],
+      templates: [],
+    });
     expect(mockGet).toHaveBeenCalledWith('/evaluations/draft-options');
   });
 

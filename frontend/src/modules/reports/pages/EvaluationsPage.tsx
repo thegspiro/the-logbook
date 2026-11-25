@@ -6,9 +6,9 @@
  * manager needs to see which form each member will get, and a template
  * builder needs the periods its deadlines count from.
  *
- * Drafting, completing and signing evaluations happens on the Evaluations list.
- * Email notices are not yet built, and the page says so rather than presenting
- * the workflow as complete (CLAUDE.md pitfall #19).
+ * Drafting, completing and signing evaluations happens on the conduct list.
+ * The emails the workflow sends are worded under Communications → Email
+ * Templates, which the subtitle links to for those who may open it.
  */
 
 import React, { useCallback, useEffect, useState } from 'react';
@@ -97,6 +97,9 @@ const EvaluationsPage: React.FC = () => {
   const { confirm } = useConfirm();
   const canConfigure = useAuthStore((state) => state.checkPermission('evaluations.configure'));
   const canManage = useAuthStore((state) => state.checkPermission('evaluations.manage'));
+  // The Email Templates route asks for settings.manage, which neither
+  // evaluations grant carries; linking without it leads to an access-denied page.
+  const canEditEmails = useAuthStore((state) => state.checkPermission('settings.manage'));
   // Matches the conduct list's route gate: a setup-only grant is refused there.
   const canOpenConductList = useAuthStore(
     (state) =>
@@ -272,12 +275,19 @@ const EvaluationsPage: React.FC = () => {
           title={EVALUATION_SETUP_LABEL}
           subtitle={
             <>
-              Build the evaluation forms for each kind of member and open the review periods they are completed for. The
-              emails people receive about their evaluations are worded in{' '}
-              <Link to="/communications/email-templates" className="underline">
-                Email Templates
-              </Link>
-              .
+              Build the evaluation forms for each kind of member and open the review periods they are completed for.
+              {canEditEmails ? (
+                <>
+                  {' '}
+                  The emails people receive about their evaluations are worded in{' '}
+                  <Link to="/communications/email-templates" className="underline">
+                    Email Templates
+                  </Link>
+                  .
+                </>
+              ) : (
+                ' The emails people receive about their evaluations are worded by an administrator under Communications → Email Templates.'
+              )}
             </>
           }
           actions={

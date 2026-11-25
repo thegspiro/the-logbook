@@ -136,4 +136,33 @@ describe('MyEvaluationsPage', () => {
     await screen.findByText('No evaluations yet');
     expect(screen.queryByRole('heading', { name: 'Deleted evaluations' })).not.toBeInTheDocument();
   });
+
+  it('still lists the member’s evaluations when their figures cannot be loaded', async () => {
+    mine.mockResolvedValue([
+      {
+        id: 'ev1',
+        member: { id: 'm1', name: 'Pat' },
+        evaluator: null,
+        period_id: 'p1',
+        period_name: '2025 Annual',
+        period_start: '2025-01-01',
+        period_end: '2025-12-31',
+        template_name: 'Operational Annual',
+        kind: 'annual',
+        status: 'finalized',
+        current_step: null,
+        current_step_due: null,
+        created_at: null,
+      },
+    ]);
+    liveData.mockRejectedValue(new Error('Network Error'));
+    renderWithRouter(<MyEvaluationsPage />);
+
+    expect(await screen.findByRole('link', { name: '2025 Annual' })).toHaveAttribute(
+      'href',
+      '/reports/evaluations/ev1'
+    );
+    expect(screen.queryByText('Could not load your evaluations.')).not.toBeInTheDocument();
+    expect(await screen.findByText('Network Error')).toBeInTheDocument();
+  });
 });

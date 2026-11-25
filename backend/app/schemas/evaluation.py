@@ -1217,10 +1217,20 @@ class DraftPeriodOption(BaseModel):
     end_date: date
 
 
+class DraftTemplateOption(BaseModel):
+    id: str
+    name: str
+    kind: EvaluationTemplateKind
+
+
 class DraftOptions(BaseModel):
     members: List[PersonRef]
     evaluators: List[PersonRef]
     periods: List[DraftPeriodOption]
+    # The forms a drafter may choose instead of the one matched from the
+    # member's class and status. Drafting refuses a member no form fits, or two
+    # fit equally, with "Choose a template", so the dialog must offer one.
+    templates: List[DraftTemplateOption] = []
 
 
 class TemplatePreviewRequest(BaseModel):
