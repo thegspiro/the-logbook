@@ -51,7 +51,7 @@ export const RegistryImportPanel: React.FC<RegistryImportPanelProps> = ({ regist
                 className="hover:bg-theme-surface-hover touch:min-h-11 flex w-full flex-col items-center justify-center rounded-md py-1"
               >
                 <span className="flex items-center space-x-2">
-                  <Download className="h-5 w-5" aria-hidden="true" />
+                  <Download className="h-5 w-5 shrink-0" aria-hidden="true" />
                   <span>Import {registry.name}</span>
                 </span>
                 {registry.last_updated && (

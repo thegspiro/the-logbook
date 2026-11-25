@@ -90,6 +90,7 @@ from app.api.v1.endpoints import (
     org_chart,
     organizations,
     outlook_calendar_oauth,
+    outreach_goals,
     platform_analytics,
     quickbooks_online,
     reports,
@@ -182,6 +183,9 @@ api_router.include_router(
     apparatus_events.router, prefix="/apparatus-events", tags=["apparatus-events"]
 )
 api_router.include_router(crr.router, prefix="/crr", tags=["crr"])
+api_router.include_router(
+    outreach_goals.router, prefix="/outreach-goals", tags=["outreach-goals"]
+)
 api_router.include_router(
     member_audience.router, prefix="/member-audience", tags=["member-audience"]
 )

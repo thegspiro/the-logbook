@@ -9,6 +9,7 @@ prints nothing for them.
 
 import base64
 import uuid
+from datetime import date
 from io import BytesIO
 from types import SimpleNamespace
 
@@ -19,15 +20,25 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.dependencies import PermissionChecker
 from app.api.v1.endpoints import member_id_cards as endpoints
 from app.models.operational_rank import OperationalRank
+from app.models.training import (
+    TrainingRecord,
+    TrainingRequirement,
+    TrainingStatus,
+    TrainingType,
+)
 from app.models.user import Organization, User, UserStatus
 from app.services.member_id_card_service import (
     DEFAULT_LAYOUT,
     SETTINGS_KEY,
     MemberIdCardService,
+    _card_certifications,
+    _CardCertificate,
     _read_layout,
     _return_lines,
+    _valid_through,
 )
 from app.utils.id_card_renderer import (
+    IdCardCertification,
     IdCardDepartment,
     IdCardSpec,
     render_id_cards,
@@ -184,7 +195,11 @@ class TestDepartmentLayout:
 
     def test_a_saved_layout_is_returned(self):
         saved = {"orientation": "portrait", "sides": "both", "symbology": "qr"}
-        assert _read_layout({SETTINGS_KEY: saved}) == saved
+        # Saved before certifications existed: they stay off.
+        assert _read_layout({SETTINGS_KEY: saved}) == {
+            **saved,
+            "certifications": False,
+        }
 
     def test_a_bad_stored_value_degrades_per_field(self):
         """Free-form JSON: one stale value must not stop the department
@@ -347,6 +362,7 @@ class TestMemberIdCardService:
             "orientation": "portrait",
             "sides": "both",
             "symbology": "qr",
+            "certifications": False,
         }
 
         pdf, _ = await service.generate(org.id, [member.id])
@@ -375,3 +391,278 @@ class TestMemberIdCardService:
             await MemberIdCardService(db_session).save_layout(
                 org.id, "diagonal", "front", "qr"
             )
+
+
+# ---------------------------------------------------------------------------
+# Certifications on the printed card (owner decisions, 2026-11-24): "Valid
+# through" on the front, the list on the back when the card is two-sided,
+# printed whoever prints it, and off until the department switches it on.
+# ---------------------------------------------------------------------------
+
+LAYOUTS = [
+    (orientation, symbology)
+    for orientation in ("landscape", "portrait")
+    for symbology in ("code128", "qr")
+]
+
+
+def _certified_card(count: int = 2, **overrides) -> IdCardSpec:
+    certs = [
+        IdCardCertification("CPR/BLS Provider", "Exp Mar 14, 2027"),
+        IdCardCertification("EMT-B", "Expired Mar 14, 2026"),
+        IdCardCertification("Hazmat Operations", "Not recorded"),
+        IdCardCertification("Pump Operator", "Exp Jan 2, 2028"),
+        IdCardCertification("Rope Rescue Technician", "Exp Jul 4, 2027"),
+        IdCardCertification("Driver Training", "On file"),
+        IdCardCertification("Ice Rescue", "Exp Feb 1, 2027"),
+        IdCardCertification("Vehicle Extrication", "Exp Apr 9, 2027"),
+        IdCardCertification("Confined Space", "Exp May 5, 2027"),
+        IdCardCertification("Incident Command 300", "On file"),
+    ]
+    return _card(
+        valid_through="Mar 14, 2027", certifications=certs[:count], **overrides
+    )
+
+
+@pytest.mark.unit
+class TestCertificationsOnTheCard:
+    @pytest.mark.parametrize(("orientation", "symbology"), LAYOUTS)
+    def test_valid_through_prints_on_the_front_of_every_layout(
+        self, orientation, symbology
+    ):
+        pdf = render_id_cards(
+            [_certified_card()], DEPARTMENT, orientation, "front", symbology
+        )
+        [front] = _pages(pdf)
+        text = front.extract_text()
+        assert "Valid through Mar 14, 2027" in text
+        # A single-sided card has no room for the list; it keeps its code.
+        assert "Certifications" not in text
+        assert "M-042" in text
+
+    @pytest.mark.parametrize(("orientation", "symbology"), LAYOUTS)
+    def test_the_list_prints_on_the_back_and_the_code_survives(
+        self, orientation, symbology
+    ):
+        pdf = render_id_cards(
+            [_certified_card()], DEPARTMENT, orientation, "both", symbology
+        )
+        back = _pages(pdf)[1].extract_text()
+        assert "Certifications" in back
+        assert "CPR/BLS Provider" in back
+        assert "Exp Mar 14, 2027" in back
+        assert "Expired Mar 14, 2026" in back
+        if symbology == "code128":
+            assert "M-042" in back
+
+    @pytest.mark.parametrize(("orientation", "symbology"), LAYOUTS)
+    def test_more_than_fits_says_how_many_more(self, orientation, symbology):
+        many = [
+            IdCardCertification(f"Certification {i}", "Exp Mar 14, 2027")
+            for i in range(30)
+        ]
+        card = _card(valid_through="Mar 14, 2027", certifications=many)
+        pdf = render_id_cards([card], DEPARTMENT, orientation, "both", symbology)
+        back = _pages(pdf)[1].extract_text()
+        assert "more on the digital ID card" in back
+        assert "Certification 0" in back
+        if symbology == "code128":
+            assert "M-042" in back
+
+    @pytest.mark.parametrize("orientation", ["landscape", "portrait"])
+    def test_the_front_line_costs_the_scannable_code_nothing(
+        self, orientation, monkeypatch
+    ):
+        """A smaller code scans worse; the date must not be paid for in it."""
+        import app.utils.id_card_renderer as renderer
+
+        def code_sizes(symbology, valid_through):
+            sizes = []
+            draw_qr, fit_code128 = renderer.draw_qr, renderer.fit_code128
+
+            def record_qr(c, value, x, y, size):
+                sizes.append(size)
+                return draw_qr(c, value, x, y, size)
+
+            def record_bar(module, value, bar_width, width, bar_height):
+                sizes.append(bar_height)
+                return fit_code128(module, value, bar_width, width, bar_height)
+
+            monkeypatch.setattr(renderer, "draw_qr", record_qr)
+            monkeypatch.setattr(renderer, "fit_code128", record_bar)
+            render_id_cards(
+                [_card(valid_through=valid_through)],
+                DEPARTMENT,
+                orientation,
+                "front",
+                symbology,
+            )
+            monkeypatch.setattr(renderer, "draw_qr", draw_qr)
+            monkeypatch.setattr(renderer, "fit_code128", fit_code128)
+            return sizes
+
+        for symbology in ("qr", "code128"):
+            assert code_sizes(symbology, "Mar 14, 2027") == code_sizes(
+                symbology, None
+            ), symbology
+
+    def test_a_card_without_certifications_is_unchanged(self):
+        pdf = render_id_cards([_card()], DEPARTMENT, "landscape", "both", "code128")
+        front, back = (p.extract_text() for p in _pages(pdf))
+        assert "Valid through" not in front
+        assert "Certifications" not in back
+
+
+@pytest.mark.unit
+class TestCertificationLines:
+    def test_valid_through_is_the_soonest_held_expiry(self):
+        certs = [
+            _CardCertificate("CPR", "on_file", date(2027, 3, 14)),
+            _CardCertificate("EMT", "on_file", date(2026, 12, 1)),
+            _CardCertificate("Hazmat", "expired", date(2026, 3, 14)),
+            _CardCertificate("Driver", "on_file", None),
+            _CardCertificate("Pump", "missing", None),
+        ]
+        assert _valid_through(certs) == date(2026, 12, 1)
+
+    def test_no_held_expiry_means_no_date(self):
+        assert _valid_through([_CardCertificate("CPR", "on_file", None)]) is None
+        assert _valid_through([]) is None
+
+    def test_lines_use_the_digital_cards_words(self):
+        lines = _card_certifications(
+            [
+                _CardCertificate("CPR", "on_file", date(2027, 3, 14)),
+                _CardCertificate("Driver", "on_file", None),
+                _CardCertificate("Hazmat", "expired", date(2026, 3, 14)),
+                _CardCertificate("Pump", "missing", None),
+            ]
+        )
+        assert [(c.name, c.status) for c in lines] == [
+            ("CPR", "Exp Mar 14, 2027"),
+            ("Driver", "On file"),
+            ("Hazmat", "Expired Mar 14, 2026"),
+            ("Pump", "Not recorded"),
+        ]
+
+    def test_only_a_stored_true_switches_them_on(self):
+        assert _read_layout({SETTINGS_KEY: {"certifications": True}})["certifications"]
+        for value in (False, "yes", 1, None):
+            assert not _read_layout({SETTINGS_KEY: {"certifications": value}})[
+                "certifications"
+            ]
+
+
+async def _certification_requirement(db, org, name):
+    requirement = TrainingRequirement(
+        organization_id=org.id,
+        name=name,
+        requirement_type="certification",
+        training_type=TrainingType.CERTIFICATION,
+        frequency="biannual",
+        registry_code=None,
+    )
+    db.add(requirement)
+    await db.flush()
+    return requirement
+
+
+async def _certificate(db, org, member, course_name, expires):
+    db.add(
+        TrainingRecord(
+            id=str(uuid.uuid4()),
+            organization_id=org.id,
+            user_id=member.id,
+            course_name=course_name,
+            training_type=TrainingType.CERTIFICATION,
+            completion_date=date(2025, 3, 14),
+            expiration_date=expires,
+            hours_completed=4,
+            status=TrainingStatus.COMPLETED,
+        )
+    )
+    await db.flush()
+
+
+@pytest.mark.integration
+class TestCertificationsFromTheGrading:
+    async def _department(self, db_session, **member_fields):
+        org = await _org(db_session)
+        member = await _member(
+            db_session, org, membership_number="C-1", **member_fields
+        )
+        await _certification_requirement(db_session, org, "CPR/BLS Certification")
+        await _certificate(
+            db_session, org, member, "CPR/BLS Certification", date(2099, 3, 14)
+        )
+        return org, member
+
+    async def test_switched_on_the_card_carries_the_dates(self, db_session):
+        org, member = await self._department(db_session)
+
+        pdf, _ = await MemberIdCardService(db_session).generate(
+            org.id, [member.id], sides="both", certifications=True
+        )
+
+        front, back = (p.extract_text() for p in _pages(pdf))
+        assert "Valid through Mar 14, 2099" in front
+        assert "CPR/BLS Certification" in back
+        assert "Exp Mar 14, 2099" in back
+
+    async def test_off_by_default_the_card_is_unchanged(self, db_session):
+        org, member = await self._department(db_session)
+
+        pdf, _ = await MemberIdCardService(db_session).generate(
+            org.id, [member.id], sides="both"
+        )
+
+        front, back = (p.extract_text() for p in _pages(pdf))
+        assert "Valid through" not in front
+        assert "Certifications" not in back
+
+    async def test_the_saved_layout_switches_them_on(self, db_session):
+        org, member = await self._department(db_session)
+        service = MemberIdCardService(db_session)
+        await service.save_layout(org.id, "landscape", "both", "code128", True)
+
+        assert (await service.get_layout(org.id))["certifications"] is True
+        pdf, _ = await service.generate(org.id, [member.id])
+        assert "Valid through Mar 14, 2099" in _pages(pdf)[0].extract_text()
+
+    async def test_a_member_exempt_from_compliance_gets_none(self, db_session):
+        org, member = await self._department(db_session, compliance_exempt=True)
+
+        pdf, _ = await MemberIdCardService(db_session).generate(
+            org.id, [member.id], sides="both", certifications=True
+        )
+
+        front, back = (p.extract_text() for p in _pages(pdf))
+        assert "Valid through" not in front
+        assert "Certifications" not in back
+
+    async def test_the_print_is_audited_with_whether_it_carried_them(
+        self, db_session, monkeypatch
+    ):
+        org, member = await self._department(db_session)
+        await MemberIdCardService(db_session).save_layout(
+            org.id, "landscape", "both", "code128", True
+        )
+        events = []
+
+        async def record(**kwargs):
+            events.append(kwargs)
+
+        monkeypatch.setattr(endpoints, "log_audit_event", record)
+        caller = SimpleNamespace(
+            id=member.id, organization_id=org.id, username=member.username
+        )
+
+        await endpoints.print_id_cards(
+            endpoints.IdCardPrintBody(user_ids=[member.id]),
+            db=db_session,
+            current_user=caller,
+        )
+
+        [event] = events
+        assert event["event_type"] == "id_cards_printed"
+        assert event["event_data"] == {"count": 1, "certifications": True}

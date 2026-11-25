@@ -11,12 +11,13 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router';
 import toast from 'react-hot-toast';
-import { isAxiosError } from 'axios';
-import { AlertTriangle, ChevronRight, Truck } from 'lucide-react';
+import { ChevronRight, Truck } from 'lucide-react';
 import { apparatusEventService } from '../../services/api';
 import type { ApparatusConflict, ApparatusEventTemplate, CrewBoard } from '../../types/apparatusEvent';
 import { getErrorMessage } from '../../utils/errorHandling';
 import { useAuthStore } from '../../stores/authStore';
+import ApparatusConflictNotice from './ApparatusConflictNotice';
+import { conflictsFrom } from './apparatusConflicts';
 
 interface RequestApparatusCrewSectionProps {
   requestId: string;
@@ -24,12 +25,6 @@ interface RequestApparatusCrewSectionProps {
   eventId: string | undefined;
   onAttached?: (() => void) | undefined;
 }
-
-const conflictsFrom = (err: unknown): ApparatusConflict[] | null => {
-  if (!isAxiosError(err) || err.response?.status !== 409) return null;
-  const detail = (err.response.data as { detail?: { conflicts?: ApparatusConflict[] } } | undefined)?.detail;
-  return Array.isArray(detail?.conflicts) ? detail.conflicts : null;
-};
 
 export const RequestApparatusCrewSection: React.FC<RequestApparatusCrewSectionProps> = ({
   requestId,
@@ -193,27 +188,12 @@ export const RequestApparatusCrewSection: React.FC<RequestApparatusCrewSectionPr
               </select>
             </div>
           )}
-          {conflicts.length > 0 && (
-            <div className="alert-warning space-y-2 text-sm" role="status">
-              <ul className="space-y-1">
-                {conflicts.map((c, i) => (
-                  <li key={`${c.apparatus_id}-${i}`} className="flex items-start gap-1.5">
-                    <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
-                    {c.reason}
-                  </li>
-                ))}
-              </ul>
-              <label className="flex items-start gap-2">
-                <input
-                  type="checkbox"
-                  className="form-checkbox mt-0.5"
-                  checked={acknowledged}
-                  onChange={(e) => setAcknowledged(e.target.checked)}
-                />
-                Add it anyway. I’ve confirmed the apparatus can cover this visit.
-              </label>
-            </div>
-          )}
+          <ApparatusConflictNotice
+            conflicts={conflicts}
+            acknowledged={acknowledged}
+            onAcknowledge={setAcknowledged}
+            confirmLabel="Add it anyway. I’ve confirmed the apparatus can cover this visit."
+          />
           <button
             type="button"
             className="btn-primary inline-flex items-center gap-2"

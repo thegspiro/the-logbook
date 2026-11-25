@@ -24,6 +24,14 @@ vi.mock('../services/api', () => ({
   userService: { getUsers: (...args: unknown[]) => getUsers(...args) as unknown },
 }));
 
+const listGoals = vi.fn();
+vi.mock('../services/outreachGoalServices', () => ({
+  outreachGoalService: { list: (...args: unknown[]) => listGoals(...args) as unknown },
+}));
+vi.mock('../services/crrServices', () => ({
+  crrService: { getCatalogue: vi.fn(() => Promise.resolve({ activity_types: [], tags: [] })) },
+}));
+
 vi.mock('react-hot-toast', () => ({
   default: Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn() }),
 }));
@@ -124,6 +132,27 @@ describe('EventsSettingsTab', () => {
 
     expect(await screen.findByRole('button', { name: 'Move "Review Request" up' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Move "Review Request" down' })).toBeDisabled();
+  });
+
+  it('opens on the section a link names, as Outreach Impact\'s "Set goals" does', async () => {
+    listGoals.mockResolvedValue({
+      year: 2026,
+      current_year: 2026,
+      year_fraction: 0.5,
+      year_complete: false,
+      goals: [],
+      metrics: [{ value: 'events_held', label: 'Events held' }],
+    });
+    window.history.pushState({}, '', '/events/admin?tab=settings&section=goals');
+    try {
+      renderWithRouter(<EventsSettingsTab />);
+
+      const sections = await screen.findByRole('navigation', { name: 'Event settings sections' });
+      expect(within(sections).getByRole('button', { name: /Outreach Goals/ })).toHaveAttribute('aria-current', 'page');
+      expect(await screen.findByRole('heading', { name: 'Outreach goals' })).toBeInTheDocument();
+    } finally {
+      window.history.pushState({}, '', '/');
+    }
   });
 
   describe('public requests section', () => {

@@ -6,14 +6,14 @@ import { FormField, FIELD_ERROR_CLASS } from '../../../components/ux/FormField';
 import { formatTimeOfDay } from '../../../utils/dateFormatting';
 import { formCoercions } from '../../../utils/formValues';
 import { X } from 'lucide-react';
-import { Link } from 'react-router';
 import type { PatternFormData, ShiftTemplate } from './shiftTemplateTypes';
 import { PATTERN_TYPES, emptyPatternForm } from './shiftTemplateTypes';
 import PatternTemplateInactiveNotice from './PatternTemplateInactiveNotice';
 
 // Weekly and custom patterns are generated from schedule_config (weekdays, or
 // a list of dates), which this form has no fields for: saved from here they
-// generate no shifts at all. The Patterns tab builds that config.
+// generate no shifts at all. Only the Patterns tab's New Pattern builds that
+// config, and this form now opens only from that tab's Edit.
 const CONFIG_DRIVEN_TYPES = new Set(['weekly', 'custom']);
 
 type PatternField =
@@ -233,15 +233,7 @@ const PatternFormModal: React.FC<PatternFormModalProps> = ({
             label="Pattern Type"
             required
             error={fieldErrors.errors.pattern_type}
-            hint={
-              <>
-                Weekly and custom patterns pick their days or dates, so create them from the{' '}
-                <Link to="/scheduling/admin/planning/patterns" className="underline">
-                  Patterns tab
-                </Link>
-                .
-              </>
-            }
+            hint="A weekly pattern's days and a custom pattern's dates stay as they are here. To change them, make a new pattern with New Pattern."
           >
             {(field) => (
               <select

@@ -875,7 +875,7 @@ export const ProspectiveMembersPage: React.FC = () => {
                 void refreshPipelineView();
               }}
               disabled={isLoading}
-              className="text-theme-text-muted hover:text-theme-text-primary min-h-11 min-w-11 p-2 transition-colors disabled:opacity-50"
+              className="text-theme-text-muted hover:text-theme-text-primary inline-flex min-h-11 min-w-11 items-center justify-center p-2 transition-colors disabled:opacity-50"
               title="Refresh"
             >
               <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />

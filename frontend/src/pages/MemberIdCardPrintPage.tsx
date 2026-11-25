@@ -28,6 +28,7 @@ const DEFAULT_LAYOUT: IdCardLayout = {
   orientation: IdCardOrientation.LANDSCAPE,
   sides: IdCardSides.FRONT,
   symbology: Symbology.CODE128,
+  certifications: false,
 };
 
 interface Choice<T extends string> {
@@ -56,7 +57,11 @@ const SYMBOLOGY_CHOICES: Choice<Symbology>[] = [
 ];
 
 const sameLayout = (a: IdCardLayout | null, b: IdCardLayout) =>
-  a !== null && a.orientation === b.orientation && a.sides === b.sides && a.symbology === b.symbology;
+  a !== null &&
+  a.orientation === b.orientation &&
+  a.sides === b.sides &&
+  a.symbology === b.symbology &&
+  a.certifications === b.certifications;
 
 interface ChoiceGroupProps<T extends string> {
   name: string;
@@ -302,6 +307,25 @@ const MemberIdCardPrintPage: React.FC = () => {
                 onChange={(symbology) => update({ symbology })}
               />
             </div>
+
+            <label className="text-theme-text-secondary flex items-start gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={layout.certifications}
+                onChange={(e) => update({ certifications: e.target.checked })}
+                className="form-checkbox mt-0.5"
+              />
+              <span>
+                <span className="text-theme-text-primary">Certifications and valid-through date</span>
+                <span className="text-theme-text-muted block text-xs">
+                  “Valid through” on the front, the soonest expiry among the member’s current certificates
+                  {layout.sides === IdCardSides.BOTH
+                    ? ', and each certification with its date on the back.'
+                    : '. The certifications themselves need a two-sided card.'}{' '}
+                  Printed dates do not update: reprint a card after a renewal.
+                </span>
+              </span>
+            </label>
 
             <div className="flex flex-wrap items-center gap-2">
               <button

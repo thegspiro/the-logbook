@@ -2037,7 +2037,7 @@ const CreatePipelinePage: React.FC = () => {
                     setCurrentStep(step.key);
                   }}
                   aria-current={isActive ? 'step' : undefined}
-                  className={`touch-target-phone flex shrink-0 items-center space-x-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                  className={`touch-target-phone flex shrink-0 items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
                     isActive
                       ? 'bg-red-800 text-white'
                       : isComplete
@@ -2113,7 +2113,7 @@ const CreatePipelinePage: React.FC = () => {
           <button
             onClick={goBack}
             disabled={stepIndex === 0}
-            className="bg-theme-surface text-theme-text-primary hover:bg-theme-surface-hover flex min-h-11 items-center space-x-2 rounded-lg px-4 py-2 disabled:cursor-not-allowed disabled:opacity-50"
+            className="bg-theme-surface text-theme-text-primary hover:bg-theme-surface-hover touch:min-h-11 flex items-center space-x-2 rounded-lg border border-transparent px-4 py-2 disabled:cursor-not-allowed disabled:opacity-50"
           >
             <ArrowLeft className="h-4 w-4" />
             <span>Back</span>

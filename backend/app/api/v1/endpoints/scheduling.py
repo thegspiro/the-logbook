@@ -71,6 +71,7 @@ from app.schemas.scheduling import (
     MemberHoursHistoryResponse,
     MemberShiftHistoryResponse,
     OpenSwapPickupResponse,
+    OutreachCreditSummary,
     PlatoonBulkAssign,
     PlatoonBulkAssignResult,
     PlatoonOverviewResponse,
@@ -148,6 +149,7 @@ from app.services.integration_services.notification_dispatch import (
     notify_summary,
 )
 from app.services.member_supervisor_service import MemberSupervisorService
+from app.services.outreach_sheet_credit import catch_up_outreach_sheets
 from app.services.pre_shift_work_service import (
     PreShiftWorkService,
     approved_pre_work_minutes,
@@ -2023,6 +2025,75 @@ async def get_scheduling_summary(
     """Get scheduling module summary statistics"""
     service = SchedulingService(db)
     return await service.get_summary(current_user.organization_id)
+
+
+def _outreach_credit_response(summary, applied: bool) -> OutreachCreditSummary:
+    return OutreachCreditSummary(
+        applied=applied,
+        sheets=summary.sheets,
+        sheets_waiting_for_event=summary.sheets_waiting_for_event,
+        sheets_awaiting_finalize=summary.sheets_awaiting_finalize,
+        volunteers=summary.volunteers,
+        attendance_updated=summary.attendance_updated,
+        entries_credited=summary.entries_credited,
+        hours=hours_from_minutes(summary.minutes),
+    )
+
+
+@router.get("/outreach-credit", response_model=OutreachCreditSummary)
+async def preview_outreach_credit(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("scheduling.manage")),
+):
+    """Preview crediting past community outreach sheets through their events.
+
+    Reports what the catch-up would do and changes nothing.
+
+    **Requires permission: scheduling.manage**
+    """
+    summary = await catch_up_outreach_sheets(
+        db, str(current_user.organization_id), dry_run=True
+    )
+    return _outreach_credit_response(summary, applied=False)
+
+
+@router.post("/outreach-credit", response_model=OutreachCreditSummary)
+async def run_outreach_credit(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("scheduling.manage")),
+):
+    """Credit past community outreach sheets through their events.
+
+    Carries each sheet's recorded time onto its event's attendance, and for an
+    event already finalized writes the admin hours. Safe to run again: it
+    compares and corrects, so nothing is credited twice.
+
+    **Requires permission: scheduling.manage**
+    """
+    try:
+        summary = await catch_up_outreach_sheets(
+            db, str(current_user.organization_id), dry_run=False
+        )
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=safe_error_detail(e))
+    await log_audit_event(
+        db=db,
+        event_type="outreach_sheet_hours_credited",
+        event_category="scheduling",
+        severity="INFO",
+        event_data={
+            "organization_id": str(current_user.organization_id),
+            "sheets": summary.sheets,
+            "volunteers": summary.volunteers,
+            "attendance_updated": summary.attendance_updated,
+            "entries_credited": summary.entries_credited,
+            "minutes": summary.minutes,
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+    return _outreach_credit_response(summary, applied=True)
 
 
 WIDGET_KEYS = {
