@@ -16,14 +16,32 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**None.** PR #4706 (Feature 29, Reports & analytics, pass 17) merged clean
-as squash commit `fd57d95fb` — confirmed by `fd57d95fb` being the current
-tip of `origin/main`, not by trusting this row. Row 29 marked ✅ above. A
-fresh `list_pull_requests` (state=open) found nothing open repo-wide. This
-iteration (watchdog pickup — the dedicated `/loop 30m /security-review`
-session, `session_011T1ZyyLrD5HagusgK9uDw2`, remains unreachable, confirmed
-via `ListAgents` → "No reachable agents") continued to Step 1: row 30
-(Onboarding) was the next ⬜ row. See the Log below for its pass 15 entry.
+**PR [#4707](https://github.com/thegspiro/the-logbook/pull/4707) (branch
+`claude/security-review-onboarding`)**: Feature 30 (Onboarding), pass 15 —
+watchdog pickup (the dedicated `/loop 30m /security-review` session,
+`session_011T1ZyyLrD5HagusgK9uDw2`, remains unreachable, confirmed via
+`ListAgents` → "No reachable agents").
+
+PR #4706 (Feature 29, Reports & analytics, pass 17) merged clean as squash
+commit `fd57d95fb` — confirmed by `fd57d95fb` being the current tip of
+`origin/main`, not by trusting this row. Row 29 marked ✅ above. A fresh
+`list_pull_requests` (state=open) found nothing open repo-wide, so this
+iteration continued to Step 1: row 30 (Onboarding) was the next ⬜ row.
+
+Baseline `2248da3bf` (pass 14's own merge, PR #4558). Near-zero delta: the
+only real diff against every declared backend/frontend file is
+`google_drive_storage.py` (+41/−1), two new helpers consumed not by
+onboarding's own code but by a new offline Drive-restore recovery script
+(`drive_restore_relink.py` + `scripts/relink_restored_drive_files.py`),
+read in full and verified good — every candidate decrypted and
+header-checked before relinking, confined to its own organization's
+storage, reported rather than guessed at when ambiguous, idempotent on a
+dry-run-by-default apply. **0 fixed, 0 new findings.** Full write-up:
+`docs/security-review/ONB5-30-onboarding.md`'s **Pass 15** section.
+
+Row 30 → ✅ (pending this PR's merge); next is Feature 31 (Scheduled
+tasks) — re-check `list_pull_requests` fresh rather than trusting this
+note.
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 29, Reports & analytics, pass 17, PR #4706, merged), preserved for history</summary>
