@@ -16,6 +16,39 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#4701](https://github.com/thegspiro/the-logbook/pull/4701) (branch
+`claude/security-review-messaging-notifications`)**: Feature 25 (Messaging
+& notifications), pass 15 — watchdog pickup (the dedicated
+`/loop 30m /security-review` session,
+`session_011T1ZyyLrD5HagusgK9uDw2`, remains unreachable, confirmed via
+`ListAgents` → "No reachable agents").
+
+PR #4699 (Feature 24, Meetings & minutes, pass 15) was fully green on every
+CI check (`CI Success` passing on its current head, `mergeable_state`
+`clean`), with only the same bot-quota-failure comments seen on every
+recent pass (Codex "unable to review", Copilot "usage limits", no actual
+findings) — merged by this watchdog as squash commit `13b59d5dc`; row 24
+marked ✅ above. A fresh `list_pull_requests` (state=open) found no
+`claude/security-review-*` head open, so this iteration continued to Step
+1: row 25 (Messaging & notifications) was the next ⬜ row.
+
+Baseline `c59bad857` (pass 14's own merge, PR #4520). This feature's own
+four route files are byte-identical to pass 14 (52 routes, re-enumerated by
+AST, unchanged). The only delta in scope: the shared
+`email_template_service.py` registers two new template types whose sending
+logic belongs to, and was already reviewed by, Training core/Compliance
+(both already ✅ at pass 16) — neither carries raw-HTML variables or
+recipient-resolution logic of its own. Four frontend files are catalogue
+metadata or cosmetic. **0 fixed, 0 new findings.** Full write-up:
+`docs/security-review/MSG-25-messaging-notifications.md`'s **Pass 15**
+section.
+
+Row 25 → ✅ (pending this PR's merge); next is Feature 26 (Forms) —
+re-check `list_pull_requests` fresh rather than trusting this note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 24, Meetings & minutes, pass 15, PR #4699, merged), preserved for history</summary>
+
 **PR [#4699](https://github.com/thegspiro/the-logbook/pull/4699) (branch
 `claude/security-review-meetings-minutes`)**: Feature 24 (Meetings &
 minutes), pass 15 — watchdog pickup (the dedicated
@@ -50,6 +83,8 @@ attachment-removal fields that are inert for the meeting workflow
 Row 24 → ✅ (pending this PR's merge); next is Feature 25 (Messaging &
 notifications) — re-check `list_pull_requests` fresh rather than trusting
 this note.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 23, Medical supplies, pass 22, PR #4698, merged), preserved for history</summary>
