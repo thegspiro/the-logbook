@@ -16,7 +16,7 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR [TBD] (branch
+**PR [#4684](https://github.com/thegspiro/the-logbook/pull/4684) (branch
 `claude/friendly-babbage-xstbnj`)**: Feature 13
 (Apparatus & NFC), pass 24 — watchdog pickup (the dedicated `/loop 30m
 /security-review` session, `session_011T1ZyyLrD5HagusgK9uDw2`, remains
