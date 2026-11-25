@@ -439,6 +439,38 @@ holder approves at `/training/approve/:token`, which can set each member's
 approved minutes (0 = no credit). The submit must cover the roster exactly once
 and is refused once the event is reopened, cancelled or re-typed.
 
+**A waiting sign-off is reminded at 7 and 14 days** _(2026-11-23, #4623)_. The
+daily `training_approval_reminders` task (07:50) emails the training officers
+about each session whose newest approval is still `PENDING` with a live link
+seven days after finalize, and once more at fourteen days, then stops. A
+superseded approval (killed by a re-finalize) and a cancelled event are never
+chased. Recipients are current `training_officer` role holders who take
+**Training officer duties** email; the wording is the **Training Approval
+Reminder** template (`training_approval_reminder`, subject "Still waiting for
+sign-off: {{course_name}}"), which a department can switch off. Each reminder
+is claimed through `training_approvals.reminder_sent_at` and committed before
+the send, so a re-run sends nothing new and a crash loses a reminder rather
+than repeating it; an approval first seen past day 14 (the first run after the
+upgrade) gets one email, not two. Email only, no SMS. Code:
+`app/services/training_approval_reminders.py`.
+
+**Finalize flags double credit; it never merges** _(2026-11-23, #4617)_.
+Finalize (or, under sign-off, the approval) no longer adopts a completed
+unsourced record that happens to share the course name and the event's day,
+and never adopts a self-report's record at all; only the member's own check-in
+placeholder, or a record an earlier approved finalize of the same session
+wrote, is still taken over. The event writes its own record, and
+`flag_duplicate_credit` (`app/services/training_credit_duplicates.py`) pairs it
+with each completed record of the member's, outside a provider import, dated
+the event's day (department calendar or UTC) that names the same library course
+or has the same match key as the event's course name or title (case, spacing
+and punctuation ignored, nothing looser). Pairs are listed under **Records →
+Possible Double Credit** (`GET /training/double-credit`, `training.manage`) and
+counted in the hub's **Needs attention** as a warning. **Keep both** resolves
+the pair for good (a re-finalize does not raise it again; the pair is unique);
+voiding either record, there or anywhere, closes it. Until then the member's
+hours count twice.
+
 **Certification eligibility.** A session has a "Counts toward certification
 requirements" toggle (on by default). When off, attendance still records the
 member's hours (general credit) but does not feed the linked

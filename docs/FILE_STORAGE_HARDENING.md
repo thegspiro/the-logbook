@@ -484,7 +484,9 @@ empties after 30 days.
 
 The manifest directory and kind keep their S3-era names, so a manifest from an
 earlier run still rolls back and finalizes. That a Drive copy cannot simply be
-restored is recorded in `docs/KNOWN_LIMITATIONS.md`, not solved here.
+restored was recorded in `docs/KNOWN_LIMITATIONS.md` and not solved here; it
+was closed on 2026-11-24 by `scripts/relink_restored_drive_files.py` (see the
+table above).
 
 ### Found in passing, not in this change
 

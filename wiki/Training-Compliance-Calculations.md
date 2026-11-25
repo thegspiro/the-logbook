@@ -207,6 +207,11 @@ Two traps:
   Completed — it is not a free pass.
 - **A certificate valid today is met today**, even if it expires next week. The
   orange "due soon" marking is a renewal warning, not a failure.
+- **A flagged double credit counts twice** _(2026-11-23)_. When a finalized
+  Training event's record pairs with a self-report or hand-entered record of
+  the same class on the same day, both stay completed and both count until an
+  officer voids one under **Records → Possible Double Credit**. **Keep both**
+  keeps both counted on purpose.
 
 **Every screen takes this answer** _(2026-11-21)_. My Training, the officer's
 view of a member, requirement progress and the member training report used to

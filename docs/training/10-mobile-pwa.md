@@ -365,6 +365,26 @@ screens adapt:
   requirement analysis and the **Historical Import** preview (where a long
   email address now wraps). The three My Training tables and the import preview
   also become cards on a tablet with the side navigation open.
+  _(2026-11-24)_ **My Training**'s **Recent Training** is a table again on a
+  tablet, side navigation open or not: its columns were tightened so it fits,
+  and it becomes cards only on a phone. Report results are no longer cards at
+  every width either: since 2026-11-21 they are cards on a phone only (see
+  [Reports](./08-admin-reports.md#generating-a-report)).
+- **On a tablet, a wide table's cards are laid out in columns** _(2026-11-24)_.
+  Where a wide table still shows as cards on a tablet or a narrow laptop
+  window (the member roster, the apparatus list, finance, grants, inventory
+  items, the audit log and others), the row's name is the card's title and
+  the other values sit side by side in columns, each label above its value. A
+  selection box, where the table has one, sits in the card's top right corner.
+  Before, every label sat at the left edge with its value at the far right, a
+  screen's width away. On a phone the cards are unchanged.
+- **Sort a table shown as cards with Sort by** _(2026-11-24)_. Cards hide the
+  column headings, which is where sorting lives, so the member roster,
+  Training Administration's **Records > Monthly Status**, the prospective
+  members pipeline table and report results show a **Sort by** list above their cards instead. Pick a
+  column, or **Default order**, and use the arrow button beside it to switch
+  between ascending and descending. It appears only while the headings are
+  hidden.
 
   ![Expiring Certifications on a 390px phone: each certification is a card led by the member's name, with its certification, expiry date and days left labelled beneath](./images/10-30-expiring-certs-phone.png)
 

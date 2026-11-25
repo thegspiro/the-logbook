@@ -185,6 +185,26 @@ modules/<module>/
 - **Theme tokens** — Use the `theme-*` utility classes (`bg-theme-surface`, `text-theme-text-primary`), which read the CSS variables below
 - **Dark mode** — Use `bg-theme-surface-modal` for modal backgrounds
 - **Responsive** — Mobile-first responsive design
+- **Wide tables** — `rwd-table` reflows rows into labelled cards under a 768px
+  viewport; a table that can outgrow its card adds `rwd-table-container` on its
+  scroll wrapper and one tier (`-narrow`, `-wide`, `-xwide`, `-2xwide`) so it
+  reflows on the card's width. Every body `<td>` carries a `data-label`. In a
+  card of 30rem or more, a wide, xwide or 2xwide table's cards set their cells
+  out in 10rem columns, label above value, with the `rwd-table-lead` cell as
+  the title and `rwd-table-corner` pinning a selection checkbox top right
+  _(2026-11-24)_. Full rule: CLAUDE.md, Pitfall #39
+- **Sorting in card mode** — card mode hides the `<thead>` and its
+  `SortableHeader`s, so a sortable reflow table also renders `CardSortControl`
+  (`components/ux/`) inside its container, before the table, with the same sort
+  state, handler and tier. CSS (`.rwd-card-sort` in `index.css`) shows it
+  exactly while the headers are hidden _(2026-11-24)_
+- **Buttons side by side** — use the `btn-*` utilities rather than a hand-built
+  button: the filled ones carry a transparent 1px border with a mouse, so they
+  match `btn-secondary`'s height. Make a button that holds only an icon a
+  flex container (`inline-flex items-center justify-center`) so the icon
+  centres, and give a button whose label can wrap `text-left`.
+  `e2e/button-alignment.spec.ts` holds the cases a route-by-route audit found
+  out of line _(2026-11-24)_
 
 ### ESLint
 

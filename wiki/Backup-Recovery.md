@@ -169,8 +169,23 @@ docker exec -it intranet-backend python scripts/migrate_uploads_to_remote.py --s
 - **Shared Drive:** a deleted file stays in the drive's trash for 30 days and a
   drive Manager can restore it **with its id intact** — the quick recovery, so
   do not empty the trash by hand. A copy taken elsewhere (for example with
-  rclone and a separate read-only service account) gets new file ids, so it
-  cannot simply be put back; it is the copy of last resort.
+  rclone and a separate read-only service account) gets new file ids when it
+  is uploaded back, so the records still name the old ids. Since 2026-11-24
+  `scripts/relink_restored_drive_files.py` repoints them: upload the copies
+  into the department's Shared Drive (any folder) without renaming them, run
+  it once as a dry run, then with `--apply`. It matches files to records by
+  name, reads each match back with this installation's file key before
+  changing anything, and is safe to re-run after each batch:
+
+  ```bash
+  docker exec -it intranet-backend python scripts/relink_restored_drive_files.py
+  docker exec -it intranet-backend python scripts/relink_restored_drive_files.py --apply
+  ```
+
+  `--org <id>` limits it to one department; exit code `1` means some records
+  were left alone and listed (no file of that name, more than one, or a match
+  that does not decrypt). Unraid's container is `logbook-backend`. See
+  [backend/scripts/README.md](https://github.com/thegspiro/the-logbook/blob/main/backend/scripts/README.md#relink_restored_drive_filespy).
 
 These files are encrypted with the installation's file key, so a copy needs
 `ENCRYPTION_KEY` and `ENCRYPTION_SALT` just like the uploads archive.

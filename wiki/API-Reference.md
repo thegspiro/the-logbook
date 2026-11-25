@@ -807,8 +807,8 @@ POST   /api/v1/member-badges/resolve                # { code } -> the member a s
 GET    /api/v1/member-badges/{user_id}              # { user_id, badge_code } - the member themselves, or a badge officer; else 404
 POST   /api/v1/member-badges/{user_id}/reissue      # Cancel a lost badge, issue a new code (badge officers; audit: member_badge_reissued)
 GET    /api/v1/member-id-cards/layout               # Saved CR80 layout, or the default
-PUT    /api/v1/member-id-cards/layout               # { orientation, sides, symbology } (audit: id_card_layout_updated)
-POST   /api/v1/member-id-cards/pdf                  # { user_ids (1-500), orientation?, sides?, symbology? } -> application/pdf (audit: id_cards_printed)
+PUT    /api/v1/member-id-cards/layout               # { orientation, sides, symbology, certifications? } (audit: id_card_layout_updated)
+POST   /api/v1/member-id-cards/pdf                  # { user_ids (1-500), orientation?, sides?, symbology?, certifications? } -> application/pdf (audit: id_cards_printed)
 ```
 
 Badge officers are holders of `members.manage` or `members.manage_id_cards`;
@@ -823,8 +823,10 @@ member has none yet. Old badges (membership number, short id, old digital-card
 QR) resolve while `accept_legacy` is not `false`; absent means accepted.
 
 Layout options: `orientation` ∈ `landscape` | `portrait`, `sides` ∈ `front` |
-`both`, `symbology` ∈ `code128` | `qr`. The default is landscape, front only,
-Code 128. Options omitted from a print request take the saved layout. See
+`both`, `symbology` ∈ `code128` | `qr`, `certifications` a boolean ("Valid
+through" on the front and the member's certifications on the back; a `PUT`
+that omits it saves it off). The default is landscape, front only, Code 128,
+no certifications. Options omitted from a print request take the saved layout. See
 [Member ID cards](Member-ID-Cards#badge-codes-and-printing-cr80-id-cards-2026-10-05).
 
 ---

@@ -108,6 +108,21 @@ member is a card instead. Members whose email is a placeholder (`…@import.inva
 or `…@anonymized.invalid`, written for archived or anonymized former members) no
 longer make **Member Management** answer "Unable to load members and roles".
 
+_Updated 2026-11-24._ On a tablet, each member's card is laid out in columns:
+the member's photo and name at the top, the selection box in the top right
+corner, and the other details side by side beneath with each label above
+its value. Before, each label sat at the left edge with its value at the far
+right. Wherever the roster is cards, a **Sort by** list above them sorts it by
+**Member**, **Status** and, when those columns show, **Member #** and **Hire
+Date**; the arrow button beside it switches between ascending and descending.
+On a desktop, select a column heading as before.
+
+> **Screenshot to create:** `01-75-member-roster-tablet.png`, **Members** on a
+> tablet with the side navigation open: the **Sort by** list above the cards,
+> and each member's card with the name at the top, the selection box in its
+> corner and the other details in columns. See
+> [SCREENSHOT_CURRENCY.md](./SCREENSHOT_CURRENCY.md).
+
 ![The Member Directory as an ordinary member: name, rank, member number and status only, with no usernames, no hire-date column, no Actions column and no selection checkboxes](./images/01-40-member-directory-member.png)
 
 ![The Members table filtered to Archived: a former member's row with the green Reactivate icon beside Edit and Delete](./images/01-42-archived-member-row.png)
@@ -232,6 +247,27 @@ The page opens on your **department layout**. Changing an option affects only
 the print you are doing now. **Save as department layout** makes your choices
 the starting point for whoever prints next.
 
+**Certifications and valid-through date** _(2026-11-24)_ is a tick-box under
+the three options, off until a department turns it on. When it is ticked, the
+front of each card reads "Valid through _date_": the soonest expiry among the
+certificates the member holds now, the same date as **Card valid through** on
+the digital ID card. On a **Front and back** card, the back also lists each
+certification with "Exp _date_", "Expired _date_", **On file** or **Not
+recorded**. A front-only card carries the date but not the list. The
+certifications are graded the way the compliance matrix grades them; a former
+member, or one exempt from compliance, gets neither. When the back has no room
+for every certification, the last line reads "+_n_ more on the digital ID
+card".
+
+- A printed date does not change when a certificate is renewed. Reprint the
+  member's card after a renewal.
+- The officer printing sees every member's dates in the PDF, even without
+  permission to read training records, and even when the department hides
+  certification status from members. The audit log records whether each print
+  carried them.
+- Like the other options, the tick-box applies to this print only until you
+  select **Save as department layout**.
+
 The back of the card says "If found, please return to:", followed by the
 department's mailing address (or physical address) and phone number from
 Organization settings.
@@ -246,6 +282,13 @@ Organization settings.
 
 Print one **Test card** first to check the alignment. Cards print in black
 only, so they look the same on a black-only ribbon as on a colour one.
+
+> **Screenshot to create:** `01-73-print-id-cards-certifications.png`, **Print
+> ID Cards** with **Front and back** chosen and **Certifications and
+> valid-through date** ticked, its hint reading that each certification goes on
+> the back; and, as `01-74-id-card-back-certifications.png`, the back of a
+> printed test card with the return address, the **Certifications** list and
+> the barcode. See [SCREENSHOT_CURRENCY.md](./SCREENSHOT_CURRENCY.md).
 
 ![Print ID Cards for two members with Front and back chosen: the Orientation, Sides and Code choices, Test card and Save as department layout, the duplex printing note, and the Accept old badges switch at the bottom](./images/01-43-print-id-cards.png)
 
@@ -317,7 +360,10 @@ after that date. If none of your current certificates expires, no date shows.
   it.
 - If your department hides certification status from members, the box does
   not appear on your own card.
-- The printed plastic card (**Print ID Cards**) is unchanged.
+- The printed plastic card carries the same date, and the list on a two-sided
+  card, only when the department ticks **Certifications and valid-through
+  date** on **Print ID Cards** (see
+  [Printing Plastic ID Cards](#printing-plastic-id-cards)).
 
 ![A member's digital ID card: membership number as text, the badge code under its barcode, the QR code, and the Print ID Card and Reissue badge buttons](./images/01-44-member-id-card.png)
 
@@ -3109,7 +3155,7 @@ History is an optional module, and it is off until an administrator turns it
 on in **Settings → Modules → Additional Modules**.
 
 Once it is on, select **History** in the menu. Its overview leads to
-**Past members**, **Photos and media**, **Documents** and **Honor Roll**. You need no permission to
+**Past members**, **Photos and media**, **Documents**, **Articles** and **Honor Roll**. You need no permission to
 read published records. Being a signed-in member of the department is
 enough.
 
@@ -3117,7 +3163,8 @@ The **Department History** page shows:
 
 - cards for **Past members**, **Photos and media** _(2026-11-13)_,
   **Documents** _(2026-11-14)_, **Honor Roll**, and **Timeline**,
-  **Events** and **Apparatus** _(2026-11-21)_, plus **Import a roster** if
+  **Events** and **Apparatus** _(2026-11-21)_, and **Articles**
+  _(2026-11-23)_, plus **Import a roster** if
   you can edit records and **Titles, lists and clearance** if you can
   configure the module (the page it opens is headed **Titles and
   Clearance**);
@@ -3125,21 +3172,23 @@ The **Department History** page shows:
   years (it reads _Nothing in the archive happened on this day._ when there
   are none);
 - **Awaiting my clearance**, if a record is waiting for you to review it;
-- **Drafts**, if you can edit records; and
+- **Drafts**, if you can edit records;
+- **Latest articles** _(2026-11-23)_, up to five published articles, when
+  there are any; and
 - **From the archive**, the latest published records.
 
 Three permissions control the rest. The seeded **Historian** position holds
 all three.
 
-| Permission        | What it lets you do                                                                                                     |
-| ----------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| `history.view`    | Read draft records, the research fields and each record's change history                                                |
-| `history.manage`  | Add and edit people, photos, documents, events and apparatus, and edit titles, the managed lists and the clearance list |
-| `history.publish` | Publish a record to members or to the public                                                                            |
+| Permission        | What it lets you do                                                                                                                                   |
+| ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `history.view`    | Read draft records, the research fields and each record's change history                                                                              |
+| `history.manage`  | Add and edit people, photos, documents, events, apparatus and articles, and edit titles, the managed lists, the clearance list and **Public website** |
+| `history.publish` | Publish a record to members or to the public                                                                                                          |
 
 **Titles and clearance** also opens for officers with permission to manage
-the department's settings. They can edit the clearance list there, but not
-the titles.
+the department's settings. They can edit the clearance list and **Public
+website** there, but not the titles.
 
 ### Past Members
 
@@ -3193,11 +3242,11 @@ every edit, who made it and when.
 **Publishing** (needs `history.publish`). The **Publication** panel on the
 person's page moves the record between three levels:
 
-| Level                    | Who can read it                                                              |
-| ------------------------ | ---------------------------------------------------------------------------- |
-| **Draft**                | Only people with a History permission, and anyone reviewing it for clearance |
-| **Published to members** | Every signed-in member of the department                                     |
-| **Public**               | Meant for the public. Nothing outside the app shows it yet                   |
+| Level                    | Who can read it                                                                                                                              |
+| ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Draft**                | Only people with a History permission, and anyone reviewing it for clearance                                                                 |
+| **Published to members** | Every signed-in member of the department                                                                                                     |
+| **Public**               | Meant for the public. Your department's website shows it once its part is switched on under [Public website](#the-public-website-2026-11-24) |
 
 Select **Publish to members** to share a draft with the department.
 **Members only** takes a public record back to members, and **Return to
@@ -3388,16 +3437,119 @@ merge it, but you cannot delete one in use.
 > Apparatus, Photos and documents), `01-66-history-apparatus-page` (Unit
 > numbers and its Timeline), `01-67-today-in-history-dashboard`.
 
+### Articles _(2026-11-23)_
+
+**Articles** holds the archive's written pieces: a station's history, a past
+chief's profile, the story of a fire. Every member reads the published ones;
+writing one needs `history.manage`.
+
+**To write an article:**
+
+1. Open **History → Articles** and select **Write an article**.
+2. Fill in the **Title**. **Subtitle**, **Byline** and **Summary** are
+   optional. Leave **Byline** blank on a new article and your name is used;
+   type another name for a piece by a retired member with no account. The
+   summary shows in the article list and at the top of a printed copy.
+3. Select **Choose a cover photo** to pick a cover from the archive's photos.
+4. Under **The article**, build the body from blocks. **Add text** opens the
+   same editor as meeting minutes (headings, bold, italic, underline, lists,
+   quotes and links). **Add photo** finds a photo already in the archive and
+   gives it its own **Caption** and a **Width** of **Full width** or **Half
+   width**. Each block has its own **Add text below** and **Add photo
+   below**, and arrows to move it up or down.
+5. Under **In this article**, link the **People**, **Events**, **Apparatus**
+   and **Documents** it is about.
+6. Under **Sources**, select **Add a reference** for each book, newspaper or
+   interview you used. The linked documents and events, and the photos shown,
+   are listed as sources by themselves.
+7. Keep anything readers must not see in **Research notes (Historian only)**.
+   It is never shown to readers and never printed.
+8. Select **Save as a draft**.
+
+A photo sits between paragraphs, never inside one, and only an archive photo
+can be shown: a recording, a film or an image from elsewhere cannot. If a
+photo is later deleted from the archive, its block shows **This photo is no
+longer in the archive** in the editor, and readers skip it.
+
+**Publishing** works as for every other record: the **Publication** panel,
+**Minor** or **Substantial** edits, the **Change history**, and **Delete**
+only while the article is a draft. Members see only the photos, people,
+events, apparatus and documents they could open themselves.
+
+**Photos and the public.** The public copy of an article only ever holds
+public photos. While the article shows a photo that is not cleared for the
+public, its page lists it under **Photos not cleared for the public**, and it
+cannot be sent for public clearance: clear each photo for the public first,
+or take it out. A photo withdrawn from the public afterwards is simply left
+out of the public copy.
+
+**Downloading.** Anyone who can read an article can download it with the
+**PDF** or **Word** button at the top of its page. The file holds what you
+can see on the page: the department's name and logo at the head, only the
+photos and links you may open, the sources, and never the research notes.
+Each page's footer reads "Prepared by the department historian", the date
+and the page number. Nothing is stored: each download is made fresh from the
+current article, so one with many photos takes a few seconds.
+
+Each person, event, apparatus, document and photo page now has an
+**Articles** section listing the articles that link to it or show it.
+Articles are not placed on the timeline or in **Today in history**.
+
+### The Public Website _(2026-11-24)_
+
+Your department's own website can show what History has published to the
+public, through the **Public Portal** and its API keys. Nothing is shown
+until you switch it on, and only a record's cleared public copy is ever
+sent: a draft, a member-only field, an edit waiting for clearance or the
+research notes never reach the website.
+
+Open **History → Titles, lists and clearance** and find **Public website**
+(needs `history.manage` or permission to manage the department's settings).
+
+- If the Public Portal is off, or has no active API key, a note says so with
+  **Open Public Portal settings**.
+- Under **Show on the website**, tick each part the website may show:
+  **People**, **Honor Roll**, **Photos**, **Documents**, **Events**,
+  **Apparatus**, **Articles**, **Timeline** and **Today in history**. Every
+  part starts unticked, and each saves as you tick it.
+- **What a website can call** lists the addresses your web developer needs.
+
+**The "Today in history" widget** puts the day's entries on your website
+with one line of code. It shows what happened on today's date in earlier
+years, or "This week in history" on a quiet day, and nothing at all when the
+coming week is empty too.
+
+1. Tick **Today in history** above.
+2. Make sure your website is listed under **Organization Settings → Forms**,
+   the same list embedded forms use. Until it is, the section says the widget
+   will not show anywhere.
+3. Choose a **Style** (**Follow the visitor's setting**, **Light** or
+   **Dark**) and whether to **Show the department's name and logo**.
+4. Select **Make a widget link**, then **Copy code**, and paste the code
+   into your website. The code is shown only this once. If it is lost,
+   select **Replace the link**: the old code stops working at once.
+   **Remove the link** stops the widget everywhere.
+
+The Public Portal's **Configuration** tab points to this section.
+
+> **Screenshots needed:** `01-76-history-article-form` (a text block and a
+> half-width photo block, with **Add text below** and **Add photo below**),
+> `01-77-history-article-page` (the **PDF** and **Word** buttons, Sources,
+> and **Photos not cleared for the public** in the side column),
+> `01-78-history-public-website` (the **Show on the website** switches and
+> the widget section, just after **Make a widget link**).
+
 ### What History Does Not Do Yet
 
-- **Public records are not shown outside the app yet.** Publishing to the
-  public saves a cleared copy, but no public website reads it. The person
-  page says so beside the button.
+- **No public pages inside the app.** Your department's own website shows
+  public records; only the **Today in history** widget is served by The
+  Logbook. The website lists filter by decade only, with no text search.
 - **No text recognition for scans.** Type a transcription to make a scan's
   words searchable.
-- **Articles** (with PDF and Word export) and a public **Today in history**
-  widget are planned and not yet built. Apparatus and event records cannot be
-  merged; delete a duplicate while it is still a draft.
+- **Only the archive's keepers write articles.** There is no way for a
+  member to submit one for review, and no series of articles. Apparatus and
+  event records cannot be merged; delete a duplicate while it is still a
+  draft.
 - **Anonymizing a member does not change their History record.** See
   [Anonymizing a Former Member](#anonymizing-a-former-member).
 

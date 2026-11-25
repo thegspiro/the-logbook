@@ -440,7 +440,9 @@ Applications**, **Rejected**, **Withdrawn** and **Converted**.
   back.
 - Cards show the applicant's name, email, time on their current stage, and a
   status badge (**Active**, **On Hold**).
-- Switch to **Table** for a sortable list, one page at a time.
+- Switch to **Table** for a sortable list, one page at a time. Where the
+  table shows as cards (a phone, a tablet, a narrow window), sort it with the
+  **Sort by** list and the arrow button above the cards _(2026-11-24)_.
 - **Filter** by status: **Active** or **On Hold**.
 - **Search accepts a full name.** Every word you type must match the first
   name or last name, or be the applicant's complete email address. So "John

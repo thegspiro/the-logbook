@@ -228,6 +228,16 @@ is_complete = completed_hours >= required_hours
 **Every 2 Years:** a lapsed certificate overrides the hours — see
 [Biannual Requirements](#biannual-requirements).
 
+**Possible double credit counts twice until an officer decides**
+_(2026-11-23)_. Finalizing a Training event writes the attendee their own
+record and never merges it into a self-report or a hand-entered record of the
+same class. When the two share the event's day and the same library course or
+the same name (case, spacing and punctuation ignored), the pair is flagged
+under **Records → Possible Double Credit**, but both records stay `COMPLETED`
+and both are summed above. The sum drops to one record only when an officer
+voids the other; **Keep both** leaves both counted on purpose. Nothing in the
+calculation de-duplicates a pair on its own.
+
 **The monthly average shown beside the total** _(2026-11-20)_. My Training's
 requirement card and the Compliance Matrix detail lead an hours requirement
 with the member's average against the department's monthly pace, from one
