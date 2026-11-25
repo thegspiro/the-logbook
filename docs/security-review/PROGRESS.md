@@ -16,10 +16,10 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**(none yet — this iteration's PR has not been opened at the time this
-commit was made; it rides along as a second commit on the review branch
-once pushed, per Step 8.)** Feature 23 (Medical supplies), pass 22 —
-watchdog pickup (the dedicated `/loop 30m /security-review` session,
+**PR [#4698](https://github.com/thegspiro/the-logbook/pull/4698) (branch
+`claude/security-review-medical-supplies`)**: Feature 23 (Medical
+supplies), pass 22 — watchdog pickup (the dedicated
+`/loop 30m /security-review` session,
 `session_011T1ZyyLrD5HagusgK9uDw2`, remains unreachable, confirmed via
 `ListAgents` → "No reachable agents").
 
