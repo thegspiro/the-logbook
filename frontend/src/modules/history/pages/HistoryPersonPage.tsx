@@ -378,8 +378,8 @@ export const HistoryPersonPage: React.FC = () => {
                 </div>
               )}
               <p className="text-theme-text-secondary text-xs">
-                Public records go live on the department&rsquo;s website when the public feed is turned on. It is not
-                connected yet.
+                Public records appear on the department&rsquo;s own website when History → Titles, lists and clearance →
+                Public website shows people.
               </p>
             </section>
 

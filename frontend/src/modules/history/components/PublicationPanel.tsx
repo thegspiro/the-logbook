@@ -85,7 +85,8 @@ export const PublicationPanel: React.FC<PublicationPanelProps> = ({ record, noun
       )}
       {record.publication_level === 'public' && (
         <p className="text-theme-text-secondary text-xs">
-          Public records are stored now and appear on the department&apos;s website once the public feed is turned on.
+          Public records appear on the department&apos;s own website when History → Titles, lists and clearance → Public
+          website shows this kind of record.
         </p>
       )}
     </section>

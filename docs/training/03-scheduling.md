@@ -165,6 +165,22 @@ questions. For example: _"2 of 3 crew checked in · 3 of 4 positions filled —
 running short · 1 start-of-shift check pending"_. Below it, the crew board is
 headed by its apparatus, and each open seat is listed by its position.
 
+**Heading of the seat list** _(2026-11-25)_. A duty shift's seats are headed
+**Crew Board — E-5**, naming the apparatus, or just **Crew Board** when no
+apparatus is assigned (it used to read "Crew Board —" with nothing after the
+dash). A community outreach sheet is headed **Volunteers**, with a people
+icon instead of the truck, and the window's title is the event's name with
+the **Community outreach** tag rather than **Shift Details**. A seat on an
+outreach sheet shows its role, and its position cannot be changed, since
+every seat there has the same one.
+
+> **Screenshot needed** (`03-156-outreach-sheet-details.png`): the shift
+> details window for a community outreach signup sheet, titled **Station Tour
+> for Lincoln Elementary** with the **Community outreach** tag, its seat list
+> headed **Volunteers** with the people icon, a filled **Tour Guide** seat, an
+> open seat reading **Greeter** above **Open role**, and **Sign yourself up
+> for this outreach event** below.
+
 **Seat names.** Every screen calls a seat by the same name. The EMT seat reads
 **EMT** on the board, the phone day sheet, **My Shifts**, shift reports, the
 printed roster and emails. A seat your department created shows the name your
@@ -437,7 +453,8 @@ off after five calls and the email after ten.
 
 _Added 2026-11-04._ The same figures appear on a member's profile as **Shift &
 Call History** (hours, calls and outside-agency hours by month, year and all
-time), for the member themself and for holders of **View scheduling reports**.
+time), for the member themself and for holders of **View shift reports and
+analytics** (`scheduling.report`).
 It shows on-call (recall) hours and outside-unit calls separately; they are
 part of the totals, never added to them.
 
@@ -498,7 +515,8 @@ permission. It shows only your own record.
   has, the full department name is used.
 
 The same layout is used for a member's **Shift & Call History** on their
-profile, for the member and for officers with **View scheduling reports**;
+profile, for the member and for officers with **View shift reports and
+analytics** (`scheduling.report`);
 an officer sees the list but not **Log outside shift**.
 
 **Hours by position** _(2026-11-23)_. Under the year-at-a-glance chart, a
@@ -518,6 +536,10 @@ year button (for example **2026**) shows the year you picked above, and
   each member sat in.
 
 It also appears on a member's **Shift & Call History** on their profile.
+Officers with **View shift reports and analytics** (`scheduling.report`) and
+access to Reports can see the same figures for every member at once in
+**Reports > Hours by Position**, one row per member per seat for a chosen
+period (see [Reports](./08-admin-reports.md#available-report-types)).
 
 ![My Shifts on its Hours view: This month, this year and all-time cards with the two-colour split bar, the year picker between its Previous year and Next year arrows, the year-at-a-glance chart with its Busiest month, Months with shifts and Avg per active month tiles, and All shifts below](./images/03-104-my-shifts-hours.png)
 
@@ -558,6 +580,37 @@ replaces the per-seat **Sign myself up** the panel used to offer, which the
 server refused because it named no role. The same control is on the event's
 own page. See the events guide,
 [Signing up to volunteer at an outreach event](./04-events-meetings.md#signing-up-to-volunteer-at-an-outreach-event-2026-11-22).
+The role list puts the roles the event cannot run without first, and shows an
+optional role as, for example, **Greeter (1 open, optional)** _(2026-11-23)_.
+
+**An outreach sheet is named by its event, not as a shift** _(2026-11-24)_. A
+station tour or school visit is staffed from the schedule but is not duty
+coverage. Everywhere in Scheduling — the Open Shifts card, the board's day
+panel and phone day sheet, **Your next shift**, **My Shifts** (upcoming and
+past), the give-up dialog, the shift report picker and the printed roster —
+the sheet is headed by the event it staffs, for example **Station Tour for
+Lincoln Elementary**, with a **Community outreach** tag, instead of a crew
+name such as "Day Duty Crew". A request not yet on the calendar reads
+"_type_ for _requester_". Each seat is named by its role (**Tour Guide**,
+**Educator**) rather than "Volunteer", and an open one reads **Open role**.
+On the board, an open seat claims the role it names; when more than one role
+is still open the panel says "Choose a role above to sign up." instead of one
+**Take a seat on this shift** button (before, that button sent no role and
+was refused with "Choose what you would like to do").
+
+**Time on an outreach sheet is outreach hours, not shift hours**
+_(2026-11-24)_. Checking in and out on the sheet credits the event it staffs,
+and the hours go to the Admin Hours category the event's type is mapped to
+(by default only **Public Education** maps to Community Outreach; an event type
+with no mapping credits nothing). The sheet's time is left out of every
+shift-hours figure — **Department hours this month**, **My Shifts → Hours**, the Member
+Hours report, the Shift Compliance report — and out of the shifts that count
+toward a shift requirement. This applies to sheets worked before the change
+too, so a member's shift hours can drop on upgrade; their outreach hours
+appear in Admin Hours once the event is ended, or once an officer has
+[credited past outreach sheets](#crediting-past-outreach-sheets). Hours
+credit from the event's scheduled start, as any event check-in does, so set
+an early arrival right with **Edit Times** on the event.
 
 You see **Signed up for shift**, and the shift appears on **My Shifts**,
 where you can confirm it.
@@ -1930,6 +1983,9 @@ These will not match, and that is the point. A shift can run short or long,
 and a member can be rostered for a shift they never work. Anything that
 credits a member uses the worked figure.
 
+Time on a community outreach signup sheet is in neither figure _(2026-11-24)_:
+it is outreach, credited to Admin Hours through the event the sheet staffs.
+
 > **What if a member worked a shift they weren't assigned to?** They still
 > appear in the report. Hours are not lost because the roster did not match
 > what happened.
@@ -2603,6 +2659,11 @@ For a shift to count toward a shifts requirement:
    closed out does not count.
 3. **The requirement must be active**, and the shift must fall inside its
    period.
+4. **It must be a duty shift.** Since 2026-11-24 a community outreach signup
+   sheet never counts toward a shifts requirement, or toward shift hours on
+   the Shift Compliance report; its time is credited as outreach hours through
+   the event instead (see
+   [An outreach sheet is named by its event](#open-shifts)).
 
 ### Path 2: Training program progress
 
@@ -3891,6 +3952,7 @@ computer never sees your values.
 | **Require approval for outside-department shifts**        | _(2026-11-05)_ Off unless you turn it on. A shift a member logs with another department waits for a scheduling officer's approval before it counts. See [For scheduling officers](#for-scheduling-officers-the-list-and-the-review) |
 | **Allow pre-shift work**                                  | Lets a member time prep work, such as an early equipment check, before check-in opens. An officer approves the time before it counts                                                                           |
 | **Department Defaults**                                   | **Default Shift Duration (hours)** and **Default Min Staffing**. Since 2026-10-31 a new shift template starts with them: the end time is set that many hours after the 08:00 start, and minimum staffing is filled in. The built-in Day, Night and 24 Hour shift types use the minimum staffing too. Overtime is set under **Overtime advisory**, not here |
+| **Community outreach hours**                              | _(2026-11-24)_ A one-off catch-up that credits time worked on outreach signup sheets before outreach hours were credited through their events. See [Crediting past outreach sheets](#crediting-past-outreach-sheets) |
 | **Position Names**                                        | Add your own seats under **Add Custom Position**, and tick the **Certifications that qualify** for each _(2026-11-05)_. See [Your department's own seats](#your-departments-own-seats). The on/off ticks for built-in seats are saved but marked **Not in effect yet**: templates and shifts still offer the full built-in list                                                                  |
 
 **The typed numbers are checked** _(2026-11-20)_. **Hours limit** (0 to 336),
@@ -3903,6 +3965,38 @@ card says _"Saved, except the flagged setting, which keeps its stored value."_
 Pressing Enter in a box saves its card.
 
 ![Scheduling settings, General, the Overtime advisory card after saving with Hours limit cleared: the box flagged Enter a whole number from 0 to 336., Window (days) beside it, and the line that the card saved except the flagged setting, which keeps its stored value](./images/03-142-overtime-hours-limit-error.png)
+
+### Crediting past outreach sheets
+
+**Who can do this:** officers who can manage scheduling.
+
+Since 2026-11-24, check-ins on a community outreach signup sheet are credited
+as outreach hours through the event the sheet staffs, as they happen. Sheets
+worked before then were not, and nothing credits them on upgrade. To credit
+them once:
+
+1. Open **Settings → General** and find the **Community outreach hours** card.
+2. Select **Check past outreach sheets**. Nothing is written yet: the card
+   lists **To credit**: how many volunteers on how many sheets, and the hours.
+   It also says how many sheets belong to an event that is still open (their
+   hours are written when the event is ended) and how many have no event yet
+   (nothing to credit until the request is scheduled).
+3. Select **Credit the hours**, and confirm (**Credit past outreach
+   sheets?**, with **Credit the hours** or **Not now**). Each volunteer is
+   recorded as attending their event, and hours are written for events that
+   have already ended, to the category each event type is mapped to. The card
+   then reads **Credited**, with how many Admin Hours entries were written or
+   corrected.
+
+It is safe to run again: a volunteer already credited, or checked in on both
+the sheet and the event, is counted once. Taking a sheet check-in away later
+does not remove the event attendance; remove the attendee on the event too.
+
+> **Screenshot needed** (`03-155-outreach-credit-card.png`): **Settings →
+> General** with the **Community outreach hours** card after **Check past
+> outreach sheets**, listing "To credit: 6 volunteers on 3 sheets, 14.5" and
+> one sheet for an event still open, with **Check again** and **Credit the
+> hours**.
 
 ### What the settings do not do
 
