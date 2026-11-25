@@ -5,7 +5,7 @@
 pass-4 addendum, PR #2515), 2026-10-04 (pass 5), 2026-10-07 (pass 6),
 2026-10-17 (pass 7), 2026-10-20 (pass 8), 2026-10-24 (pass 9), 2026-10-27
 (pass 10), 2026-10-30 (pass 11), 2026-11-04 (pass 12), 2026-11-11 (pass 13),
-2026-11-22 (pass 14) · **PR:** #1911 (pass 1)
+2026-11-22 (pass 14), 2026-11-25 (pass 15) · **PR:** #1911 (pass 1)
 
 **Backend:** `app/api/v1/endpoints/security_monitoring.py` (677 L),
 `app/api/v1/endpoints/ip_security.py` (555 L), `app/api/v1/endpoints/audit_logs.py`
@@ -2487,6 +2487,137 @@ respective owner/product decision. No `KNOWN_LIMITATIONS.md` change needed.
 | `npm run typecheck`                                                                                                               | 0 errors                                                                          |
 | `npm run lint`                                                                                                                    | 0 errors/warnings                                                                 |
 | frontend scoped suite (`src/modules/ip-security`, `AuditLogPage`, `ErrorMonitoringPage`)                                          | 65 passed (5 files)                                                               |
+
+Next in rotation: Feature 29 (Reports & analytics — `reports.py`,
+`analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`).
+
+## Pass 15 (2026-11-25) — watchdog pickup, true zero-delta in this feature's own scope, 0 new findings
+
+The dedicated `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) remains unreachable (no reachable agent
+via `ListAgents`). A fresh `list_pull_requests` (state=open) found nothing
+open at all — PR #4704 (Feature 27, Integrations, pass 15) had already
+merged clean (`1bb6c27b8174ab0ed510dfa821c9ea3eca8e48f9`), confirming row 28
+as the next `⬜` row.
+
+### Baseline and diff method
+
+Baseline: `78809b873` (the merge of PR #4547, this feature's own pass 14).
+Diffed every declared backend scope file against that SHA with
+`git diff --stat`, not trusted from the prior write-up.
+
+**Eight of the nine backend scope files are byte-identical to the
+baseline:** `app/api/v1/endpoints/security_monitoring.py`,
+`app/services/security_monitoring.py`, `app/api/v1/endpoints/ip_security.py`,
+`app/services/ip_security_service.py`, `app/api/v1/endpoints/audit_logs.py`,
+`app/api/v1/endpoints/error_logs.py`, `app/core/audit.py`,
+`app/core/geoip.py`, `app/services/audit_ship_service.py`.
+
+**`app/core/security_middleware.py` carries the same shape of diff pass 14
+already saw and accepted:** two new paths appended to
+`SecurityMonitoringMiddleware.EXPORT_ENDPOINTS`
+(`/api/v1/evaluations/export-pdfs`, `/api/v1/users/leave-requests/export`)
+and one new entry in `EXPORT_ENDPOINT_TEMPLATES`
+(`/api/v1/history/articles/{article_id}/export`) — each a different
+feature's own commit registering its new export route in this shared,
+hand-maintained allowlist. Confirmed, not assumed, that
+`tests/test_security_middleware.py::TestExportEndpointsCoverage` still pins
+this set bidirectionally against the live route table (`real_export_paths -
+EXPORT_ENDPOINTS` and `EXPORT_ENDPOINTS - real_paths`, both asserted empty),
+so an export route left off this list fails that test rather than silently
+escaping monitoring. No other line in the file changed. **No finding.**
+
+### Route inventory — re-enumerated by AST, 37 routes, unchanged
+
+Counted every `@router.<method>(` decorator directly in the four endpoint
+files (not trusted from the empty diff): 16 (`security_monitoring.py`) + 12
+(`ip_security.py`) + 3 (`audit_logs.py`) + 6 (`error_logs.py`) = **37**,
+identical to pass 14.
+
+### Frontend — two files carry a genuine post-pass-14 diff, both cosmetic
+
+Diffed the module (`frontend/src/modules/ip-security/`) and the two
+standalone pages (`AuditLogPage.tsx`, `ErrorMonitoringPage.tsx`) against the
+same baseline:
+
+- **`IPExceptionTable.tsx`** (+19/−15) — the Use Case and Status cells each
+  wrap their multi-line content (label plus an optional reason/rejection/
+  revoke note) in a `min-w-0` div, the Pitfall #39 `rwd-table` reflow-fit
+  shape. Same markup, same data, same conditions for what renders. No
+  finding.
+- **`ErrorMonitoringPage.tsx`** (+22/−13) — the same `min-w-0` wrapping on
+  the error-type badge cell, plus a new "Reference" field in the detail
+  panel that calls the existing, already-reviewed `contextText(error.context,
+  'reference')` helper — the same generic string-extractor already used
+  for `filename`/`method`/`path`/`error_code`/`traceback`/`userAgent` on
+  this same panel. Confirmed no backend file in this feature's scope
+  changed, so `reference` is an existing `context` key this page is simply
+  now choosing to display, not new backend-side data collection; it is
+  gated by the same page-level permission as every other field already
+  shown here. No finding.
+
+Grepped both diffs for `window.confirm`/`alert`/`prompt`,
+`dangerouslySetInnerHTML` and a bare `toHaveBeenCalledWith()`: zero hits.
+
+### Re-verified — both open items unchanged
+
+- **SEC2-28-6** (LOW, flagged) — `request_ip_exception` is still a plain
+  `select()` → `INSERT` with no `.with_for_update()` and no unique
+  constraint (`app/api/v1/endpoints/ip_security.py:69`, unchanged file). Not
+  a security bypass; left as an admin-UX nicety per the standing decision.
+- **Dead detector code** (pass 3, flagged) — `analyze_request`,
+  `_check_rate_limit`, `_check_injection_patterns`
+  (`app/services/security_monitoring.py:387,414,460`) still have zero
+  production callers outside their own file — re-confirmed by a repo-wide
+  grep for `analyze_request` outside `app/services/security_monitoring.py`
+  and `tests/`, zero hits.
+
+All previously FIXED/RESOLVED items (SEC-1 through SEC-9, SEC2-28-1 through
+SEC2-28-11, pass 11's IP-exception approval locking) are unchanged — their
+files are byte-identical to pass 14's already-spot-verified state.
+
+### Checklist dimensions re-checked directly against current code
+
+1. **Auth coverage** — all 37 routes carry a `Depends(...)`-bearing
+   dependency; unchanged files, re-confirmed by the same AST count above.
+2. **Authorization & role fit** — unchanged file content; permission
+   strings unchanged from pass 14's set.
+3. **Tenant isolation** — unchanged file content; org-scoping on every
+   by-id audit/error-log/IP-exception/alert operation unchanged.
+4. **Injection & untrusted output** — unchanged file content; the audit-log
+   search's `like_pattern()`/`escape=LIKE_ESCAPE_CHAR` and
+   `safe_error_detail()` on the exception handlers both unchanged.
+5. **Data exposure** — unchanged file content; `/security/`,
+   `/audit-logs/`, `/ip-security/`, `/errors` remain in
+   `UNCACHEABLE_PREFIXES`. The new frontend "Reference" field reads an
+   existing, already-permission-gated context key (see above) — not a new
+   exposure.
+6. **Abuse resistance** — n/a change this pass; SEC-1's tracking-dict caps
+   untouched.
+7. **Schema & migration integrity** — no migration in this feature's own
+   scope this pass; `validate_migrations.py --strict` passes clean at a
+   single head.
+
+### No new findings this pass
+
+**0 fixed, 0 new findings** in this feature's own scope. SEC2-28-6 and the
+dead-detector-code note remain open, unchanged. No `KNOWN_LIMITATIONS.md`
+change needed.
+
+### Completion gate (Pass 15)
+
+| Check                                                                                                | Result                                                             |
+| ----------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/` (`flake8==7.4.1`, CI's pin)                                              | clean                                                                |
+| `black --check app/ tests/ alembic/` (`black==26.10.1`, CI's pin)                                      | clean, 3541 files unchanged                                         |
+| `isort --check-only app/ tests/ alembic/` (`isort==9.0.2`, CI's pin)                                   | clean                                                                |
+| `python3.13 scripts/validate_migrations.py --strict`                                                  | PASSED — 844 revisions, single head `e9cf8ab7e4e4`                  |
+| `python3.13 scripts/generate_schema_docs.py --check`                                                  | up to date                                                           |
+| `python3.13 scripts/check_route_permissions.py --strict` (repo root)                                  | 344 routes, 0 errors/warnings                                       |
+| Scoped backend pytest (`-k "security_monitoring or ip_security or ip_exception or audit_log or error_log or geoip or audit_ship or security_middleware or export_endpoint"`) | 293 passed, 1 pre-existing environment-only skip (`py_vapid`) |
+| `npm run typecheck`                                                                                    | 0 errors                                                             |
+| `npm run lint`                                                                                         | 0 errors/warnings                                                    |
+| `npx vitest run src/modules/ip-security src/pages/AuditLogPage.test.tsx src/pages/ErrorMonitoringPage.test.tsx` | 66 passed (5 files)                                 |
 
 Next in rotation: Feature 29 (Reports & analytics — `reports.py`,
 `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`).
