@@ -29,7 +29,7 @@ placeholders for `04-111` to `04-116`.
 | 02 | Add Provider details step, address flagged "Enter a full address, starting with https://." | Optional `02-176-provider-address-error` |
 | 09 | Skill template builder: a blank criterion label flagged, its section opened, **Fix these and save again** with "Section 1, Criterion 2: Give the criterion a label."; on an existing template "Template saved, except template name…" | Create `09-35-builder-errors` |
 | 09 | `09-04-template-builder`, `09-02-create-template` | Check for the old banner |
-| 03 | My Shifts → Hours: **Hours by position** card with the year and **All time** buttons, several seats, **No position recorded** and **Other departments** rows | Create `03-145-hours-by-position` |
+| 03 | My Shifts → Hours: **Hours by position** card with the year and **All time** buttons, several seats, **No position recorded** and **Other departments** rows | Create `03-148-hours-by-position` (queued as `03-145`, which `03-145-my-shifts-past-credited` already holds) |
 | 03 | `03-104-my-shifts-hours`, `03-146-hours-month-selected`, `03-113`: the new card sits between the chart and All shifts | Check |
 | 04 | **Settings → CRR Catalogue**: Smoke alarm install with its counts, Risks and Priority populations ticks, the Admin Hours category, Rename / Describe / Retire, one type marked **Coming soon** | Create `04-111-crr-catalogue` |
 | 04 | **Log a CRR activity**: Alarms installed 3, Fire ticked, ZIP with city and state, Add resident details unticked, one member at 60 minutes | Create `04-112-crr-activity-dialog` |
@@ -43,17 +43,18 @@ placeholders for `04-111` to `04-116`.
 | 06 | Department Maintenance, editing a record: "Facility: Station 1" as text, no picker | Create `06-41-maintenance-edit-facility-text` |
 | 08 | A report at desktop width as a sortable table, sorted by one column, its header button focused | Create `08-127-report-sorted-column` |
 
-**Rows earlier queues still show as open, though the images now exist.**
-Left as they are here, because the open passes rewrite those sections; mark
-them done when #4568 and #4626 merge:
+**Rows earlier queues still showed as open, though the images exist.**
+Settled by the November 24 – 25 pass, now that #4568 and #4626 have merged:
 
-- November 20 – 21 queue: `02-144-evaluation-step-assign`,
-  `02-145-evaluation-last-review`, `02-146-evaluation-period-results` and
-  `03-138-closeout-own-row-locked` were captured by #4607.
-- `04-102-event-request-page` still says "Still open: the phone action bar";
-  check whether #4599 captured it.
-- #4599 also added `01-59` to `01-62`, `02-147` to `02-150` and `04-103` to
-  `04-107`, which have no row in this file or `SCREENSHOT_STATUS.md`.
+- November 20 – 21 queue: `02-144`, `02-145`, `02-146` and `03-138` are
+  marked **Done** (captured by #4607).
+- `04-102-event-request-page` stays open for the phone action bar: the image
+  is 1440 × 900, desktop only.
+- `01-59` to `01-62`, `02-147` to `02-150` and `04-103` to `04-107` (added
+  by #4599) exist and are referenced from their guides.
+- `03-145` was queued here for **Hours by position**, but
+  `03-145-my-shifts-past-credited` holds that id. The row now asks for
+  `03-148-hours-by-position`.
 
 **Made wrong by this range:** `01-49`, `02-17`.
 
@@ -363,12 +364,12 @@ of this pass; check them against `images/` before saving.
 | 02 | Event template editor's **Training Details** section on a Training template | Optional `02-151-template-training-details` |
 | 02 | `02-108-monthly-hours-leave` (headline is now the average), `02-66-compliance-matrix` (an hours cell now leads with "3.7/2 hrs/mo avg"), `02-41-training-admin-reports` (Compliance Report card text) | Re-shot 2026-11-21: the average headline, the "hrs/mo avg" cell and the new card text are in frame |
 | 02 | `02-01-my-training`, `02-125-compliance-matrix-not-applicable` (replace if an hours cell shows), `02-75-compliance-forecast` (Current coloured by standing), `02-133-compliance-profile-positions` (now "Optional Requirements") | Checked, re-shot 2026-11-21 |
-| 02 | Evaluation step list with **Assign** and the **Who takes "…"** dialog | Create `02-144-evaluation-step-assign`. Still open: needs evaluations seeded through the workflow |
-| 02 | **Last review** card on an evaluation | Create `02-145-evaluation-last-review`. Still open, as `02-144` |
-| 02 | Conduct list with a period chosen: **Period results**, grade tiles, **Export CSV** (as a `view_all` holder) | Create `02-146-evaluation-period-results`. Still open, as `02-144` |
+| 02 | Evaluation step list with **Assign** and the **Who takes "…"** dialog | Create `02-144-evaluation-step-assign`. **Done** (#4607) |
+| 02 | **Last review** card on an evaluation | Create `02-145-evaluation-last-review`. **Done** (#4607) |
+| 02 | Conduct list with a period chosen: **Period results**, grade tiles, **Export CSV** (as a `view_all` holder) | Create `02-146-evaluation-period-results`. **Done** (#4607) |
 | 02 | **New template** dialog with "Annual Evaluation with Officer Sections" and its **Officer ranks** boxes | Created 2026-11-23 |
 | 08 | Compliance profile form with the amber "… also has priority N" warning and the Required / Optional lists | Created `08-124-profile-priority-tie-warning` 2026-11-23. `08-70-compliance-profiles` re-shot 2026-11-21; no seeded profile has optional requirements, so no "Optional:" chips are in frame |
-| 03 | Close-out wizard step 1 as a shift officer without `scheduling.manage`: own Start/End/Hours disabled with the hint line | Create `03-138-closeout-own-row-locked` (still open: needs a shift officer without `scheduling.manage`). `03-75-closeout-step1-attendance`, `03-45-finalize-checklist` re-shot 2026-11-21 |
+| 03 | Close-out wizard step 1 as a shift officer without `scheduling.manage`: own Start/End/Hours disabled with the hint line | Create `03-138-closeout-own-row-locked`. **Done** (#4607). `03-75-closeout-step1-attendance`, `03-45-finalize-checklist` re-shot 2026-11-21 |
 | 03 | History import Shifts tab: "You chose to add these members to that shift." with **Undo** | **CURRENT** 2026-11-23 as `03-139-history-import-existing-undo`. `wiki/images/history-import-shifts.png` checked: it shows the per-member **Same shift** / **Keep separate** question, a different one, and every control in it is still on the screen |
 | 01 | Leave request: **Ask a question**; the member's view with changed dates and **Accept these dates**; **Your leave** with **Your first day back** and **End my leave**; the escalation setting | Created 2026-11-23 |
 | 01 | `01-49-anonymize-member` (the Removed list has two more lines), `01-08-member-audit-history` (plain-word field names, new position wording) | **Replace** `01-49`: still open, it fails in the 2026-11-21 capture. `01-08` re-shot 2026-11-21 |
