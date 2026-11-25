@@ -4123,3 +4123,202 @@ No migration in this pass's window touches a training-extended table. No
 | `pytest tests/ -q -k "training or cohort or syllabus or waiver or external or enhancement or submission or xapi or module_config"` | ✅ 3550 passed, 1 pre-existing environment-only skip (`py_vapid`) |
 | `cd frontend && npm run typecheck`                                                                                                 | ✅ 0 errors                                                       |
 | `cd frontend && npm run lint`                                                                                                      | ✅ 0 errors (exit 0, within `--max-warnings 10`)                  |
+
+## Pass 16 (2026-11-25) — watchdog pickup, first full review of `attendance_waiver_requests.py`, 0 fixed, 0 new findings
+
+**Prefix:** `TRX16` · **PR:** see `PROGRESS.md`'s **Open PR** row
+
+**Watchdog note.** `ListAgents` reported "No reachable agents" — the dedicated
+`/loop 30m /security-review` session (`session_011T1ZyyLrD5HagusgK9uDw2`)
+remains unreachable, consistent with every prior pass. PR #4692 (Feature 17,
+Training core, pass 16) had already merged (`f6888842b`) before this
+iteration started; a fresh `list_pull_requests` (state `open`) found no
+`claude/security-review-*` head, and row 18 was confirmed the next `⬜` row
+directly against `PROGRESS.md`'s rotation table.
+
+Baseline `b07b25cab` (pass 15's merge, PR #4494).
+
+### The deferred surface: `attendance_waiver_requests.py` and its services
+
+Pass 15 deferred this surface because PR #4481 ("Fix the remaining seven
+attendance-waiver review findings") was open and rewriting it. #4481 merged
+(`5ab28b471`) before this pass started, so this is that surface's first full
+seven-dimension read under this rotation, against settled code —
+`attendance_waiver_requests.py`, `attendance_waiver_service.py` (3443 L),
+`attendance_waiver_attachments.py` (703 L), `attendance_waiver_expiry.py`,
+`attendance_waiver_email_service.py`, `models/attendance_waiver.py`,
+`schemas/attendance_waiver.py`.
+
+**Route re-enumeration corrects a stale count.** The pass-14→15 lap note that
+folded this file into scope cited "31 routes"; counting `@router.get/post/
+put/patch/delete` decorators directly gives **21**. Carried forward below as
+the corrected figure.
+
+**1. Authentication coverage.** All 21 routes carry `Depends(get_current_user)`
+or `Depends(require_permission("training.manage"))` (the three `/policy*`
+settings routes only). No route lacks a dependency.
+
+**2. Authorization & role fit.** Deliberately not permission-gated past
+sign-in for the decision routes (approve/deny/override/confirm/withdraw/
+respond/request-info/get/list/attachments): the docstring states "who may
+decide is a matter of holding a position, not a permission," and the service
+resolves it per request rather than a static string. Read the mechanism
+directly rather than accepting the docstring's claim:
+
+- `_require_decider` (service, line 1344) refuses the request's own member
+  (`PermissionError`, separation of duties) before calling `may_decide`, and
+  answers 404 rather than 403 to anyone the service's `_may_view` also refuses
+  — a non-decider cannot distinguish "this id doesn't exist" from "this one
+  isn't routed to you."
+- `chief_override` requires `holds_chief_position(actor)` in addition to
+  `_may_view`, and separately refuses the actor's own request — a Chief
+  cannot override a denial on their own waiver.
+- `save_policy`/position/alternate-option routes are the only state a
+  `training.manage` string actually gates, matching their sensitivity
+  (department-wide routing configuration, not one member's request).
+
+**3. Tenant isolation.** `_find`/`_locked_request` (service, lines 2172–2219)
+are the only two by-id fetch paths, and both filter
+`AttendanceWaiverRequest.organization_id == org_id` (plus `.workflow ==
+self.workflow`, so the training and meeting variants of this engine cannot
+cross). Every helper that resolves a parent or sibling row for a decision —
+`_lock_member`, `_event`, `_member`, `_approved_dates`, `_holder_ids`,
+`_names`, `_with_asker`, `_copy_decision` — filters `organization_id` in the
+same query, re-read directly rather than sampled. `attendance_waiver_
+attachments.py`'s `download`/`add_attachments`/`remove_attachment` resolve
+the parent request through `self.engine._find` (same org-scoped path) before
+touching the attachment row, itself also filtered on
+`AttendanceWaiverAttachment.organization_id == org_id`.
+
+**4. Injection & untrusted output.** No raw SQL or `LIKE`. Uploads go through
+the shared magic-byte/UUID-filename pipeline (`PendingUpload`, `_store`),
+capped by `MAX_ATTACHMENT_BYTES`/`MAX_ATTACHMENTS`. `download`'s path is
+resolved through `file_storage.resolve(attachment.file_path, org_id, AREA)`
+and refused (logged, 404) if resolution lands outside the organization's
+area — read directly at attachments.py:454–461, not assumed from the
+docstring.
+
+**5. Data exposure.** `_ids` (service, line 2242) is the one shape `_audit`
+ever receives: ids, workflow, member id, event id, session date — "the reason
+and notes may be medical, and the category can say as much (#33)," enforced
+by construction rather than by each call site remembering to redact.
+`download`'s own audit call (attachments.py:468) matches: ids only, and sets
+`Cache-Control: no-store, private` / `Pragma: no-cache` on the response,
+matching the module's own "often medical" framing. `AttendanceWaiverRequest-
+Action.note` (the question/answer/decision note, possibly medical) is never
+read by any audit call — verified by grep across both files for `.note` next
+to `_audit`/`log_audit_event`: none.
+
+**6. Abuse resistance.** `list_attendance_waiver_requests`/`list_my_...`
+are bounded (`MAX_PAGE = 200`, `limit: int = Query(50, ge=1, le=MAX_PAGE)`).
+`read_uploads` caps attachment count before storing any of them.
+`approve`'s cap check takes `_approved_dates(..., lock=True)` under the
+member's own already-locked row (Pitfall #27) — a second concurrent approval
+for the same member waits and recounts; one for a different member does not
+contend.
+
+**7. Schema & migration integrity.** No migration in this pass's window
+touches an `attendance_waiver` table (confirmed below: this surface's own
+files carry no diff since pass 15 beyond what #4481 already fixed and this
+pass re-verified). `AttendanceWaiverAttachment`/`Action` rows are plain
+columns, no JSON mutation to misuse.
+
+**0 fixed, 0 new findings.** #4481 closed what it set out to close; nothing
+left open by it, and no gap of this pass's own.
+
+### Real delta elsewhere since pass 15 (baseline `b07b25cab`)
+
+`git diff --stat` across the seven originally-declared files plus the
+newly-folded attendance-waiver surface found changes beyond #4481 itself,
+all already shipped and tested by their own commits — re-verified against
+current code rather than re-derived:
+
+- **`training_waivers.py`** (#4560, `9e15158d9`, owner decision 2026-11-22):
+  `create_training_waiver` refuses `user_id == current_user.id` (400);
+  `update_training_waiver` refuses the caller's own waiver (403) after an
+  org-scoped by-id fetch. Matches `MemberLeaveService.create_leave`'s and
+  `RequirementOverrideService.grant`'s existing self-grant refusal shape.
+  `is_own_grant` (`app/utils/separation_of_duties.py`) is confirmed the one
+  function behind all five call sites (leave grant/edit, chief override,
+  waiver grant/edit) per the follow-up commit below — re-read directly, not
+  five independent comparisons.
+- **`training_waivers.py`/`member_leaves.py`** (`46ca3c364`): the frontend
+  now surfaces the server's existing refusal before submit rather than only
+  after; no change to the authorization itself.
+- **`course_cohorts.py`** (`0054718f9`): `_build_detail` blanks `created_by`/
+  `generated_by` when `include_member_data` is false — a roster member's `GET
+  /training/cohorts/{id}` no longer carries the reviewing officers' user ids.
+  Verified still present at `course_cohorts.py:341-348`; the officer path
+  (`include_member_data=is_officer`) is unchanged.
+- **`training.py`/`training_module_config.py`** (`7df25e31f`, `c0f98ff79`):
+  the compliance card and the officer's member-requirements view both now
+  report `"not_current_member"` for a non-current or deleted member instead
+  of grading them against the live matrix — the same class of drift Pitfall
+  #29 names, closed by routing both screens through
+  `training_compliance.py`'s shared classifier rather than each re-deriving
+  "is this person current."
+- **`training_enhancements.py`** gains one new route,
+  `DELETE /records/{record_id}/attachments/{entry}` (`1fcad58e1`,
+  `bef7a8f8b`): `_load_record_for_attachment` org-scopes the fetch and
+  refuses anyone but the record's own uploader or a `training.manage` holder
+  (403); `_removal_refusal` additionally keeps a voided record's attachments
+  and a self-report-copied certificate from being removed through this
+  route, matching `can_remove`'s own read of the same function (Pitfall #29).
+  The write takes a locking re-read (`for_update=True`) before mutating the
+  JSON `attachments` list and calls `flag_modified` (Pitfall #12), and its
+  audit event carries ids only, never the file name (Pitfall #33).
+- **`training_enhancement_service.py`**'s 677-line diff is almost entirely
+  export/report formatting (signature-line tick-box, department-identity/
+  report-number banner, forecast-standings) — confirmed every export still
+  builds its CSV through `SafeCsvChunks`/`collect_csv`
+  (`app/utils/csv_export`), never bare `csv.writer`.
+- **`training_program_service.py`**/compliance files: a completed program
+  requirement can be reopened by a correction that drops it below target
+  (`d2d4de04a`) and a milestone-processing failure no longer 500s a progress
+  update (`f9130d42b`) — both already-tested correctness fixes, neither
+  changing org-scoping or authorization.
+
+None of this is new authorization or tenancy surface; all of it is either a
+fix already landed and tested by its own commit (re-verified here) or a
+formatting/export change with no security bearing.
+
+### Route re-enumeration
+
+`training_submissions.py` 22, `training_waivers.py` 5,
+`training_enhancements.py` **31** (+1: the new delete-by-entry route),
+`external_training.py` 20, `course_cohorts.py` 17, `course_syllabus.py` 6,
+`training_module_config.py` 8, `attendance_waiver_requests.py` **21** (newly
+counted; corrects the "31" cited when this surface was folded into scope) —
+**130 routes** across the now eight declared endpoint files.
+`python3 scripts/check_route_permissions.py --strict` (repo root): **344
+total application routes, 0 errors, 0 warnings.**
+
+### Standing findings re-verified
+
+TRX-1 through TRX-10, TRX2-1, TRX3-1/TRX4-1, and TRX14-1 re-read directly at
+their current citation; none reopened. No OPEN or FLAGGED item existed
+entering this pass.
+
+## Flagged, not fixed
+
+Nothing this pass.
+
+## Schema & migration notes
+
+No migration in this pass's window touches a training-extended or
+attendance-waiver table. No `SET NULL` nullability issue found.
+
+## Completion gate (pass 16)
+
+| Check                                                                                                                                         | Result                                                            |
+| ----------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| `flake8 app/ tests/ alembic/`                                                                                                                    | ✅ 0 violations                                                    |
+| `black --check app/ tests/ alembic/`                                                                                                             | ✅ 3541 files unchanged                                            |
+| `isort --check-only app/ tests/ alembic/`                                                                                                        | ✅ clean                                                           |
+| `python3 scripts/validate_migrations.py --strict`                                                                                                | ✅ 844 revisions, single head `e9cf8ab7e4e4`                       |
+| `python3 scripts/check_route_permissions.py --strict` (repo root)                                                                                | ✅ 344 routes, 0 errors, 0 warnings                                |
+| `python3.13 scripts/generate_schema_docs.py --check` (backend)                                                                                   | ✅ up to date                                                      |
+| `pytest tests/ -q -k "training or cohort or syllabus or waiver or external or enhancement or submission or xapi or module_config or attendance"` | ✅ 4323 passed, 1 pre-existing environment-only skip (`py_vapid`)  |
+| `cd frontend && npm run typecheck`                                                                                                                | ✅ 0 errors                                                        |
+| `cd frontend && npm run lint`                                                                                                                     | ✅ 0 errors (exit 0, within `--max-warnings 10`)                   |
+| `npx vitest run` (training pages, 42 files)                                                                                                      | ✅ 498 passed                                                      |
