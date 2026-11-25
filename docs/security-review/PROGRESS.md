@@ -16,6 +16,41 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#4683](https://github.com/thegspiro/the-logbook/pull/4683) (branch
+`claude/friendly-babbage-xstbnj`)**: Feature 12
+(Facilities), pass 17 — watchdog pickup (the dedicated `/loop 30m
+/security-review` session, `session_011T1ZyyLrD5HagusgK9uDw2`, remains
+unreachable). **Branch-name deviation**, same as prior watchdog-run passes
+recorded here: this session's environment restricts pushes to its own
+assigned branch rather than a freely-chosen
+`claude/security-review-facilities` name.
+
+PR #4678 (Feature 11, Inventory, pass 17 — 0 fixed, 0 new findings) had
+already merged before this iteration started; row 11 marked ✅ above. A
+fresh `gh api search/issues` found no `claude/security-review-*` head open,
+so this iteration continued to Step 1: row 12 (Facilities) was the next ⬜
+row.
+
+Baseline `c5a93595d` (PR #4446's merge, pass 16), confirmed an ancestor of
+`origin/main`. Real delta: app-review's B4 pass 6 (`9d17c46d8`) fixed FAC2-9
+(a maintenance record's `system_id` now validated against its own
+facility, not just the org — a genuine XC-1-shaped tightening, fails
+closed), FAC2-7 (dashboard/list queries now filter out archived facilities'
+inspections) and FAC2-10 (a `floor=0` filter bug), all already correct when
+reviewed; a shared `documents_service.py` member-erasure extraction already
+reviewed by this lap's Documents & legal pass; and a mobile-UX frontend
+rollout (touch targets, contrast, `?dueWithin=30` deep link). No new route
+(102, unchanged), no permission or schema change. **0 fixed, 0 new
+findings.** FAC-30 remains the only standing (owner-accepted) item. Full
+write-up: `docs/security-review/FAC-12-facilities.md`'s **Pass 17** section.
+
+Row 12 → ✅ (pending this PR's merge); next is Feature 13 (Apparatus & NFC)
+— re-check `list_pull_requests`/`gh api search/issues` fresh rather than
+trusting this note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 11, Inventory, pass 17, PR #4678, merged), preserved for history</summary>
+
 **PR [#4678](https://github.com/thegspiro/the-logbook/pull/4678) (branch
 `claude/friendly-babbage-xstbnj`)**: Feature 11
 (Inventory), pass 17 — watchdog pickup (the dedicated `/loop 30m
@@ -59,6 +94,8 @@ write-up: `docs/security-review/INV-11-inventory.md`'s **Pass 17** section.
 
 Row 11 → ✅ (pending this PR's merge); next is Feature 12 (Facilities) —
 re-check `list_pull_requests` fresh rather than trusting this note.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 10, Documents & legal, pass 17, PR #4670, merged), preserved for history</summary>
@@ -28000,7 +28037,7 @@ iteration's commit" rule.
 | 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`, `screening_reminder_service.py` (added pass 16)                                                                                                                                                                               | ✅     |
 | 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`, `services/member_documents.py` (LIFE-11 erasure, added pass 17)                                                                                                                                                         | ✅     |
 | 11  | Inventory                 | INV    | `endpoints/inventory.py` (7089 L), `inventory_service.py`                                                                                                                                                                                                                             | ✅     |
-| 12  | Facilities                | FAC    | `endpoints/facilities.py` (4394 L), `facilities_service.py`                                                                                                                                                                                                                           | ⬜     |
+| 12  | Facilities                | FAC    | `endpoints/facilities.py` (4394 L), `facilities_service.py`                                                                                                                                                                                                                           | ✅     |
 | 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                                                                                                                                                         | ⬜     |
 | 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                                                                                                                                                           | ⬜     |
 | 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                                                                                                                                                      | ⬜     |
@@ -28083,6 +28120,57 @@ into row 13's declared scope rather than leaving it to be rediscovered.
 ---
 
 ## Log
+
+### 2026-11-25 — Feature 11 (Inventory, pass 17) merged (PR #4678); Feature 12 (Facilities, pass 17): watchdog pickup, real delta (FAC2-7/FAC2-9/FAC2-10 app-review correctness fixes, one security-relevant; a shared member-erasure `documents_service.py` extraction; a mobile-UX frontend rollout), 0 fixed, 0 new findings
+
+PR #4678 merged; row 11 confirmed ✅ above. A fresh `gh api search/issues
+q='repo:thegspiro/the-logbook is:pr is:open head:claude/security-review'`
+found zero results, so this iteration continued to Step 1: row 12
+(Facilities) was the next ⬜ row.
+
+Baseline `c5a93595d` (PR #4446's merge, pass 16), confirmed an ancestor of
+`origin/main` via `git merge-base --is-ancestor`. AST-enumerating
+`facilities.py` gives **102 routes, unchanged** from pass 16. `git diff
+--stat` scoped to every declared file showed zero change to `facilities.py`,
+`models/facilities.py`, `schemas/facilities.py` or `mcp/tools/facilities.py`.
+The real delta was app-review's B4 pass 6 commit (`9d17c46d8`): a new
+`_assert_system_on_facility` helper (FAC2-9, LOW) closing a cross-facility
+(same-org) mix-up on a maintenance record's `system_id`, called after the
+existing `assert_in_org` on the same field — verified it fails closed (org
+filter applied before the facility comparison) and introduces no new by-id
+surface; two dashboard/list query filters adding `is_archived`/active-facility
+scoping (FAC2-7, correctness, CLAUDE.md Pitfall #29's shape — not a
+tenant-isolation change, both are additional org-scoped conditions on
+already org-scoped queries); and a `floor=0` falsy-filter bug fix (FAC2-10).
+A second, unrelated commit (`feb5e8912`, Life-cycle/Documents feature) is
+the identical `delete_folder` → `_delete_folder_subtree` extraction this
+lap's Documents & legal pass 17 already reviewed in full — re-confirmed the
+FAC-34 lock still lives inside the extracted helper and that it touches no
+`facility_*` table. The frontend delta (14 files) is the FAC2-8 read-only
+facility display fix, the FAC2-7 `?dueWithin=30` deep link, and a
+touch-target/contrast/`formatCurrency()` mobile-UX pass — grepped for every
+dimension 4-5 risky pattern, zero matches. `core/permissions.py` gained two
+unrelated permission pairs (Events/CRR); grepped for every Facilities
+permission constant, zero matches, confirming no Facilities grant changed.
+Every migration added this window is a new file (zero modified), none
+naming a `facility_*` table. FAC-30/FAC-13/FAC-41/FAC-44 all re-confirmed
+unchanged. Full write-up: `docs/security-review/FAC-12-facilities.md`'s
+**Pass 17** section.
+
+**Completion gate:** `flake8`/`black --check`/`isort --check-only` on
+`app/ tests/ alembic/` all clean. `validate_migrations.py --strict` — 838
+revisions, single head `66f64aabdda2`. `check_route_permissions.py --strict`
+— 339 routes, 0 errors/warnings. Scoped backend pytest (`-k "facilit"`) —
+328 passed, 1 pre-existing environment-only skip (`py_vapid`). Standing
+guard suites (capacity locking, org-scoping ratchet, LIKE escaping, CSV
+sweep, migration chain, `create_all`-table tolerance) — 179 passed. `npm
+run typecheck` — 0 errors. `npm run lint` — 0 errors, 0 warnings. `npx
+vitest run src/modules/facilities` — 218 passed (26 files, up from 204/23
+at pass 16).
+
+Row 12 → ✅ (pending this PR's merge). Next is Feature 13 (Apparatus & NFC)
+— re-check `list_pull_requests`/`gh api search/issues` fresh rather than
+trusting this note.
 
 ### 2026-11-24 — Feature 10 (Documents & legal, pass 17) merged (PR #4670); Feature 11 (Inventory, pass 17): watchdog pickup, real delta (CSV-import dry-run preview, new "never inspected" maintenance view, 3 already-shipped concurrency fixes), 0 fixed, 0 new findings; **corrected pass 16's wrongful reopening of INV-16/INV-17**
 
