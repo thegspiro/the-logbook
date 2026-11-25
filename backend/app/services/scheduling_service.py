@@ -100,6 +100,7 @@ from app.utils.apparatus_ref import (
     resolve_apparatus_display_map,
     resolve_apparatus_ref,
 )
+from app.utils.duty_shifts import duty_shifts_only
 from app.utils.hours import hours_from_minutes, sum_hours_to_quarter
 from app.utils.member_names import format_display_name
 from app.utils.membership import is_administrative
@@ -3184,6 +3185,7 @@ class SchedulingService:
 
             self.db.add(attendance)
             await self.db.commit()
+            await self._sync_outreach_credit(shift_id, organization_id)
             await self.db.refresh(attendance)
             return attendance, None
         except Exception as e:
@@ -3275,6 +3277,7 @@ class SchedulingService:
                 attendance.duration_minutes = int(delta.total_seconds() / 60)
 
             await self.db.commit()
+            await self._sync_outreach_credit(attendance.shift_id, organization_id)
             await self.db.refresh(attendance)
             return attendance, None
         except Exception as e:
@@ -3563,6 +3566,7 @@ class SchedulingService:
             existing.checked_in_at = now
             await end_active_session_at_check_in(self.db, user_id, str(shift_id), now)
             await self.db.commit()
+            await self._sync_outreach_credit(shift_id, organization_id)
             await self.db.refresh(existing)
             return existing, None
 
@@ -3574,6 +3578,7 @@ class SchedulingService:
         self.db.add(attendance)
         await end_active_session_at_check_in(self.db, user_id, str(shift_id), now)
         await self.db.commit()
+        await self._sync_outreach_credit(shift_id, organization_id)
         await self.db.refresh(attendance)
         return attendance, None
 
@@ -3611,6 +3616,7 @@ class SchedulingService:
         delta = now - existing.checked_in_at
         existing.duration_minutes = int(delta.total_seconds() / 60)
         await self.db.commit()
+        await self._sync_outreach_credit(shift_id, organization_id)
         await self.db.refresh(existing)
         return existing, None
 
@@ -3754,6 +3760,7 @@ class SchedulingService:
         hours_result = await self.db.execute(
             select(func.coalesce(func.sum(ShiftAttendance.duration_minutes), 0))
             .join(Shift, ShiftAttendance.shift_id == Shift.id)
+            .where(duty_shifts_only())
             .where(*scope)
             .where(Shift.shift_date >= first_of_month)
             .where(Shift.shift_date < next_month_first)
@@ -6389,6 +6396,32 @@ class SchedulingService:
             logger.warning(
                 "Could not sync volunteer RSVPs for shift {}: {}", shift_id, e
             )
+
+    async def _sync_outreach_credit(
+        self, shift_id: UUID | str, organization_id: UUID | str
+    ) -> None:
+        """Carry an outreach sheet's attendance onto the event it staffs.
+
+        Owner decision, 2026-11-24: time worked on an outreach sheet is
+        community outreach, credited through the event, and not shift hours.
+        Called after each attendance change has committed. Only outreach
+        sheets are looked at, and a failure here never undoes the attendance
+        change it follows: the next change, the event's own finalize and the
+        officer-run catch-up all run the same compare-and-correct.
+        """
+        try:
+            from app.services.outreach_sheet_credit import sync_sheet_attendance
+
+            await sync_sheet_attendance(self.db, str(shift_id), str(organization_id))
+            await self.db.commit()
+        except Exception as e:
+            logger.warning(
+                "Could not credit outreach attendance for shift {}: {}", shift_id, e
+            )
+            try:
+                await self.db.rollback()
+            except Exception:
+                logger.exception("Rollback after that failure also failed")
 
     # ============================================
     # Shift Decline / Drop Notifications
@@ -9711,6 +9744,7 @@ class SchedulingService:
                 func.coalesce(func.sum(scheduled_minutes), 0).label("minutes"),
             )
             .join(Shift, ShiftAssignment.shift_id == Shift.id)
+            .where(duty_shifts_only())
             .join(User, ShiftAssignment.user_id == User.id)
             .where(ShiftAssignment.organization_id == str(organization_id))
             .where(User.organization_id == str(organization_id))
@@ -9747,6 +9781,7 @@ class SchedulingService:
                 ),
             )
             .join(Shift, ShiftAttendance.shift_id == Shift.id)
+            .where(duty_shifts_only())
             .join(User, ShiftAttendance.user_id == User.id)
             .where(Shift.organization_id == str(organization_id))
             .where(User.organization_id == str(organization_id))
@@ -9951,6 +9986,7 @@ class SchedulingService:
                 func.coalesce(func.sum(ShiftAttendance.call_count), 0).label("calls"),
             )
             .join(Shift, ShiftAttendance.shift_id == Shift.id)
+            .where(duty_shifts_only())
             .where(ShiftAttendance.user_id == str(user_id))
             .where(Shift.organization_id == str(organization_id))
         )
@@ -10152,6 +10188,7 @@ class SchedulingService:
                 func.coalesce(func.sum(ShiftAttendance.call_count), 0).label("calls"),
             )
             .join(Shift, ShiftAttendance.shift_id == Shift.id)
+            .where(duty_shifts_only())
             .outerjoin(
                 seats,
                 and_(
@@ -10909,6 +10946,7 @@ class SchedulingService:
                 func.coalesce(func.sum(ShiftAttendance.duration_minutes), 0),
             )
             .join(Shift, ShiftAttendance.shift_id == Shift.id)
+            .where(duty_shifts_only())
             .where(Shift.organization_id == organization_id)
             .where(Shift.shift_date >= start)
             .where(Shift.shift_date <= end)
@@ -11237,6 +11275,7 @@ class SchedulingService:
                     ),
                 )
                 .join(Shift, ShiftAttendance.shift_id == Shift.id)
+                .where(duty_shifts_only())
                 .where(Shift.organization_id == str(organization_id))
                 .where(Shift.shift_date >= period_start)
                 .where(Shift.shift_date <= period_end)
@@ -11823,6 +11862,7 @@ class SchedulingService:
             )
 
             await self.db.commit()
+            await self._sync_outreach_credit(shift_id, organization_id)
             await self.db.refresh(shift)
 
             # Under report review, an evaluation of a member with no report of
@@ -12114,6 +12154,7 @@ class SchedulingService:
 
         shift.closeout_step = max(int(shift.closeout_step or 0), 1)
         await self.db.commit()
+        await self._sync_outreach_credit(shift_id, organization_id)
         return await self.get_closeout_state(shift_id, organization_id)
 
     async def save_closeout_calls(

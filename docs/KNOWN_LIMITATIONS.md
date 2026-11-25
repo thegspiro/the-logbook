@@ -288,9 +288,14 @@ The owner ruled that a request's crew rides on the request's existing
 calendar event, that volunteer signups and a crew may both be used, and that
 the coordinator picks the template each time (no default per outreach type).
 
-- **A moved date is not re-checked for apparatus conflicts.** Postponing a
-  request to a new date moves its event and the crew with it; the conflict
-  check ran only when the crew was added.
+- **A moved date is re-checked for apparatus conflicts** _(owner decision of
+  2026-11-24)_. Scheduling or postponing a request that has a crew onto a date
+  where its apparatus is already committed is held back with the conflicts
+  listed, until the coordinator ticks **Move anyway**. The acceptance is noted
+  in the request's activity log. A save that keeps the same date and time is
+  not checked again. **Moving an apparatus night from its own event page is
+  not re-checked** — the owner chose requests only; Edit event and the
+  event's own Postpone move the crew without asking.
 - **A postponement to a date TBD leaves the crew on the cancelled event.**
   Rescheduling opens a new calendar event without a crew, and the
   coordinator adds it again. Carrying it over automatically would seat members
@@ -1961,6 +1966,50 @@ taken; each can be revisited.
 | --------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **A requirement cannot name one policy acknowledgment**                                 | ✅ Resolved (2026-10-07, owner decision: map provider courses to library courses) | A requirement graded only by training type (`training_compliance.py`) is still met by **any** record of that type. A particular policy is now required by mapping its Target Solutions Course ID to a library course (`external_course_mappings`) and linking a COURSES requirement to that course; imports set `TrainingRecord.course_id` from the mapping. Every version of a course maps to the same library course, so a reissued course never needs the requirement edited. **Residual, accepted:** members who complete a new version read as not current until an officer maps it. Training officers are emailed when a new course resembles a library course, and mapping it backfills the records already imported. See [16-integrations.md](./training/16-integrations.md). |
 | **Requirement grandfathering reads a missing hire date as the account's creation date** | Accepted (owner to note, 2026-10-03; confirmed by the owner 2026-11-23)           | A requirement's `new_member_cutoff_date` separates existing members from new ones by join date: `hire_date`, else the UTC date the account was created (`training_compliance.member_join_date`). A roster imported into The Logbook without hire dates therefore reads every imported member as having joined on the import day. If that day falls on or after a cutoff, veterans are graded as new members. Before relying on a cutoff, record hire dates for the existing roster, or choose a cutoff earlier than the import. Members already enrolled in a training program are governed separately, by the per-program `apply_to_current_enrollments` choice made when a requirement is added to it.                                                                              |
+
+## Outreach Signup Sheets — Outreach Hours, Not Shift Hours (Owner Decisions, 2026-11-24)
+
+A station tour or a school visit is staffed from the schedule, on a community
+outreach signup sheet. The owner ruled that this is not a duty shift:
+
+- **Wording.** Scheduling names a sheet by its event with a "Community
+  outreach" tag, and each seat by its role.
+- **Shift hours.** Time on a sheet is left out of every shift-hours total and
+  out of the shifts worked toward a shift requirement
+  (`app/utils/duty_shifts.py`). This applies to past sheets as well, so a
+  member's shift hours or shift compliance can be lower than before the
+  change.
+- **Outreach hours.** A volunteer's sheet check-in and check-out are carried
+  onto their attendance at the event the sheet staffs
+  (`app/services/outreach_sheet_credit.py`). The event's finalize then credits
+  the hours as it does for any attendee. A member checked in on both the sheet
+  and the event is counted once.
+- **Category.** The hours go to the admin hours category the event's type is
+  mapped to. Only `public_education` maps to "Community Outreach" by default.
+  A sheet on an event type with no mapping credits no admin hours.
+- **After finalize.** Sheet time recorded or corrected after the event's
+  attendance is finalized is credited anyway. This is a deliberate exception
+  to the attendance lock, limited to members with attendance on that event's
+  own sheet.
+- **No event yet.** A sheet whose request has not been scheduled into an event
+  has nothing to credit against. Its hours are credited when the event is
+  finalized.
+- **Past sheets.** Nothing is credited on upgrade. An officer with
+  `scheduling.manage` runs the catch-up once from Scheduling Administration →
+  Settings → General → "Community outreach hours". It previews the numbers
+  first and is safe to run again.
+
+Left as they are, and worth knowing:
+
+- **Early arrival is not credited.** Credit runs from the event's scheduled
+  start, as for any check-in. A volunteer who set up beforehand is corrected
+  with Edit Times on the event, which the sheet then leaves alone.
+- **Removing a sheet check-in does not withdraw the event attendance.** The
+  mirror only adds and corrects. Remove the attendee on the event as well.
+- **Pre-shift work is not filtered.** Approved pre-shift work on an outreach
+  sheet would still count as shift hours. None is expected on a sheet.
+- **A shift completion report's crew list still shows "Volunteer"** for a
+  sheet seat. That endpoint does not carry the role.
 
 ## Outreach — Vocabulary and Community Risk Reduction Direction (Owner Decisions, 2026-11-21)
 

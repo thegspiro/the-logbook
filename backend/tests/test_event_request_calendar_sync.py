@@ -31,6 +31,20 @@ USER_ID = "00000000-0000-0000-0000-0000000000aa"
 REQUEST_ID = "00000000-0000-0000-0000-0000000000bb"
 EVENT_ID = "00000000-0000-0000-0000-0000000000dd"
 
+
+@pytest.fixture(autouse=True)
+def _no_apparatus_crew():
+    """The endpoints here run on a mocked session with every collaborator
+    stubbed. The apparatus-crew conflict check on a moved request queries
+    the real crew tables; its own database-backed tests are in
+    test_apparatus_event_request_crews.py, so here it reports no conflicts."""
+    with patch(
+        "app.api.v1.endpoints.event_requests._crew_move_conflicts",
+        AsyncMock(return_value=[]),
+    ):
+        yield
+
+
 START = datetime(2026, 11, 4, 14, 0, tzinfo=timezone.utc)
 
 

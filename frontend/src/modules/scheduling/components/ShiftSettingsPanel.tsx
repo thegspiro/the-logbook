@@ -27,6 +27,7 @@ import { ResourceTypeDefaultsCard } from './ResourceTypeDefaultsCard';
 import { DepartmentDefaultsCard } from './DepartmentDefaultsCard';
 import { PositionNamesCard } from './PositionNamesCard';
 import { CallTypesCard } from './CallTypesCard';
+import { OutreachCreditCard } from './OutreachCreditCard';
 import { EligibilitySettingsCard } from './EligibilitySettingsCard';
 import { ShiftReportsSettingsPanel } from './ShiftReportsSettingsPanel';
 import { PlatoonRosterPanel } from './PlatoonRosterPanel';
@@ -810,6 +811,8 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
             onSettingsChange={setSettings}
             allPositionOptions={allPositionOptions}
           />
+
+          <OutreachCreditCard />
         </div>
       )}
 

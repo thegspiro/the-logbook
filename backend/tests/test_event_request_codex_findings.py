@@ -38,6 +38,19 @@ MIGRATION = (
 )
 
 
+@pytest.fixture(autouse=True)
+def _no_apparatus_crew():
+    """The endpoints here run on a mocked session with every collaborator
+    stubbed. The apparatus-crew conflict check on a moved request queries
+    the real crew tables; its own database-backed tests are in
+    test_apparatus_event_request_crews.py, so here it reports no conflicts."""
+    with patch(
+        "app.api.v1.endpoints.event_requests._crew_move_conflicts",
+        AsyncMock(return_value=[]),
+    ):
+        yield
+
+
 # ============================================
 # P1 — the backfill must not open intake a department switched off
 # ============================================

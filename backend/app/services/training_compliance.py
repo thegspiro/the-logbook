@@ -51,6 +51,7 @@ from app.services.training_waiver_service import (
     total_months_in_period,
 )
 from app.utils.compliance_profiles import ordered_profiles
+from app.utils.duty_shifts import duty_shifts_only
 from app.utils.hours import meets_required_hours
 from app.utils.membership import MemberStatus, canonical_member_status
 from app.utils.org_timezone import (
@@ -2035,6 +2036,8 @@ async def load_credited_shift_dates(
         .where(
             Shift.organization_id == str(org_id),
             Shift.is_finalized.is_(True),
+            # A station tour is not a shift worked toward a shift requirement.
+            duty_shifts_only(),
             ShiftAttendance.user_id.in_(ids),
             *_dated(Shift.shift_date),
         )
