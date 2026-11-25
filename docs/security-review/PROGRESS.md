@@ -16,6 +16,62 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**Feature 34 (Frontend shared), pass 17** — watchdog pickup (the dedicated
+`/loop 30m /security-review` session remains unreachable). PR link recorded
+in a follow-up commit on this same branch, once opened.
+
+PR #4710 (Feature 33, Core infrastructure, pass 16) was confirmed merged on a
+freshly fetched `main` (`ce354045b`, merge commit) before this iteration
+started, and a fresh `list_pull_requests` (state=open) returned 0 results, so
+this iteration continued to Step 1: row 34 (Frontend shared) was the next
+`⬜` row. Row 33 marked ✅ above.
+
+**Baseline correction, read before trusting the diff numbers below:** this
+iteration's own briefing named `f30309984` (PR #4259, pass 15) as the
+baseline, on the premise that pass 16 existed only as an abandoned draft
+(PR #4590, closed without merging). That premise was wrong: PR #4589 — a
+_different_, concurrent pass-16 attempt, the exact collision risk this
+rotation warns about — had already merged as `0238cf27f` during the prior
+rotation lap, writing the real `docs/security-review/FE16-34-frontend-
+shared.md` (present on `main`). The next iteration's own lap-boundary reset
+(Feature 00, pass 18, PR #4616) then reset row 34 back to ⬜ for the new lap,
+which is why this iteration found it ⬜ despite FE16 having already run.
+Confirmed both PRs' real state via `pull_request_read` before trusting
+either claim; corrected the baseline to `0238cf27f` and numbered this pass's
+write-up `FE17` to continue the real sequence.
+
+569 commits since the real baseline (380 frontend `src` files touched, 237
+non-test). Real deltas, all read in full:
+`utils/apiCache.ts` (two new additive `UNCACHEABLE_PREFIXES` entries,
+`/crr/` and `/training/double-credit`, both already-correct fixes from other
+features' own work — traced to the backend schemas naming `member_name`/
+resident-contact fields and confirmed necessary), `utils/createApiClient.ts`
+(a new cache-invalidation bridge so a mutation made through a _module_
+client also invalidates the _shared_ response cache — fixes a real
+staleness bug, adds no new read/write path to the cache), `services/
+apiClient.ts` (behavior-preserving refactor to share that same
+invalidation helper), `utils/errorHandling.ts` (a new `reference` field —
+traced to `main.py`'s unhandled-exception handler and confirmed it is a
+random opaque `uuid4` request id, sent only on a 5xx, not a new information
+leak), and `evaluationsApi.ts` (one additive GET on an already-uncached
+module client). 6 new top-level `services`/`utils` files, all read in full.
+10 real new GET call sites on a client that could reach the shared cache,
+each traced individually against the actual extracted
+`UNCACHEABLE_PREFIXES`/`UNCACHEABLE_SUBSTRINGS` arrays; also ran this
+feature's own backend guard test
+(`tests/test_api_cache_pii_exclusions.py`, 4 tests) directly, which checks
+the same invariant across the whole application, not just this diff — all
+pass. **0 fixed, 0 new findings.** Full write-up:
+`docs/security-review/FE17-34-frontend-shared.md`.
+
+Row 34 → ✅ (pending this PR's merge). Every row of the rotation (00–34) is
+now ✅ again, closing this lap — per the rotation's own rule, the _next_
+iteration's Step 1 should reset all 35 rows to ⬜ for a fresh lap rather than
+this one doing it; re-check `list_pull_requests` fresh first.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 33, Core infrastructure, pass 16, PR #4710, merged), preserved for history</summary>
+
 **PR [#4710](https://github.com/thegspiro/the-logbook/pull/4710) (branch
 `claude/security-review-core-infra-p16`)**: Feature 33 (Core infrastructure),
 pass 16 — watchdog pickup (the dedicated `/loop 30m /security-review` session
@@ -42,6 +98,8 @@ chain has a single head (844 revisions, `e9cf8ab7e4e4`), unforked. **0 fixed,
 
 Row 33 → ✅ (pending this PR's merge); next is Feature 34 (Frontend shared) —
 re-check `list_pull_requests` fresh rather than trusting this note.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 32, Locations & kiosk, pass 15, PR #4709, merged), preserved for history</summary>
@@ -28898,7 +28956,7 @@ iteration's commit" rule.
 | 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                                                                                                                                                         | ✅     |
 | 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                                                                                                                                                        | ✅     |
 | 33  | Core infrastructure       | CORE   | `core/security_middleware.py`, `core/database.py`, `core/config.py`                                                                                                                                                                                                                   | ✅     |
-| 34  | Frontend shared           | FE     | `utils/apiCache.ts`, module axios instances, `ProtectedRoute`, global stores                                                                                                                                                                                                          | ⬜     |
+| 34  | Frontend shared           | FE     | `utils/apiCache.ts`, module axios instances, `ProtectedRoute`, global stores                                                                                                                                                                                                          | ✅     |
 
 **35 iterations per full pass.** After 34 the rotation wraps to 00, which
 re-runs the whole-codebase sweeps against whatever has landed since.
@@ -29011,6 +29069,73 @@ it to be rediscovered.
 ---
 
 ## Log
+
+### 2026-11-25 — Feature 33 (Core infrastructure, pass 16) merged (PR #4710); Feature 34 (Frontend shared, pass 17): baseline correction (a concurrent pass-16 collision, PR #4589 merged / PR #4590 abandoned, had already closed the prior lap), 0 fixed, 0 new findings, closes this lap at every row ✅
+
+Watchdog pickup — a fresh `git fetch origin` + `git log origin/main -1`
+confirmed `main`'s HEAD was `ce354045b` (merge of PR #4710) and a fresh
+`list_pull_requests` (state=open) returned 0 results, both re-verified
+independently of the briefing per this rotation's own collision-avoidance
+discipline. Row 33 marked ✅ above. Row 34 (Frontend shared) was confirmed
+the next and only `⬜` row by reading the rotation table directly on this
+freshly fetched `main`.
+
+**The task briefing's baseline was stale, and this iteration caught it
+before diffing anything.** The briefing named `f30309984` (PR #4259, pass 15) as the baseline on the premise that Feature 34's pass 16 existed only
+as an abandoned draft, PR #4590. `git ls-remote` found the stale
+`claude/security-review-frontend-shared-p16` branch still on the remote
+(from that abandoned draft), and `pull_request_read` on #4590 confirmed it:
+closed, draft, never merged, opened against `c01ab8df1` (pre-dating pass
+15's own merge check) — a session that raced a _different_ concurrent
+pass-16 attempt and lost. That other attempt, **PR #4589**, had in fact
+merged cleanly as `0238cf27f` during the previous rotation lap, writing the
+real `docs/security-review/FE16-34-frontend-shared.md` (confirmed present
+on `main`, read in full as this pass's prior art) and closing that lap at
+every row 00–34 ✅. The very next iteration's own lap-boundary reset
+(Feature 00, pass 18, PR #4616) then reset all 35 rows to ⬜ for the new
+lap — which is exactly why this iteration found row 34 at ⬜ again despite
+FE16 having already run for real. Corrected the baseline to `0238cf27f` and
+numbered this pass's write-up `FE17` to continue the real sequence. No
+stray `FE16-34-frontend-shared.md` from #4590's branch was present in the
+working tree to reconcile — that branch was never merged, so its content
+never reached `main`.
+
+Baseline `0238cf27f` (the real pass-16 merge, PR #4589). 569 commits landed
+since then (380 frontend `src` files touched, 237 non-test). Real deltas,
+all read in full: `utils/apiCache.ts` (two new additive
+`UNCACHEABLE_PREFIXES` entries — `/crr/` and `/training/double-credit` —
+both already-correct fixes landed by other features' own work, traced to
+the backend schemas naming `member_name`/resident-contact fields and
+confirmed necessary, nothing removed), `utils/createApiClient.ts` (a new
+cache-invalidation bridge so a mutation made through a _module_ client also
+invalidates the _shared_ response cache, fixing a real staleness bug
+without adding any new read/write path to the cache — module clients still
+never read or populate it), `services/apiClient.ts` (a behavior-preserving
+refactor sharing that same helper), `utils/errorHandling.ts` (a new
+`reference` field, traced to `main.py`'s unhandled-exception handler and
+confirmed to be a random opaque `uuid4` request id sent only on a 5xx — not
+a new information leak), and `evaluationsApi.ts` (one additive GET on an
+already-uncached module client, so never cache-exposed regardless). 6 new
+top-level `services`/`utils` files, all read in full and found to touch
+either nothing sensitive or only the already-reviewed global client. 10
+real new GET call sites on a client that could reach the shared cache, each
+traced individually against the actual extracted `UNCACHEABLE_PREFIXES`/
+`UNCACHEABLE_SUBSTRINGS` arrays (hit the exact "an apostrophe in a trailing
+comment corrupts a naive quote-pair scan" trap this feature's own backend
+guard test warns about on the first extraction attempt; caught it by
+cross-checking against that test's own line-anchored parser before trusting
+the result) — all correctly excluded or correctly left cacheable. Also ran
+`tests/test_api_cache_pii_exclusions.py`'s four tests directly, which check
+the same invariant across the whole application rather than just this
+pass's diff: all pass. Zero new `axios.create`/`createApiClient` call
+sites, zero new `localStorage`/`sessionStorage` writes, zero new hardcoded
+secrets, zero new XSS sinks. The migration chain remains a single head
+(844 revisions, `e9cf8ab7e4e4`), purely additive growth since the baseline's 821. **0 fixed, 0 new findings.** Full write-up:
+`docs/security-review/FE17-34-frontend-shared.md`.
+
+Row 34 → ✅. Every row of the rotation (00–34) is now ✅ again, closing this
+lap — per the rotation's own rule, the _next_ iteration's Step 1 does the
+reset to ⬜ for a fresh lap, not this one.
 
 ### 2026-11-25 — Feature 32 (Locations & kiosk, pass 15) merged (PR #4709); Feature 33 (Core infrastructure, pass 16): watchdog pickup, near-zero delta (two already-fixed export-monitoring registry entries), 0 fixed, 0 new findings
 
