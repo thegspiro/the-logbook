@@ -28540,7 +28540,7 @@ iteration's commit" rule.
 | 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`, `zeffy.py`/`zeffy_service.py`/`zeffy_sync_service.py` (added pass 13)                                                                                                                                                      | ✅     |
 | 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                                                                                                                                                                 | ✅     |
 | 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`, `meeting_waiver_requests.py` (added pass 14)                                                                                                                                                                                                             | ✅     |
-| 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                                                                                                                                                         | ⬜     |
+| 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                                                                                                                                                         | ✅     |
 | 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                                                                                                                                                               | ⬜     |
 | 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`, `historical_import.py` (33 routes incl. undo, added pass 14), `historical_staffing_*.py`, `historical_import_undo.py` (added pass 14)                                                                                                        | ⬜     |
 | 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`, `audit_ship_service.py`                                                                                                                                                                                 | ⬜     |
@@ -28622,6 +28622,59 @@ it to be rediscovered.
 ---
 
 ## Log
+
+### 2026-11-25 — Feature 24 (Meetings & minutes, pass 15) merged (PR #4699); Feature 25 (Messaging & notifications, pass 15): watchdog pickup, near-zero delta (two new email-template registrations, cosmetic frontend), 0 fixed, 0 new findings
+
+Scheduled watchdog check-in — the dedicated `/loop 30m /security-review`
+session (`session_011T1ZyyLrD5HagusgK9uDw2`) remains unreachable per
+`ListAgents`. PR #4699 (Feature 24, Meetings & minutes, pass 15) was fully
+green on every CI check (`CI Success` passing on its current head,
+`mergeable_state` `clean`), with only the same bot-quota-failure comments
+seen on every recent pass (Codex "unable to review", Copilot "usage
+limits", no actual findings) — merged by this watchdog as squash commit
+`13b59d5dc`. A fresh `list_pull_requests` (state=open) found no
+`claude/security-review-*` head open, so this iteration continued to Step
+1: row 25 (Messaging & notifications) was the next `⬜` row.
+
+Baseline `c59bad857` (pass 14's own merge, PR #4520). This feature's own
+four route files (`messages.py`, `message_history.py`, `notifications.py`,
+`email_templates.py`) are byte-identical to pass 14 — 52 routes
+re-enumerated by AST, unchanged, every one carrying a `Depends(...)`. The
+only delta in scope: the shared `email_template_service.py` (+26 lines)
+registers two new template types — `email_templates_training_approval.py`
+(the sign-off reminder, Training core/Feature 17, already ✅ at pass 16)
+and `email_templates_program_progress.py` (a reopened-requirement notice,
+Training core/Compliance, both already ✅ at pass 16) — wired in the same
+way every existing template module is. Both new modules declare
+`RAW_HTML_VARIABLES: set[str] = set()` (every value plain text, escaped on
+render) and carry no recipient-resolution logic of their own; that lives in
+the senders, out of scope here and already reviewed by the features that
+own them. Four frontend files in `communications` are either catalogue
+metadata (icon/label/colour entries for the new and other features' own
+template types) or cosmetic (two toggle buttons gain `text-left`; two
+hand-rolled button class strings replaced with the shared `btn-secondary`
+utility; a one-line comment correcting a position's display name). **0
+fixed, 0 new findings.** Full write-up:
+`docs/security-review/MSG-25-messaging-notifications.md`'s **Pass 15**
+section.
+
+**Completion gate:** `flake8`/`black --check`/`isort --check-only` (CI's
+pins) on `app/ tests/ alembic/` all clean. `validate_migrations.py
+--strict` — 844 revisions, single head `e9cf8ab7e4e4`.
+`check_route_permissions.py --strict` — 344 routes, 0 errors/warnings.
+`generate_schema_docs.py --check` — up to date. Scoped backend pytest
+(`-k "messag or notification or email_template or email_theme or
+push_service or push_dispatch or leave_of_absence_notice or
+leave_workflow or leave_notice"`) — 2,835 passed, 1 pre-existing
+environment-only skip (`py_vapid`), up from 2,730/1 at pass 14. `npm run
+typecheck` — 0 errors. `npm run lint` — 0 errors, 0 warnings. `npx vitest
+run src/modules/communications src/modules/notifications
+src/pages/NotificationsPage.test.tsx src/hooks/usePushNotifications.test.ts
+src/utils/devicePushSubscription.test.ts` — 333 passed (44 files), matching
+pass 14 exactly.
+
+Row 25 → ✅ (pending this PR's merge). Next is Feature 26 (Forms) —
+re-check `list_pull_requests` fresh rather than trusting this note.
 
 ### 2026-11-25 — Feature 17 (Training core, pass 16) merged (PR #4692); Feature 18 (Training extended, pass 16): watchdog pickup, first full review of `attendance_waiver_requests.py` now that PR #4481 merged, 0 fixed, 0 new findings
 
