@@ -3451,3 +3451,115 @@ re-verified (the two leave-notice callers).
 
 Next in rotation: Feature 26 (Forms) — re-check `list_pull_requests` fresh
 rather than trusting this note.
+
+## Pass 15 (2026-11-25) — watchdog pickup, near-zero delta (two new email-template registrations, cosmetic frontend), 0 fixed, 0 new findings
+
+Scheduled watchdog check-in — the dedicated `/loop 30m /security-review`
+session (`session_011T1ZyyLrD5HagusgK9uDw2`) remained unreachable
+(`ListAgents` → "No reachable agents"). Step 0: `list_pull_requests`
+(state `open`) found no PR with a `claude/security-review-*` head — PR #4699
+(Feature 24, Meetings & minutes, pass 15) had just merged clean (squash
+`13b59d5dc`), recorded in this pass's own `PROGRESS.md` edit per the
+rotation's own rule. Row 25 confirmed the next `⬜` row, re-checked directly
+against the freshly pulled `main` rather than trusted from a PR note.
+
+**Baseline:** pass 14's own merge, `c59bad857` (PR #4520). **This pass's
+head:** `13b59d5dc` (the just-merged #4699). `git log --no-merges
+c59bad857..HEAD` restricted to this feature's own declared backend files
+(`messages.py`, `message_history.py`, `notifications.py`,
+`email_templates.py`, plus the shared `email_service.py`,
+`messaging_service.py`, `message_delivery_service.py`,
+`notification_channels.py`, `email_theme.py`, `push_service.py`,
+`push_dispatch.py`, `email_template_service.py`, models/schemas) and the
+declared frontend scope (`frontend/src/modules/communications`,
+`frontend/src/modules/notifications`, `NotificationsPage.tsx`,
+`usePushNotifications.ts`, `devicePushSubscription.ts`,
+`communicationsServices.ts`) surfaced the smallest delta of any pass so far:
+one shared backend file (+26 lines) and four frontend files (+25/−9 lines).
+The four route files themselves — `messages.py`, `message_history.py`,
+`notifications.py`, `email_templates.py` — are byte-identical to pass 14
+(`git diff --stat` empty for all four), confirmed, not assumed.
+
+### Reviewed in full
+
+- **`email_template_service.py` (+26 lines): two new template types
+  registered, both owned and sent by other features.** `email_templates_
+  training_approval.py` (Training core / Feature 17, already ✅ at pass 16 —
+  its own PR title named "approval reminders") and `email_templates_
+  program_progress.py` (a reopened-requirement notice when a correction
+  takes a member below a program requirement they had completed; sender
+  belongs to Training core/Compliance, both already ✅ at pass 16) are
+  wired into `TEMPLATE_VARIABLES`, `SAMPLE_CONTEXT`, `TEST_RECIPIENT_FIELDS`,
+  `TEST_SAMPLE_DATES`, `RAW_HTML_VARIABLES` and `DEFAULT_TEMPLATE_DEFS` the
+  same way every existing template module already is — read both new
+  modules directly rather than inferring from the diff: both declare
+  `RAW_HTML_VARIABLES: set[str] = set()` (every value plain text, escaped by
+  `build_shell`/`fact`/`facts` on render), carry no recipient-resolution
+  logic of their own (that lives in the senders, out of scope here, same
+  treatment as pass 14's "three new EmailService senders"), and introduce
+  no new `EmailTemplateType` collision with an existing value. **No
+  finding** — this feature's only exposure is the shared registration
+  mechanism, and it behaves exactly as it does for every other template.
+- **Frontend (4 files, `communications` module):** `TemplateList.tsx` adds
+  display entries (icon/label/colour) for the two new template types above
+  plus three leave-cover types and one outreach-feedback type (all senders
+  owned by other features) — pure catalogue metadata, no new API call.
+  `TemplateEditor.tsx` and `EmailTemplatesPage.tsx` are cosmetic
+  (`text-left` on two existing toggle buttons; two hand-rolled button class
+  strings replaced with the shared `btn-secondary` utility per CLAUDE.md's
+  "Form Controls" rule). `PhotoUseConsentPage.tsx` is a one-line comment
+  correction (a position's display name). Grepped the full diff for
+  `window.confirm`/`alert`/`prompt` and a bare `toHaveBeenCalledWith()`:
+  zero hits.
+
+### Re-swept, unchanged since pass 14
+
+- **Route count: 52** (13 + 2 + 20 + 17), re-enumerated by walking all four
+  endpoint files' decorators by AST from scratch (not trusted from pass
+  14's count) — unchanged. Every route still carries a `Depends(...)`
+  (confirmed by grep count per file: 28/4/41/34).
+- `.ilike(`/`.like(` sites: unchanged (files byte-identical), still pass
+  `escape=LIKE_ESCAPE_CHAR` (guarded by `tests/test_like_escaping.py`).
+- Standing findings MSG-12 (stranded/throttled delivery retry,
+  owner-accepted 2026-08-31/09-06) and MSG-15 (web-push DNS-rebinding pin
+  skipped outside prod/staging, owner-accepted 2026-09-06): re-confirmed
+  unchanged in `docs/KNOWN_LIMITATIONS.md`, neither touched by this delta.
+- MSG-3 (test-email to an arbitrary address, by design) and NOTIF2-3
+  (residual DNS-rebinding note): unchanged, re-confirmed in
+  `docs/app-review/messaging.md` / `notifications.md`.
+
+**0 new findings.** No route gained or lost a permission; no by-id query
+lost its organization filter; no new client-settable FK; the only change in
+this feature's own scope is two template modules registering into an
+already-reviewed, escaping-safe shared mechanism, owned and sent by
+features already ✅ in this rotation.
+
+## Guard tests added (pass 15)
+
+None — no new finding, and the shared registration mechanism this pass
+touched is already covered by the escaping/samples tests the template
+service itself carries.
+
+## Completion gate (pass 15)
+
+| Check                                                                                                                                                                              | Result                                                                                         |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `flake8 app/ tests/ alembic/` (CI's pinned 7.4.1)                                                                                                                                 | ✅ clean                                                                                        |
+| `black --check app/ tests/ alembic/` (CI's pinned 26.10.1)                                                                                                                       | ✅ clean — 3,541 files unchanged                                                                |
+| `isort --check-only app/ tests/ alembic/` (CI's pinned 9.0.2)                                                                                                                    | ✅ clean                                                                                        |
+| `python3 scripts/validate_migrations.py --strict`                                                                                                                                | ✅ PASSED — 844 revisions, single head `e9cf8ab7e4e4`                                          |
+| `python3 scripts/check_route_permissions.py --strict`                                                                                                                            | ✅ 344 routes, 0 errors/warnings                                                                |
+| `python3 scripts/generate_schema_docs.py --check`                                                                                                                                | ✅ `DATABASE_SCHEMA.md` up to date                                                              |
+| `pytest tests/ -q -k "messag or notification or email_template or email_theme or push_service or push_dispatch or leave_of_absence_notice or leave_workflow or leave_notice"`    | ✅ 2,835 passed, 1 pre-existing environment-only skip (`py_vapid`), up from 2,730/1 at pass 14 |
+| `npm run typecheck`                                                                                                                                                               | ✅ 0 errors                                                                                     |
+| `npm run lint`                                                                                                                                                                    | ✅ 0 errors/warnings                                                                            |
+| `npx vitest run src/modules/communications src/modules/notifications src/pages/NotificationsPage.test.tsx src/hooks/usePushNotifications.test.ts src/utils/devicePushSubscription.test.ts` | ✅ 333 passed (44 files), matching pass 14 exactly                                              |
+
+No fix was made this pass (0 findings). This is effectively a
+re-verification pass: this feature's own four route files carried zero
+delta, and the one shared file touched gained only registration data for
+templates whose sending logic belongs to, and was already reviewed by,
+other rotation rows.
+
+Next in rotation: Feature 26 (Forms) — re-check `list_pull_requests` fresh
+rather than trusting this note.
