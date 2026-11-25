@@ -127,12 +127,24 @@ exactly.
 
 ### Re-verified: every prior open item
 
-**EC-17** (MED, FLAGGED — a non-draft report's substantive fields stay
-editable by its filing officer indefinitely on a review-off department; the
-2026-10-27/2026-11-01 owner decisions narrowed but did not close it) —
-`shift_completion_service.py` is byte-identical to pass 16's baseline, so
-nothing in this window touches it. Re-confirmed OPEN/FLAGGED, unaffected.
-**EC-8**'s residual (the two harmless read-after-validate cases in
+**EC-17 status correction: RESOLVED, not OPEN/FLAGGED as this pass's own text
+above (and pass 16's before it) wrongly carried forward.** Pass 13
+(2026-10-29) already moved EC-17 from FLAGGED to **FIXED** after reading
+`_return_edited_report_to_review` in full and running its four tests
+directly; `docs/KNOWN_LIMITATIONS.md`'s EC-17 entry has been headed
+"resolved 2026-10-27" since that pass. Pass 16 then re-marked it
+OPEN/FLAGGED with no cited regression, and this pass's own text above
+repeated that unverified claim rather than checking it. Re-read
+`ShiftCompletionService.update_report` directly this correction: a
+review-required org still returns an edited approved/flagged report to
+`pending_review` (pass 13's fix, unchanged); a review-off org leaves it
+approved **and now restates its training credit in place**
+(`_restate_credit`, `update_report` lines ~1922-1931) — the owner decision
+of 2026-11-01, resolved 2026-11-04, that closed the one residual gap
+(credit staying stale for a review-off department) `docs/
+KNOWN_LIMITATIONS.md` documents in detail. No forced second check on a
+review-off department's edit is the owner's deliberate design for that
+setting, not an unresolved finding. **EC-8**'s residual (the two harmless read-after-validate cases in
 `add_item`/`update_item`, left as-is by app-review's own pass 1) — same file,
 untouched, still accurate. **EC-7 residual** (submit endpoints on bare auth,
 an intra-org granularity decision, owner-accepted) — `equipment_check.py`'s
