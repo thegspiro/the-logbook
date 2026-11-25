@@ -16,8 +16,9 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR pending — recorded in this same branch's second commit once opened.**
-Feature 14 (Equipment check & shifts), pass 17 — watchdog pickup. Step 0
+**PR [#4687](https://github.com/thegspiro/the-logbook/pull/4687) (branch
+`claude/security-review-equipment-shifts`)**: Feature 14 (Equipment check &
+shifts), pass 17 — watchdog pickup. Step 0
 (`list_pull_requests`, state: open) found 3 open PRs, none with a
 `claude/security-review-` head branch. PR #4684 (Feature 13, Apparatus &
 NFC, pass 24) had already merged — docs-only (it updated only
