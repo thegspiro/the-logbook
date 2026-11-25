@@ -3,7 +3,8 @@
 **Prefix:** `SCH` · **Iteration:** 15 · **Reviewed:** 2026-08-26 (pass 1),
 2026-09-17 (pass 6), 2026-10-06 (pass 7), 2026-10-15 (pass 8), 2026-10-19
 (pass 9), 2026-10-23 (pass 10), 2026-10-26 (pass 11), 2026-10-29 (pass 12),
-2026-11-02 (pass 13), 2026-11-08 (pass 14), 2026-11-20 (pass 15) ·
+2026-11-02 (pass 13), 2026-11-08 (pass 14), 2026-11-20 (pass 15), 2026-11-25
+(pass 16) ·
 **PR:**
 [#1846](https://github.com/thegspiro/the-logbook/pull/1846) (pass 1),
 [#2628](https://github.com/thegspiro/the-logbook/pull/2628) (pass 6),
@@ -31,39 +32,221 @@ pass 15 (0 fixed in Scheduling itself — ADV-2 self-supervisor-assignment
 closed by a commit riding along in scope, already tracked and fixed under
 `ADV-01-adversarial-exfiltration.md` — 0 new findings; real delta — two new
 member-shift-history routes, two notify-role senders moved to the
-current-member-aware helper, and evaluation-credit resync on seat changes)
+current-member-aware helper, and evaluation-credit resync on seat changes),
+pass 16 (0 fixed, 0 new findings; real delta — the community-outreach-sheet
+hours credit, its officer-run catch-up, an outreach-specific open-shifts
+lookahead window, a leave-request surfacing on the unassignable-members
+lookup, a per-position hours breakdown, and a driver-eligibility refactor)
 
-**Backend:** `api/v1/endpoints/scheduling.py` (112 routes, up from 110 — new
-`GET /my-shift-history` and `GET /members/{user_id}/shift-history`),
+**Backend:** `api/v1/endpoints/scheduling.py` (114 routes, up from 112 — new
+`GET /outreach-credit` and `POST /outreach-credit`),
 `api/v1/endpoints/scheduling_module_config.py` (3 routes, unchanged),
 `api/v1/endpoints/calcom_sync.py` (1 route, unchanged),
-`services/scheduling_service.py` (+259/−26 this pass — `get_member_shift_history`
-and its two new routes' backing, evaluation-credit resync on assignment
-change/delete/finalize/reopen, `WORKING_ASSIGNMENT_STATUSES` tightening, and
-the `notify_roles` sender moved to `current_holder_ids()`),
+`services/scheduling_service.py` (+596/−167 this pass — `_sync_outreach_credit`
+called from every attendance writer, the outreach-lookahead window on the
+open-shifts queries, `get_leave_requested_user_ids`, the per-position hours
+breakdown (`get_member_position_totals`/`_position_rows`) on
+`get_my_hours_history`/`get_member_hours_history`, and outreach titles on
+shift-list/assignment enrichment),
 `services/scheduling_module_config_service.py` (zero diff this pass),
 `services/standing_shift_service.py` (zero diff this pass),
 `services/call_tracking_service.py` (zero diff this pass),
-`services/shift_eligibility_service.py` (zero diff this pass),
-`services/shift_completion_service.py` (+10/−1 this pass — crew
-current-member validation on a manual batch; shared with Feature 14,
-already reviewed under its own pass 16, not re-reviewed here),
+`services/shift_eligibility_service.py` (+35/−9 this pass — the driver-EVOC
+rule extracted into `evaluate_driver_for_apparatus`, reused rather than
+re-implemented for a non-shift seat; pure refactor, same checks),
+`services/shift_completion_service.py` (zero diff this pass),
 `services/integration_services/calcom_service.py` (zero diff since pass 6),
 `services/scheduling_widget_service.py` (zero diff this pass),
-`services/pre_shift_work_service.py` (zero diff this pass),
-`mcp/tools/scheduling.py` (zero diff), `schemas/scheduling.py` (+62/−0 this
-pass — `MemberHoursYear`, `MemberDepartmentShift`, `MemberShiftHistoryResponse`),
+`services/pre_shift_work_service.py` (+6/−1 this pass — `approved_pre_work_minutes`
+takes optional extra outer joins, used by the new position breakdown),
+`mcp/tools/scheduling.py` (zero diff), `schemas/scheduling.py` (+47/−0 this
+pass — `OutreachCreditSummary`, `MemberPositionTotals`, `outreach_title` on
+`ShiftResponse`/`EmbeddedShiftInfo`, `own_hours_locked_user_id` on
+`CloseoutStateResponse`, `essential` on `OutreachRoleSlot`),
 `schemas/scheduling_module_config.py` (zero diff this pass),
-`models/call_tracking.py`, `models/scheduling_module_config.py`,
-`models/training.py` (zero diff this pass),
-`utils/scheduling_dates.py` (zero diff). **Opportunistically reviewed, shared
-dependency:** `services/member_supervisor_service.py` (+10/−0 this pass — the
-self-assignment refusal; see below).
+`models/call_tracking.py`, `models/scheduling_module_config.py` (zero diff
+this pass), `utils/scheduling_dates.py` (zero diff).
+**New file, Scheduling's own:** `services/outreach_sheet_credit.py` (the
+sheet-to-event attendance mirror; see below).
+**Out of declared scope, seen and not reviewed here:** `models/training.py`
+(+111/−0 this pass) adds `TrainingCreditDuplicateFlag` and
+`RollingRequirementLastMet` — both belong to Training core (Feature 17) or
+Compliance (Feature 20) per `PROGRESS.md`'s rotation table, not Scheduling;
+flagged here only so the next reviewer of either row knows to pick them up.
 **Frontend:** `modules/scheduling`, `pages/scheduling`
-**Migrations:** none in Scheduling's own declared scope this pass (one
-migration in the window, `20261113_1200_533f8aba187e_shift_evaluation_preceptor_links.py`,
-adds `shift_evaluation_links` — Shift Evaluations' own table, declared under
-Features 03 and 17, not reviewed here).
+**Migrations:** none in Scheduling's own declared scope this pass (234
+non-merge commits touch `backend/alembic/versions` in the window, dominated
+by the merge revision that resolves the alembic fork found and fixed while
+tending this iteration — see below — and other features' own tables).
+
+---
+
+## Pass 16 (2026-11-25) — real delta (a new feature, a refactor, and three correctness widenings), 0 fixed, 0 new findings; one unrelated alembic fork found and fixed while tending Step 0
+
+**Watchdog pickup.** No other Claude session is running on this machine
+(`ListAgents` → "No reachable agents"), consistent with the dedicated
+`/loop 30m /security-review` session (`session_011T1ZyyLrD5HagusgK9uDw2`)
+remaining unreachable through every prior pass.
+
+**Step 0.** A fresh `list_pull_requests` (state=open) found 0 PRs with a
+`claude/security-review-` head branch — row 15 (Scheduling) was confirmed the
+next `⬜` row. One unrelated open PR existed (#4689, "merge the
+history-public-settings and training-approval-reminder heads") — a fresh
+`alembic`/`validate_migrations.py --strict` run against a local checkout had
+found `main` itself with two Alembic heads (a session-start hook failure
+reproduces this on a fresh database). That PR's own merge revision was
+already CI-green and `mergeable_state: clean`; it was merged directly (not a
+security-review PR, and not this iteration's own work) so the chain is
+whole again before reviewing any feature on top of it. `main`'s local
+checkout was then fast-forwarded past that merge before starting Step 1.
+
+**Baseline** `2a5ca8e31` (PR #4464's merge, pass 15) to head `78cb87c22`
+(PR #4689's merge, current `main` — a genuine ancestor,
+`git merge-base --is-ancestor` succeeds). `git diff --numstat` restricted to
+the declared backend files shows real changes in six:
+`scheduling.py` (+172/−17), `schemas/scheduling.py` (+47/−0),
+`scheduling_service.py` (+596/−167), `shift_eligibility_service.py` (+35/−9),
+`pre_shift_work_service.py` (+6/−1), and (out of declared scope)
+`models/training.py` (+111/−0, Training/Compliance's own new tables, not
+reviewed here). A new file, `services/outreach_sheet_credit.py`, lands in
+this window. 626 non-merge commits touch the repo since baseline; the
+frontend's `modules/scheduling`/`pages/scheduling` trees carry 43 changed
+files (+1998/−323), dominated by the outreach-aware shift board.
+
+### New feature: community-outreach-sheet hours credit (`outreach_sheet_credit.py`, two new routes)
+
+A station tour or school visit is staffed from the Scheduling signup sheet
+but its worked time is community outreach, credited through the Events
+module's RSVP/finalize path rather than as shift hours. Read
+`sync_sheet_attendance`/`catch_up_outreach_sheets` in full:
+
+- **Org-scoped throughout.** Every query — the outreach-sheet lookup
+  (`Shift.organization_id`), the event resolution (`Event.organization_id`),
+  the RSVP lookup (`EventRSVP.organization_id`) — filters the caller's
+  org; `catch_up_outreach_sheets` additionally scopes its own sheet-id query
+  the same way before ever reaching `sync_sheet_attendance`.
+- **Locking matches Pitfall #27.** The event row is taken `with_for_update()`
+  first (the lock every other attendance/finalize writer on that event
+  already takes), then the RSVP rows are read with their own
+  `.with_for_update()` — not a plain `SELECT` after the lock, which would
+  still answer from the pre-lock REPEATABLE READ snapshot.
+- **Idempotent by construction (Pitfall #36).** The mirror compares each
+  wanted field to the RSVP's current value and only writes on a real
+  change (`_mirror`), and a `dry_run` preview runs the identical code inside
+  a savepoint it then rolls back — the preview cannot drift from what a real
+  run would do, because it *is* the real run, uncommitted.
+- **New routes correctly admin-gated.** `GET /outreach-credit` (preview) and
+  `POST /outreach-credit` (apply) both require `scheduling.manage` — right,
+  since a run writes admin-hours ledger entries org-wide, not merely for the
+  caller. The audit log entry on apply records counts only
+  (`sheets`/`volunteers`/`attendance_updated`/`entries_credited`/`minutes`),
+  no member-identifying free text (Checklist §5).
+- **`_sync_outreach_credit`** (the per-write hook called from check-in,
+  check-out and closeout-attendance-save) wraps the same mirror in a
+  try/except that logs and rolls back on failure without undoing the
+  attendance write it follows — correct: the next write, the event's own
+  finalize, or the officer-run catch-up above all re-run the same
+  compare-and-correct, so a transient failure here is self-healing, not
+  silent data loss. The log call passes `shift_id`/`e` as arguments to a
+  `{}`-templated message, not an f-string combined with arguments
+  (Pitfall #33).
+
+Route count re-confirmed by AST (114, +2 from pass 15, matching exactly
+these two new routes; no route removed).
+
+### `scheduling.py`/`scheduling_service.py` — three correctness/visibility widenings, no new authorization surface
+
+- **Outreach lookahead window.** The default open-shifts window reaches 60
+  days ahead for outreach sheets against 30 for duty shifts
+  (`OUTREACH_LOOKAHEAD_DAYS`), only when the caller did not name an explicit
+  `end_date` — a caller who asks for a specific range gets exactly that
+  range, not a silently widened one. Implemented as an `OR` branch in the
+  shared `open_shift_candidate_criteria` WHERE clause
+  (`Shift.is_outreach.is_(True), Shift.shift_date <= outreach_end_date`),
+  still inside the same `organization_id`/not-finalized/not-cancelled
+  filters every other branch of that query already carries — not a second,
+  unscoped query path.
+- **`get_leave_requested_user_ids`** (backing the widened
+  `GET /scheduling/shifts/{id}/unavailable-members` response) is org-scoped
+  (`LeaveRequest.organization_id`) and resolves the shift through the
+  existing org-scoped `get_shift_by_id` before querying. It surfaces only
+  user ids with a *pending* leave request covering the shift date — no leave
+  reason, note or category reaches the response — to a caller who already
+  holds `scheduling.assign` (unchanged permission on this endpoint).
+- **Per-position hours breakdown** (`positions`/`all_time_positions` on
+  `get_my_hours_history`/`get_member_hours_history`) is computed inside the
+  same already-org/self-scoped bucket query those two endpoints already ran
+  (Checklist item re-verified: the member-other-than-self branch still
+  requires `scheduling.report` and 404s a cross-org `user_id`, unchanged from
+  pass 14's review) — a new column on an old, already-gated query, not a new
+  by-id surface.
+- **`shift_eligibility_service.py`'s refactor** extracts the driver-EVOC rule
+  (`enforce_evoc` setting + approved-exception lookup) out of
+  `evaluate_driver_assignment` into a reusable `evaluate_driver_for_apparatus`,
+  so a non-shift seat (an apparatus event's Driver seat) can call the same
+  rule instead of a second implementation drifting from it — exactly the
+  "one place the rule can be read" discipline Pitfall #29 asks for. Read the
+  extraction diff directly: the body is moved, not rewritten: same
+  `EvocLevelService.check_driver_evoc_eligibility` call, same settings read,
+  same shape of result.
+- **`pre_shift_work_service.approved_pre_work_minutes`** grew an optional
+  `outer_joins` parameter so the new position breakdown can group by a
+  column living outside the `Shift`/`ShiftPreWorkSession` join — additive,
+  default `()`, every existing call site unaffected (confirmed: no other
+  call site in the diff window passes it).
+
+### Frontend — grep sweep, no risky pattern found
+
+Swept the full 43-file, +1998/−323 diff under `modules/scheduling` and
+`pages/scheduling` for `window.confirm`/`alert`/`prompt`,
+`dangerouslySetInnerHTML`, a bare `toHaveBeenCalledWith()`, the banned
+locale-method/`date-fns` imports, a raw `localStorage.setItem`, and `??
+undefined` on a form value — zero hits on added lines. `ShiftBoard.tsx`'s new
+outreach-calendar fetch is gated on `checkPermission('events.view')`
+client-side (a UI nicety; the server-side `apparatus_event_service` the
+calendar actually calls was reviewed under Feature 13 pass 24) and is
+deliberately isolated from the shift-fetch `Promise.all` — a failure there is
+caught and degrades to an empty list rather than blanking the board
+(`.catch(() => [] as CalendarOutreachItem[])`).
+
+### Out of declared scope, seen and not reviewed here
+
+`models/training.py`'s `TrainingCreditDuplicateFlag` (a finalize-vs-self-report
+duplicate-credit flag, keyed by a unique `(event_record_id, other_record_id)`
+pair per Pitfall #36) and `RollingRequirementLastMet` (a per-member/requirement
+"last met" date, unique on `(user_id, requirement_id)`, also per Pitfall #36)
+both read as correctly-shaped on inspection, but belong to Training core
+(Feature 17) or Compliance (Feature 20), not Scheduling — flagged here only so
+the next reviewer of either row knows to pick them up; not reviewed against
+the full seven-dimension checklist as part of this pass.
+
+**SCH-20 unaffected.** Its file, `member_supervisor_service.py`, carries zero
+diff since pass 15's own head (the self-assignment refusal pass 15 recorded
+is already in this pass's baseline) — re-confirmed by `git diff` producing no
+output for that path in this pass's window.
+
+**0 fixed, 0 new findings.** `docs/module-audit/scheduling.md` and
+`docs/app-review/scheduling.md` re-grepped for `🚩`/`OPEN`/`FLAGGED` — both
+zero for this feature.
+
+**Completion gate:** `flake8`/`black --check`/`isort --check-only` on
+`app/ tests/ alembic/` all clean; `validate_migrations.py --strict` — 844
+revisions, single head `e9cf8ab7e4e4` (after merging in PR #4689's fix, see
+Step 0 above); `check_route_permissions.py --strict` — 344 routes, 0
+errors/0 warnings; scoped backend pytest (`-k "scheduling or time_off or
+supervisor or seat_override or widget or eligibility or member_hours or
+on_call or shift_history or standing_shift or call_tracking or outreach"`,
+unit-marked only, run under `python3.13`) — 842 passed, 1 pre-existing
+environment-only skip (`py_vapid`); standing guard suites (capacity locking,
+org-scoping ratchet, LIKE escaping, CSV sweep, migration chain,
+`create_all`-table tolerance, account-status gates, log-call shape, baseline
+member grants) — 207 passed; `npm run typecheck` — 0 errors; `npm run lint`
+— 0 errors, 0 warnings; `npx vitest run src/modules/scheduling
+src/pages/scheduling` — 1301 passed (80 files).
+
+Row 15 → ✅ (pending this PR's merge); next is Feature 16 (Events &
+requests) — re-check `list_pull_requests` fresh rather than trusting this
+note.
 
 ---
 

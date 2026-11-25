@@ -16,6 +16,39 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR (this iteration, branch `claude/security-review-scheduling-p16`)**:
+Feature 15 (Scheduling), pass 16 — watchdog pickup (the dedicated `/loop 30m
+/security-review` session, `session_011T1ZyyLrD5HagusgK9uDw2`, remains
+unreachable, confirmed via `ListAgents` → "No reachable agents").
+
+PR #4685 (Feature 14, Equipment check & shifts, pass 17) had already merged
+before this iteration started; row 14 marked ✅ above. A fresh
+`list_pull_requests` (state=open) found one unrelated open PR, #4689
+("fix(migrations): merge the history-public-settings and
+training-approval-reminder heads") — not a `claude/security-review-*` head,
+so Step 0 did not tend it as this iteration's own PR, but it was CI-green and
+`mergeable_state: clean`, and `main` itself had two Alembic heads (this
+session's own startup hook had failed on it), so it was merged directly
+before continuing. Row 15 (Scheduling) was then confirmed the next ⬜ row.
+
+Baseline `2a5ca8e31` (PR #4464's merge, pass 15). Real delta in five of this
+feature's declared backend files plus one new file: a new community-outreach-
+sheet hours-credit feature (`services/outreach_sheet_credit.py`, two new
+admin-gated routes), an outreach-specific open-shifts lookahead window, a
+leave-request surfacing on the unassignable-members lookup, a per-position
+hours breakdown, and a driver-eligibility rule extracted for reuse by a
+non-shift seat. **0 fixed, 0 new findings** — every new surface is
+already correctly org-scoped, permission-gated, lock-ordered (Pitfall #27)
+and idempotent (Pitfall #36) on inspection. Full write-up:
+`docs/security-review/SCH-15-scheduling.md`'s **Pass 16** section.
+
+Row 15 → ✅ (pending this PR's merge); next is Feature 16 (Events &
+requests) — re-check `list_pull_requests` fresh rather than trusting this
+note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 14, Equipment check & shifts, pass 17, PR #4685, merged), preserved for history</summary>
+
 **PR [#4685](https://github.com/thegspiro/the-logbook/pull/4685) (branch
 `claude/security-review-equipment-check-shifts`)**: Feature 14 (Equipment
 check & shifts), pass 17 — watchdog pickup (the dedicated `/loop 30m
@@ -28127,7 +28160,7 @@ iteration's commit" rule.
 | 12  | Facilities                | FAC    | `endpoints/facilities.py` (4394 L), `facilities_service.py`                                                                                                                                                                                                                           | ✅     |
 | 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`, `apparatus_events.py` (new, pass 24)                                                                                                                                                                                                                   | ✅     |
 | 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                                                                                                                                                           | ✅     |
-| 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                                                                                                                                                      | ⬜     |
+| 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                                                                                                                                                      | ✅     |
 | 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                                                                                                                                                             | ⬜     |
 | 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`, `knowledge_tests.py` (added pass 12), `shift_evaluation_templates.py`/`shift_evaluations.py` (added pass 13), `api/public/shift_evaluations.py` (added pass 15)                                                        | ⬜     |
 | 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py`, `training_module_config.py` (added pass 14), `attendance_waiver_requests.py` (31 routes, added pass 17)                              | ⬜     |
