@@ -253,15 +253,25 @@ into the target org's checklist**, carrying the caller's `name`/`description`/
 beyond EC2-1's read leak. **Fixed:** `update_item` validates a reassigned
 `compartment_id` via the org-scoped `_get_compartment` before re-parenting.
 
-### EC2-3 — LOW — Remaining dangling FKs on the same setattr loop — 🚩 OPEN
+### EC2-3 — LOW — Remaining dangling FKs on the same setattr loop — ✅ FIXED (found stale 2026-11-25, security-review pass 17)
 
 The other client FKs reachable through the item/compartment update loops —
 `inventory_item_id` and `equipment_id` on items, `parent_compartment_id` on
-compartments — are **not** validated either, but they are integrity-only: none
-moves the row's org membership (unlike `compartment_id`) and none is projected by
+compartments — were **not** validated either, but they were integrity-only: none
+moved the row's org membership (unlike `compartment_id`) and none was projected by
 name into a response (the responses carry scalar ids). Same dangling-FK class as
-AP2-2 / INV-4-remainder; recommend a defense-in-depth sweep validating them via
-the org-scoped getters. No disclosure or cross-org write in the interim.
+AP2-2 / INV-4-remainder.
+
+**Fixed** by commit `f37e67603` (merged 2026-11-11, outside both this rotation and
+the security-review rotation — this entry had simply never been revisited since).
+`EquipmentCheckService._validate_item_fks` now rejects an out-of-org
+`inventory_item_id`/`equipment_id` via `is_in_org`, with an explicit `EC2-3 / EC2-4`
+comment citing this finding, and `_validate_compartment_parent` now requires a
+reassigned `parent_compartment_id` to resolve org-scoped (`_get_compartment`) **and**
+share the same `template_id` — tighter than this finding asked for. Re-verified by
+reading both helpers and their three call sites directly (not taken on the commit
+message's word) during the security review's Feature 14 pass 17
+(`docs/security-review/EC-14-equipment-check-shifts.md`).
 
 ### EC-7 residual (submit endpoints on bare auth) — unchanged
 

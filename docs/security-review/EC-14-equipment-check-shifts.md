@@ -5,21 +5,163 @@
 (pass 5), 2026-09-17 (pass 6), 2026-10-06 (pass 7), 2026-10-14 (pass 8),
 2026-10-15 (pass 9), 2026-10-19 (pass 10), 2026-10-23 (pass 11), 2026-10-26
 (pass 12), 2026-10-29 (pass 13), 2026-11-02 (pass 14), 2026-11-06
-(pass 15), 2026-11-20 (pass 16) · **PR:**
+(pass 15), 2026-11-20 (pass 16), 2026-11-25 (pass 17) · **PR:**
 [#1842](https://github.com/thegspiro/the-logbook/pull/1842) (pass 1),
 [#2625](https://github.com/thegspiro/the-logbook/pull/2625) (pass 6, 0
 fixed, 0 flagged, merged), [#2970](https://github.com/thegspiro/the-logbook/pull/2970)
 (pass 7, 0 fixed, 0 new findings), [#3195](https://github.com/thegspiro/the-logbook/pull/3195) (pass 8, 1 fixed, 0 flagged),
-[#3290](https://github.com/thegspiro/the-logbook/pull/3290) (pass 9, 0 fixed, 0 new findings), [#3435](https://github.com/thegspiro/the-logbook/pull/3435) (pass 10, 0 fixed, 0 new findings, merged), [#3602](https://github.com/thegspiro/the-logbook/pull/3602) (pass 11 — watchdog pickup, 0 fixed, 0 new findings), [#3741](https://github.com/thegspiro/the-logbook/pull/3741) (pass 12 — watchdog pickup, 0 fixed, 1 flagged, merged), [#3837](https://github.com/thegspiro/the-logbook/pull/3837) (pass 13 — watchdog pickup, 0 fixed, 0 new findings, merged), [#3927](https://github.com/thegspiro/the-logbook/pull/3927) (pass 14 — watchdog pickup, 0 fixed, 0 new findings, merged), [#4111](https://github.com/thegspiro/the-logbook/pull/4111) (pass 15 — watchdog pickup, 0 fixed, 0 new findings, merged), pass 16 PR recorded in `PROGRESS.md`
+[#3290](https://github.com/thegspiro/the-logbook/pull/3290) (pass 9, 0 fixed, 0 new findings), [#3435](https://github.com/thegspiro/the-logbook/pull/3435) (pass 10, 0 fixed, 0 new findings, merged), [#3602](https://github.com/thegspiro/the-logbook/pull/3602) (pass 11 — watchdog pickup, 0 fixed, 0 new findings), [#3741](https://github.com/thegspiro/the-logbook/pull/3741) (pass 12 — watchdog pickup, 0 fixed, 1 flagged, merged), [#3837](https://github.com/thegspiro/the-logbook/pull/3837) (pass 13 — watchdog pickup, 0 fixed, 0 new findings, merged), [#3927](https://github.com/thegspiro/the-logbook/pull/3927) (pass 14 — watchdog pickup, 0 fixed, 0 new findings, merged), [#4111](https://github.com/thegspiro/the-logbook/pull/4111) (pass 15 — watchdog pickup, 0 fixed, 0 new findings, merged), [#4464](https://github.com/thegspiro/the-logbook/pull/4464) (pass 16, 0 fixed, 0 new findings, merged), pass 17 PR recorded in `PROGRESS.md`
 
-**Backend:** `api/v1/endpoints/equipment_check.py` (54 routes, unchanged from
-pass 10), `api/v1/endpoints/shift_completion.py` (22 routes, unchanged from
-pass 14),
-`services/equipment_check_service.py` (6,934 L, unchanged pass 15, +15/−23
-this pass), `services/shift_completion_service.py` (2,134 L, +332/−30
-pass 15, +10/−1 this pass)
+**Backend:** `api/v1/endpoints/equipment_check.py` (54 routes, unchanged route
+count, +15/−4 this pass), `api/v1/endpoints/shift_completion.py` (22 routes,
+unchanged from pass 14, byte-identical this pass),
+`services/equipment_check_service.py` (6,934 L, byte-identical this pass),
+`services/shift_completion_service.py` (2,134 L, byte-identical this pass)
 **Frontend:** in-app (no dedicated module directory)
 **Migrations:** none this iteration to this feature's own tables
+
+---
+
+## Pass 17 (2026-11-25) — small cross-cutting landing (document provenance), stale app-review doc corrected, 0 fixed in this file, 0 new findings
+
+**Watchdog pickup.** No other Claude session is running on this machine
+(`ListAgents` → "No reachable agents"), consistent with the dedicated
+`/loop 30m /security-review` session (`session_011T1ZyyLrD5HagusgK9uDw2`)
+remaining unreachable through every prior pass. PR #4684 (Feature 13,
+Apparatus & NFC, pass 24) had just merged (`4ad542a49`); a fresh
+`list_pull_requests` (state=open) found 0 PRs with a `claude/security-review-`
+head branch, and row 14 (Equipment check & shifts) was confirmed the next
+`⬜` row by reading the rotation table directly.
+
+**Baseline** `f0547e6ae` (PR #4452's merge, pass 23 of Apparatus & NFC — the
+commit pass 16 itself was baselined from, since EC's own pass-16 PR #4464 sits
+behind it on a side branch) to head `4ad542a49` (PR #4684's merge, current
+`main`) — a genuine ancestor (`git merge-base --is-ancestor` succeeds).
+`git diff --numstat` restricted to the six declared backend files shows real
+change in exactly one: `equipment_check.py` (+15/−4). The other five —
+`shift_completion.py` and both service and schema file pairs — are
+byte-identical to pass 16.
+
+### `equipment_check.py` — a new, already-landed, already-escaped feature: report numbers and a preparer line on exported PDFs
+
+Commits `daeb28002` ("Give every document its department identity, a report
+number and a handling banner") and `79e184c98` ("Offer signature lines on
+report PDFs, by a tick-box at download") — both outside this rotation, an
+owner decision dated 2026-11-21 — add a `report_number_for`/`preparer_label`
+pair (`app/services/document_provenance.py`, new) and a `signature_lines`
+query flag to `export_pdf`'s three report types (compliance, failure log,
+check-detail).
+
+- **`report_number_for`** calls `new_report_number(await
+resolve_org_today(db, organization_id))` (`app/utils/report_number.py`) —
+  `RPT-YYYYMMDD-` plus 4 characters from `secrets.choice` over a
+  Crockford-base32-style alphabet (cryptographically random, not sequential,
+  by the same owner decision — the module docstring states why no counter
+  table or locked increment is needed: collision risk is ~1-in-a-million per
+  same-day pair, and the audit row still disambiguates by time and member if
+  it ever happens). No client input, no org-scoping question to ask.
+- **`preparer_label`** takes only `current_user` — `full_name` (the caller's
+  own, already-known name) plus their `OperationalRank.display_name`, looked
+  up filtered on `OperationalRank.organization_id ==
+str(user.organization_id)` **and** `rank_code` **and** `is_active` — org-
+  scoped, no client-supplied id, degrades to the bare name on no match
+  (never prints a raw rank code). No new by-id surface.
+- **Injection/exposure (checklist item 4).** Read the full render path:
+  `equipment_check_pdf.py`'s three generators pass `generated_by`/
+  `report_number`/`signature_lines` straight through to
+  `pdf_report_kit.ReportMeta`; the letterhead facts strip and the signature
+  block both wrap every value in `esc(...)` before building a `Paragraph`
+  (`pdf_report_kit.py:452`, `:542`, `:551` — markup-parsing sinks); the
+  footer draws `generated_by` straight onto the canvas with
+  `canvas.drawString`, which the module's own comment correctly notes is not
+  a markup parser and needs no escaping. `report_number` carries no
+  attacker-reachable content regardless (server-random). Not a new finding —
+  the escaping discipline already in place for the pre-existing
+  `generated_by=current_user.full_name` parameter (reviewed pass-over-pass
+  since pass 1) is unchanged by this rename/addition.
+- **Audit logging (Pitfall #33).** `_audit_equipment_export`'s
+  `event_data` now also carries `report_number` via the existing
+  `**parameters` splat at both PDF call sites — an id-shaped generated
+  string, not free text, matching the pattern this rotation has checked at
+  every prior pass.
+- No new route (`export_pdf`'s route count is unchanged — this only adds one
+  `Query(False)` parameter and two local variables); route re-enumeration
+  below confirms no route was added or removed anywhere in the file.
+
+`document_provenance.py` and `report_number.py` are new, shared,
+cross-cutting files (used by other export endpoints across the app, by the
+same owner decision) — reviewed here only for this feature's own call site,
+per the scoping discipline prior passes use for cross-cutting landings (e.g.
+`list_within_detail_limit` at EC pass 13, lot-recall at EC pass 12); their
+other call sites belong to whichever feature's rotation row reaches them
+next.
+
+### Found while re-verifying prior app-review findings: EC2-3 was already fixed, but `docs/app-review/equipment-check.md` still read 🚩 OPEN
+
+Per Step 2, re-checked `docs/app-review/equipment-check.md` for its two
+`🚩`-marked items before reviewing new code. EC-11 (hardcoded compliance
+metrics, a feature gap) is correctly still open — untouched this pass. **EC2-3**
+("the other client FKs reachable through the item/compartment update loops —
+`inventory_item_id`/`equipment_id` on items, `parent_compartment_id` on
+compartments — are not validated") was not: `EquipmentCheckService.update_item`
+(`equipment_check_service.py:1275`) calls `_validate_item_fks`, which rejects an
+out-of-org `inventory_item_id`/`equipment_id` via `is_in_org` — the method's own
+docstring cites "EC2-3 / EC2-4" by name — and `update_compartment` (`:706`)
+calls `_validate_compartment_parent`, which resolves a reassigned
+`parent_compartment_id` through the org-scoped `_get_compartment` and
+additionally requires it share the compartment's own `template_id` (tighter
+than the finding even asked for) plus a cycle check. Both read in full, both
+call sites confirmed (`add_item` and `update_item` for the FK validator;
+`update_compartment` for the parent validator). The fix landed in commit
+`f37e67603` (merged 2026-11-11) — two weeks before this pass, and outside both
+the app-review and security-review rotations, which is why neither caught the
+doc going stale. Corrected `docs/app-review/equipment-check.md`'s EC2-3 entry
+to ✅ FIXED, citing the commit and the two helpers, as this rotation's own
+"a module doc that contradicts the code gets corrected" rule requires.
+
+### Route re-enumeration
+
+By AST (not grep, matching pass 14/16's method): `equipment_check.py` **54**
+(unchanged), `shift_completion.py` **22** (unchanged). Matches pass 16
+exactly.
+
+### Re-verified: every prior open item
+
+**EC-17** (MED, FLAGGED — a non-draft report's substantive fields stay
+editable by its filing officer indefinitely on a review-off department; the
+2026-10-27/2026-11-01 owner decisions narrowed but did not close it) —
+`shift_completion_service.py` is byte-identical to pass 16's baseline, so
+nothing in this window touches it. Re-confirmed OPEN/FLAGGED, unaffected.
+**EC-8**'s residual (the two harmless read-after-validate cases in
+`add_item`/`update_item`, left as-is by app-review's own pass 1) — same file,
+untouched, still accurate. **EC-7 residual** (submit endpoints on bare auth,
+an intra-org granularity decision, owner-accepted) — `equipment_check.py`'s
+only change this pass is additive (one query param on `export_pdf`); the
+submit endpoints' permission dependencies are untouched, confirmed by the
+diff above showing no other hunk.
+
+**0 fixed by this pass in `EC-14`'s own declared scope** (EC2-3's fix, like
+EC-17's and EC-8's before it, had already landed by other work; this pass's
+job was finding that the record hadn't caught up, and correcting it), **0 new
+findings**.
+
+### Completion gate (pass 17)
+
+| Check                                                                                                                                                                                                | Result                                                      |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/` (CI-pinned 7.4.1)                                                                                                                                                      | ✅ 0 violations                                             |
+| `black --check app/ tests/ alembic/` (CI-pinned 26.10.1)                                                                                                                                             | ✅ clean, 3520 files unchanged                              |
+| `isort --check-only app/ tests/ alembic/` (CI-pinned 9.0.2)                                                                                                                                          | ✅ clean                                                    |
+| `python3 scripts/validate_migrations.py --strict`                                                                                                                                                    | ✅ single head `d41f7a2c9e58`, 840 revisions                |
+| `python3 scripts/check_route_permissions.py --strict`                                                                                                                                                | ✅ 339 routes, 0 errors, 0 warnings                         |
+| `python3.13 scripts/generate_schema_docs.py --check`                                                                                                                                                 | ✅ up to date                                               |
+| Scoped backend pytest (`-k "equipment or shift_completion or shift_report"`)                                                                                                                         | ✅ 910 passed, 1 pre-existing environment skip (`py_vapid`) |
+| Standing guard suites (capacity locking, org-scoping ratchet, LIKE escaping, CSV sweep, migration chain, `create_all`-table tolerance, account-status gates, log-call shape, baseline member grants) | ✅ all passed                                               |
+| `cd frontend && npm run typecheck`                                                                                                                                                                   | ✅ 0 errors                                                 |
+| `cd frontend && npm run lint`                                                                                                                                                                        | ✅ 0 errors, 0 warnings                                     |
+
+Row 14 → ✅ (pending this PR's merge); next is Feature 15 (Scheduling) —
+re-check `list_pull_requests` fresh rather than trusting this note.
 
 ---
 

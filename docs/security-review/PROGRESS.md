@@ -16,6 +16,35 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#4685](https://github.com/thegspiro/the-logbook/pull/4685) (branch
+`claude/security-review-equipment-check-shifts`)**: Feature 14 (Equipment
+check & shifts), pass 17 — watchdog pickup (the dedicated `/loop 30m
+/security-review` session, `session_011T1ZyyLrD5HagusgK9uDw2`, remains
+unreachable). No branch-name deviation this time — the environment accepted
+pushing to the rotation's own preferred branch name directly.
+
+PR #4684 (Feature 13, Apparatus & NFC, pass 24) had already merged before this
+iteration started; row 13 marked ✅ above. A fresh `list_pull_requests`
+(state=open) found no `claude/security-review-*` head open, so this
+iteration continued to Step 1: row 14 (Equipment check & shifts) was the
+next ⬜ row.
+
+Baseline `f0547e6ae` (PR #4452's merge). Of this feature's six declared
+backend files, only `equipment_check.py` changed (+15/−4) — a small,
+already-correct, already-escaped owner-decision feature (report numbers and
+a preparer line on exported PDFs). **0 fixed in this file's own scope, 0 new
+findings.** While re-verifying `docs/app-review/equipment-check.md`'s two
+open items per Step 2, found EC2-3 had already been fixed by commit
+`f37e67603` (merged 2026-11-11) without that doc being updated; corrected it
+to ✅ FIXED. Full write-up: `docs/security-review/EC-14-equipment-check-shifts.md`'s
+**Pass 17** section.
+
+Row 14 → ✅ (pending this PR's merge); next is Feature 15 (Scheduling) —
+re-check `list_pull_requests` fresh rather than trusting this note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 13, Apparatus & NFC, pass 24, PR #4684, merged), preserved for history</summary>
+
 **PR [#4684](https://github.com/thegspiro/the-logbook/pull/4684) (branch
 `claude/friendly-babbage-xstbnj`)**: Feature 13
 (Apparatus & NFC), pass 24 — watchdog pickup (the dedicated `/loop 30m
@@ -66,9 +95,10 @@ reviewed. Full write-up: `docs/security-review/AP-13-apparatus-nfc.md`'s
 **Pass 24** section, which also updates this file's own declared backend/
 frontend/migration scope to name the new files explicitly.
 
-Row 13 → ✅ (pending this PR's merge); next is Feature 14 (Equipment check
-& shifts) — re-check `list_pull_requests`/`gh api search/issues` fresh
-rather than trusting this note.
+Row 13 → ✅ (merged). Row 14 (Equipment check & shifts) is this entry's own
+pass 17 — see current section above.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 12, Facilities, pass 17, PR #4683, merged), preserved for history</summary>
@@ -28096,7 +28126,7 @@ iteration's commit" rule.
 | 11  | Inventory                 | INV    | `endpoints/inventory.py` (7089 L), `inventory_service.py`                                                                                                                                                                                                                             | ✅     |
 | 12  | Facilities                | FAC    | `endpoints/facilities.py` (4394 L), `facilities_service.py`                                                                                                                                                                                                                           | ✅     |
 | 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`, `apparatus_events.py` (new, pass 24)                                                                                                                                                                                                                   | ✅     |
-| 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                                                                                                                                                           | ⬜     |
+| 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                                                                                                                                                           | ✅     |
 | 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                                                                                                                                                      | ⬜     |
 | 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                                                                                                                                                             | ⬜     |
 | 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`, `knowledge_tests.py` (added pass 12), `shift_evaluation_templates.py`/`shift_evaluations.py` (added pass 13), `api/public/shift_evaluations.py` (added pass 15)                                                        | ⬜     |
@@ -28177,6 +28207,8 @@ into row 13's declared scope rather than leaving it to be rediscovered.
 ---
 
 ## Log
+
+### 2026-11-25 — Feature 13 (Apparatus & NFC, pass 24) merged (PR #4684); Feature 14 (Equipment check & shifts, pass 17): watchdog pickup, a small already-escaped cross-cutting landing (document provenance on exported PDFs), and a stale `docs/app-review/equipment-check.md` finding (EC2-3) corrected to FIXED after re-verifying it against the current code, 0 fixed in this file's own scope, 0 new findings
 
 ### 2026-11-25 — Feature 12 (Facilities, pass 17) merged (PR #4683); Feature 13 (Apparatus & NFC, pass 24): watchdog pickup, found a new feature (apparatus events) outside this file's declared scope, reviewed end to end, 0 fixed, 0 new findings
 
