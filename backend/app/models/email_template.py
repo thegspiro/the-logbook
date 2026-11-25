@@ -148,6 +148,9 @@ class EmailTemplateType(str, enum.Enum):
     # A correction took a member below a program requirement they had
     # completed; see email_templates_program_progress.py.
     PROGRAM_REQUIREMENT_REOPENED = "program_requirement_reopened"
+    # A training session's sign-off still waiting 7, then 14, days after
+    # finalize; see email_templates_training_approval.py.
+    TRAINING_APPROVAL_REMINDER = "training_approval_reminder"
     CUSTOM = "custom"
 
 

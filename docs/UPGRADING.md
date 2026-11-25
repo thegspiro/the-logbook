@@ -953,6 +953,21 @@ and changes no existing table; the downgrade drops it and every goal in it.
 No goal exists until a department sets one under Events Settings → Outreach
 Goals.
 
+### Training sign-off reminders (2026-11-23)
+
+Nothing blocks a restart. Migration `5845dae0c277` adds the
+`training_approval_reminder` email template type to
+`email_templates.template_type` and `scheduled_emails.template_type`, and
+changes no other table. It builds on `d41f7a2c9e58`.
+
+- **A one-time burst of sign-off reminders.** The new daily
+  `training_approval_reminders` task (07:50) emails the training officers
+  about each training session whose sign-off has waited 7 days, and once more
+  at 14 days. The first run after the upgrade reminds every approval already
+  waiting 7 days or more, once (an approval past 14 days gets one email, not
+  two). A host that runs the tasks from cron rather than the built-in
+  scheduler needs the new line from `app/services/scheduled_tasks.py`.
+
 ### Community risk reduction tracking, and a street map that loads tiles from OpenStreetMap (2026-11-23)
 
 Nothing blocks a restart. Migrations `89c0b481fe55` and `5c2e8a417d90` create

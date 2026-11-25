@@ -244,6 +244,11 @@ const TEMPLATE_TYPE_DISPLAY: Record<string, { icon: React.ElementType; label: st
     label: 'Program Requirement Reopened',
     color: 'text-purple-500',
   },
+  training_approval_reminder: {
+    icon: GraduationCap,
+    label: 'Training Approval Reminder',
+    color: 'text-purple-500',
+  },
   shift_evaluation_preceptor_link: {
     icon: GraduationCap,
     label: 'Shift Evaluation Preceptor Link',
@@ -373,6 +378,7 @@ const TEMPLATE_CATEGORIES: { id: string; label: string; types: string[] }[] = [
     label: 'Training & Certifications',
     types: [
       'training_approval',
+      'training_approval_reminder',
       'cert_expiration',
       'external_course_match',
       'training_record_voided',

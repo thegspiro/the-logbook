@@ -1339,6 +1339,9 @@ linked from their email and from **Review and approve** on the event's
 **Training details** card. _(2026-11-21)_ While that approval is waiting, the
 session is not counted as held for a session-attendance requirement either, so
 no member is charged with missing a class nobody has signed off yet.
+If the approval is still waiting a week after finalizing, training officers
+get a reminder email, and one more at two weeks _(2026-11-23)_. Members are
+credited only once an officer approves.
 
 **A member who already logged the class** _(2026-11-23)_. If a member had
 already self-reported the class (and it was approved), or an officer entered
