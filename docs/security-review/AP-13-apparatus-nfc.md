@@ -1,6 +1,6 @@
 # Security Review 13 — Apparatus & NFC
 
-**Prefix:** `AP` · **Iteration:** 13 · **Reviewed:** 2026-08-26 (pass 1), 2026-08-28 (pass 2), 2026-09-03 (pass 3), 2026-09-03 (pass 4), 2026-09-03 (pass 5), 2026-09-03 (pass 6), 2026-09-03 (pass 7), 2026-09-03 (pass 8), 2026-09-03 (pass 9), 2026-09-03 (pass 10), 2026-09-09 (pass 11), 2026-09-15 (pass 12), 2026-09-17 (pass 13), 2026-10-06 (pass 14), 2026-10-13 (pass 15), 2026-10-15 (pass 16), 2026-10-19 (pass 17), 2026-10-23 (pass 18), 2026-10-26 (pass 19), 2026-10-29 (pass 20), 2026-11-02 (pass 21), 2026-11-06 (pass 22), 2026-11-20 (pass 23) · **PR:** [#1838](https://github.com/thegspiro/the-logbook/pull/1838) (pass 1), [#2199](https://github.com/thegspiro/the-logbook/pull/2199) (passes 3–8, merged), [#2200](https://github.com/thegspiro/the-logbook/pull/2200) (passes 9–10, merged), [#2428](https://github.com/thegspiro/the-logbook/pull/2428) (pass 11 — rotation pass 4, merged), [#2565](https://github.com/thegspiro/the-logbook/pull/2565) (pass 12 — rotation pass 5, merged), [#2623](https://github.com/thegspiro/the-logbook/pull/2623) (pass 13 — rotation pass 6, merged), [#2969](https://github.com/thegspiro/the-logbook/pull/2969) (pass 14 — rotation pass 7, 0 fixed, 0 new findings), [#3185](https://github.com/thegspiro/the-logbook/pull/3185) (pass 15 — watchdog pickup, 1 fixed, 0 new findings), [#3289](https://github.com/thegspiro/the-logbook/pull/3289) (pass 16 — watchdog pickup, 0 fixed, 0 new findings), [#3434](https://github.com/thegspiro/the-logbook/pull/3434) (pass 17 — watchdog pickup, 0 fixed, 0 new findings, merged), [#3589](https://github.com/thegspiro/the-logbook/pull/3589) (pass 18 — watchdog pickup, 0 fixed, 0 new findings, merged), [#3740](https://github.com/thegspiro/the-logbook/pull/3740) (pass 19 — watchdog pickup, 0 fixed, 0 new findings, merged), pass 20 (no PR — committed directly to `main` as `b6a86b4d4`, bypassing the branch/PR flow; its "Open PR" row said "PR (pending)" and the rotation table's row 13 was never flipped to ✅, which this pass corrects), [#3924](https://github.com/thegspiro/the-logbook/pull/3924) (pass 21, merged), [#4109](https://github.com/thegspiro/the-logbook/pull/4109) (pass 22, merged), pass 23 (this PR)
+**Prefix:** `AP` · **Iteration:** 13 · **Reviewed:** 2026-08-26 (pass 1), 2026-08-28 (pass 2), 2026-09-03 (pass 3), 2026-09-03 (pass 4), 2026-09-03 (pass 5), 2026-09-03 (pass 6), 2026-09-03 (pass 7), 2026-09-03 (pass 8), 2026-09-03 (pass 9), 2026-09-03 (pass 10), 2026-09-09 (pass 11), 2026-09-15 (pass 12), 2026-09-17 (pass 13), 2026-10-06 (pass 14), 2026-10-13 (pass 15), 2026-10-15 (pass 16), 2026-10-19 (pass 17), 2026-10-23 (pass 18), 2026-10-26 (pass 19), 2026-10-29 (pass 20), 2026-11-02 (pass 21), 2026-11-06 (pass 22), 2026-11-20 (pass 23), 2026-11-25 (pass 24) · **PR:** [#1838](https://github.com/thegspiro/the-logbook/pull/1838) (pass 1), [#2199](https://github.com/thegspiro/the-logbook/pull/2199) (passes 3–8, merged), [#2200](https://github.com/thegspiro/the-logbook/pull/2200) (passes 9–10, merged), [#2428](https://github.com/thegspiro/the-logbook/pull/2428) (pass 11 — rotation pass 4, merged), [#2565](https://github.com/thegspiro/the-logbook/pull/2565) (pass 12 — rotation pass 5, merged), [#2623](https://github.com/thegspiro/the-logbook/pull/2623) (pass 13 — rotation pass 6, merged), [#2969](https://github.com/thegspiro/the-logbook/pull/2969) (pass 14 — rotation pass 7, 0 fixed, 0 new findings), [#3185](https://github.com/thegspiro/the-logbook/pull/3185) (pass 15 — watchdog pickup, 1 fixed, 0 new findings), [#3289](https://github.com/thegspiro/the-logbook/pull/3289) (pass 16 — watchdog pickup, 0 fixed, 0 new findings), [#3434](https://github.com/thegspiro/the-logbook/pull/3434) (pass 17 — watchdog pickup, 0 fixed, 0 new findings, merged), [#3589](https://github.com/thegspiro/the-logbook/pull/3589) (pass 18 — watchdog pickup, 0 fixed, 0 new findings, merged), [#3740](https://github.com/thegspiro/the-logbook/pull/3740) (pass 19 — watchdog pickup, 0 fixed, 0 new findings, merged), pass 20 (no PR — committed directly to `main` as `b6a86b4d4`, bypassing the branch/PR flow; its "Open PR" row said "PR (pending)" and the rotation table's row 13 was never flipped to ✅, which this pass corrects), [#3924](https://github.com/thegspiro/the-logbook/pull/3924) (pass 21, merged), [#4109](https://github.com/thegspiro/the-logbook/pull/4109) (pass 22, merged), [#4452](https://github.com/thegspiro/the-logbook/pull/4452) (pass 23, merged; #4450 was an earlier, duplicate attempt of the same pass, closed in #4452's favor), pass 24 (this PR — watchdog pickup, 0 fixed, 0 new findings)
 
 **Backend:** `api/v1/endpoints/apparatus.py` (94 routes), `services/apparatus_service.py`,
 `evoc_level_service.py`, `services/driver_exception_service.py`,
@@ -8,13 +8,184 @@
 up from 5 as of pass 19 — the Member ID Cards admin surface), `services/nfc_tag_service.py`,
 `services/nfc_card_admin_service.py` (new, pass 19), `services/nfc_card_status_sync.py`
 (new, pass 19; also called from the Users & organizations member-status
-endpoints — that call site is Feature 07's scope), `mcp/tools/apparatus.py`
-**Frontend:** `modules/apparatus` (the Member ID Cards admin UI, if any, is
-members-permission-gated and lives outside this module — not found under
-`frontend/src/modules/apparatus/`, confirmed by diff: no frontend file in
-that tree changed this pass)
-**Migrations:** none through pass 18; pass 19 reviews
-`a8c3b50b6d9b_nfc_card_taps_and_auto_suspend`
+endpoints — that call site is Feature 07's scope), `mcp/tools/apparatus.py`,
+`api/v1/endpoints/apparatus_events.py` (23 routes, new, pass 24),
+`services/apparatus_event_service.py`, `services/apparatus_seat_call_service.py`,
+`services/apparatus_seat_request_notices.py` (all new, pass 24),
+`models/apparatus_event.py`, `schemas/apparatus_event.py` (both new, pass 24)
+**Frontend:** `modules/apparatus`, plus — new as of pass 24 and **not** under
+that directory, so declared explicitly here rather than left implicit —
+`pages/apparatus-events/`, `components/event-detail/apparatus-crew/`,
+`pages/ApparatusEventsTab.tsx`, `services/apparatusEventServices.ts`,
+`types/apparatusEvent.ts`, and the boundary touches in `pages/EventDetailPage.tsx`,
+`pages/EventsAdminHub.tsx`, `pages/eventsAdminTabs.ts`,
+`pages/event-requests/RequestApparatusCrewSection.tsx`,
+`pages/outreach-overview/OutreachOverviewTab.tsx`, `pages/scheduling/CrewBoardSlot.tsx`
+(the Member ID Cards admin UI, if any, is members-permission-gated and lives
+outside `modules/apparatus/` too — not found by diff as of pass 23)
+**Migrations:** none through pass 18; pass 19 reviewed
+`a8c3b50b6d9b_nfc_card_taps_and_auto_suspend`; pass 24 reviews
+`3f8a1c6e2b94` (tables + grants), `3daf47506e9e` (seat calls),
+`5c8e1f3a9d27` (signup approval), `bbb6eac6ae34` (essential seats)
+
+---
+
+## Pass 24 (2026-11-25, watchdog pickup) — new feature: apparatus events (outreach crews), reviewed end to end; 0 fixed, 0 new findings
+
+**Watchdog pickup.** PR #4683 (Feature 12, Facilities, pass 17) had just
+merged; a fresh `gh api search/issues -f q='repo:thegspiro/the-logbook
+is:pr is:open head:claude/security-review'` found 0 results, and the
+dedicated `/loop 30m /security-review` session remains unreachable
+(`ListAgents` → "No reachable agents"). `PROGRESS.md`'s rotation table had
+rows 00–12 `✅` and row 13 (this feature) as the next `⬜`.
+
+**Branch-name deviation**, same as every prior watchdog pass recorded here:
+this cloud session's environment only allows pushing to its own
+pre-assigned branch (`claude/friendly-babbage-xstbnj`), not a freely-chosen
+`claude/security-review-apparatus-nfc` name.
+
+### Prior art loaded (not re-derived)
+
+`CHECKLIST.md`, `SEC-00-cross-cutting-baseline.md`, `docs/module-audit/apparatus.md`
+and `docs/app-review/apparatus.md` (both re-grepped for `🚩`/`OPEN`/`FLAGGED` —
+zero open items in either), and this file's pass 1–23 history. No open
+finding exists for this feature entering this pass.
+
+### Scope and delta
+
+Baseline: pass 23's merge commit (`5ecee8110`) to current `main`
+(`448cedf0d`). `git diff --stat` restricted to every file this document had
+declared returned only `apparatus_service.py` (+15/−10) — but a wider sweep
+(every file under `api/v1/endpoints/apparatus*.py`, `services/apparatus*.py`,
+`services/nfc*.py`, `services/evoc*`, `services/driver_exception*`,
+`services/external_apparatus*`, `models/apparatus*.py`, `schemas/apparatus*.py`,
+`mcp/tools/apparatus.py`, `utils/apparatus*.py`) turned up a real feature this
+file's declared scope had not caught up to: **apparatus events** — outreach
+that rolls an apparatus with a named crew (a Santamobile run, a holiday
+parade) but is not a shift. New, entirely reviewed this pass:
+
+- `api/v1/endpoints/apparatus_events.py` — 23 routes (AST-counted), all under
+  `apparatus_events.manage` or `apparatus_events.manage`/`apparatus_events.signup`
+  OR-gated, except `GET /calendar` (`events.view`, a read-only overlay — a
+  deliberate, narrower-than-manage grant since the scheduling calendar
+  already shows this to anyone who can see the calendar).
+- `services/apparatus_event_service.py` (2151 lines), `services/apparatus_seat_call_service.py`
+  (318 lines), `services/apparatus_seat_request_notices.py` (295 lines).
+- `models/apparatus_event.py` (515 lines), `schemas/apparatus_event.py`
+  (545 lines, deliberately snake_case/no `alias_generator` — stated in its own
+  module docstring to match the events module's convention, confirmed against
+  `frontend/src/types/apparatusEvent.ts`, which mirrors it exactly: Pitfall #5
+  satisfied by explicit choice, not omission).
+- Four migrations: `3f8a1c6e2b94` (the six core tables + the
+  `apparatus_events.manage`/`.signup` grants, added on evidence from
+  `events.manage`/`events.view` per Pitfall #23's exact shape — frozen
+  evidence tuple, `is_system`-gated, idempotent), `3daf47506e9e` (seat-call
+  log), `5c8e1f3a9d27` (signup-approval column + `apparatus_event_seat_requests`,
+  existing rows default to "approval off" — Pitfall #35 satisfied), `bbb6eac6ae34`
+  (essential-seat flag, existing rows default to essential — same). All four
+  guard every `create_table`/`add_column` on the table/column's own absence
+  (Pitfall #26), and every `ondelete="SET NULL"` column is `nullable=True`
+  (Pitfall #2).
+
+Reviewed against all seven `CHECKLIST.md` dimensions:
+
+- **Auth/authz (1–2):** every route enumerated by AST carries a recognized
+  permission dependency; no bare route. Self-scoped writes (`claim_seat`,
+  `release_seat`, `withdraw_request`) are enforced in the **service**, not
+  merely by the endpoint's OR-permission: `release_seat` raises
+  `PermissionError` when a non-manager tries to clear someone else's seat;
+  `withdraw_request` returns `None` (→ 404) for a request that is not the
+  caller's own, so another member's request id "tells the caller nothing" —
+  the file's own comment names this IDOR-safe design intentionally.
+- **Tenant isolation (3, XC-1/XC-3):** every by-id read/write in
+  `apparatus_event_service.py` filters `organization_id` (`_get_event`,
+  `get_plan`, `_locked_seat`, `_locked_request`, `_unit`, the template query).
+  Client-supplied FKs are validated in-org before being stored:
+  `_assert_apparatus` (XC-1, also excludes archived apparatus),
+  `_assert_category` → `assert_in_org`, and `assign_seat`'s target user is
+  re-queried with `organization_id`/`deleted_at is None`/`ACTIVE_ACCOUNT_STATUSES`
+  filters (Pitfall #32's correct mechanism, not a literal `== ACTIVE`) before
+  being written into a seat.
+- **Concurrency (Pitfall #27 shape), beyond the checklist's own items but
+  load-bearing for a shared, scarce resource (a seat):** every seat/request
+  mutation locks the parent `Event` row first (`with_for_update()`), then
+  takes its own locking read on the seat/request
+  (`execution_options(populate_existing=True)` after the lock, closing the
+  exact snapshot-predates-the-lock gap Pitfall #27 describes), and a unique
+  index (`ux_event_apparatus_seats_event_user`,
+  `ux_apparatus_event_seat_requests_pending`) is the backstop a lock ordering
+  bug would still be caught by — `_commit_seat()` catches the resulting
+  `IntegrityError` and turns it into a user-facing message rather than a 500.
+- **Injection/exposure (4–5):** no raw SQL, no `.like()`/`.ilike()` in this
+  feature. Every user-supplied value reaching an email body
+  (`apparatus_seat_call_service.py`'s `message`, unit/seat labels, location;
+  `apparatus_seat_request_notices.py`'s decision note) is `html.escape`d. No
+  secret, no PII beyond member names already gated by the same permission the
+  crew board itself requires. `/apparatus-events/` is in
+  `frontend/src/utils/apiCache.ts`'s `UNCACHEABLE_PREFIXES` (crew boards name
+  members and must read fresh the instant a seat changes) — confirmed present
+  at `apiCache.ts:112`, not merely claimed by the service file's own comment.
+- **Abuse resistance (6):** every route in this feature requires a
+  department permission (no public/unauthenticated surface here); the one
+  cross-feature public-adjacent path, `event_requests.py`'s own
+  `/{request_id}/apparatus-crew`, AND-gates `events.manage` **and**
+  `apparatus_events.manage` and loads its target through an already
+  org-scoped, locked fetch before calling into this feature's
+  `attach_template` — reviewed at that boundary only, since the endpoint
+  itself is Feature 16's file, matching this file's own pass 22/23 precedent
+  for a one-caller boundary review.
+- **Schema/migration integrity (7):** covered above; also confirmed the
+  `apparatus_events.manage`/`.signup` grant migration does not touch
+  `DEFAULT_POSITIONS` in a way that widens `firefighter`'s baseline beyond
+  what `events.manage`/`events.view` already evidenced — re-ran
+  `tests/test_baseline_member_grants.py` (below) to confirm.
+
+**The one small, already-correct fix found in this window, outside the new
+feature:** `apparatus_service.py` (+15/−10) replaces three hand-rolled
+`for field, value in update_data.items(): setattr(...)` update loops with
+`apply_updates(..., skip={...})` on a custom field, an operator, and
+equipment — exactly CLAUDE.md Pitfall #1's `apply_updates` rule, protecting
+tenancy/identity columns via `skip` rather than a per-field guard, so an
+explicit `null` now clears instead of being silently dropped. Already landed
+by its own feature commit; re-verified, not re-implemented.
+
+### Route inventory
+
+Re-enumerated **by AST**: `apparatus.py` **94**, `nfc_tags.py` **11** — both
+unchanged from pass 23 (byte-identical, confirmed by `git diff --stat`).
+`apparatus_events.py` is new at **23** routes. `check_route_permissions.py
+--strict` (repo-wide): 339 routes, 0 errors, 0 warnings.
+
+### Standing findings re-verified
+
+No open finding exists for this feature (confirmed against this file's own
+history and both `docs/module-audit/apparatus.md` / `docs/app-review/apparatus.md`,
+re-grepped, zero `🚩`/`OPEN`/`FLAGGED`). AP2-4 remains resolved at pass 21;
+nothing in this window touches the files it concerned.
+
+### Findings (pass 24)
+
+**0 fixed, 0 new findings.** The new apparatus-events feature is org-scoped,
+permission-gated on every route, self-scoping its own member-facing writes
+in the service layer rather than relying on the endpoint's OR-permission
+alone, correctly lock-ordered for a shared scarce resource, and HTML-escapes
+every piece of user text reaching an email. `apparatus_service.py`'s small
+diff is a correctness fix already landed and already correct.
+
+## Completion gate (pass 24)
+
+| Check                                                                                                                                                                                                | Result                                                        |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                                                                                                                                                        | ✅ 0 violations                                               |
+| `black --check app/ tests/ alembic/`                                                                                                                                                                 | ✅ 3517 files unchanged                                       |
+| `isort --check-only app/ tests/ alembic/`                                                                                                                                                            | ✅ clean                                                      |
+| `python3 scripts/validate_migrations.py --strict`                                                                                                                                                    | ✅ 839 revisions, single head (`1735810be510`)                |
+| `python3 scripts/check_route_permissions.py --strict`                                                                                                                                                | ✅ 339 routes, 0 errors/0 warnings                            |
+| Scoped backend pytest (`-k "apparatus or nfc or evoc or driver_exception or external_agency"`)                                                                                                       | ✅ 1647 passed, 1 pre-existing skip (`py_vapid`)              |
+| Standing guard suites (capacity locking, org-scoping ratchet, LIKE escaping, CSV sweep, migration chain, `create_all`-table tolerance, account-status gates, log-call shape, baseline member grants) | ✅ 209 passed                                                 |
+| `cd frontend && npm run typecheck`                                                                                                                                                                   | ✅ 0 errors                                                   |
+| `cd frontend && npm run lint`                                                                                                                                                                        | ✅ 0 errors, 0 warnings (`eslint-heap.mjs --max-warnings 10`) |
+| `npx vitest run` (apparatus-events + apparatus-crew + `modules/apparatus`)                                                                                                                           | ✅ 208 passed (23 files)                                      |
 
 ---
 
