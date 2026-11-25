@@ -16,7 +16,8 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR (this iteration, branch `claude/security-review-events-requests-p16`)**:
+**PR [#4691](https://github.com/thegspiro/the-logbook/pull/4691) (branch
+`claude/security-review-events-requests-p16`)**:
 Feature 16 (Events & requests), pass 16 — watchdog pickup (the dedicated
 `/loop 30m /security-review` session, `session_011T1ZyyLrD5HagusgK9uDw2`,
 remains unreachable, confirmed via `ListAgents` → "No reachable agents").
