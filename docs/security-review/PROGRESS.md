@@ -28499,7 +28499,7 @@ iteration's commit" rule.
 | 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                                                                                                                                                      | ✅     |
 | 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`, `zeffy.py`/`zeffy_service.py`/`zeffy_sync_service.py` (added pass 13)                                                                                                                                                      | ✅     |
 | 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                                                                                                                                                                 | ✅     |
-| 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`, `meeting_waiver_requests.py` (added pass 14)                                                                                                                                                                                                             | ⬜     |
+| 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`, `meeting_waiver_requests.py` (added pass 14)                                                                                                                                                                                                             | ✅     |
 | 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                                                                                                                                                         | ⬜     |
 | 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                                                                                                                                                               | ⬜     |
 | 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`, `historical_import.py` (33 routes incl. undo, added pass 14), `historical_staffing_*.py`, `historical_import_undo.py` (added pass 14)                                                                                                        | ⬜     |
@@ -54371,3 +54371,81 @@ pre-existing environment-only skip (`py_vapid`), matching pass 21 exactly.
 Row 23 → ✅ (pending this PR's merge). Next is Feature 24 (Meetings &
 minutes) — re-check `list_pull_requests` fresh rather than trusting this
 note.
+
+### 2026-11-25 — Feature 23 (Medical supplies, pass 22) merged (PR #4698); Feature 24 (Meetings & minutes, pass 15): watchdog pickup, real delta already landed and verified good, 0 new findings
+
+PR #4698 merged as squash commit `6ecb75180`. A fresh `list_pull_requests`
+(state=open) found no `claude/security-review-*` head, and row 24 (Meetings
+& minutes) was the next `⬜` row, confirmed directly against the table on
+freshly-pulled `origin/main`.
+
+Baseline `f571296e3` (pass 14's own merge, PR #4507). Route surface
+re-enumerated by AST: **98 routes**, unchanged from pass 14, every one
+carrying an auth dependency. `git diff --stat` against the baseline,
+restricted to every file pass 14 named in scope, found `meetings.py`,
+`minutes.py`, `minutes_records.py`'s own routes, `api/public/minutes.py`,
+`mcp/tools/meetings.py`, `meetings_service.py`, `minute_service.py`,
+`minutes_record_service.py`, `quorum_service.py`,
+`attendance_dashboard_service.py`, `models/minute.py`, `schemas/meetings.py`
+and `schemas/minute.py` byte-identical to pass 14 — confirmed by an empty
+diffstat for all thirteen, not assumed.
+
+The real delta is in five backend files plus two shared frontend pages,
+each traced against this feature's own meeting-workflow call sites:
+
+- A redundant single-column index (`idx_meeting_attendees_meeting`) dropped
+  by a guarded migration now that the pass-14 unique index already leads on
+  the same column — no row change either way.
+- **`GET /meetings/waiver-requests/policy` no longer serves every member
+  who decides a waiver request** (the approver/CC positions, the Chief's
+  alternate) — a new `AttendanceWaiverMemberPolicy` strips those fields,
+  and the route checks `meetings.manage` before returning the full policy.
+  Closes a real over-exposure that existed at every prior pass. Verified by
+  reading the route and both schema classes directly.
+- The approver queue's new `state=pending|decided` split appends onto the
+  same org- and workflow-scoped `conditions` list `list_for_decider`
+  already used, so it only ever narrows an already-scoped query (XC-3) and
+  fixes a real bug (the unfiltered decided page used to drop pending rows).
+- A shared not-counted-refusal check and an idempotent "correction keeps an
+  approval" rule were added to the reconfirmation path both workflows
+  share; for the meeting side these are both behaviorally unchanged
+  (on-leave is still the only meeting-side not-counted check; the lock
+  order and idempotency guard Pitfall #36 names explicitly).
+- The minutes PDF export now stamps a random (non-sequential, by design),
+  shared-module report number and the department's letterhead address,
+  recorded in the export's audit event as an id, not free text (Pitfall
+  #33); both reads happen after the route's own existing org-scoped
+  `minutes`/`org` fetch.
+- Three new attachment-removal response fields landed on the shared
+  schema but are inert for meetings: the workflow's `takes_documents=False`
+  keeps `policy.attachment` at `"off"` and `files` empty for every meeting
+  request, so the gating arithmetic is always `False`/default regardless.
+  The actual removal route and service are Training's own surface
+  (Feature 17-18), confirmed unreachable from the meeting side rather than
+  assumed.
+
+**0 fixed, 0 new findings.** Every real change in this window was already
+landed and tested by its own commit before this pass began; MM-9, MM-17,
+MM-19, MM-20 and MM5-4 in `docs/KNOWN_LIMITATIONS.md` all re-read against
+byte-identical files and still accurate. The `minutes.view_executive` tier,
+MM2-3 and `reports_service.py`'s `open_meeting_items` gap remain FLAGGED,
+unchanged. Full write-up:
+`docs/security-review/MM-24-meetings-minutes.md`'s **Pass 15** section.
+
+**Completion gate:** `flake8`/`black --check`/`isort --check-only` (CI's
+pins) on `app/ tests/ alembic/` — clean. `validate_migrations.py --strict`
+— 844 revisions, single head `e9cf8ab7e4e4`. `check_route_permissions.py
+--strict` — 344 routes, 0 errors/warnings. `generate_schema_docs.py
+--check` — `DATABASE_SCHEMA.md` up to date. Scoped backend pytest (`-k
+"meeting or minutes or minute or quorum or attendance_dashboard or motion
+or action_item or attendance_waiver"`) — 2,192 passed, 1 pre-existing
+environment-only skip (`py_vapid`), up from 2,144/1 at pass 14. `npm run
+typecheck` — 0 errors. `npm run lint` — 0 errors, 0 warnings. `npx vitest
+run src/modules/minutes src/pages/ActionItemsPage.test.tsx
+src/pages/training/AttendanceWaiver*.tsx
+src/pages/training/SessionWaiverSettingsPanel.test.tsx` — 561 passed (70
+files), up from 545/66 at pass 14.
+
+Row 24 → ✅ (pending this PR's merge). Next is Feature 25 (Messaging &
+notifications) — re-check `list_pull_requests` fresh rather than trusting
+this note.
