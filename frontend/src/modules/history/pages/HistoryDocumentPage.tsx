@@ -292,8 +292,8 @@ export const HistoryDocumentPage: React.FC = () => {
               )}
               {full.publication_level === 'public' && (
                 <p className="text-theme-text-secondary text-xs">
-                  Public documents are stored now and appear on the department&apos;s website once the public feed is
-                  turned on.
+                  Public documents appear on the department&apos;s own website when History → Titles, lists and
+                  clearance → Public website shows documents.
                 </p>
               )}
             </section>

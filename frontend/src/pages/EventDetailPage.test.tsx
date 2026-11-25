@@ -1073,6 +1073,25 @@ describe('EventDetailPage', () => {
       });
     });
 
+    it('warns that the files in Attachments go with the event', async () => {
+      vi.mocked(eventService.getEvent).mockResolvedValue(mockEvent);
+      vi.mocked(eventService.getEventRSVPs).mockResolvedValue([]);
+      vi.mocked(eventService.getEventStats).mockResolvedValue(mockStats);
+
+      const user = userEvent.setup();
+      renderWithRouter(<EventDetailPage />);
+
+      await waitFor(() => {
+        expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Monthly Business Meeting');
+      });
+      await user.click(screen.getByRole('button', { name: /more/i }));
+      await user.click(screen.getByRole('button', { name: /delete event/i }));
+
+      expect(
+        await screen.findByText(/files in its attachments are deleted with it\. download any you need to keep first/i)
+      ).toBeInTheDocument();
+    });
+
     it('should delete event and navigate away', async () => {
       vi.mocked(eventService.getEvent).mockResolvedValue(mockEvent);
       vi.mocked(eventService.getEventRSVPs).mockResolvedValue([]);

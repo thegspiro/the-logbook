@@ -161,6 +161,33 @@ What it depends on and leaves open:
   fork when two migration branches merge close together, and Migration Chain
   reports it on the push to `main`.
 
+## Found by the November 24 – 25 Documentation Pass (2026-11-25)
+
+Two gaps the documentation pass found while checking the guides against the
+code. Neither is a regression of the pass's own making, and each needs either
+an owner's choice or a change larger than a documentation pass makes. The
+pass did fix two others: the event delete dialog now says attachments are
+deleted (#4656), and Error Monitoring's **Details** now shows the reference a
+member quotes (#4583).
+
+- **An article can go public with photos the public copy leaves out.**
+  `HistoryClearanceService.submit` (`history_clearance_service.py`) refuses
+  to send an article for public clearance while it shows a photo that is not
+  itself public. But `publish()` in `history_records.py` runs no such check.
+  For a department with no clearance list, `is_cleared` passes, so the
+  article goes straight to public. Nothing leaks, because the public snapshot
+  drops those photos. The article the public reads, though, has gaps where
+  its photos were, and nothing told the Historian. The fix is to run the same
+  `photos_not_public` check in `publish()` at the public level.
+- **The Compliance Matrix uses two words for one state.** Since #4568, a
+  missing certification's figure reads **Not recorded**, but the status pill
+  beside it still says **Nothing on file**
+  (`TONE_LABELS[CellTone.MISSING]` in `ComplianceMatrixTab.tsx`). That tone
+  also covers non-certification requirements with nothing recorded, so
+  renaming it changes more than certifications, and
+  `training-matrix-certification.spec.ts` asserts the current word. Open for
+  an owner decision: one word for both, or keep the pill as it is.
+
 ## Found by the November 23 – 24 Documentation Pass (2026-11-24)
 
 Two gaps the documentation pass found while checking the guides against the

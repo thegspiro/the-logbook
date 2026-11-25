@@ -135,6 +135,52 @@ _is_ the upgrade. Before it:
 Newest first. Every entry here is a change that was safe on a fresh install
 and refused to boot an existing one.
 
+### History articles, essential seats, double-credit flags and waiver retention counts (2026-11-25)
+
+Nothing blocks a restart. Five migrations that no other entry covers arrive
+in this range. They run in one `alembic upgrade head`, and afterwards the
+single head is `e9cf8ab7e4e4`. Each one only adds things, so no existing row
+changes, and each is skipped where `create_all` already built its table or
+column.
+
+- **`8d4ee6cc92ca` (#4620).** Creates the six History article tables:
+  `history_articles`, `history_article_blocks`, and the four link tables for
+  members, events, apparatus and documents. PDF and Word export need no new
+  package: ReportLab, python-docx and Pillow are already pinned. Each export
+  is built in memory and re-encodes every photo in the article. A proxy with
+  an `/api/` read timeout shorter than the shipped 60 seconds may cut off a
+  photo-heavy article. A downgrade drops every article, so take the backup
+  first.
+- **`bbb6eac6ae34` (#4583).** Adds `is_essential` (NOT NULL, default true) to
+  `apparatus_event_template_seats` and `event_apparatus_seats`. Every existing
+  seat becomes essential, which is how it already counted. A downgrade loses
+  which seats were marked optional.
+- **`66f64aabdda2` (#4617).** Creates the empty table
+  `training_credit_duplicate_flags`. Finalizes before the upgrade flagged
+  nothing. A pair credited twice before the upgrade is flagged the next time
+  its event is finalized.
+- **`241c1cc27313` (#4646).** Adds `attachments_removed_count` and
+  `attachments_removed_at`, both nullable, to `attendance_waiver_requests`.
+  There is no backfill, so a request whose documents were swept before the
+  upgrade still says nothing about them.
+- **Merge:** `e9cf8ab7e4e4` rejoins `46accab49bc1` and `5845dae0c277`.
+
+Behaviour that changes on upgrade, with no setting to restore the old one:
+
+- **Finalizing a Training event no longer takes over** a completed
+  hand-entered record with the same name and day, and never takes over a
+  self-report's record (#4617). It credits the member and lists the pair
+  under **Records → Possible Double Credit** for an officer to decide. Until
+  someone decides, both records count.
+- **Outreach signup sheet time stops counting as shift hours** (owner
+  decision of 2026-11-24, #4671). This includes sheets worked before the
+  upgrade, so a member's shift hours, **Department hours this month** and
+  shift compliance can drop as soon as the new release starts. Nothing is
+  credited as outreach hours on upgrade. To credit past sheets, an officer
+  with `scheduling.manage` runs **Check past outreach sheets** under
+  Scheduling Administration → Settings → General → **Community outreach
+  hours**. Later sheets are credited when their event is finalized.
+
 ### The History widget needs an nginx location in a self-managed proxy (2026-11-24)
 
 The History "Today in history" widget is served at `/embed/history/<token>`

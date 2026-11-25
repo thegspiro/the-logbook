@@ -452,6 +452,23 @@ settings screen, and finalizing a Training event removes the admin-hours entries
 that event had written — approved ones included. Details and the entries this
 leaves behind are in `docs/KNOWN_LIMITATIONS.md`.
 
+## Outreach signup sheets credit admin hours through their event _(2026-11-24)_
+
+Time a member checks in for on a community outreach signup sheet in
+Scheduling (a station tour, a school visit) is no longer shift hours. The
+sheet check-in and check-out are copied onto the member's attendance at the
+event the sheet staffs, and the event's finalize credits them as an
+`event_attendance` entry like any attendee, to the category the event type is
+mapped to (the seeded mappings send Public Education to Community Outreach
+and Fundraiser to Fundraising; an unmapped type, such as Social or Ceremony,
+credits nothing). A member checked in on both the sheet and the
+event is credited once. Sheet time recorded after the event's attendance is
+finalized is credited anyway. Sheets worked before this change are credited
+only when an officer runs **Scheduling → Settings → General → Community
+outreach hours**. See [Scheduling](Module-Scheduling#community-outreach-signup-sheets)
+and `docs/KNOWN_LIMITATIONS.md` → "Outreach Signup Sheets — Outreach Hours,
+Not Shift Hours".
+
 ## Times in the department's timezone _(2026-09-25 → 09-26)_
 
 - **CSV export** — Date, Clock In and Clock Out were written as UTC with no

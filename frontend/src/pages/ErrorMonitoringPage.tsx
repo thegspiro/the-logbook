@@ -455,6 +455,14 @@ const ErrorMonitoringPage: React.FC = () => {
                                   </dd>
                                 </div>
                               )}
+                              {contextText(error.context, 'reference') && (
+                                <div>
+                                  <dt className="text-theme-text-muted text-xs font-semibold uppercase">Reference</dt>
+                                  <dd className="text-theme-text-primary mt-1 font-mono break-all">
+                                    {contextText(error.context, 'reference')}
+                                  </dd>
+                                </div>
+                              )}
                               {typeof error.context.occurrences === 'number' && (
                                 <div>
                                   <dt className="text-theme-text-muted text-xs font-semibold uppercase">Occurrences</dt>

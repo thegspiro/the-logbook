@@ -222,6 +222,14 @@ describe('HistoryPersonPage', () => {
     expect(screen.getByRole('button', { name: 'Submit for public clearance' })).toBeInTheDocument();
   });
 
+  it('points the Historian at the Public website setting, not a feed still to come', async () => {
+    mockGetPerson.mockResolvedValue(fullView());
+    renderPage();
+
+    expect(await screen.findByText(/History → Titles, lists and clearance → Public website/)).toBeInTheDocument();
+    expect(screen.queryByText(/not connected yet/)).not.toBeInTheDocument();
+  });
+
   it('lets a cleared record go public', async () => {
     mockGetPerson.mockResolvedValue(fullView({ cleared_for_public: true }));
     renderPage();

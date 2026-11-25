@@ -24,7 +24,11 @@ the real close time (`closed_at`), not the scheduled end.
 `/elections/:electionId` is the **Overview**; `/elections/:electionId/<section>`
 opens one section. A single splat route (`/elections/:electionId/*`, rendered
 through `ElectionDetailRoute`) serves every section, so switching sections does
-not remount the page or lose a vote receipt. Section changes push history, so
+not remount the page or lose a vote receipt. _(2026-11-24, ELEC2-14)_ The page
+is keyed by `electionId`, so moving to **another** election (the runoff chain,
+a clone) does remount it: the integrity result, forensics report, paper
+batches and a pending batch void no longer carry over to the new election.
+Section changes push history, so
 Back steps through them. A section the viewer may not open, or an unknown one,
 falls back to the Overview with `replace`, so Back does not loop.
 

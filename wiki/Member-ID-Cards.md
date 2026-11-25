@@ -92,7 +92,8 @@ apply) or a `training.manage` holder (the officer member endpoint). An officer
 holding only the ID-card permissions sees the card without it. When
 certification status is hidden from members, `/my-training` now also withholds
 `expiry_date` and sets `certification_status_hidden`, so no date leaks onto the
-card. The printed CR80 PDF is unchanged.
+card. The printed CR80 card carries the same date only when the department
+switches certifications on (below, 2026-11-24).
 
 **Printing badges follows the same rule** _(2026-10-04)_. Member labels
 (`/members/print-labels` and the label API's `membership` module) require
@@ -146,6 +147,25 @@ prints one card, and up to 500 cards go in one job. Cards are black-only, so
 they print the same on monochrome and colour ribbons. Printing is audited as
 `id_cards_printed`. This is the printed-card path; the NFC card flow above is
 separate.
+
+**Certifications on the printed card** _(2026-11-24)_. A fourth layout option,
+**Certifications and valid-through date** (`certifications`, saved with the
+layout, default off), prints "Valid through _date_" on the front — the soonest
+expiry among current certificates, `_valid_through` in
+`member_id_card_service.py`, the same rule as the digital card's
+`cardValidThrough` — and, on a **Front and back** card, each certification with
+"Exp …", "Expired …", **On file** or **Not recorded** on the back, between the
+return address and the code. Grading is the compliance matrix's own
+(`ComplianceGrading.for_member`, `load_graded_records`,
+`evaluate_member_requirement_detail`), so former members and
+`compliance_exempt` members get neither. The code never shrinks below a
+scannable minimum (0.3 in bar, 0.6 in QR); the list gives way instead and ends
+"+_n_ more on the digital ID card". Off by default because a printed date goes
+stale at the next renewal (owner decision 2026-11-24). Unlike the digital
+card, the printed card is not gated on training access or on the
+department's member-visibility setting: the printing officer sees every
+member's dates, and `id_cards_printed` records `certifications: true|false`
+for that reason.
 
 ## The check-in station
 

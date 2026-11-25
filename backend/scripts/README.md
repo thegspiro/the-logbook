@@ -431,8 +431,9 @@ name and rewrites the references to the new ids.
 - **Safe to run twice**: a record whose file is there is left alone, so a
   second run finds nothing to do. Restore in batches and re-run after each.
 - **Left alone and reported**: a record with no file of its name in the
-  drive, one with more than one (delete the extra copy and re-run), and one
-  whose match does not read back as this installation's file.
+  drive, one with more than one (delete the extra copy and re-run), one
+  whose match does not read back as this installation's file, and one whose
+  stored path lies outside its own department's storage area.
 - Covers every department with Google Drive settings saved, including one
   that has since moved to another store. `--org <organization id>` limits it
   to one department.

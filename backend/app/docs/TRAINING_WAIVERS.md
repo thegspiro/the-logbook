@@ -340,7 +340,13 @@ filename is never kept, because a doctor's note's name can say what it is
 about. The daily `attendance_waiver_attachment_retention` task deletes a
 request's documents `attachment_retention_days` after it was decided (or, for
 one withdrawn or voided, after it closed) and audits the ids it removed; the
-request and its decision log are kept. Anonymizing the member deletes them at
+request and its decision log are kept. Since 2026-11-23 (migration
+`241c1cc27313`) the sweep also adds the number it removed to the request's
+`attachments_removed_count` and stamps `attachments_removed_at`, in the same
+transaction as the row deletes, and the request page reads "N documents
+removed under retention on <date>" to anyone who can see the request. A
+request swept before that migration has neither, so its page still says
+nothing: the older audit entries cannot be split into a count per request. Anonymizing the member deletes them at
 once. The data export lists each document's record (type, size, checksum,
 date) but not the file. Documents never appear in the annual review or in a
 notification.

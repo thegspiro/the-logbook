@@ -288,9 +288,11 @@ for, or named as evaluator.
    equally well, or no full month served in the period). Anyone left out for
    want of a form can be drafted one at a time from **New evaluation**,
    choosing the form there.
+3. Untick anyone you do not want drafted, and choose an evaluator wherever
+   none is filled in.
+4. **Draft**. Anyone who could not be drafted is listed with the reason.
 
-![Draft a review period: the preview lists each current member with the form and evaluator they would get, or why they are left out](images/evaluations-draft-period.png) 3. Untick anyone you do not want drafted, and choose an evaluator wherever
-none is filled in. 4. **Draft**. Anyone who could not be drafted is listed with the reason.
+![Draft a review period: the preview lists each current member with the form and evaluator they would get, or why they are left out](images/evaluations-draft-period.png)
 
 **Which time counts.** The figures cover the member's time in the period, not
 the whole period: they start from the first full month after the member joined
@@ -300,7 +302,8 @@ period cannot be evaluated for it.
 
 The figures are taken when the evaluation is drafted. The evaluator or a
 manager can update them with **Update figures** until the evaluator locks
-their part.
+their part. _(2026-11-24)_ It saves the evaluator's unsaved answers first;
+before then it discarded them and saved nothing.
 
 ---
 
@@ -311,13 +314,18 @@ their part.
   the form allows it, the evaluator may go on without it; the record shows it
   was not submitted.
 - **The evaluator** fills in their part beside the member's figures, saves as
-  they go, and submits it.
+  they go, and submits it. Each written box holds up to 5,000 characters, and
+  leaving the page, or opening another evaluation from **Last review** or
+  **Review history**, with unsaved changes asks first _(2026-11-24)_.
 - **Calibration**, if the form has it: a `view_all` holder other than the
   evaluator (or the person a manager named on the step) opens the
   evaluation, chooses **Mark calibration complete**, and may tick items for
   the evaluator to revisit. Only the ticks are kept; talk through the changes
   in person. The evaluator sees the ticked items marked **Flagged at
-  calibration**, and submits again.
+  calibration**, and submits again. While calibration is open the evaluator
+  is not reminded or reported overdue; the evaluation is waiting on
+  calibration, and calibration's due date is the one that counts
+  _(2026-11-24)_.
 - **Approvals:** each approver opens the evaluation and chooses the button
   named for their step (for example **Board approval**), types their name as
   it appears on their account, confirms they intend it as their signature, and

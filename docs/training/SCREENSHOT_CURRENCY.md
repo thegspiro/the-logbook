@@ -1,5 +1,50 @@
 # Screenshot currency
 
+## Queued by the November 24 – 25 documentation pass
+
+Source: [CHANGE_AUDIT_2026-11](../CHANGE_AUDIT_2026-11.md#change-audit-november-24--25-2026).
+Nothing was captured by this pass. Every new id below has a placeholder in
+its guide. Two older clashes are settled: the signature-lines shot moves from
+`08-125` (an existing image) to `08-130`, and the leave-requested shot from
+`03-141` to `03-157`.
+
+| Guide | Screen | Action |
+| --- | --- | --- |
+| 01 | **Members** on a tablet with the sidebar open: **Sort by** above the cards, the cards laid out in columns, the checkbox in each card's corner | Create `01-75-member-roster-tablet` |
+| 01 | **Print ID Cards**, Front and back, with **Certifications and valid-through date** ticked and its hint | Create `01-73-print-id-cards-certifications` |
+| 01 | The back of a printed test card: return address, Certifications list, barcode | Create `01-74-id-card-back-certifications` |
+| 01 | `01-43-print-id-cards`: now has the new tick-box | **Replace** |
+| 01 | History article editor: a text block and a half-width photo block, with **Add text below** / **Add photo below** | Create `01-76-history-article-form` |
+| 01 | History article page: **PDF** and **Word** buttons, Sources, "Photos not cleared for the public" in the side column | Create `01-77-history-article-page` |
+| 01 | **History → Titles, lists and clearance → Public website**: the **Show on the website** switches and the widget section after **Make a widget link** | Create `01-78-history-public-website` |
+| 02 | **Records → Possible Double Credit** with one pair: "Same name" and the date found, **From the event** beside **Self-report**, **Keep both** and the two **Void** buttons | Create `02-177-possible-double-credit` |
+| 02 | Member Training History → Files on a record whose certificate retention removed: the "Certificate file removed under the department's retention policy on …" note, no **Download** | Create `02-178-certificate-removed-notice` |
+| 02 | A decided waiver request, **Supporting documents** reading "2 documents removed under retention on …" | Create `02-179-waiver-documents-removed` |
+| 02 | **New evaluation** with the **Form** list open ("Matched to the member's class and status", two forms) | Create `02-180-evaluation-new-form-choice` |
+| 02 | `02-66-compliance-matrix`: a missing certification's figure now reads **Not recorded** (caption and manifest alt text already updated) | **Replace** |
+| 02 | `02-01-my-training`: Recent Training columns tightened; Self-Reported Training is a table at tablet width | Check |
+| 03 | **Settings → General → Community outreach hours** after **Check past outreach sheets** | Create `03-155-outreach-credit-card` |
+| 03 | Shift details for an outreach sheet: the event's title, the **Community outreach** tag, the **Volunteers** heading, a seat per role, **Open role** | Create `03-156-outreach-sheet-details` |
+| 03 | `03-05`, `03-59`, `03-100`, `03-105`, `19-34`: if the demo data has an outreach sheet, it now shows the event's name and tag | Check |
+| 04 | **Volunteer staffing** as the organizer: seat rows, an **Essential** badge, "(You)" with **Give up my spot**, **Assign someone** / **Sign myself up**, an optional position | **Replace** `04-105-event-volunteer-staffing` |
+| 04 | An outreach event as a member: the **Volunteer staffing** seat board (placeholder rewritten for the board) | Create `04-109-event-volunteer-signup` |
+| 04 | **Settings → Public Requests → Types & roles**: preset rows with an **Essential** tick and its help line | **Replace** `04-104-type-role-preset` |
+| 04 | `04-102-event-request-page`: the staffing summary is now a readiness badge | Check |
+| 04 | **Settings → Outreach Goals**: the year buttons, goals with bars, Target / **Save** / **Remove**, **Add goal** | Create `04-117-outreach-goals-settings` |
+| 04 | Outreach Impact goals section with **On pace**, **Behind pace** and **Met**, and **Edit goals** | Create `04-118-outreach-impact-goals` |
+| 04 | Apparatus & Crew card: the essential count in the heading, coloured night chips, an optional position, **Assign someone** | Create `04-119-apparatus-crew-card-essential` |
+| 04 | Schedule nights after **Every day**, Hours 3.5, **Route or place** on its own line | Create `04-120-schedule-nights-every-day` |
+| 04 | `04-116` placeholder (apparatus seat requests): the crew card has been redrawn since the placeholder was written | Check its text before capturing |
+| 08 | **Hours by Position** report: the four cards, the Position list set to Driver/Operator with its total, the filtered table | Create `08-128-report-hours-by-position` |
+| 08 | A report on a phone as cards, **Sort by** set to a column with the descending arrow | Create `08-129-report-card-sort` |
+| 08 | `08-06-reports`: the card grid now includes Hours by Position | **Replace** |
+| 08 | `08-11-error-monitor` with a server row open: the new **Reference** line | Check (optional retake) |
+| 04 | The **Delete Event** dialog now has the attachments sentence | Check any shot of it |
+| 06 | `06-01-apparatus-list` if taken at tablet width: cards now laid out in columns | Check |
+| 14 | `14-18-paper-batches`: the open-election shot still holds; a closed election now also shows **Void Batch** | Check |
+
+**Made wrong by this range:** `01-43`, `02-66`, `04-104`, `04-105`, `08-06`.
+
 ## Queued by the November 23 – 24 documentation pass
 
 Source: [CHANGE_AUDIT_2026-11](../CHANGE_AUDIT_2026-11.md#change-audit-november-23--24-2026).
@@ -29,7 +74,7 @@ placeholders for `04-111` to `04-116`.
 | 02 | Add Provider details step, address flagged "Enter a full address, starting with https://." | Optional `02-176-provider-address-error` |
 | 09 | Skill template builder: a blank criterion label flagged, its section opened, **Fix these and save again** with "Section 1, Criterion 2: Give the criterion a label."; on an existing template "Template saved, except template name…" | Create `09-35-builder-errors` |
 | 09 | `09-04-template-builder`, `09-02-create-template` | Check for the old banner |
-| 03 | My Shifts → Hours: **Hours by position** card with the year and **All time** buttons, several seats, **No position recorded** and **Other departments** rows | Create `03-145-hours-by-position` |
+| 03 | My Shifts → Hours: **Hours by position** card with the year and **All time** buttons, several seats, **No position recorded** and **Other departments** rows | Create `03-148-hours-by-position` (queued as `03-145`, which `03-145-my-shifts-past-credited` already holds) |
 | 03 | `03-104-my-shifts-hours`, `03-146-hours-month-selected`, `03-113`: the new card sits between the chart and All shifts | Check |
 | 04 | **Settings → CRR Catalogue**: Smoke alarm install with its counts, Risks and Priority populations ticks, the Admin Hours category, Rename / Describe / Retire, one type marked **Coming soon** | Create `04-111-crr-catalogue` |
 | 04 | **Log a CRR activity**: Alarms installed 3, Fire ticked, ZIP with city and state, Add resident details unticked, one member at 60 minutes | Create `04-112-crr-activity-dialog` |
@@ -43,17 +88,18 @@ placeholders for `04-111` to `04-116`.
 | 06 | Department Maintenance, editing a record: "Facility: Station 1" as text, no picker | Create `06-41-maintenance-edit-facility-text` |
 | 08 | A report at desktop width as a sortable table, sorted by one column, its header button focused | Create `08-127-report-sorted-column` |
 
-**Rows earlier queues still show as open, though the images now exist.**
-Left as they are here, because the open passes rewrite those sections; mark
-them done when #4568 and #4626 merge:
+**Rows earlier queues still showed as open, though the images exist.**
+Settled by the November 24 – 25 pass, now that #4568 and #4626 have merged:
 
-- November 20 – 21 queue: `02-144-evaluation-step-assign`,
-  `02-145-evaluation-last-review`, `02-146-evaluation-period-results` and
-  `03-138-closeout-own-row-locked` were captured by #4607.
-- `04-102-event-request-page` still says "Still open: the phone action bar";
-  check whether #4599 captured it.
-- #4599 also added `01-59` to `01-62`, `02-147` to `02-150` and `04-103` to
-  `04-107`, which have no row in this file or `SCREENSHOT_STATUS.md`.
+- November 20 – 21 queue: `02-144`, `02-145`, `02-146` and `03-138` are
+  marked **Done** (captured by #4607).
+- `04-102-event-request-page` stays open for the phone action bar: the image
+  is 1440 × 900, desktop only.
+- `01-59` to `01-62`, `02-147` to `02-150` and `04-103` to `04-107` (added
+  by #4599) exist and are referenced from their guides.
+- `03-145` was queued here for **Hours by position**, but
+  `03-145-my-shifts-past-credited` holds that id. The row now asks for
+  `03-148-hours-by-position`.
 
 **Made wrong by this range:** `01-49`, `02-17`.
 
@@ -76,7 +122,7 @@ saving.
 | 04 | An outreach event's page as an ordinary member: the **Volunteer** card with two roles, the "What would you like to do?" menu and **Sign me up** | Create `04-109-event-volunteer-signup` |
 | 04 | Page 2 of circulated (unapproved) minutes as a PDF: DRAFT across the page, the report number in the header | Create `04-110-minutes-pdf-draft` |
 | 04 | `04-105-event-volunteer-staffing` (queued by an earlier pass) | Widen the request: include **Email the Membership**, **Last sent** and the organizer's own **Sign me up** |
-| 08 | A report on the Reports page with **Add signature lines to PDF** ticked beside CSV and PDF | Create `08-125-report-signature-lines` |
+| 08 | A report on the Reports page with **Add signature lines to PDF** ticked beside CSV and PDF | Create `08-130-report-signature-lines` |
 | 08 | The last page of that PDF: Prepared by / Reviewed by / Approved by lines | Create `08-126-report-pdf-signature-block` |
 | 01 | **Leave Requests → Calendar**: a month with a recorded leave, a "(requested)" entry, a "… covers …" stand-in, and the key | Create `01-68-leave-calendar` |
 | 01 | **Export leave records** card with From, To and **Download CSV** | Create `01-69-leave-export` |
@@ -116,7 +162,7 @@ of this pass; check them against `images/` before saving.
 | 01 | **Leave Requests** with the **Approver cover** card: one cover in effect with **End cover**, above the Stand-in / First day away / Last day away form | Create `01-63-leave-approver-cover` |
 | 01 | History: the Timeline with a decade open and Milestones boxes; the event form (People with a Role, Apparatus, Photos and documents); an apparatus page with Unit numbers and Timeline; the Dashboard's **Today in history** card | Create `01-64-history-timeline`, `01-65-history-event-form`, `01-66-history-apparatus-page`, `01-67-today-in-history-dashboard` |
 | 01 | Any positions capture showing **Public Outreach** or **Community Education / Outreach Team** | **Replace** if found: the seeded names are now Community Outreach Manager / Team |
-| 03 | **Assign someone** with a member marked "— leave requested" and the amber note | Create `03-141-assign-leave-requested` |
+| 03 | **Assign someone** with a member marked "— leave requested" and the amber note | Create `03-157-assign-leave-requested` |
 | 03 | `03-58-assign-member-form`, `03-05-assignment-form` (only if seed data has a pending leave request), `03-22-equipment-check-builder` (bar wraps), `wiki/images/history-import-rows.png` | Check |
 | 16 | The staffing step's **Paired with the hours already imported** block | Check the staffing-step image, if the guide has one; otherwise optional Create |
 | 05 | Maintenance **Never Inspected** tab with the explanation line and two rows, each with **Log Maintenance** | Create `05-155-maintenance-never-inspected` |
@@ -363,12 +409,12 @@ of this pass; check them against `images/` before saving.
 | 02 | Event template editor's **Training Details** section on a Training template | Optional `02-151-template-training-details` |
 | 02 | `02-108-monthly-hours-leave` (headline is now the average), `02-66-compliance-matrix` (an hours cell now leads with "3.7/2 hrs/mo avg"), `02-41-training-admin-reports` (Compliance Report card text) | Re-shot 2026-11-21: the average headline, the "hrs/mo avg" cell and the new card text are in frame |
 | 02 | `02-01-my-training`, `02-125-compliance-matrix-not-applicable` (replace if an hours cell shows), `02-75-compliance-forecast` (Current coloured by standing), `02-133-compliance-profile-positions` (now "Optional Requirements") | Checked, re-shot 2026-11-21 |
-| 02 | Evaluation step list with **Assign** and the **Who takes "…"** dialog | Create `02-144-evaluation-step-assign`. Still open: needs evaluations seeded through the workflow |
-| 02 | **Last review** card on an evaluation | Create `02-145-evaluation-last-review`. Still open, as `02-144` |
-| 02 | Conduct list with a period chosen: **Period results**, grade tiles, **Export CSV** (as a `view_all` holder) | Create `02-146-evaluation-period-results`. Still open, as `02-144` |
+| 02 | Evaluation step list with **Assign** and the **Who takes "…"** dialog | Create `02-144-evaluation-step-assign`. **Done** (#4607) |
+| 02 | **Last review** card on an evaluation | Create `02-145-evaluation-last-review`. **Done** (#4607) |
+| 02 | Conduct list with a period chosen: **Period results**, grade tiles, **Export CSV** (as a `view_all` holder) | Create `02-146-evaluation-period-results`. **Done** (#4607) |
 | 02 | **New template** dialog with "Annual Evaluation with Officer Sections" and its **Officer ranks** boxes | Created 2026-11-23 |
 | 08 | Compliance profile form with the amber "… also has priority N" warning and the Required / Optional lists | Created `08-124-profile-priority-tie-warning` 2026-11-23. `08-70-compliance-profiles` re-shot 2026-11-21; no seeded profile has optional requirements, so no "Optional:" chips are in frame |
-| 03 | Close-out wizard step 1 as a shift officer without `scheduling.manage`: own Start/End/Hours disabled with the hint line | Create `03-138-closeout-own-row-locked` (still open: needs a shift officer without `scheduling.manage`). `03-75-closeout-step1-attendance`, `03-45-finalize-checklist` re-shot 2026-11-21 |
+| 03 | Close-out wizard step 1 as a shift officer without `scheduling.manage`: own Start/End/Hours disabled with the hint line | Create `03-138-closeout-own-row-locked`. **Done** (#4607). `03-75-closeout-step1-attendance`, `03-45-finalize-checklist` re-shot 2026-11-21 |
 | 03 | History import Shifts tab: "You chose to add these members to that shift." with **Undo** | **CURRENT** 2026-11-23 as `03-139-history-import-existing-undo`. `wiki/images/history-import-shifts.png` checked: it shows the per-member **Same shift** / **Keep separate** question, a different one, and every control in it is still on the screen |
 | 01 | Leave request: **Ask a question**; the member's view with changed dates and **Accept these dates**; **Your leave** with **Your first day back** and **End my leave**; the escalation setting | Created 2026-11-23 |
 | 01 | `01-49-anonymize-member` (the Removed list has two more lines), `01-08-member-audit-history` (plain-word field names, new position wording) | **Replace** `01-49`: still open, it fails in the 2026-11-21 capture. `01-08` re-shot 2026-11-21 |

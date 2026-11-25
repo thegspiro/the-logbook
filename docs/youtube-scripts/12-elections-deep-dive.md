@@ -618,8 +618,16 @@ turnout bar, quorum banner]**
 > "Results show per-position vote counts with the winner flagged by your
 > victory condition, write-ins tallied under their typed names, overall
 > turnout, and — if you configured quorum — the quorum banner. For ranked
-> choice you get the full round-by-round elimination so you can narrate
-> exactly how the winner emerged."
+> choice you see the final round: the winner and the last candidates
+> standing."
+
+**[PRODUCTION NOTE — 2026-11-25. The narration promised a round-by-round
+elimination; the results show only the final round, and eliminated candidates
+read 0 (app review ELEC2-21, an open owner decision in KNOWN_LIMITATIONS).
+Line changed to match. Since #4681 (2026-11-24) a one-seat race marks one
+winner even when two candidates clear the bar, and a motion on a ranked-choice
+ballot is counted by its own rule; footage showing either older result needs
+re-shooting.]**
 
 > "If quorum failed, the banner says so, the winner flags are cleared, and
 > the numbers stand as advisory. What your bylaws do next is up to you — the

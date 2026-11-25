@@ -306,7 +306,13 @@ results share the table and are never deleted by retention.
   department sets a period in the self-report settings
   (`self_report_configs.attachment_retention_days`, 90-day floor), enforced
   daily by the `self_report_attachment_retention` task. It deletes the files
-  only; the submission and training record rows stay. The period runs from
+  only; the submission and training record rows stay, and since 2026-11-23
+  each deleted file's entry is replaced by a marker (`removed_at`,
+  `removed_reason: "retention"`, the entry's id and name, no path), so the
+  screens say "Certificate file removed under the department's retention
+  policy on <date>" and a download answers `410` rather than `404`. The hourly
+  stored-file malware scan marks a certificate it deletes the same way, with
+  reason `malware`. The period runs from
   the review, or (since 2026-11-20) from submission for an auto-approved
   submission, which has no `reviewed_at`: before, those certificates were
   never expired. A resent `POST /training/submissions/with-attachment` (same

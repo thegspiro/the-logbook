@@ -342,7 +342,33 @@ GET    /calendar-feed                   # Caller's private ICS URL
 POST   /calendar-feed/rotate            # Reset the URL
 GET    /platoons/overview               # Department platoon roster (scheduling.manage)
 POST   /platoons/bulk-assign            # Bulk platoon assignment (scheduling.manage; audited)
+GET    /outreach-credit                 # Preview crediting past outreach sheets; runs the real code in a rolled-back savepoint (scheduling.manage)
+POST   /outreach-credit                 # Credit them (scheduling.manage; audited outreach_sheet_hours_credited)
 ```
+
+**Outreach signup sheets are not duty shifts** _(2026-11-24, #4652, #4671,
+#4682)_. `ShiftResponse.outreach_title` and `EmbeddedShiftInfo.is_outreach` /
+`outreach_title` (additive) carry what a sheet is for, from
+`outreach_sheet_titles` in `event_request_service.py`: the linked event's
+title, else "<type> for <requester>". The client heads a sheet with
+`outreachTitle` / `shiftHeading` (`modules/scheduling/utils/shiftBoard.ts`)
+and the `OutreachTag` component; `buildSeats` gives each seat its role, and a
+board claim sends `outreach_role`. Every shift-hours total and shifts-worked
+count applies `duty_shifts_only()` (`app/utils/duty_shifts.py`):
+`get_summary`, the admin hub tile, member hours, My Hours, position totals,
+shift compliance, `_credited_shift_hours`, `load_credited_shift_dates` and the
+public volunteer-hours total. Sheet time is credited instead by
+`app/services/outreach_sheet_credit.py`: `sync_sheet_attendance` copies a
+volunteer's sheet check-in/out onto their event RSVP (compare-and-correct, the
+ledger keyed on the RSVP, so a re-run or a double check-in credits once),
+after every sheet attendance write, auto-checkout and inside event finalize
+under the event lock; a late sheet write is credited past the event's
+attendance lock for that sheet only. `EventService.credit_admin_hours_for_rsvp`
+is the per-attendee credit step finalize and the mirror share.
+`OutreachCreditSummary`: `applied`, `sheets`, `sheets_waiting_for_event`,
+`sheets_awaiting_finalize`, `volunteers`, `attendance_updated`,
+`entries_credited`, `hours`. The UI is `OutreachCreditCard` under Settings →
+General.
 
 `/dashboard/widgets` takes `start_date`, `end_date` and optional
 `station_id`, `platoon`, `shift_type` and `position`. An inverted window,

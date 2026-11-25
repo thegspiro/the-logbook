@@ -50,7 +50,7 @@ destination; the areas are declared in
 | Area (`?page=`)                         | Destinations (`&tab=`)                                                                                                                                                         |
 | --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | **Overview** (`dashboard`)              | Dashboard (`overview`), Compliance Matrix, Expiring Certs, Training Waivers                                                                                                    |
-| **Records** (`records`)                 | Submissions to Review, Waiver Requests, Sessions, Course Cohorts, Shift Reports, Monthly Status                                                                                |
+| **Records** (`records`)                 | Submissions to Review, Waiver Requests, Sessions, Possible Double Credit (`double-credit`), Course Cohorts, Shift Reports, Monthly Status                                      |
 | **Curriculum** (`curriculum`)           | Requirements, Course Library, Course Links, Programs (`pipelines`)                                                                                                             |
 | **Evaluations** (`evaluations`)         | Skill Evaluations, Knowledge Tests, Skills Test Templates (`templates`), Skills Test Records (`tests`)                                                                         |
 | **Program Management** (`enhancements`) | Recertification, Competency, Instructors, Effectiveness, Multi-Agency, Reports                                                                                                 |
@@ -789,7 +789,8 @@ has not started (`400`), and records no figure when nobody is graded.
 | `training_records`                   | TrainingRecord                  | Individual completions with rank/station snapshots, `category_id`, `start_time`, `source_event_id`, `attachments` JSON and `alert_{90,60,30,7}_sent_at` / `escalation_sent_at` expiry-alert stamps          |
 | `training_requirements`              | TrainingRequirement             | Requirement definitions with type, frequency, targeting, `recency_days`, `include_current_month`, `shift_credited`, `name_match_until`, grandfathering dates, `allows_external_credit`                      |
 | `training_sessions`                  | TrainingSession                 | Scheduled training events with instructor assignment, location, `counts_toward_certification`                                                                                                               |
-| `training_approvals`                 | TrainingApproval                | Session approval workflow with token-based email approval                                                                                                                                                   |
+| `training_approvals`                 | TrainingApproval                | Session approval workflow with token-based email approval; `reminder_sent_at` stamps the 7- and 14-day sign-off reminders                                                                                   |
+| `training_credit_duplicate_flags`    | TrainingCreditDuplicateFlag     | A finalize's record paired with a self-report or hand-entered record of the same class and day; `match_reason`, `resolution` (`kept_both`)                                                                  |
 | `training_programs`                  | TrainingProgram                 | Structured curricula (phases, flexible; sequential as a legacy stored value)                                                                                                                                |
 | `program_phases`                     | ProgramPhase                    | Ordered phases within programs; `requires_manual_advancement`                                                                                                                                               |
 | `program_requirements`               | ProgramRequirement              | Requirements linked to program phases                                                                                                                                                                       |
@@ -993,6 +994,23 @@ Daily scheduled task (06:00) → cert_expiration_alerts
     7 days  → alert to member + training + compliance (in-app + email CC)
     Expired → escalation to all officers (in-app + email CC)
   → Each tier sent only once (tracked by alert_{90,60,30,7}_sent_at, escalation_sent_at)
+```
+
+### Session Sign-Off Reminder Flow _(2026-11-23, #4623)_
+
+```
+Daily scheduled task (07:50) → training_approval_reminders
+  → send_approval_reminders (app/services/training_approval_reminders.py) per organization
+  → Picks each session's newest TrainingApproval still PENDING, token unexpired,
+    event not cancelled, created 7+ days ago
+    (a superseded approval — its link killed by a re-finalize — is never chased)
+  → Day 7: first reminder while reminder_sent_at is NULL
+    Day 14: second reminder while reminder_sent_at predates created_at + 14 days
+    Then stops; an approval first seen past day 14 gets one email, not two
+  → Claim = conditional UPDATE of reminder_sent_at, committed BEFORE the send
+    (at most once: a re-run or second worker sends nothing; a crash loses one)
+  → Email (training_approval_reminder template, switchable) to current
+    training_officer role holders who take EmailKind.TRAINING_DUTIES; no SMS
 ```
 
 ### Waiver Adjustment Flow

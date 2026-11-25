@@ -239,6 +239,44 @@ close-out, enter manual hours for themselves, or add their own attendance
 
 ---
 
+## Community Outreach Signup Sheets
+
+A station tour or school visit is staffed from the schedule on a **community
+outreach signup sheet** — an open-to-all shift a public request or an outreach
+event opens, whose seats are **roles** (Tour Guide, Educator) rather than
+positions. Owner decisions of 2026-11-24 make it outreach, not a duty shift:
+
+- **Named by its event** — the shift details window, board day panel, phone
+  day sheet, **Your next shift**, **My Shifts**, past shifts, the give-up
+  dialog, Open Shifts cards, the shift report picker and the printed roster
+  head the sheet with the event's title (or "_type_ for _requester_" before
+  the request is on the calendar) and a **Community outreach** tag, not a
+  duty-crew name. Each seat shows its role; an open one reads **Open role**,
+  and a role seat's position is not editable. The details window heads the
+  seats **Volunteers** (people icon) where a duty shift reads **Crew Board —
+  E-5**, or **Crew Board** with no apparatus _(2026-11-25)_.
+- **Claiming** — on the board, an open seat claims the role it names; with
+  more than one role open, the panel reads "Choose a role above to sign up."
+  instead of a single **Take a seat on this shift**. The details window's
+  **Sign yourself up for this outreach event** picks a role, essential roles
+  first, an optional one reading "(1 open, optional)".
+- **Outreach hours, not shift hours** — sheet time is left out of every
+  shift-hours total (Department hours this month, My Shifts → Hours, Member
+  Hours, Shift Compliance, the admin hub tile, the public volunteer-hours
+  total) and out of the shifts counted toward a shifts requirement. A
+  volunteer's sheet check-in/out is copied onto their attendance at the event,
+  which credits Admin Hours to the category the event type maps to when the
+  event is ended (only Public Education maps to Community Outreach by
+  default). Applies to past sheets too, so shift hours can drop on upgrade.
+- **Catch-up** — **Settings → General → Community outreach hours** (needs
+  `scheduling.manage`): **Check past outreach sheets** previews, **Credit the
+  hours** runs it; safe to run twice. Nothing is credited on upgrade.
+
+Edges (early arrival not credited, a removed sheet check-in leaving the event
+attendance, a shift completion report still listing "Volunteer") are in
+`docs/KNOWN_LIMITATIONS.md` → "Outreach Signup Sheets — Outreach Hours, Not
+Shift Hours".
+
 ## Standing Shifts
 
 A standing shift is a member's recurring claim on a seat — "every Tuesday
@@ -1004,7 +1042,8 @@ and not an empty result.
 **Scheduling Reports** (`/scheduling/admin/reports`; the endpoints need
 `scheduling.report`):
 
-- **Member Hours** — hours per member from shift assignments, with the
+- **Member Hours** — hours per member from shift assignments (outreach signup
+  sheets excluded since 2026-11-24), with the
   **Outside Hours** column, the **Outside apparatus staffed** summary, and
   reject/restore of outside entries.
 - **Coverage** — staffing coverage over a range. Coverage, Call Volume and

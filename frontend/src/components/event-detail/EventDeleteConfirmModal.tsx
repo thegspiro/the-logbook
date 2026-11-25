@@ -80,6 +80,11 @@ const EventDeleteConfirmModal: React.FC<EventDeleteConfirmModalProps> = ({
               Permanently delete &ldquo;{eventTitle}&rdquo;? Its RSVPs and attendance records are deleted too. You
               can&apos;t undo this.
             </p>
+            {/* Since #4656 the delete also removes the stored files, and they
+                cannot be recovered from the app afterwards. */}
+            <p className="text-theme-text-muted mt-2 text-sm">
+              The files in its Attachments are deleted with it. Download any you need to keep first.
+            </p>
             {isRecurring && (
               <div className="mt-4 space-y-2">
                 <label className="flex cursor-pointer items-center gap-2">

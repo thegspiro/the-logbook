@@ -122,7 +122,12 @@ counts what will go before anything does.
   that wrote it is an officer's correction. It is kept, listed after the undo,
   and keeps its ledger entry, so committing again does not write it twice.
 - **Former members the import created** are removed with the step unless
-  something else still refers to them.
+  something else still refers to them. Their decision in `member_mappings`
+  goes back to `{"action": "create"}` and, since 2026-11-24, keeps the
+  `first_name` / `last_name` the reviewer typed (the commit now stores them
+  beside the `user_id` it made), so a recommit creates them under that name
+  rather than "Former member _number_". A decision committed before that date
+  holds no name; retype it before committing again.
 - **Shifts and seats the step reused** (rather than made) are left as they
   are. A member the roster moved to another seat goes back to the seat they
   had; a roster written before 2026-11-21 did not record it, so its moved

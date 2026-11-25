@@ -256,6 +256,7 @@ PUT    /events/{id}/guest-headcount              # Set or clear the guests count
 PUT    /events/{id}/outreach-closeout            # Replace the outreach close-out: outcome note, apparatus, materials, photos (manage)
 GET    /events/{id}/staffing                     # The volunteer signup sheet staffing this event, its own or its request's (manage)
 POST   /events/{id}/staffing                     # Open a signup sheet on an outreach event with no request behind it (manage)
+GET    /events/{id}/staffing/seats               # The live sheet seat by seat: role, holder or open, is_me, essential (events.view; 404 for a hidden draft, no live sheet, or cancelled)
 POST   /events/{id}/volunteer-call               # Email the membership for help with the event's own sheet (manage; email only)
 GET    /events/outreach-calendar?start=&end=     # Outreach events in a range (<= 93 days) with sheet and crew fill, for the Outreach Overview (manage)
 POST   /events/{id}/end-event                    # End now + bulk checkout + finalize durations (manage, or training.manage on Training)
@@ -505,11 +506,36 @@ DELETE /event-requests/email-templates/{id}           # Delete
   behind `events.manage` on `GET /events/{id}/staffing`. None for a cancelled
   event or one with no live sheet. Signing up goes through the scheduling
   signup endpoint with `outreach_role`, which enforces eligibility and the
-  window. `OutreachRoleSignup` (`modules/scheduling/components/`) is the one
-  control the event page (`EventVolunteerSignupCard`, or inside
-  `EventStaffingCard` for an organizer) and `ShiftDetailPanel` use; the panel
-  no longer offers per-seat signup, bulk fill or a position on an outreach
-  sheet, and its assign form sends `outreach_role`.
+  window. _(2026-11-23, #4583)_ The event page now draws the sheet seat by
+  seat with `VolunteerSeatBoard` (`components/event-detail/`), read fresh
+  from `GET /events/{id}/staffing/seats` (`seat_board` in
+  `event_staffing_service.py`: each role's holders then its open seats,
+  essential roles first) — inside `EventVolunteerSignupCard` for a member and
+  `EventStaffingCard` for an organizer, including on a request's event once
+  its sheet is open. Seat actions use the scheduling endpoints: signup with
+  `outreach_role`, **Give up my spot** (`useConfirm`, then `DELETE
+/scheduling/shifts/{id}/signup`), **Assign someone** (shown with
+  `scheduling.assign`, `POST …/assignments` with the seat's role). It
+  replaced the event page's cached read of `GET /events/{id}`, which left
+  "Sign me up as …" on screen after the signup. `OutreachRoleSignup` is now
+  used by `ShiftDetailPanel` only; the panel offers no per-seat signup, bulk
+  fill or position on an outreach sheet, and its assign form sends
+  `outreach_role`.
+- **Essential roles** _(2026-11-23, no migration)_. `staffing_roles` and the
+  type presets are JSON read through `normalize_staffing_roles`, which settles
+  `essential` (absent means essential; a repeated role is essential if either
+  entry was). Role needs, role statuses, seats and Scheduling role slots carry
+  `essential`; the request staffing response adds `essential_total` /
+  `essential_filled`. `arrange_volunteers` still compares every seat.
+- **Essential apparatus seats** _(2026-11-23, migration `bbb6eac6ae34`)_.
+  `is_essential` on `apparatus_event_template_seats` and
+  `event_apparatus_seats`, NOT NULL, server default true, so every existing
+  seat is essential; a spec omitting it stays essential, which is why
+  **Edit this night** always sends it (the PUT replaces the seats). Night
+  summaries and chips gain `essential_filled` / `essential_total`;
+  `tones.readinessTone` / `readinessLabel` (`pages/apparatus-events/`) colour
+  and label by them, and `fillTone` colours by plain fill. Downgrade drops the
+  columns.
 - **Swaps sync RSVPs.** `_sync_outreach_after_swap` in `scheduling_service.py`
   runs `_sync_outreach_rsvps` after a swap commits, once per shift, naming the
   member who gave each seat up in `removed_user_ids` (a swap rewrites the
@@ -527,7 +553,10 @@ DELETE /event-requests/email-templates/{id}           # Delete
   re-applies `5a41041e328b` (nullable `contact_email`, `source`) on an
   installation stamped past it by the "already exists" fallback in `main.py`,
   where a request with no email failed with MySQL 1048. A no-op elsewhere; its
-  downgrade does nothing.
+  downgrade does nothing. _(2026-11-23, #4583)_ The fallback itself is gone:
+  `app/core/migration_recovery.py` now marks only the revision that raised
+  the duplicate error as applied, logs it at ERROR and records it in the
+  startup status, and runs the rest; see `docs/UPGRADING.md`.
 
 All event response schemas inherit from `UTCResponseBase`, so datetimes are
 serialized with an explicit UTC offset.

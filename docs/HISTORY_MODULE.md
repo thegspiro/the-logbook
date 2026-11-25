@@ -405,8 +405,8 @@ same visibility rules as the timeline. A month-only or year-only date is
 stored as the 1st and never matches a day; a 29 February entry shows on 28
 February in a year without a 29th. It is a card on the History home (which
 says when nothing happened) and on the Dashboard when the module is on (which
-hides itself on such a day). The public widget stays in phase 7 with the
-public feed.
+hides itself on such a day). The website's `/today` and the public widget
+follow the same rules; see [Publishing outward](#publishing-outward).
 
 ## Articles
 

@@ -248,3 +248,7 @@ scratchRepro*
 
 # Workflow review state: generated keys, seeded accounts, browser sessions, logs
 .workflow-review/
+
+# Husky v9 generates this directory on install; a committed copy (a
+# self-referencing symlink came in with #4679) breaks the hook install.
+.husky/_

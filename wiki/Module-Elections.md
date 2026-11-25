@@ -484,14 +484,24 @@ voter", "Ranked choice" or "Approval" — with a **Winner** row from
   measured against ballots cast rather than vote rows; a tie on the last seat
   follows the tie policy. Refused with ranked choice (on the election or any
   item) and with a `max_votes_per_position` below the seat count. Runoffs and
-  clones copy it.
+  clones copy it. _(2026-11-24, ELEC2-10)_ A one-seat race under `majority`,
+  `supermajority` or `threshold` goes through the same seat count with one
+  seat, so two qualifiers (an approval ballot, a low threshold) no longer
+  both win; a tie for the seat follows the tie policy.
+- **Approve/Deny items on a ranked ballot** _(2026-11-24, ELEC2-11)_ — a
+  motion or membership item is never counted by instant runoff, whatever the
+  election's method: it takes the plurality/threshold path with one seat and
+  its own victory condition.
 - **Tie policy** — Under `co_winners` tied candidates all win and the result
   is still flagged `is_tie`. The other policies declare no winner on a tie,
   flag it in results and the UI, and audit `election_tie_detected` at close.
 - **Write-ins** — Stored as typed. Spelling variants are consolidated under
   one candidate via an audited alias (`merged_into_candidate_id`,
   `POST /elections/{id}/write-ins/merge`); signed vote rows are never
-  mutated, so integrity verification still passes. Checking "Write-in
+  mutated, so integrity verification still passes. _(2026-11-24, ELEC2-12)_
+  The merged copy keeps every field the count reads, including
+  `paper_ballot_id`, so a ranked paper sheet carrying a merged write-in stays
+  one ballot. Checking "Write-in
   candidate" on the candidate form auto-fills the name and clears the linked
   member.
 - **Candidate edits after votes** — Changing the name, position or acceptance
@@ -729,7 +739,17 @@ ballots count. A disputed batch is voided with a reason.
   overwrite each other's reason and timestamp.
 - Voided batches carry `voided_by`, `voided_at`, `void_reason` and
   `over_count_override`, shown on the batch card.
-- Merge, void and batch-void remain allowed after close.
+- Merge, void and batch-void remain allowed after close. _(2026-11-24,
+  ELEC2-15)_ The panel now offers **Void Batch** after close too (it hid the
+  button once voting ended); **Attest Count** stays open-only.
+- _(2026-11-24, ELEC2-13)_ The membership-package sync at close reads the
+  Approve row's `is_winner` from `get_election_results` instead of
+  re-counting Approve against Deny, so it follows the item's victory
+  condition, quorum and write-in merges. A post-close correction still does
+  not re-run it (ELEC2-20, in KNOWN_LIMITATIONS).
+- **Results are recomputed on every read**, not snapshotted at close. The
+  2026-11-24 tally fixes therefore change what an affected past election
+  displays, without a revision stamp (owner-approved).
 
 ---
 
@@ -797,7 +817,10 @@ Results Report** / **Send Report** (only after close).
 
 A meeting-night panel (`LiveTurnoutPanel`, fullscreen-capable, on the
 Overview) shows ballots received versus eligible and quorum progress,
-auto-refreshes, and never shows candidate tallies before close. On a phone,
+auto-refreshes, and never shows candidate tallies before close. Quorum
+**met** mirrors `get_election_results` _(2026-11-24, ELEC2-17)_: raw voter
+count for a count quorum, the unrounded ratio for a percentage, never the
+two-decimal turnout. On a phone,
 a manager's Overview is the meeting-night dashboard described under
 [Navigation](#navigation-2026-11-15).
 
