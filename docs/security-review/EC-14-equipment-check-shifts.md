@@ -5,21 +5,237 @@
 (pass 5), 2026-09-17 (pass 6), 2026-10-06 (pass 7), 2026-10-14 (pass 8),
 2026-10-15 (pass 9), 2026-10-19 (pass 10), 2026-10-23 (pass 11), 2026-10-26
 (pass 12), 2026-10-29 (pass 13), 2026-11-02 (pass 14), 2026-11-06
-(pass 15), 2026-11-20 (pass 16) · **PR:**
+(pass 15), 2026-11-20 (pass 16), 2026-11-25 (pass 17) · **PR:**
 [#1842](https://github.com/thegspiro/the-logbook/pull/1842) (pass 1),
 [#2625](https://github.com/thegspiro/the-logbook/pull/2625) (pass 6, 0
 fixed, 0 flagged, merged), [#2970](https://github.com/thegspiro/the-logbook/pull/2970)
 (pass 7, 0 fixed, 0 new findings), [#3195](https://github.com/thegspiro/the-logbook/pull/3195) (pass 8, 1 fixed, 0 flagged),
-[#3290](https://github.com/thegspiro/the-logbook/pull/3290) (pass 9, 0 fixed, 0 new findings), [#3435](https://github.com/thegspiro/the-logbook/pull/3435) (pass 10, 0 fixed, 0 new findings, merged), [#3602](https://github.com/thegspiro/the-logbook/pull/3602) (pass 11 — watchdog pickup, 0 fixed, 0 new findings), [#3741](https://github.com/thegspiro/the-logbook/pull/3741) (pass 12 — watchdog pickup, 0 fixed, 1 flagged, merged), [#3837](https://github.com/thegspiro/the-logbook/pull/3837) (pass 13 — watchdog pickup, 0 fixed, 0 new findings, merged), [#3927](https://github.com/thegspiro/the-logbook/pull/3927) (pass 14 — watchdog pickup, 0 fixed, 0 new findings, merged), [#4111](https://github.com/thegspiro/the-logbook/pull/4111) (pass 15 — watchdog pickup, 0 fixed, 0 new findings, merged), pass 16 PR recorded in `PROGRESS.md`
+[#3290](https://github.com/thegspiro/the-logbook/pull/3290) (pass 9, 0 fixed, 0 new findings), [#3435](https://github.com/thegspiro/the-logbook/pull/3435) (pass 10, 0 fixed, 0 new findings, merged), [#3602](https://github.com/thegspiro/the-logbook/pull/3602) (pass 11 — watchdog pickup, 0 fixed, 0 new findings), [#3741](https://github.com/thegspiro/the-logbook/pull/3741) (pass 12 — watchdog pickup, 0 fixed, 1 flagged, merged), [#3837](https://github.com/thegspiro/the-logbook/pull/3837) (pass 13 — watchdog pickup, 0 fixed, 0 new findings, merged), [#3927](https://github.com/thegspiro/the-logbook/pull/3927) (pass 14 — watchdog pickup, 0 fixed, 0 new findings, merged), [#4111](https://github.com/thegspiro/the-logbook/pull/4111) (pass 15 — watchdog pickup, 0 fixed, 0 new findings, merged), [#4464](https://github.com/thegspiro/the-logbook/pull/4464) (pass 16 — watchdog pickup, 0 fixed, 0 new findings, merged), pass 17 PR recorded in `PROGRESS.md`
 
 **Backend:** `api/v1/endpoints/equipment_check.py` (54 routes, unchanged from
-pass 10), `api/v1/endpoints/shift_completion.py` (22 routes, unchanged from
-pass 14),
-`services/equipment_check_service.py` (6,934 L, unchanged pass 15, +15/−23
-this pass), `services/shift_completion_service.py` (2,134 L, +332/−30
-pass 15, +10/−1 this pass)
-**Frontend:** in-app (no dedicated module directory)
+pass 10; +19/−4 this pass, threading a report number and a signature-lines
+option into PDF exports), `api/v1/endpoints/shift_completion.py` (22 routes,
+unchanged from pass 14),
+`services/equipment_check_service.py` (7,106 L, byte-identical to pass 16's
+head), `services/shift_completion_service.py` (2,622 L, byte-identical to
+pass 16's head), `services/equipment_check_pdf.py` (+18/−0 this pass, same
+report-number/signature-lines feature)
+**Frontend:** in-app (no dedicated module directory as such, but every
+equipment-check page lives under `frontend/src/modules/inventory/`, where
+this feature's module-audit pass 1 relocated it in 2026-09-03)
 **Migrations:** none this iteration to this feature's own tables
+
+---
+
+## Pass 17 (2026-11-25) — real delta (a cross-cutting PDF provenance feature landed in this scope), 0 fixed, 0 new findings; AST route re-enumeration confirms no drift
+
+**Watchdog pickup.** No other Claude session is running on this machine for
+this task. Step 0 (`list_pull_requests`, state: open) found 3 open PRs, none
+with a `claude/security-review-` head branch. PR
+[#4684](https://github.com/thegspiro/the-logbook/pull/4684) (Feature 13,
+Apparatus & NFC, pass 24 — docs-only, 0 fixed, 0 new findings) had already
+merged into `main`; per the skill's own rule a docs-only PR is not a
+recordable event, so nothing needed clearing from `PROGRESS.md`'s Open PR
+row beyond what pass 24's own note already left there. Row 14 (Equipment
+check & shifts) was confirmed the next `⬜` row by reading the rotation
+table directly.
+
+**Baseline** `f0547e6ae` (PR #4464's merge, pass 16) to head `4ad542a49`
+(PR #4684's merge, current `main`). 1,143 commits in the window (608
+non-merge) — another full rotation lap elsewhere in the app — but
+`git diff --stat` restricted to this feature's declared backend scope found
+real changes in only two files: `equipment_check.py` (+19/−4) and
+`equipment_check_pdf.py` (+18/−0). `shift_completion.py`,
+`shift_completion_service.py`, and `equipment_check_service.py` are
+byte-identical to pass 16's head (`git hash-object` matches the blob at
+`f0547e6ae` exactly for both service files, not merely an empty `--stat`).
+`training.py`'s diff in this window (+111 lines) is two new model classes,
+`TrainingCreditDuplicateFlag` and `RollingRequirementLastMet` — both belong
+to Training core/Compliance (requirement-progress and self-report
+duplicate-detection), landed in the same file as `ShiftCompletionReport`
+only because that file holds every Training-domain model; neither touches
+`ShiftCompletionReport`, `ShiftTemplateEquipmentCheck`, or any equipment-check
+table, confirmed by reading the diff in full. Out of this feature's scope,
+not reviewed here.
+
+### Routes AST re-enumerated — 76 total, unchanged from pass 16, every one checked individually
+
+Walked both files' route decorators by AST (not grep) rather than trusting
+the diff table, per this pass's own re-enumeration requirement:
+`equipment_check.py` **54** routes, `shift_completion.py` **22** routes — 76
+total, matching pass 16's recorded count exactly. For every route, both the
+parameter-level `Depends(...)` and any decorator-level
+`dependencies=[Depends(...)]` were read (the latter is easy to miss by
+grepping function signatures alone — `get_template_changelog` carries
+`current_user: User = Depends(get_current_user)` as a parameter _and_
+`dependencies=[Depends(require_permission("inventory.check_manage"))]` on
+the route decorator itself; reading only the parameter would have
+misreported it as bare-auth).
+
+- **Every one of the 76 routes carries an auth dependency.** None bare.
+- **Permission-gated routes carry the correct permission string.** No
+  `.view`-gated route doing `.manage`-sensitivity work (checklist §2's
+  XC-2 pattern) — `inventory.check_manage` on every template/compartment/
+  item write, `inventory.check_submit`/`.check_manage` on check submission,
+  `inventory.check_view` (OR submit/manage as appropriate) on reads.
+- **Self-scoped/bare-`get_current_user` routes** (`get_my_checklists`,
+  `get_my_checklist_history`, `get_check_log`, `download_csv_sample` in
+  `equipment_check.py`; `create_shift_report`, `get_shift_crew_status`,
+  `batch_create_shift_reports`, `get_review_access`, `get_my_shift_reports`,
+  `get_my_shift_stats`, `get_draft_reports`, `submit_all_drafts`,
+  `get_shift_report`, `update_shift_report`, `acknowledge_report` in
+  `shift_completion.py`) are every one listed in
+  `tests/permissionless_route_baseline.txt`, confirmed by `grep`, not
+  assumed — each self-scopes in the service layer or (for the shift-officer
+  routes) through `_authorize_report_filing`'s "`training.manage`, or being
+  the shift's assigned Shift Officer" check, read in full this pass
+  (`shift_completion.py:149-180`, unchanged since prior passes verified it).
+- **`get_pending_review_reports`, `get_flagged_reports`, `review_report`,
+  `batch_review_reports`** all resolve through `require_report_reviewer`
+  (`training.manage` OR the department's configured reviewer role via
+  `_reviews_by_role`), read in full and unchanged from pass 16's separation-
+  of-duties review: `_not_about_reviewer`/`_role_review_refusal` keep a role
+  reviewer off a report about themselves or one they filed, and off a
+  report not in `("pending_review", "flagged")`.
+- **`preview_shift_data`** is gated to `training.manage` only — narrower than
+  `create_shift_report`/`get_shift_crew_status`, which also admit the
+  shift's own Shift Officer via `_authorize_report_filing`. Pre-existing
+  (unchanged file, confirmed by the byte-identical hash above) and not a
+  security finding — the narrower gate means an acting officer who is not
+  `training.manage` can file a report and see its crew list but cannot use
+  the preview endpoint first; that is a product/UX gap in the safe direction
+  (less access, not more), not reopened as a new finding.
+
+### `equipment_check.py` + `equipment_check_pdf.py` — the new report-number/signature-lines feature, reviewed end to end
+
+Commits `daeb28002` (2026-11-21) and `79e184c98` (2026-11-23) — a
+cross-cutting PDF-provenance feature (owner decisions of 2026-11-21 and
+2026-11-23: every generated report gets a letterhead identity line, a
+`report_number`, and an optional "Add signature lines to PDF" tick-box) —
+touch this feature's `export_pdf` endpoint and `equipment_check_pdf.py`'s
+three generator functions. Already independently reviewed as a shared
+helper under `SEC-00-cross-cutting-baseline.md` pass 18's "Eight more new
+service files" table (`document_provenance.py`, called from "report export
+endpoints," found to filter `organization_id` on its one query with no
+exception handling to leak); read directly here for this feature's own
+call sites rather than taken on that prior review's word:
+
+- **`report_number_for`/`preparer_label`** (`app/services/document_provenance.py`)
+  are pure, org-scoped helpers: `preparer_label`'s one query
+  (`OperationalRank.display_name`) filters
+  `OperationalRank.organization_id == str(user.organization_id)`; the report
+  number itself (`app/utils/report_number.py`) is `secrets.choice`-drawn,
+  carries no injectable content, and is not stored (by owner decision — no
+  counter table, no migration).
+- **Every `check_id`/`checked_by` lookup `export_pdf` makes stays org-scoped**
+  — re-confirmed, not re-derived: `service.get_check(check_id,
+current_user.organization_id)` (`equipment_check.py:1842`) and the
+  `checked_by` resolution (`equipment_check.py:1867-1870`, the XC-3 fix pass
+  16 already recorded) both filter on `current_user.organization_id`; the
+  `organization` object passed to `department_identity()` comes from
+  `select(Organization).where(Organization.id ==
+current_user.organization_id)` (`equipment_check.py:1779`), never a
+  client-supplied id.
+- **Every value threaded into the PDF is escaped before rendering.**
+  `pdf_report_kit.py`'s `_letterhead` wraps `meta.identity` in `esc(...)`
+  before the `Paragraph` call (line 408); `signature_block` wraps
+  `meta.generated_by` (the preparer's name+rank) in `esc(...)` the same way
+  (line 551) — reportlab's `Paragraph` markup means an unescaped value could
+  otherwise break the layout or inject markup, not merely display oddly.
+- **`_audit_equipment_export`'s new `report_number` field** is the server-
+  generated opaque code, not free text — Pitfall #33 holds (ids/enums only,
+  no user-supplied text reaches the audit log; `report_type`/`format`/query
+  parameters were already the only other fields).
+- **The frontend wiring** (`SignatureLinesOption.tsx`, a new shared
+  component; `EquipmentCheckReportsPage.tsx`'s `ExportActions` wrapper;
+  `equipmentCheckApi.ts`'s `signature_lines` query param) is a plain
+  boolean tick-box defaulting to unticked, serialized through
+  `URLSearchParams` (safe encoding, no raw string concatenation) into the
+  same relative, same-origin `/api/v1/equipment-checks/...` URL the export
+  links already used — no new open-redirect or XSS surface.
+- **`EquipmentCheckTemplateBuilder.tsx`'s delta** (an `sr-only` `<h1>` for
+  assistive technology, a `touch:min-w-11` tap-target fix, and a `min-w-0`
+  flex-wrap fix for the sticky action bar at tablet width) is layout/a11y
+  only, no security surface.
+
+No finding. **0 fixed, 0 new findings this pass.**
+
+### Prior-pass findings re-confirmed, by reading the current code rather than trusting the unchanged hash alone
+
+- **EC-17 (MED, OPEN/FLAGGED, owner-accepted)** — unaffected. The
+  `UPDATABLE_FIELDS` write loop in `update_report`
+  (`shift_completion_service.py`, unchanged file) still runs with no
+  `was_draft`/`review_status` gate, so a filing officer can still edit a
+  non-draft report's narrative/rating/skills after approval; `update_report`
+  still returns a changed submitted report to review (the 2026-10-27 fix),
+  but a review-off department still has no forced second check. Mirrored,
+  unchanged, in `docs/KNOWN_LIMITATIONS.md`'s EC-17 entry.
+- **EC-8 (by-id reads for changelog text only, no org filter, harmless by
+  construction)** — unchanged, confirmed still read-after-validate at every
+  site named by prior passes (`add_item`/`update_item`'s post-validation
+  `template_id` lookups).
+- **EC2-3/EC2-4 (dangling-FK-on-setattr-loop, app-review's residual)** —
+  closed, not reopened: `_validate_item_fks` (`equipment_check_service.py:1058`)
+  validates `inventory_item_id`/`equipment_id` in-org, and
+  `_validate_compartment_parent` validates a reassigned
+  `parent_compartment_id`, both read directly this pass (not merely grepped)
+  at every call site (`add_item`, `add_items_bulk`, `update_item`,
+  `update_compartment`). The app-review doc's standalone `🚩 OPEN` marker on
+  EC2-3 predates this fix and is stale; this security-review file has
+  superseded it since at least pass 7, and is the authoritative record —
+  `docs/app-review/equipment-check.md` is not corrected here since app-review
+  is a separate rotation with its own review cadence, but is noted so a
+  future reader does not re-flag it.
+- **EC-11 (compliance-cadence metrics, LOW, FLAGGED — feature, not a
+  defect)** — unchanged, still an incomplete feature by design per the
+  2026-10-11 owner decision recorded in `KNOWN_LIMITATIONS.md`.
+- **EC-16 (SAVEPOINT duplicate-report guard, Pitfall #27)**,
+  **EC-6/EC-13 (in-org FK validation)**, **EC-7/EC-11 built** (resolved
+  2026-10-11) — untouched, confirmed by the byte-identical hash plus a
+  direct read of the relevant functions above.
+
+### Additional checks this pass
+
+- **LIKE escaping** — `equipment_check_service.py`'s one `.ilike()` call
+  (failed-item search) still passes `like_pattern(...)` with
+  `escape=LIKE_ESCAPE_CHAR`; unchanged, re-confirmed by reading the line.
+- **CSV export** — `export_csv` still uses `SafeCsvWriter`
+  (`equipment_check.py:1432`, unchanged).
+- **SMS allowlist (Pitfall #18)** — `grep` for `SMSService`/`SmsAlert`/
+  `resolve_sms_recipients` across both service files: 0 hits, unchanged.
+- **No migration in this window touches this feature's tables** — confirmed
+  by content-grepping (not just filename-grepping) every migration file
+  added between the two commits for `equipment_check`, `shift_completion`,
+  `check_template`, `shift_equipment_check`, `check_item_deployed_lot`, or
+  `template_change_log`: 0 matches.
+- **JSON-column mutation safety (Pitfall #12)** — no JSON column in this
+  feature's own models; n/a, unchanged.
+
+**0 fixed, 0 new findings.** `docs/module-audit/equipment-check.md` and
+`docs/app-review/equipment-check.md` re-grepped for `🚩`/`OPEN`/`FLAGGED`:
+module-audit carries no open marker; app-review's two markers (EC2-3, EC-11)
+are addressed above — EC2-3 is stale/already-fixed, EC-11 is the accepted
+incomplete-feature flag, both unchanged in disposition.
+
+**Completion gate:** `flake8 app/ tests/ alembic/` (7.4.1) — 0 violations;
+`black --check app/ tests/ alembic/` (26.10.1) — clean, 3520 files
+unchanged; `isort --check-only app/ tests/ alembic/` (9.0.2) — clean;
+`validate_migrations.py --strict` — single head `d41f7a2c9e58`, 840
+revisions; `check_route_permissions.py --strict` — 339 routes, 0 errors, 0
+warnings; `generate_schema_docs.py --check` — up to date; scoped backend
+pytest (`-k "equipment_check or shift_completion or shift_report"`) — 714
+passed, 1 pre-existing environment-only skip (`py_vapid`); the PDF-
+provenance feature's own tests (`test_pdf_provenance.py`,
+`test_report_export.py`) — 34 passed; standing guard suites (capacity
+locking, org-scoping ratchet, LIKE escaping, CSV sweep, migration
+`create_all`-table tolerance, account-status gates, log-call shape,
+baseline member grants, endpoint auth coverage) — 196 passed; `cd frontend
+&& npm run typecheck` — 0 errors; `cd frontend && npm run lint` — 0 errors,
+0 warnings (`--max-warnings 10`); `npx vitest run src/modules/inventory` —
+2009 passed (129 files).
+
+Row 14 → ✅ (pending this PR's merge); next is Feature 15 (Scheduling) —
+re-check `list_pull_requests` fresh rather than trusting this note.
 
 ---
 

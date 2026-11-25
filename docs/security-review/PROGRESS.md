@@ -16,6 +16,65 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR pending — recorded in this same branch's second commit once opened.**
+Feature 14 (Equipment check & shifts), pass 17 — watchdog pickup. Step 0
+(`list_pull_requests`, state: open) found 3 open PRs, none with a
+`claude/security-review-` head branch. PR #4684 (Feature 13, Apparatus &
+NFC, pass 24) had already merged — docs-only (it updated only
+`AP-13-apparatus-nfc.md` and this file), so per the skill's own rule
+("a docs-only PR is not a recordable event") it is not independently
+recorded here; row 13 was already ✅ in the table this session found on
+checkout. Row 14 (Equipment check & shifts) was confirmed the next `⬜` row.
+
+**Baseline** `f0547e6ae` (PR #4464's merge, pass 16) to head `4ad542a49`
+(PR #4684's merge, current `main`). 1,143 commits in the window (608
+non-merge), but `git diff --stat` restricted to this feature's declared
+backend scope found real changes in only two files —
+`equipment_check.py` (+19/−4) and the new `equipment_check_pdf.py`
+(+18/−0) — threading a report number and an optional "Add signature lines
+to PDF" tick-box (a cross-cutting feature, owner decisions of 2026-11-21/
+2026-11-23) into this feature's PDF exports. `shift_completion.py`,
+`shift_completion_service.py`, and `equipment_check_service.py` are
+byte-identical to pass 16's head (confirmed by `git hash-object`, not just
+an empty `--stat`). Routes AST re-enumerated (not grepped): 54 + 22 = 76,
+unchanged from pass 16; every route's auth dependency and permission
+string checked individually, including decorator-level
+`dependencies=[...]` (which a parameter-only read would have missed on
+`get_template_changelog`). The new PDF-provenance code is org-scoped
+throughout (`report_number_for`/`preparer_label` filter
+`organization_id`; every `check_id`/`checked_by`/`Organization` lookup
+`export_pdf` makes is already org-scoped, re-confirmed not re-derived) and
+escapes every value before handing it to reportlab's `Paragraph` markup.
+EC-17 (MED, OPEN/FLAGGED, owner-accepted — a review-off department has no
+forced second check on an indefinitely-editable report) and EC-11 (LOW,
+FLAGGED — compliance-cadence metrics, an incomplete feature by design) are
+both re-confirmed unchanged; app-review's stale `EC2-3 🚩 OPEN` marker is
+confirmed already closed by `_validate_item_fks`/
+`_validate_compartment_parent` (superseded by this file since at least pass
+7, not reopened). **0 fixed, 0 new findings.** Full write-up:
+`docs/security-review/EC-14-equipment-check-shifts.md`'s **Pass 17**
+section.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` on
+`app/ tests/ alembic/` all clean; `validate_migrations.py --strict` —
+single head `d41f7a2c9e58`, 840 revisions; `check_route_permissions.py
+--strict` — 339 routes, 0 errors/0 warnings; `generate_schema_docs.py
+--check` — up to date; scoped backend pytest (`-k "equipment_check or
+shift_completion or shift_report"`) — 714 passed, 1 pre-existing
+environment-only skip (`py_vapid`); `test_pdf_provenance.py` +
+`test_report_export.py` — 34 passed; standing guard suites (capacity
+locking, org-scoping ratchet, LIKE escaping, CSV sweep, migration
+`create_all`-table tolerance, account-status gates, log-call shape,
+baseline member grants, endpoint auth coverage) — 196 passed; `npm run
+typecheck` — 0 errors; `npm run lint` — 0 errors, 0 warnings; `npx vitest
+run src/modules/inventory` — 2009 passed (129 files).
+
+Row 14 → ✅ (pending this PR's merge); next is Feature 15 (Scheduling) —
+re-check `list_pull_requests` fresh rather than trusting this note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 13, Apparatus & NFC, pass 24, PR #4684, merged docs-only — not independently recorded), preserved for history</summary>
+
 **PR [#4684](https://github.com/thegspiro/the-logbook/pull/4684) (branch
 `claude/friendly-babbage-xstbnj`)**: Feature 13
 (Apparatus & NFC), pass 24 — watchdog pickup (the dedicated `/loop 30m
@@ -69,6 +128,8 @@ frontend/migration scope to name the new files explicitly.
 Row 13 → ✅ (pending this PR's merge); next is Feature 14 (Equipment check
 & shifts) — re-check `list_pull_requests`/`gh api search/issues` fresh
 rather than trusting this note.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 12, Facilities, pass 17, PR #4683, merged), preserved for history</summary>
@@ -28096,7 +28157,7 @@ iteration's commit" rule.
 | 11  | Inventory                 | INV    | `endpoints/inventory.py` (7089 L), `inventory_service.py`                                                                                                                                                                                                                             | ✅     |
 | 12  | Facilities                | FAC    | `endpoints/facilities.py` (4394 L), `facilities_service.py`                                                                                                                                                                                                                           | ✅     |
 | 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`, `apparatus_events.py` (new, pass 24)                                                                                                                                                                                                                   | ✅     |
-| 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                                                                                                                                                           | ⬜     |
+| 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`, `equipment_check_pdf.py`                                                                                                                                                                                                                 | ✅     |
 | 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                                                                                                                                                      | ⬜     |
 | 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                                                                                                                                                             | ⬜     |
 | 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`, `knowledge_tests.py` (added pass 12), `shift_evaluation_templates.py`/`shift_evaluations.py` (added pass 13), `api/public/shift_evaluations.py` (added pass 15)                                                        | ⬜     |
