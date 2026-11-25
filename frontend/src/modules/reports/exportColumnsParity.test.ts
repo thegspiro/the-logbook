@@ -22,6 +22,7 @@ import { getEventAttendanceExportData } from './components/renderers/EventAttend
 import { getInventoryStatusExportData } from './components/renderers/InventoryStatusRenderer';
 import { getMemberRosterExportData } from './components/renderers/MemberRosterRenderer';
 import { getPipelineOverviewExportData } from './components/renderers/PipelineOverviewRenderer';
+import { getPositionHoursExportData } from './components/renderers/positionHoursExport';
 import { getTrainingProgressExportData } from './components/renderers/TrainingProgressRenderer';
 import { getTrainingSummaryExportData } from './components/renderers/TrainingSummaryRenderer';
 import type {
@@ -36,6 +37,7 @@ import type {
   InventoryStatusReport,
   MemberRosterReport,
   PipelineOverviewReport,
+  PositionHoursReport,
   TrainingProgressReport,
   TrainingSummaryReport,
 } from './types';
@@ -75,6 +77,7 @@ const RENDERED: Record<string, () => ContractColumn[]> = {
   training_progress: () => columnsOf(getTrainingProgressExportData(empty as unknown as TrainingProgressReport)),
   annual_training: () => columnsOf(getAnnualTrainingExportData(empty as unknown as AnnualTrainingReport)),
   admin_hours: () => columnsOf(getAdminHoursExportData(empty as unknown as AdminHoursReport)),
+  position_hours: () => columnsOf(getPositionHoursExportData(empty as unknown as PositionHoursReport)),
   department_overview: () =>
     columnsOf(
       getDepartmentOverviewExportData({

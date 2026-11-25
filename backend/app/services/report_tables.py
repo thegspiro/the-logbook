@@ -275,6 +275,13 @@ def _kpis(report_type: str, data: Mapping[str, Any]) -> List[Tuple[str, str]]:
             ("Entries", v("summary", "total_entries")),
             ("Members", v("summary", "unique_members")),
         ]
+    if report_type == "position_hours":
+        return [
+            ("Total Hours", v("summary", "total_hours")),
+            ("Shifts", v("summary", "total_shifts")),
+            ("Calls", v("summary", "total_calls")),
+            ("Members", v("summary", "members")),
+        ]
     if report_type == "certification_expiration":
         return [
             ("Total Certifications", v("total_certifications")),

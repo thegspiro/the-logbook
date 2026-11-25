@@ -106,6 +106,24 @@ class TestReportPiiGateTrainingAndAdminHours:
         with patch.object(reports_ep, "user_has_permission", return_value=True):
             reports_ep._enforce_report_pii_permission(user, "admin_hours")
 
+    def test_blocks_position_hours_without_scheduling_report(self):
+        # Every member's hours by seat: another member's hours history needs
+        # scheduling.report at its source (/scheduling/members/{id}/...).
+        assert (
+            reports_ep.PII_REPORT_PERMISSIONS["position_hours"] == "scheduling.report"
+        )
+        user = SimpleNamespace()
+        with patch.object(reports_ep, "user_has_permission", return_value=False):
+            with pytest.raises(HTTPException) as exc:
+                reports_ep._enforce_report_pii_permission(user, "position_hours")
+        assert exc.value.status_code == 403
+        assert "scheduling.report" in exc.value.detail
+
+    def test_allows_position_hours_with_scheduling_report(self):
+        user = SimpleNamespace()
+        with patch.object(reports_ep, "user_has_permission", return_value=True):
+            reports_ep._enforce_report_pii_permission(user, "position_hours")
+
 
 class TestMemberDirectoryGate:
     """Owner decision 2026-08-13: the member directory is member-facing.

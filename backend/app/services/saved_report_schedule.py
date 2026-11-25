@@ -81,6 +81,9 @@ PII_REPORT_PERMISSIONS: dict[str, str] = {
     "certification_expiration": "training.manage",
     "compliance_status": "training.manage",
     "admin_hours": "admin_hours.manage",
+    # Every member's shift hours by seat: what one member's hours history
+    # shows another member only with scheduling.report.
+    "position_hours": "scheduling.report",
 }
 
 MAX_RECIPIENTS = 25

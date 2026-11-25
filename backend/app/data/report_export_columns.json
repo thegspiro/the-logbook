@@ -79,6 +79,17 @@
       { "key": "source", "header": "Source" }
     ]
   },
+  "position_hours": {
+    "title": "Hours by Position",
+    "rows": "entries",
+    "columns": [
+      { "key": "member_name", "header": "Member" },
+      { "key": "position", "header": "Position" },
+      { "key": "hours", "header": "Hours" },
+      { "key": "shifts", "header": "Shifts" },
+      { "key": "calls", "header": "Calls" }
+    ]
+  },
   "department_overview": {
     "title": "Department Overview",
     "rows": null,

@@ -616,6 +616,10 @@ the outside hours, so the rows add up to the cards above them. Only finalized
 shifts count, as on the cards; approved pre-shift work counts under the seat
 held on that shift. The figures are `positions` and `all_time_positions` on
 `GET /scheduling/my-hours-history` and `GET /scheduling/members/{id}/hours-history`.
+The department-wide view is **Reports → Hours by Position** _(2026-11-24)_: one
+row per member per seat for credited shifts dated in the chosen period, from the
+same query (`SchedulingService.get_department_position_totals`), with the same
+**Other departments** row; it needs `scheduling.report` beside `reports.view`.
 
 A member who rides a neighbouring jurisdiction's apparatus gets credit for it
 from **My Shifts → Hours → All shifts**, with **Log outside shift**:

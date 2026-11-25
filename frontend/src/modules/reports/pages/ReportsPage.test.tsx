@@ -83,6 +83,7 @@ describe('ReportsPage with a report body it cannot read', () => {
     'training_progress',
     'annual_training',
     'admin_hours',
+    'position_hours',
     'department_overview',
     'certification_expiration',
     'apparatus_status',

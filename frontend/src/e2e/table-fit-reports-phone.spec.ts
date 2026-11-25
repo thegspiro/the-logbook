@@ -6,6 +6,7 @@ import type {
   CertExpirationReport,
   EventAttendanceReport,
   MemberRosterReport,
+  PositionHoursReport,
   TrainingSummaryReport,
 } from '../modules/reports/types';
 
@@ -97,6 +98,26 @@ const memberRoster: MemberRosterReport = {
   })),
 };
 
+const positionHours: PositionHoursReport = {
+  report_type: 'position_hours',
+  generated_at: GENERATED_AT,
+  ...PERIOD,
+  summary: {
+    total_hours: 2568,
+    total_shifts: 214,
+    total_calls: 512,
+    members: 4,
+    by_position: [{ position: 'Rescue Technician / Heavy Rescue', hours: 2568, shifts: 214, calls: 512, members: 4 }],
+  },
+  entries: MEMBER_NAMES.map((name) => ({
+    member_name: name,
+    position: 'Rescue Technician / Heavy Rescue',
+    hours: 642.25,
+    shifts: 53,
+    calls: 128,
+  })),
+};
+
 async function openReport(
   page: Page,
   viewport: { width: number; height: number },
@@ -161,6 +182,18 @@ test.describe('Event attendance report table fits its card', () => {
       const table = reportTable(page, 'Attendance Rate');
       await table.waitFor();
       await expectTableFitsItsCard(table, 'Event attendance table');
+    });
+  }
+});
+
+// Five columns: a member, a long department-named seat and three numbers.
+test.describe('Hours by position report table fits its card', () => {
+  for (const viewport of VIEWPORTS) {
+    test(`/reports hours by position — ${viewport.name}`, async ({ page }) => {
+      await openReport(page, viewport, 'Hours by Position', positionHours);
+      const table = reportTable(page, 'Position');
+      await table.waitFor();
+      await expectTableFitsItsCard(table, 'Hours by position table');
     });
   }
 });
