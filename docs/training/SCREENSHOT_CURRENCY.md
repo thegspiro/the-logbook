@@ -77,7 +77,7 @@ saving.
 | 04 | An outreach event's page as an ordinary member: the **Volunteer** card with two roles, the "What would you like to do?" menu and **Sign me up** | Create `04-109-event-volunteer-signup` |
 | 04 | Page 2 of circulated (unapproved) minutes as a PDF: DRAFT across the page, the report number in the header | Create `04-110-minutes-pdf-draft` |
 | 04 | `04-105-event-volunteer-staffing` (queued by an earlier pass) | Widen the request: include **Email the Membership**, **Last sent** and the organizer's own **Sign me up** |
-| 08 | A report on the Reports page with **Add signature lines to PDF** ticked beside CSV and PDF | Create `08-125-report-signature-lines` |
+| 08 | A report on the Reports page with **Add signature lines to PDF** ticked beside CSV and PDF | Create `08-130-report-signature-lines` |
 | 08 | The last page of that PDF: Prepared by / Reviewed by / Approved by lines | Create `08-126-report-pdf-signature-block` |
 | 01 | **Leave Requests → Calendar**: a month with a recorded leave, a "(requested)" entry, a "… covers …" stand-in, and the key | Create `01-68-leave-calendar` |
 | 01 | **Export leave records** card with From, To and **Download CSV** | Create `01-69-leave-export` |

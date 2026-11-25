@@ -194,7 +194,10 @@ sections alone, which keep nearly the plain annual form's shares.
 **Matching:** when drafting without naming a template, the most specific
 active, published template of the kind is used (class and status beats either,
 which beats neither); two equally specific fits are refused rather than
-guessed between.
+guessed between. _(2026-11-24)_ The **New evaluation** dialog offers a
+**Form** choice for exactly those two cases: `GET /draft-options` lists the
+active templates with a published version (`templates`, each with its
+`kind`), and the chosen one is sent as `template_id`.
 
 ## Figures
 
@@ -332,7 +335,10 @@ Adding these sources changed the stored shape of no existing entry, so
 1. **Drafting** (`POST /evaluations`, or `/bulk` for a whole period) takes
    the snapshot and opens the self-evaluation and evaluator steps together.
    With no evaluator named, a manager's draft goes to the member's supervisor
-   when the supervisor holds `conduct`, otherwise to the drafter.
+   when the supervisor holds `conduct`, otherwise to the drafter. The member
+   and the evaluator must both be current (`ACTIVE_ACCOUNT_STATUSES`, so
+   Probationary counts; pitfall #32), on a direct request as in the dialogs
+   _(2026-11-24)_.
 2. **Parts** are saved as drafts and submitted separately. The evaluator never
    sees an unsubmitted self-evaluation. If the member misses the
    self-evaluation's due date and the template allows it, the evaluator may

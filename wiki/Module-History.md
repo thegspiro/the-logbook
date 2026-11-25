@@ -2,7 +2,8 @@
 
 _(Phase 1 2026-11-03; roster import and merge, photos and media 2026-11-13;
 documents 2026-11-14; events, apparatus, timelines and "Today in history"
-2026-11-21)_
+2026-11-21; articles with PDF and Word export 2026-11-23; the public website
+and widget 2026-11-24)_
 
 > The full engineering reference is [docs/HISTORY_MODULE.md](https://github.com/thegspiro/the-logbook/blob/main/docs/HISTORY_MODULE.md).
 > The step-by-step guide to past members, the Honor Roll, titles and clearance
@@ -13,7 +14,8 @@ documents 2026-11-14; events, apparatus, timelines and "Today in history"
 
 The department archive: everyone who served, the Honor Roll, photos,
 recordings and papers, the department's past events and apparatus, a timeline,
-and a review list before anything goes public. **Off by default.**
+written articles, and a review list before anything goes public, which the
+department's own website can then show. **Off by default.**
 
 ---
 
@@ -26,27 +28,28 @@ Modules**.
 Once it is on, **History** appears in the menu with **Overview**, **Past
 Members** and **Honor Roll**. The **Department History** overview has cards
 for **Past members**, **Photos and media**, **Documents**, **Honor Roll**,
-**Timeline**, **Events** and **Apparatus** _(2026-11-21)_, plus **Import a
-roster** for the historian and **Titles, lists and clearance** for anyone who
+**Timeline**, **Events** and **Apparatus** _(2026-11-21)_ and **Articles**
+_(2026-11-23)_, plus **Import a roster** for the historian and **Titles, lists and clearance** for anyone who
 can configure the module. Below the cards is **Today in history** (see
-[below](#today-in-history-2026-11-21)). The menu itself still lists only
+[below](#today-in-history-2026-11-21)), and **Latest articles** lists up to
+five published articles when there are any. The menu itself still lists only
 Overview, Past Members and Honor Roll; reach the rest from the overview.
 
 Every signed-in member can read what has been published. Nothing else needs a
 permission.
 
-| Permission        | What it lets you do                                                                                                                                                                 |
-| ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `history.view`    | Read drafts, the research fields and each record's change history                                                                                                                   |
-| `history.manage`  | Add and edit people, photos, documents, events and apparatus; import, merge, albums, titles and the managed lists (sources, document types, stations, apparatus types, event types) |
-| `history.publish` | Publish to members or to the public                                                                                                                                                 |
+| Permission        | What it lets you do                                                                                                                                                                                               |
+| ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `history.view`    | Read drafts, the research fields and each record's change history                                                                                                                                                 |
+| `history.manage`  | Add and edit people, photos, documents, events, apparatus and articles; import, merge, albums, titles, the managed lists (sources, document types, stations, apparatus types, event types) and **Public website** |
+| `history.publish` | Publish to members or to the public                                                                                                                                                                               |
 
 The seeded **Historian** position holds all three. Officers with
 `settings.manage` can also open **Titles and clearance** to edit the clearance
-list.
+list and **Public website**.
 
 Restricted fields — birth date, addresses, verification sources and research
-notes (on people, events and apparatus) — are encrypted and never shown
+notes (on people, events, apparatus and articles) — are encrypted and never shown
 outside the keepers.
 
 ## Past members
@@ -69,13 +72,14 @@ their own **Timeline**.
 
 ## Publication levels
 
-People, photos, recordings, documents, events and apparatus share one model:
+People, photos, recordings, documents, events, apparatus and articles share
+one model:
 
-| Level                    | Who can read it                                                          |
-| ------------------------ | ------------------------------------------------------------------------ |
-| **Draft**                | The historian, and anyone reviewing it for clearance                     |
-| **Published to members** | Every signed-in member                                                   |
-| **Public**               | Meant for the public, once cleared. Nothing outside the app shows it yet |
+| Level                    | Who can read it                                                                                                                          |
+| ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| **Draft**                | The historian, and anyone reviewing it for clearance                                                                                     |
+| **Published to members** | Every signed-in member                                                                                                                   |
+| **Public**               | Meant for the public, once cleared. The department's website shows it once its part is on ([Public website](#public-website-2026-11-24)) |
 
 Every save asks for **Minor** or **Substantial**. A substantial edit to a
 public item leaves the public copy as it was until it is cleared again. Only a
@@ -252,13 +256,87 @@ this day.** when there is nothing, and on every member's **Dashboard** while
 the module is on, where it hides itself on an empty day (or if it cannot
 load).
 
+## Articles _(2026-11-23)_
+
+**Articles** holds the archive's written pieces: a station's history, a past
+chief's profile, the story of a fire. Every member reads the published ones;
+**Write an article** needs `history.manage`. Search reads the title,
+subtitle, summary and every word of the text and captions; **Order** is
+**Recently updated** or **A to Z**, and the keepers also filter by
+**Publication**.
+
+An article has a **Title** (required), **Subtitle**, **Byline** (left blank
+on a new article, it is the writer's name; a retired member with no account
+can be named), **Summary** and a **Cover photo**. Its body, under **The
+article**, is a list of blocks:
+
+- **Add text**: the minutes' rich-text editor (two heading levels, bold,
+  italic, underline, lists, quotes, links).
+- **Add photo**: an archive photo, with its own **Caption** and a **Width**
+  of **Full width** or **Half width**. A recording or film cannot be added,
+  and there is no image inside the text. A photo deleted from the archive
+  leaves its block reading **This photo is no longer in the archive** in the
+  editor; readers skip it.
+
+**In this article** links **People**, **Events**, **Apparatus** and
+**Documents**. **Sources** lists the linked documents and events and the
+photos shown by itself; **Add a reference** adds a book, a newspaper of a
+given date or an interview. **Research notes (Historian only)** are never
+shown to readers and never printed.
+
+Publication, minor and substantial edits, the change history and deleting a
+draft work as for every record. The public copy only ever holds public
+photos: while an article shows a photo that is not public, its page lists it
+under **Photos not cleared for the public** and the article cannot be sent
+for public clearance.
+
+**PDF** and **Word** buttons on the article page download it for anyone who
+can read it. The file holds that reader's page: the department's name and
+logo, only the photos and links they may open, the sources, never the
+research notes, and a footer of "Prepared by the department historian", the
+date and the page number. Files are made on each request and not kept.
+
+Person, event, apparatus, document and photo pages gain an **Articles**
+section listing the articles that link to or show them. Articles are not on
+the timeline or in "Today in history".
+
+## Public website _(2026-11-24)_
+
+The department's own website reads History through the **Public Portal**
+(`/api/public/v1/history`, with the portal's API key in `X-API-Key`). Only a
+record's cleared public copy is served, never the live record.
+
+**Titles, lists and clearance → Public website** (`history.manage` or
+`settings.manage`):
+
+- A note with **Open Public Portal settings** while the portal is off or
+  has no active API key.
+- **Show on the website**: **People**, **Honor Roll**, **Photos**,
+  **Documents**, **Events**, **Apparatus**, **Articles**, **Timeline** and
+  **Today in history**, all off to start. A part that is off answers 404.
+- **What a website can call**: the feed, list and timeline addresses.
+
+**"Today in history" widget**: one `<iframe>` line for the website, showing
+today's entries, "This week in history" on a quiet day, or nothing. It may be
+framed only by the websites listed under **Organization Settings → Forms**
+(the list embedded forms use) and only while **Today in history** is on.
+Choose a **Style** (**Follow the visitor's setting**, **Light**, **Dark**)
+and **Show the department's name and logo**, then **Make a widget link** and
+**Copy code**. The code is shown once; **Replace the link** stops the old one
+at once, and **Remove the link** stops the widget.
+
+A self-managed nginx in front of The Logbook needs the new
+`/embed/history/` location; see
+[UPGRADING.md](https://github.com/thegspiro/the-logbook/blob/main/docs/UPGRADING.md).
+
 ## Settings
 
 **Titles, lists and clearance** (the page itself is headed **Titles and
-Clearance**) holds the **Clearance list**, **Historical titles**, **Sources
+Clearance**) holds the **Clearance list**, **Historical titles**, **Public
+website** _(2026-11-24, see [above](#public-website-2026-11-24))_, **Sources
 and donors** (shared by photos, documents, events and apparatus),
 **Document types** and, since 2026-11-21, **Stations**, **Apparatus types**
-and **Event types**. Each of those lists is kept like sources: renaming an
+and **Event types**. Each of the managed lists is kept like sources: renaming an
 entry corrects every record, an entry in use is retired or merged, never
 deleted, and each row shows how many records use it. A department starts
 with a set of apparatus and event types; stations start empty. Stations are
@@ -270,9 +348,10 @@ for each person whose record dates it.
 
 ## Not yet
 
-- Public records are not shown outside the app, and the public "Today in
-  history" widget comes with the public feed (phase 7).
-- Articles with PDF and Word export are phase 6.
+- No public pages inside the app: the department's website shows the
+  records, and only the widget is served by The Logbook. Website lists filter
+  by decade only, with no text search and no RSS.
+- Only the keepers write articles: no member submissions, no series.
 - Apparatus and events cannot be merged: delete a duplicate while it is a
   draft. Stations are not full records yet.
 

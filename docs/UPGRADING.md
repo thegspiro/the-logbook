@@ -146,7 +146,11 @@ column.
 - **`8d4ee6cc92ca` (#4620).** Creates the six History article tables:
   `history_articles`, `history_article_blocks`, and the four link tables for
   members, events, apparatus and documents. PDF and Word export need no new
-  package. A downgrade drops every article, so take the backup first.
+  package: ReportLab, python-docx and Pillow are already pinned. Each export
+  is built in memory and re-encodes every photo in the article. A proxy with
+  an `/api/` read timeout shorter than the shipped 60 seconds may cut off a
+  photo-heavy article. A downgrade drops every article, so take the backup
+  first.
 - **`bbb6eac6ae34` (#4583).** Adds `is_essential` (NOT NULL, default true) to
   `apparatus_event_template_seats` and `event_apparatus_seats`. Every existing
   seat becomes essential, which is how it already counted. A downgrade loses

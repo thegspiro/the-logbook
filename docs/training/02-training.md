@@ -148,8 +148,15 @@ The **My Training** tab shows:
   opens a read-only scorecard. Your department decides which results appear
   and how much of each you see; see
   [Who Sees a Result](./09-skills-testing.md#who-sees-a-result--disclosure-settings).
-- **Pipeline Progress**, **Shift Statistics**, **Shift Completion Reports**
-  and **Self-Reported Training**.
+- **Pipeline Progress**, **Shift Statistics** and **Shift Completion
+  Reports**.
+- **Self-Reported Training** — collapsed at first. Every training you
+  submitted, with its **Course**, **Date**, **Hours**, **Status** and
+  **Submitted** date. It is a table on a tablet or larger and one card per
+  submission on a phone _(2026-11-24; it used to be cards on every tablet)_.
+  A certificate the department's retention period or the malware scan
+  removed is noted under the course name (see
+  [What Records Officers Should Know About Certificate Files](#what-records-officers-should-know-about-certificate-files)).
 
 ![My Training as a member: this year's course and hour tiles, Required Training with its "3 of 4 requirements met" line, upcoming expirations, the requirements and the sections below them](./images/02-01-my-training.png)
 
@@ -461,6 +468,16 @@ time shows the start time as blank.
   hours are under **Auto-approve under (hours)** — counts from the day it was
   submitted _(2026-11-20)_. Before, its files were never deleted, because no
   officer decision ever dated it.
+- **A deleted certificate leaves a note where it was** _(2026-11-23)_. When
+  the retention period deletes a file, the submission and the training record
+  no longer just lose it. In its place they read _"Certificate file removed
+  under the department's retention policy on_ date _."_ The member sees this
+  under the class on **My Training** (in their training history and their
+  submissions), and officers see it in the submission's files on **Review
+  Submissions** and in the record's **Files** on a member's training history.
+  The date is in your department's time zone. The note cannot be opened or
+  removed; a link to the old file answers that it was removed under the
+  retention policy. Files deleted before 2026-11-23 left no note.
 - **Files can be scanned for viruses.** Every file is checked to be the type it
   claims, and is stored under a name The Logbook chooses. If your
   administrator has turned on ClamAV scanning, each certificate is also scanned
@@ -472,6 +489,11 @@ time shows the start time as blank.
     file is not saved unscanned.
   - Without scanning turned on, a certificate an officer opens is exactly what
     the member uploaded.
+  - Files stored before scanning was turned on are scanned once afterwards,
+    in the background. A certificate that scan finds infected is deleted, and
+    in its place the submission and record read _"Certificate file removed by
+    the malware scan on_ date _: it was found to be infected."_
+    _(2026-11-23)_ The record and its hours stay.
 - **Voiding a record keeps its file.** Deleting a record marks it cancelled
   instead of removing it. The correction stays traceable, and its evidence
   stays with it. A voided record cannot take a new file: an upload to it is
@@ -2124,7 +2146,7 @@ The areas are:
 | Area                     | What is in it                                                                                                                                |
 | ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Overview**             | Dashboard, Compliance Matrix, Expiring Certs, Training Waivers                                                                               |
-| **Records**              | Submissions to Review, Waiver Requests, Sessions, Course Cohorts, Shift Reports, Monthly Status                                              |
+| **Records**              | Submissions to Review, Waiver Requests, Sessions, Possible Double Credit, Course Cohorts, Shift Reports, Monthly Status                      |
 | **Curriculum**           | Requirements, Course Library, Course Links, Programs                                                                                         |
 | **Evaluations**          | Practical-skills tools, Knowledge Tests                                                                                                      |
 | **Program Management**   | Recertification, Competency, Instructors, Effectiveness, Multi-Agency, Reports                                                               |
@@ -2362,6 +2384,21 @@ type is **Training**. **Edit** on the event page changes it later.
   an officer approved, so members could read as short until someone acted.
   Approving or rejecting decides it as before.
 
+  **A sign-off left waiting is chased** _(2026-11-23)_. If nobody has approved
+  or rejected the attendance a week after it was finalized, the training
+  officers get a reminder email, _"Still waiting for sign-off:"_ and the
+  course name. It says how many days it has waited and how many members are
+  waiting on credit, and its **Review and Approve** button opens the same
+  approval page. One more follows at two weeks, and then the reminders stop:
+  a sign-off nobody has acted on in a fortnight needs someone to follow it up
+  in person. Members are still credited only when an officer approves. The
+  email goes to current members holding a training-officer role who have not
+  turned off **Training officer duties** email, and its wording is the
+  **Training Approval Reminder** template under **Communications > Email
+  Templates > Training & Certifications**, which a department can switch off
+  there. Re-finalizing the session sends a new approval link, and the
+  reminders count from that finalize; the old link is never chased.
+
 ![Approve training credit for the Ventilation Drill: course, event date and approve-by date, the roster with credited and approved minutes (one member set to 0 with a note), the approval notes and Approve and record](./images/02-117-approve-training-credit.png)
 
 ![Training completion on the training-event form's Training Info step: Counts toward certification requirements, Start an in-progress training record when members check in, and Require sign-off](./images/02-91-session-confirmation-toggle.png)
@@ -2376,6 +2413,45 @@ event's attendance with **Reopen Attendance**. Correct the times or the
 links, then finalize again. Each member's record is updated in place. A member taken off the roster has their record marked **Cancelled**,
 with the hours it had noted. Reopening cancels an approval link that was still
 waiting; finalizing again sends a new one.
+
+**Possible double credit** _(2026-11-23)_. A member may already have the class
+on their record from another route: a self-report you approved, or a record
+an officer entered by hand. Finalizing never merges the event's credit into
+that record and never takes it over; the member gets the event's record beside
+it. When the two look like the same class, the pair is set aside for you to
+decide:
+
+- both records are completed and dated the event's day;
+- they name the same Course Library course, **or** their names match once
+  case, spacing and punctuation are ignored ("CPR", "c.p.r." and "C-P-R"
+  match; "CPR Refresher" and "CPR" do not). The event's title counts as a
+  name too.
+
+Records from a training provider import are never paired. With **Require
+sign-off** ticked, the pair is found when the officer approves, because that is
+when the event's records are completed.
+
+Open **Training Admin → Records → Possible Double Credit**. The hub's **Needs
+attention** list also shows _"N possible double credits to review"_ with a
+**Review** link. Each pair names the member, says **Same course** or **Same
+name** and when it was found, and shows **From the event** beside
+**Self-report** or **Entered by hand**, each with its course name, hours and
+date. Until you decide, **the member's hours count twice**.
+
+- **Keep both** — they really were two different classes. Both records stand,
+  and finalizing the event again does not raise the pair a second time.
+- **Void the event's record** or **Void the self-report record** (**Void the
+  hand-entered record**) — type a reason, which is shown to the member, and
+  select **Void record**. This is the ordinary record void: the member is told,
+  and any program credit the record fed is taken back.
+
+Voiding either record anywhere else also takes the pair off the list.
+
+> **Screenshot needed** (`02-177-possible-double-credit.png`): **Training
+> Admin → Records → Possible Double Credit** with one pair: the member's name,
+> **Same name · found** _date_, **From the event** beside **Self-report**
+> with course name, hours and date for each, and the **Keep both**, **Void the
+> event's record** and **Void the self-report record** buttons.
 
 ### Choosing the Course _(2026-11-11)_
 
@@ -2501,7 +2577,8 @@ Open **Training Admin → Overview → Compliance Matrix** to work through who i
 short. It is a list you work down, not a grid. Members are grouped by standing
 — Non-compliant, At risk, Compliant — worst first, and you step through them one
 at a time. Each row shows the numbers behind the status: _"6 of 24 hours"_,
-_"Lapsed 41 days ago"_, _"Expires in 26 days"_.
+_"1 of 1 shifts"_, or for a certification **On file** _"(Expires Mar 14,
+2027)"_.
 
 - Each member's row shows how many of their requirements they meet, with a
   strip of colored marks: green met, amber short, orange due soon, red
@@ -2509,7 +2586,7 @@ _"Lapsed 41 days ago"_, _"Expires in 26 days"_.
   requirement's catch-up deadline (see
   [Existing Members](#existing-members--exempting-or-giving-a-catch-up-deadline)).
 - Opening a member shows each requirement's figure — _"44 of 24 hours"_,
-  _"Nothing on file"_, _"1 of 1 shifts"_ — with its status and the date or
+  _"Not recorded"_, _"1 of 1 shifts"_ — with its status and the date or
   window it was judged against. Since 2026-11-20 an hours requirement leads
   with the member's monthly average against the monthly pace — _"3.7/2 hrs/mo
   avg"_ — with the total on the line beneath (_"44 of 24 hours total"_). The
@@ -2570,7 +2647,7 @@ Administrative, Social, then Unclassified), each table carrying only the
 requirements that apply to its members; a roster of one class prints a single
 table with every requirement.
 
-![The Compliance Matrix triage rail opened from the dashboard's non-compliant deep link: the Non-compliant + at risk only chip, members grouped by standing worst first, and Bram Hollis's detail with each requirement's figure — 44 of 24 hours, Nothing on file, 1 of 1 shifts](./images/02-66-compliance-matrix.png)
+![The Compliance Matrix triage rail opened from the dashboard's non-compliant deep link: the Non-compliant + at risk only chip, members grouped by standing worst first, and Bram Hollis's detail with each requirement's figure — 44 of 24 hours, Not recorded, 1 of 1 shifts](./images/02-66-compliance-matrix.png)
 
 > **Hint:** Use this view for yearly reporting, and to find members who need
 > attention before compliance deadlines.
@@ -3169,6 +3246,17 @@ period ends after the decision; the request itself is kept.
   is decided nothing can be removed. If your department requires a document,
   the last one cannot be removed — file the replacement first. Only the member
   who asked can remove a document.
+- **After the documents are deleted** _(2026-11-23)_. The request's page
+  still shows **Supporting documents**, reading _"2 documents removed under
+  retention on_ date _."_ (the number deleted, and the day in your
+  department's time zone) instead of _"No documents are on file for this
+  request."_ Everyone who can see the request sees it. A request whose
+  documents were deleted before 2026-11-23 still says nothing, because the
+  older records cannot be split back into a count per request.
+
+> **Screenshot needed** (`02-179-waiver-documents-removed.png`): a decided
+> waiver request's page, **Supporting documents** reading _"2 documents
+> removed under retention on_ date _."_ with no document rows.
 
 **Deciding** (the holders of the positions under **Who decides**, and the
 Chief and the President):
@@ -5102,6 +5190,17 @@ beside a removable file._
 - A record's file cannot be removed from this panel. It leaves only through
   the department's retention period (for a file that came with a
   self-report), the member's anonymisation or permanent deletion.
+- A file the retention period or the malware scan removed is listed as a note
+  instead of a file — _"Certificate file removed under the department's
+  retention policy on_ date _"_, or _"…removed by the malware scan on_ date _:
+  it was found to be infected"_ — with no **Download** and no bin icon
+  _(2026-11-23)_.
+
+> **Screenshot needed** (`02-178-certificate-removed-notice.png`): a member's
+> **Training History** page, **Files** opened on a record whose certificate the
+> retention period removed: the note _"Certificate file removed under the
+> department's retention policy on_ date _"_ in place of the file, with no
+> **Download**.
 
 ---
 
@@ -5981,11 +6080,11 @@ per member for a review period, and each person completes their part in turn.
 
 ### Where things are
 
-| You are...                | Go to                                                                |
-| ------------------------- | -------------------------------------------------------------------- |
-| Setting up forms, periods | **Reports → Evaluations** (setup; `evaluations.configure`)           |
-| Drafting and conducting   | **Reports → Evaluations → Conduct** (`evaluations.conduct`)          |
-| A member reading your own | **My Evaluations** (every member), with your figures for this period |
+| You are...                | Go to                                                                                     |
+| ------------------------- | ----------------------------------------------------------------------------------------- |
+| Setting up forms, periods | **Evaluations → Templates & periods** (`evaluations.configure` or `evaluations.manage`)   |
+| Drafting and conducting   | **Evaluations → Evaluations I conduct** (**All evaluations** for `view_all` and `manage`) |
+| A member reading your own | **Evaluations → My evaluations** (every member), with your figures for this period        |
 
 The navigation carries one **Evaluations** entry for everyone. It opens **My
 evaluations**, and a strip across the top offers **Evaluations I conduct** (or
@@ -6042,6 +6141,14 @@ ranks later in the builder.
    member with the form and evaluator that would be used (or why they are left
    out), lets you untick people, then drafts the rest; a member who cannot be
    drafted is reported and the others still go ahead (500 at most).
+   _(2026-11-24)_ **New evaluation** has a **Form** choice. Left at
+   **Matched to the member's class and status**, the form is chosen for you;
+   pick one when no form fits the member, or when two fit equally well (both
+   used to stop the draft with no way round). Only current members, Active or
+   Probationary, can be drafted for or named as the evaluator. In **Draft a
+   review period**, the note saying why **Draft** is greyed out (a ticked
+   member with no evaluator) now sits beside the button, not at the foot of
+   the list.
 2. **Self-evaluation, evaluator, calibration.** Each part is filled in on the
    evaluation page. Every item shows the member's figure and a suggested rating;
    a rating that departs from the suggestion needs a reason, and some levels need
@@ -6052,10 +6159,18 @@ ranks later in the builder.
    percentage for the review period, no longer a met / not met verdict, and
    reads "unavailable" when no single requirement applies to the member. Evaluations opened before the change keep
    the old figure until someone selects **Update figures**.
+   _(2026-11-24)_ **Update figures** saves your unsaved answers first; it
+   used to throw them away and save nothing. Answer, comment and reason boxes
+   stop at 5,000 characters, the most a save accepts. Leaving the page, or
+   opening another evaluation from **Last review** or **Review history**,
+   with unsaved changes asks you first.
    At calibration the reviewer (a holder of `evaluations.view_all`, or the
    person a manager named on the step, never the evaluator) may **tick the
    evaluator's items to revisit** (ticks only, no notes). The evaluator is told items are flagged;
    the member sees the ticks once the evaluation is released to them.
+   _(2026-11-24)_ While calibration is open, the evaluator is not reminded
+   and their step is not reported overdue: the evaluation reads as waiting
+   on calibration, whose due date is the one that counts.
    _(2026-11-14)_ Three more figures can be added to a template's items:
    **events attended by type** ("Training: 12 events"; a count, since not
    every event is one a member is expected at), **certifications expiring
@@ -6093,6 +6208,10 @@ ranks later in the builder.
 6. **Deleting.** Only the Chief (`evaluations.delete`) can delete, with a reason
    and a re-verified session. A record of who, when and why is kept and shown
    under **Removed evaluations**; the member is emailed without the reason.
+   _(2026-11-24)_ After deleting, you go back to the page the evaluation's
+   own back link names (**My evaluations**, the conduct list or **My
+   crew**), not always the conduct list, which `evaluations.delete` alone
+   cannot open.
 
 A PDF frozen before 2026-11-20 keeps its old "Page N" footer; only PDFs made
 from then on read "Page X of Y".
@@ -6459,6 +6578,11 @@ a rating or comment. A daily task sends reminders and overdue notices once each.
 > evaluation's **Last year's goals** item with two goals, results and a
 > comment) and `02-162-evaluation-data-sources-new` (the **Data shown with this
 > item** list open on the **Apparatus & equipment** and **Inventory** groups).
+> Also needed _(2026-11-24)_: `02-181-evaluation-new-form-choice` (the **New
+> evaluation** dialog with the **Form** list open below **Kind**, showing
+> **Matched to the member's class and status** and two forms). The wiki's
+> [Performance Evaluations](../../wiki/Module-Evaluations.md) page now carries
+> screenshots from the running app of most screens listed above.
 
 ---
 

@@ -206,6 +206,11 @@ member sees, look the same on a phone as before.
   may choose up to two. The winning rule decides who qualifies, and the seats
   go to the highest who qualify. A tie for the last seat follows the tie rule.
   Ranked choice elects one per race, so choosing it sets this back to 1.
+  _(2026-11-24)_ A one-seat race works the same way: when two candidates
+  both clear a majority, supermajority or threshold bar (possible on an
+  approval ballot, or with a low threshold), the one with more votes takes
+  the seat, and a tie for it follows the tie rule. Until then every candidate
+  over the bar was marked elected to the one seat.
 - **Quorum:** the form has no quorum box. A new election takes the
   department's quorum from [Election Settings → Defaults](#defaults).
 - **Who may vote** _(2026-11-13)_. This section sits under **Linked
@@ -241,6 +246,13 @@ This one menu sets both the **voting method** (how people vote) and the
 
 > **Tip.** For a bylaw amendment that needs two-thirds, choose
 > **Supermajority Required (2/3)**.
+
+_(2026-11-24)_ An Approve/Deny item (a motion or a membership vote) is never
+counted by ranked choice, even on a ballot whose method is **Ranked Choice
+Voting**: it carries on its own winning rule, so a 67% motion needs 67%, and a
+5–5 split does not carry. Until then such an item was put through the
+round-by-round count, which ignored its winning rule and settled a tie
+arbitrarily.
 
 On approval and ranked-choice ballots, all of a voter's choices for a race are
 saved together, or none are.
@@ -1174,15 +1186,19 @@ Things to know:
   setting later never confirms or un-confirms old batches.
 - A disputed batch can be **voided** with a reason. It stays on record, and
   the card shows who voided it, when and why.
-- Confirming and voiding work only while voting is open. A batch still pending
-  at close stays out of the certified results, and the close records a
-  warning in the audit log.
+- Confirming works only while voting is open. A batch still pending at close
+  stays out of the certified results, and the close records a warning in the
+  audit log.
+- **Void Batch** stays available after the close _(2026-11-24)_, so a
+  mis-keyed batch can still be corrected. The correction is marked on the
+  results (see [Corrections after close are marked](#what-the-results-the-report-and-the-certified-pdf-show)).
 - The panel sits on the election's **Overview**, and appears once one batch
   exists.
 
 ![The Paper-Ballot Batches panel — a recorded in-room tally, who recorded it, and the officer attestations that confirmed it](./images/14-18-paper-batches.png)
 
-After the close, a batch shows its record but no buttons.
+After the close, a batch shows its record and **Void Batch** only; nobody
+can confirm it any more.
 
 ### What if …?
 
@@ -1301,6 +1317,11 @@ you can make full screen and project in the room:
 - It refreshes by itself.
 - It **never shows candidate totals** before close — participation only, so
   projecting it cannot sway the vote.
+- _(2026-11-24)_ Quorum reads **met** exactly when the results will say it
+  is: against the number of voters for a quorum of a set number, or the
+  unrounded share for a percentage. It could disagree near the line, for
+  example reading met at 2 of 3 voters against a 66.67% quorum that the
+  results reported as not met.
 
 ### Closing an Election
 
@@ -1376,7 +1397,22 @@ result is corrected. Each leaves a mark. The **Results** section shows _"These
 results were revised after the election closed"_ with a line per correction,
 for example _"Revised (when) by (who): a vote was voided (reason)"_. The
 certified PDF prints the same lines. Rolling the election back to open clears
-the marks, and the next close certifies afresh.
+the marks, and the next close certifies afresh. _(2026-11-24)_ After **Void
+this vote** the notice shows at once; before, it waited for the page to be
+reloaded.
+
+**Results are worked out each time they are shown** _(2026-11-24)_, not
+stored at close. Four counting faults were fixed on 2026-11-24: two winners
+in a one-seat race, a motion on a ranked-choice ballot counted round by
+round, a merged write-in splitting a ranked paper ballot into pieces (its
+lower choices then counted as first choices), and a membership vote's
+pipeline status that ignored the item's winning rule and quorum. A closed
+election that met one of these cases now shows the corrected result, with no
+"revised" mark, because no correction was made to its votes. At close, a
+membership vote now sets the prospect's pipeline status from the result the
+screen shows. A status already set by an earlier close is not changed, and a
+correction after close (a void or a merge) does not update it; check the
+prospect's pipeline by hand after one.
 
 ### Who voted
 
@@ -1425,7 +1461,9 @@ certify, combine them:
    candidate.
 
 The merge never edits the votes themselves, so the integrity check still
-passes. The merge is recorded in the audit log.
+passes. The merge is recorded in the audit log. _(2026-11-24)_ On a
+ranked-choice race, a paper ballot carrying a merged write-in still counts as
+one ballot in its order; it used to fall apart into single rankings.
 
 ---
 
@@ -1443,7 +1481,11 @@ close (including an early close):
    candidate-selection items so ballots can be emailed. Its description names
    the tie or shortfall that caused it. It gets its own anonymity key.
 3. The election chain shows the order: Original → Runoff 1 → Runoff 2, up to
-   **Maximum Runoff Rounds**.
+   **Maximum Runoff Rounds**. _(2026-11-24)_ Opening another round from the
+   chain (or a clone) starts its page afresh. Before, the last election's
+   integrity check, forensics report, paper batches and a half-finished batch
+   void stayed on screen, and that void would have been sent against the new
+   election.
 4. Each runoff is run like any election. To vote on the spot, just open it —
    **opening starts voting at once**, even before the scheduled start (an hour
    ahead unless changed). To set a window first, such as a 15-minute floor
