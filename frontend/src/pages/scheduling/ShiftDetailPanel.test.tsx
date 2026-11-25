@@ -1565,4 +1565,39 @@ describe('ShiftDetailPanel — a community outreach signup sheet', () => {
     await waitFor(() => expect(screen.getAllByText('Open role')).toHaveLength(2));
     expect(screen.getAllByText('Tour Guide').length).toBeGreaterThanOrEqual(2);
   });
+
+  it('heads the seat list Volunteers, since a station tour has no crew board', async () => {
+    grantedPermissions.current = ['scheduling.view'];
+    renderWithRouter(<ShiftDetailPanel shift={outreachShift as never} onClose={vi.fn()} />);
+
+    expect(await screen.findByRole('heading', { name: 'Volunteers' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: /Crew Board/ })).not.toBeInTheDocument();
+  });
+});
+
+describe('ShiftDetailPanel — the crew board heading on a duty shift', () => {
+  const seats = [{ position: 'firefighter', required: true }];
+
+  afterEach(() => {
+    grantedPermissions.current = null;
+  });
+
+  it('names the unit when the shift has one', async () => {
+    grantedPermissions.current = ['scheduling.view'];
+    renderWithRouter(
+      <ShiftDetailPanel
+        shift={{ ...shift, apparatus_id: 'app-1', apparatus_unit_number: 'E-5', apparatus_positions: seats } as never}
+        onClose={vi.fn()}
+      />
+    );
+
+    expect(await screen.findByRole('heading', { name: 'Crew Board — E-5' })).toBeInTheDocument();
+  });
+
+  it('leaves no dangling dash when no apparatus is assigned', async () => {
+    grantedPermissions.current = ['scheduling.view'];
+    renderWithRouter(<ShiftDetailPanel shift={{ ...shift, apparatus_positions: seats } as never} onClose={vi.fn()} />);
+
+    expect(await screen.findByRole('heading', { name: 'Crew Board' })).toBeInTheDocument();
+  });
 });

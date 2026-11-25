@@ -2375,7 +2375,19 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
                 <div>
                   <div className="mb-3 flex items-center justify-between">
                     <h3 className="text-theme-text-primary flex items-center gap-2 text-base font-semibold">
-                      <Truck className="h-4 w-4" /> Crew Board — {shift.apparatus_unit_number}
+                      {/* A station tour has volunteers and no rig, and a duty
+                          shift with seats may have no apparatus assigned: name
+                          the unit only when there is one to name. */}
+                      {shift.is_outreach ? (
+                        <>
+                          <Users className="h-4 w-4" aria-hidden="true" /> Volunteers
+                        </>
+                      ) : (
+                        <>
+                          <Truck className="h-4 w-4" aria-hidden="true" /> Crew Board
+                          {shift.apparatus_unit_number ? ` — ${shift.apparatus_unit_number}` : ''}
+                        </>
+                      )}
                     </h3>
                     {openPositions.length > 0 && (
                       <span className="text-xs font-medium text-amber-700 dark:text-amber-400">
