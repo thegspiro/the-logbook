@@ -16,6 +16,13 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+_To be recorded as a second commit on this pass's own branch, once its PR
+exists — per the rotation's rule that an Open PR record never gets a PR of
+its own._
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 21, Admin hours, pass 16, PR #4696, merged), preserved for history</summary>
+
 **PR [#4696](https://github.com/thegspiro/the-logbook/pull/4696) (branch
 `claude/security-review-admin-hours-p16` — the plain
 `claude/security-review-admin-hours` collided with an old, abandoned
@@ -57,6 +64,8 @@ findings.** Full write-up: `docs/security-review/AH-21-admin-hours.md`'s
 Row 21 → ✅ (pending this PR's merge); next is Feature 22 (Grants &
 fundraising) — re-check `list_pull_requests` fresh rather than trusting
 this note.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 20, Compliance, pass 16, PR #4695, merged), preserved for history</summary>
@@ -28417,7 +28426,7 @@ iteration's commit" rule.
 | 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3855 L)                                                                                                                                                                                                                                                | ✅     |
 | 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`, `training_compliance.py` (declared scope since pass ≤11)                                                                                                                                                                             | ✅     |
 | 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                                                                                                                                                      | ✅     |
-| 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`, `zeffy.py`/`zeffy_service.py`/`zeffy_sync_service.py` (added pass 13)                                                                                                                                                      | ⬜     |
+| 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`, `zeffy.py`/`zeffy_service.py`/`zeffy_sync_service.py` (added pass 13)                                                                                                                                                      | ✅     |
 | 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                                                                                                                                                                 | ⬜     |
 | 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`, `meeting_waiver_requests.py` (added pass 14)                                                                                                                                                                                                             | ⬜     |
 | 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                                                                                                                                                         | ⬜     |
@@ -54162,3 +54171,66 @@ errors, 0 warnings.
 
 Row 20 → ✅ (pending this PR's merge). Next is Feature 21 (Admin hours) —
 re-check `list_pull_requests` fresh rather than trusting this note.
+
+### 2026-11-25 — Feature 21 (Admin hours, pass 16) merged (PR #4696); Feature 22 (Grants & fundraising, pass 16): watchdog pickup, real delta (ADV2-11 dues-match confirmation, already fixed by its own commit), 0 new findings
+
+PR #4696 merged as squash commit `0dd346ebb`. A fresh `list_pull_requests`
+(state=open) found no `claude/security-review-*` head, and row 22 (Grants &
+fundraising) was the next `⬜` row, confirmed directly against the table on
+freshly-pulled `origin/main`.
+
+Baseline `fd8cc24c4` (pass 15's own merge, PR #4503). `git diff --stat`
+across the full declared scope found exactly three backend files
+(`zeffy.py`, `schemas/zeffy.py`, `zeffy_sync_service.py`) and one real
+frontend commit (`ZeffyConfirmDuesDialog.tsx`, new, plus `ZeffyPage.tsx`/
+`api.ts`/`types/index.ts`/`labels.ts`); `grants.py`, `grant_service.py`,
+`fundraising_service.py`, `grant_federal_programs.py`, `models/grant.py`,
+`schemas/grant.py` and the rest of the Zeffy files are byte-identical to
+pass 15.
+
+The real delta is **ADV2-11**, an owner-decided fix (2026-11-21, landed the
+same day as pass 15 but after it) for a defect this rotation had not yet
+reached: a Zeffy membership payment used to be credited to whichever
+member's email the payer typed, so anyone filling out a public Zeffy form
+could name any member's dues to settle, and an overpayment became a
+donation recorded in that member's name with no one choosing it. The fix
+holds every such payment as `UNMATCHED` until a `finance.manage` holder
+confirms the member through two new routes (`GET .../dues-match`,
+`POST .../confirm-dues`); the email match is only a suggestion. Traced end
+to end: the candidate list and the confirm target are both org-scoped and
+filtered to current members (`ACTIVE_ACCOUNT_STATUSES`, Pitfall #32); the
+payment row is resolved under its own row lock before anything happens
+(Pitfall #27); the self-pay refusal and the idempotent transaction
+reference are inherited from the pre-existing, already-reviewed
+`FinanceService.record_dues_payment` rather than reimplemented; the audit
+event carries ids only (Pitfall #33); the response schemas carry
+`alias_generator=to_camel` matching this module's existing casing
+convention (Pitfall #5); the new frontend dialog uses no
+`window.confirm`/`alert`/`prompt` and requires the treasurer to explicitly
+tick a checkbox before an overpayment can be recorded as a donation,
+mirroring the backend's own refusal rather than trusting the UI alone.
+**No finding** — verified good, not a defect to report.
+
+Route surface re-enumerated by AST: **46 routes** in `grants.py`
+(unchanged from pass 15) and **9 routes** in `zeffy.py` (up by 2 for the
+new dues-match/confirm-dues pair, both `finance.manage`; not previously
+tracked as a standalone count in this file). **0 fixed, 0 new findings.**
+Full write-up: `docs/security-review/GF-22-grants-fundraising.md`'s
+**Pass 16** section.
+
+**Completion gate:** `flake8==7.4.1`/`black==26.10.1 --check`/
+`isort==9.0.2 --check-only` on `app/ tests/ alembic/` — clean.
+`validate_migrations.py --strict` — 844 revisions, single head
+`e9cf8ab7e4e4`. `check_route_permissions.py --strict` — 344 routes, 0
+errors/warnings. `generate_schema_docs.py --check` — `DATABASE_SCHEMA.md`
+up to date. Scoped backend pytest (`-k "grant or fundraising or donor or
+pledge or zeffy or federal_program or current_member_guards"`) — 1665
+passed, 1 pre-existing environment-only skip (`py_vapid`). `npm run
+typecheck` — 0 errors. `npm run lint` — 0 errors, 0 warnings. `npx vitest
+run src/modules/grants-fundraising` — 199 passed (35 files, up from
+192/35). `npx playwright test src/e2e/mobile-route-integrity.spec.ts
+--project=chromium` — 1 passed.
+
+Row 22 → ✅ (pending this PR's merge). Next is Feature 23 (Medical
+supplies) — re-check `list_pull_requests` fresh rather than trusting this
+note.

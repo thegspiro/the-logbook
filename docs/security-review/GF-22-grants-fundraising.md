@@ -4,8 +4,9 @@
 2026-08-30 (pass 2), 2026-09-05 (pass 3), 2026-09-11 (pass 4), 2026-09-15
 (pass 5), 2026-10-03 (pass 6), 2026-10-07 (pass 7), 2026-10-16 (pass 8),
 2026-10-20 (pass 9), 2026-10-24 (pass 10), 2026-10-27 (pass 11), 2026-10-30
-(pass 12), 2026-11-02 (pass 13), 2026-11-10 (pass 14), 2026-11-21 (pass 15) ·
-**PR:** [#1904](https://github.com/thegspiro/the-logbook/pull/1904)
+(pass 12), 2026-11-02 (pass 13), 2026-11-10 (pass 14), 2026-11-21 (pass 15),
+2026-11-25 (pass 16) · **PR:**
+[#1904](https://github.com/thegspiro/the-logbook/pull/1904)
 (pass 1), pass 7 merged as commit `9da13118` (no PR — pushed directly), pass
 6 merged as PR [#2875](https://github.com/thegspiro/the-logbook/pull/2875),
 pass 8 merged as PR [#3339](https://github.com/thegspiro/the-logbook/pull/3339),
@@ -15,7 +16,181 @@ pass 11 merged as PR [#3765](https://github.com/thegspiro/the-logbook/pull/3765)
 pass 12 merged as PR [#3847](https://github.com/thegspiro/the-logbook/pull/3847),
 pass 13 merged as PR [#3962](https://github.com/thegspiro/the-logbook/pull/3962),
 pass 14 merged as PR [#4226](https://github.com/thegspiro/the-logbook/pull/4226),
-pass 15 (this PR)
+pass 15 merged as PR [#4503](https://github.com/thegspiro/the-logbook/pull/4503),
+pass 16 (this PR)
+
+---
+
+## Pass 16 (2026-11-25) — watchdog pickup, 0 fixed, 0 new findings; real delta (ADV2-11 dues-match confirmation, already fixed by its own commit)
+
+**Watchdog pickup.** The dedicated `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) remains unreachable (`ListAgents` → "No
+reachable agents"). PR #4696 (Feature 21, Admin hours, pass 16) had just
+merged (`0dd346ebb` on `main`). A fresh `list_pull_requests` (state=open)
+found no PR whose head branch starts with `claude/security-review-`;
+`docs/security-review/PROGRESS.md`'s rotation table, read on a freshly
+fetched `main`, showed row 22 (Grants & fundraising) as the next `⬜`.
+
+**Backend (declared scope):** `app/api/v1/endpoints/grants.py` (46 routes,
+AST-walked — unchanged from pass 15), `app/services/grant_service.py`,
+`app/services/fundraising_service.py`, `app/services/grant_federal_programs.py`,
+`app/models/grant.py`, `app/schemas/grant.py`, plus the Zeffy files
+(`app/api/v1/endpoints/zeffy.py`, `app/api/public/zeffy_webhook.py`,
+`app/services/integration_services/zeffy_service.py`,
+`app/services/zeffy_sync_service.py`, `app/models/zeffy.py`,
+`app/schemas/zeffy.py`). **Frontend:**
+`frontend/src/modules/grants-fundraising/`.
+
+### Diff-scoping methodology
+
+Baseline `fd8cc24c4` (PR #4503's merge, pass 15; confirmed an ancestor of
+`HEAD` via `git merge-base --is-ancestor`). `git diff fd8cc24c4..HEAD --stat`
+against the full declared backend scope found exactly three changed files:
+`app/api/v1/endpoints/zeffy.py` (+175/−9 net), `app/schemas/zeffy.py` (+38),
+`app/services/zeffy_sync_service.py` (+279/−70) — all from one commit,
+`34bf172e0` ("Zeffy: hold membership payments until a treasurer confirms
+whose dues they pay", ADV2-11, owner decision 2026-11-21, same day as pass
+15 but landed after it). `grants.py`, `grant_service.py`,
+`fundraising_service.py`, `grant_federal_programs.py`, `models/grant.py`,
+`schemas/grant.py`, `api/public/zeffy_webhook.py`,
+`integration_services/zeffy_service.py`, and `models/zeffy.py` are all
+byte-identical to pass 15. Frontend: one real commit, `270a989fd` ("Zeffy
+page: a treasurer confirms whose dues a held membership payment pays"),
+the UI companion to `34bf172e0`; the rest of this window's frontend diff
+(`DonationsPage.tsx`, `DonorsPage.tsx`, `GrantApplicationFormPage.tsx`,
+`GrantOpportunityFormPage.tsx`, several reflow/touch-target commits) is the
+same repo-wide forms-rollout and card-reflow batches prior passes already
+traced, confirmed unrelated by `git log --oneline` per file.
+
+### ADV2-11 — Zeffy membership payments held for treasurer confirmation, reviewed end to end
+
+This is the real delta for this pass, and it is a fix for a finding this
+rotation had not yet reached: a Zeffy membership payment used to be
+credited to whichever member's email the payer typed
+(`_apply_dues`/`_member_by_email` in the pre-fix `zeffy_sync_service.py`),
+so anyone filling out a public Zeffy membership form could name any
+member's dues to settle, and an overpayment became a donation recorded in
+that member's name with no one choosing it. Fixed by `34bf172e0` +
+`270a989fd` together, verified by reading the current code directly (not
+the commit message):
+
+- **Two new routes, both gated `finance.manage`** (`zeffy.py`):
+  `GET /grants/zeffy/payments/{id}/dues-match` and
+  `POST /grants/zeffy/payments/{id}/confirm-dues` — the same permission
+  that already gates recording a dues payment by hand and linking a Zeffy
+  campaign to a dues schedule, so this does not open a new gate, only a new
+  action behind the existing one.
+- **`_hold_dues`** (replacing `_apply_dues`) never credits on sync; it only
+  sets `state = UNMATCHED` and records the email match as a suggestion
+  (`state_detail`), re-read on every pass so a member added later is
+  suggested from then on. No money moves until a human confirms.
+- **`dues_match`** org-scopes its payment lookup
+  (`ZeffyPayment.organization_id == organization_id`), 404s via
+  `ZeffyPaymentNotFound` otherwise, and lists candidates via `MemberDues`
+  joined to `User` filtered on `organization_id`, `deleted_at.is_(None)`
+  and `User.status.in_(ACTIVE_ACCOUNT_STATUSES)` (Pitfall #32) — a former
+  member cannot be offered as a destination for dues credit.
+- **`confirm_dues`** resolves the row through `_locked_row`
+  (`organization_id` + `zeffy_payment_id`, `.with_for_update()` — Pitfall
+  #27, read-then-write on the payment's own applied state) before doing
+  anything, then re-validates the chosen `member_id` is in-org, not
+  deleted, and an active-status account (same `ACTIVE_ACCOUNT_STATUSES`
+  filter) — an org-scoped, current-membership check on a client-supplied
+  id, exactly Pitfall #14c/#32's shape, independent of whatever the
+  `dues-match` response offered. The member's oldest open `MemberDues` row
+  is then read with its own `.with_for_update()` (comment cites Pitfall
+  #27 by number: two confirmations for the same member must settle two
+  open dues in turn, not both read the first dues row and double-credit
+  it while turning the second amount into a stray donation).
+- **Self-pay refusal and idempotency are inherited, not reimplemented.**
+  `confirm_dues` calls the pre-existing `FinanceService.record_dues_payment`
+  with `recorded_by=confirmed_by` (the treasurer's own id); that method's
+  `assert_different_person(recorded_by, dues.user_id, ...)` (FIN-4/OPS-8,
+  already reviewed under Finance) refuses a treasurer crediting their own
+  dues, and its `transaction_reference` dedup
+  (`_reference(parsed.zeffy_payment_id)`) makes a retried confirmation a
+  no-op (Pitfall #36) — belt-and-suspenders on top of the fact that a
+  second `confirm_dues` call on an already-applied row fails `NOT_AWAITING`
+  before it gets that far, since `_held_dues_payment` requires
+  `applied_target_type is None`.
+- **Audited.** `confirm_zeffy_dues_payment` calls `log_audit_event` after
+  `db.commit()`, `event_category="finance"`, with the payment id, target
+  member id, dues id, amount and the `excess_as_donation` flag — no free
+  text, ids only (Pitfall #33).
+- **Overpayment handling matches the existing W66-3 rule** (an overpayment
+  is refused unless recorded as the member's donation) rather than
+  reintroducing a separate check; `confirm_dues` passes the caller's
+  `excess_as_donation` straight through instead of hardcoding `True` as
+  the old `_apply_dues` did.
+- **Response schemas** (`ZeffyDuesMatchResponse`, `ZeffyDuesCandidateResponse`,
+  `ZeffyDuesConfirm`) all carry `alias_generator=to_camel`, matching this
+  module's existing casing convention (Pitfall #5); the frontend's
+  `ZeffyDuesMatch`/`ZeffyDuesCandidate`/`ZeffyDuesConfirmPayload` types in
+  `modules/grants-fundraising/types/index.ts` are camelCase to match.
+- **Frontend (`ZeffyConfirmDuesDialog.tsx`, new):** no
+  `window.confirm`/`alert`/`prompt`; built on the shared `Modal` (height-capped,
+  no outside-click close — Pitfalls #21/#31) and `useDiscardGuard`; the
+  member `<select>` is required before submit and an overpayment cannot be
+  confirmed until the treasurer explicitly ticks the donation checkbox,
+  mirroring the backend's own refusal rather than trusting the UI alone to
+  enforce it. No PII beyond what `finance.manage` already sees elsewhere in
+  this module.
+
+**No finding** — this is a real, security-relevant change in the window,
+verified good rather than merely read, not a defect to report. Guard tests
+(`test_zeffy_sync_service.py`, `test_zeffy_endpoints.py`, both rewritten
+with the old, defective behavior's assertions removed — the pass-16 fork
+re-ran them against current code rather than re-deriving whether they'd
+have failed against the pre-fix service, since the fix already shipped on
+its own commit with its own tests).
+
+### Re-confirmed unchanged (not re-derived)
+
+- **GF-1 through GF-9, GF-14, GF-15, GF-24a, GF-27a, GF-33, GF-35, GF-36** —
+  all unchanged since pass 15; `docs/module-audit/grants-fundraising.md`
+  and `docs/app-review/grants-fundraising.md` re-read in full (Step 2),
+  both current, no open items.
+- Pass 15's reviewed surface (`GrantComplianceTask.assigned_to` current-
+  membership check, GF15-1) — unchanged; `grant_service.py` is
+  byte-identical to pass 15.
+- **LIKE escaping** — no new `.ilike()` call site this window.
+- **CSV export** — still n/a; no export exists anywhere in this module.
+
+### Route surface — re-enumerated from scratch, not carried forward
+
+46 `@router.` decorators in `grants.py` (AST walk), unchanged from pass 15.
+9 `@router.` decorators in `zeffy.py` (AST walk; not previously recorded as
+a standalone count in this file — up by 2 for `dues-match`/`confirm-dues`,
+both `finance.manage`). `scripts/check_route_permissions.py --strict` (run
+from the repo root): 344 routes repo-wide, 0 errors, 0 warnings.
+
+### Schema & migration notes
+
+No migration in scope this window — `34bf172e0` added no model field, only
+new schemas and service/endpoint logic over the existing `ZeffyPayment`
+columns. Chain re-validated: 844 revisions, single head `e9cf8ab7e4e4`, no
+duplicate ids.
+
+### Completion gate (pass 16)
+
+| Check                                                                                                                | Result                                              |
+| --------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- |
+| `flake8 app/ tests/ alembic/` (`flake8==7.4.1`)                                                                      | ✅ 0 violations                                     |
+| `black --check app/ tests/ alembic/` (`black==26.10.1`)                                                              | ✅ clean, 3541 files unchanged                      |
+| `isort --check-only app/ tests/ alembic/` (`isort==9.0.2`)                                                           | ✅ clean                                            |
+| `python3 scripts/validate_migrations.py --strict`                                                                    | ✅ 844 revisions, single head `e9cf8ab7e4e4`        |
+| `python3.13 scripts/generate_schema_docs.py --check`                                                                 | ✅ `DATABASE_SCHEMA.md` up to date                  |
+| `python3.13 -m pytest tests/ -q -k "grant or fundraising or donor or pledge or zeffy or federal_program or current_member_guards"` | ✅ 1665 passed, 1 pre-existing environment skip (`py_vapid`) |
+| `python3 scripts/check_route_permissions.py --strict`                                                                | ✅ 344 routes, 0 errors, 0 warnings                 |
+| `npm run typecheck`                                                                                                  | ✅ 0 errors                                         |
+| `npm run lint`                                                                                                       | ✅ 0 errors/warnings                                |
+| `npx vitest run src/modules/grants-fundraising`                                                                      | ✅ 199 passed (35 files, up from 192/35 at pass 15) |
+| `npx vitest run src/modules/testing/testingRegistry.test.ts`                                                         | ✅ 12 passed (unchanged — no new page route)        |
+
+No source file was changed by this pass — every fixable item in this
+window's real delta had already landed correctly via its own commit
+(`34bf172e0` + `270a989fd`) before this pass began. This pass's own diff is
+documentation-only (this file + `PROGRESS.md`).
 
 ---
 
