@@ -111,6 +111,7 @@ from app.services.training_compliance import (
     count_active_requirements,
 )
 from app.services.training_course_links import TrainingCourseLinkService
+from app.services.training_credit_duplicates import count_open_flags
 from app.services.training_module_config_service import (
     get_practical_skills_method,
 )
@@ -835,9 +836,42 @@ async def _training_attention(ctx: MetricContext) -> list[AdminAttentionItem]:
             ctx.organization_id,
             exc,
         )
+    items.extend(await _double_credit_attention(ctx))
     items.extend(await _skill_test_attention(ctx))
     items.extend(await _shift_report_attention(ctx))
     return items
+
+
+async def _double_credit_attention(ctx: MetricContext) -> list[AdminAttentionItem]:
+    """Finalize credit that may repeat a self-report or hand-entered record.
+
+    Owner decision 2026-11-23: finalize flags the pair rather than merging it,
+    and an officer keeps both or voids one. Until then the member's hours count
+    twice, so the row is a warning.
+    """
+    count, oldest = await count_open_flags(ctx.db, ctx.organization_id)
+    if not count:
+        return []
+    age = _age_days(oldest, ctx.today, ctx.timezone_name)
+    return [
+        AdminAttentionItem(
+            key="possible_double_credit",
+            title=f"{count} possible double {_plural(count, 'credit')} to review",
+            detail=" · ".join(
+                part
+                for part in (
+                    _waiting_phrase(age),
+                    "keep both records or void one",
+                )
+                if part
+            ),
+            action_label="Review",
+            href="/training/admin?page=records&tab=double-credit",
+            severity="warning",
+            count=count,
+            oldest_age_days=age,
+        )
+    ]
 
 
 async def _course_link_attention(ctx: MetricContext) -> list[AdminAttentionItem]:

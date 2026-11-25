@@ -16,6 +16,74 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#4670](https://github.com/thegspiro/the-logbook/pull/4670) (branch
+`claude/friendly-babbage-2isqey`)**: Feature 10
+(Documents & legal), pass 17 — watchdog pickup (the dedicated `/loop 30m
+/security-review` session, `session_011T1ZyyLrD5HagusgK9uDw2`, remains
+unreachable). **Branch-name deviation**, same as prior watchdog-run passes
+recorded here: this session's environment restricts pushes to its own
+assigned branch rather than a freely-chosen
+`claude/security-review-documents-legal` name.
+
+PR #4666 (Feature 09, Medical screening PHI, pass 17 — 0 fixed, 0 new
+findings) had already merged before this iteration started; row 09 marked
+✅ above. A concurrent watchdog session's duplicate pass for the same
+feature (PR #4665, same conclusion) was closed in #4666's favor — see that
+PR's own comment thread, mirroring the #4643/#4644 and #4660/#4662
+precedents.
+
+Baseline `b3274989` (PR #4440's merge, pass 16), confirmed an ancestor of
+`HEAD` directly via `git merge-base --is-ancestor`. Two files with a real
+delta, both read in full: `documents_service.py` extracts `delete_folder`'s
+body into a `_delete_folder_subtree` helper with no behavior change, so a
+new member-erasure path (LIFE-11's `member_documents.py`, swept for and
+read) reuses the existing DOC-32 History guard automatically rather than
+needing its own copy; `print_document_service.py` titles a community-
+outreach shift's printed roster using the department's own configured
+outreach-role vocabulary, unrelated feature work with no new query or
+permission. **0 fixed, 0 new findings.** No OPEN or FLAGGED finding exists
+for this feature (DOC-9/DOC-31/DOC-32 all FIXED/RESOLVED, re-confirmed
+against `KNOWN_LIMITATIONS.md` directly). Full write-up:
+`docs/security-review/DOC-10-documents-legal.md`'s **Pass 17** section.
+
+Row 10 → ✅ (pending this PR's merge); next is Feature 11 (Inventory) —
+re-check `list_pull_requests` fresh rather than trusting this note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 09, Medical screening PHI, pass 17, PR #4666, merged), preserved for history</summary>
+
+**PR [#4666](https://github.com/thegspiro/the-logbook/pull/4666) (branch
+`claude/friendly-babbage-5w0f57`)**: Feature 09 (Medical
+screening, PHI), pass 17 — watchdog pickup (the dedicated `/loop 30m
+/security-review` session, `session_011T1ZyyLrD5HagusgK9uDw2`, remains
+unreachable). **Branch-name deviation**, same as prior watchdog-run passes
+recorded here: this session's environment restricts pushes to its own
+assigned branch rather than a freely-chosen
+`claude/security-review-medical-screening` name.
+
+PR #4664 (Feature 08, Membership pipeline, pass 18 — 0 fixed, 0 new
+findings) had already merged before this iteration started; row 08 marked
+✅ above.
+
+Baseline `b7f84513d` (PR #4439's merge, pass 16). Zero backend delta
+(verified by `git diff --stat`, not `git log -- <paths>`, per this
+feature's own pass-16 note about history-simplification false negatives).
+The only real change — `MedicalScreeningPage.tsx` hiding Add/Edit/Delete
+controls from a `.view`-only reader — was already fixed and dated
+2026-11-16 by app-review's MS2-11, ahead of this rotation's own baseline;
+re-verified here, not re-reported. **0 fixed, 0 new findings.** MS-15 (the
+compliance roster loads every screening record unbounded, LOW, FLAGGED,
+same class as MS-6/FIN-9/ELEC-12/USR-5/MP-10/DOC-9) re-confirmed OPEN,
+unchanged. Full write-up: `docs/security-review/MS-09-medical-screening.md`'s
+**Pass 17** section.
+
+Row 09 → ✅ (pending this PR's merge); next is Feature 10 (Documents &
+legal) — re-check `list_pull_requests` fresh rather than trusting this
+note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 08, Membership pipeline, pass 18, PR #4664, merged), preserved for history</summary>
+
 **PR [#4664](https://github.com/thegspiro/the-logbook/pull/4664) (branch
 `claude/friendly-babbage-2isqey`)**: Feature 08
 (Membership pipeline), pass 18 — watchdog pickup (the dedicated `/loop 30m
@@ -50,6 +118,10 @@ no behavior change). Full write-up:
 Row 08 → ✅ (pending this PR's merge); next is Feature 09 (Medical
 screening, PHI) — re-check `list_pull_requests` fresh rather than trusting
 this note.
+
+</details>
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 07, Users & organizations, pass 17, PR #4662, merged), preserved for history</summary>
@@ -27876,8 +27948,8 @@ iteration's commit" rule.
 | 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (76 routes, token-scoped voting), `election_service.py`, `services/voter_rules.py` (added pass 16), `services/election_attendance_service.py` (added pass 16), `services/election_defaults.py` (added pass 16)                                               | ✅     |
 | 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`, `leave_requests.py` (20 routes, added pass 17; Chief routing, approver cover, escalation, calendar/export added pass 17)                                                                                      | ✅     |
 | 08  | Membership pipeline       | MP     | `membership_pipeline.py` (64 routes), `membership_pipeline_service.py`, `models/membership_pipeline.py` (`identity_edited_by_applicant_at`, added pass 18)                                                                                                                            | ✅     |
-| 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`, `screening_reminder_service.py` (added pass 16)                                                                                                                                                                               | ⬜     |
-| 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                                                                                                                                                          | ⬜     |
+| 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`, `screening_reminder_service.py` (added pass 16)                                                                                                                                                                               | ✅     |
+| 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`, `services/member_documents.py` (LIFE-11 erasure, added pass 17)                                                                                                                                                         | ✅     |
 | 11  | Inventory                 | INV    | `endpoints/inventory.py` (7089 L), `inventory_service.py`                                                                                                                                                                                                                             | ⬜     |
 | 12  | Facilities                | FAC    | `endpoints/facilities.py` (4394 L), `facilities_service.py`                                                                                                                                                                                                                           | ⬜     |
 | 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                                                                                                                                                         | ⬜     |
@@ -27962,6 +28034,48 @@ into row 13's declared scope rather than leaving it to be rediscovered.
 ---
 
 ## Log
+
+### 2026-11-24 — Feature 09 (Medical screening PHI, pass 17) merged (PR #4666); Feature 10 (Documents & legal, pass 17): watchdog pickup, real delta (a no-op refactor lets LIFE-11's erasure reuse the DOC-32 History guard; an unrelated outreach-roster print label), 0 fixed, 0 new findings
+
+PR #4666 merged; row 09 confirmed ✅ above. (PR #4665, a duplicate pass for
+the same feature opened by a concurrent watchdog session at nearly the same
+moment, reached the same conclusion and was closed in #4666's favor — see
+that PR's own comment thread, mirroring the #4643/#4644 and #4660/#4662
+precedents.) A fresh `list_pull_requests` (state=open) found zero
+`claude/security-review-*` heads, so this iteration continued to Step 1:
+row 10 (Documents & legal) was the next ⬜ row.
+
+Baseline: pass 16's real merge commit `b3274989` (PR #4440), confirmed an
+ancestor of `HEAD` directly via `git merge-base --is-ancestor`, not assumed
+from the file's own text. Real delta, two files: `documents_service.py`
+extracts `delete_folder`'s body into a `_delete_folder_subtree` helper with
+no observable behavior change, so a new member-erasure path (LIFE-11's
+`app/services/member_documents.py`, swept for and read as a new unclaimed
+file) can call it directly inside its own transaction and inherit the
+existing DOC-32 History guard automatically, rather than needing a second
+copy of it; `print_document_service.py` titles a community-outreach
+shift's printed roster from the department's own configured outreach-role
+vocabulary, unrelated feature work with no new query or permission. **0
+fixed, 0 new findings** — no OPEN or FLAGGED finding exists for this
+feature (DOC-9/DOC-31/DOC-32 all FIXED/RESOLVED, re-confirmed against
+`KNOWN_LIMITATIONS.md` directly). Route count unchanged at 26 (AST
+re-enumerated). Full write-up:
+`docs/security-review/DOC-10-documents-legal.md`'s **Pass 17** section.
+
+**Completion gate:** `flake8`, `black --check` (26.10.1) and
+`isort --check-only` (9.0.2) on `app/ tests/ alembic/` all clean (via
+`python3.13`, matching CI's pins). `validate_migrations.py --strict` — 837
+revisions, single head `bbb6eac6ae34` (no fork this pass). `check_route_
+permissions.py --strict` — 339 routes, 0 errors/warnings. Schema docs
+already current. Scoped backend pytest (`-k "document or legal or
+station_document or facility_folder or folder or admin_only or
+minutes_attachment or published_minutes"`) — 491 passed, 1 pre-existing
+environment-only skip (`py_vapid`). `npm run typecheck` — 0 errors. `npm
+run lint` — 0 errors, 0 warnings. `npx vitest run` on the feature's
+component tests — 85 passed (6 files).
+
+Row 10 → ✅ (pending this PR's merge). Next is Feature 11 (Inventory) —
+re-check `list_pull_requests` fresh rather than trusting this note.
 
 ### 2026-11-24 — Feature 05 (Finance & approvals, pass 17) merged (PR #4655); Feature 06 (Elections & ballots, pass 17): watchdog pickup, real delta (report numbers and a letterhead identity line on two PDF exports), 0 fixed, 0 new findings
 
@@ -53187,3 +53301,42 @@ baseline member grants) — 205 passed. `npm run typecheck` — 0 errors.
 
 Row 13 → ✅ (pending this PR's merge). Next is Feature 14 (Equipment check &
 shifts) — re-check `list_pull_requests` fresh rather than trusting this note.
+
+### 2026-11-24 — Feature 08 (Membership pipeline, pass 18) merged; Feature 09 (Medical screening, PHI, pass 17): watchdog pickup, zero backend delta, 0 fixed, 0 new findings
+
+A fresh `list_pull_requests` (state=open) found no `claude/security-review-*`
+head; PR #4664 (Feature 08, pass 18) had already merged with no open rotation
+PR behind it, and row 09 was the next `⬜` row (rows 00–08 all `✅` since the
+2026-11-23 rotation-lap reset).
+
+Baseline `b7f84513d` (PR #4439's merge, pass 16). `git diff --stat` across the
+five declared backend files, `screening_reminder_service.py`, and the full
+`frontend/src/modules/medical-screening/` directory (used instead of a
+path-scoped `git log`, per this feature's own pass-16 note on history
+simplification) found zero backend change and three frontend files: one real
+change plus two new test files. The real change —
+`MedicalScreeningPage.tsx` now hides the requirement/record Add, Edit and
+Delete controls from a `medical_screening.view`-only reader who lacks
+`.manage` — was already fixed and dated 2026-11-16 by app-review's MS2-11,
+ahead of this rotation's own baseline; verified directly against the diff and
+its two new tests rather than re-reported as new. The matching server-side
+`.manage` gate on every mutating route was independently re-confirmed
+unchanged. **0 fixed, 0 new findings.** MS-15 (the compliance roster loads
+every screening record in the organization unbounded, LOW, FLAGGED, same
+class as MS-6/FIN-9/ELEC-12/USR-5/MP-10/DOC-9) re-confirmed OPEN, read
+directly against `get_compliance_roster`, unchanged. Full write-up:
+`docs/security-review/MS-09-medical-screening.md`'s **Pass 17** section.
+
+**Completion gate:** `flake8`, `black --check` (26.10.1, CI's pin) and
+`isort --check-only` (9.0.2, CI's pin) on `app/ tests/ alembic/` all clean.
+`validate_migrations.py --strict` — 836 revisions, single head
+`241c1cc27313`. `check_route_permissions.py --strict` — 339 routes, 0
+errors/warnings. `docs/DATABASE_SCHEMA.md` already current. Scoped backend
+pytest (`-k "medical_screening or medical_screen or screening"`) — 265
+passed, 1 pre-existing environment-only skip (`py_vapid`). `npm run
+typecheck` — 0 errors. `npm run lint` — 0 errors, 0 warnings. `npx vitest run
+src/modules/medical-screening` — 88 passed (16 files, up from 85/15 at pass
+16).
+
+Row 09 → ✅ (pending this PR's merge). Next is Feature 10 (Documents & legal)
+— re-check `list_pull_requests` fresh rather than trusting this note.

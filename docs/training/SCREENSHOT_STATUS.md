@@ -9,28 +9,28 @@ image still matches the application is tracked by hand in
 [SCREENSHOT_CURRENCY.md](./SCREENSHOT_CURRENCY.md) — this file is
 regenerated wholesale, so that audit cannot live here.
 
-**951 of 955 placeholders filled** (4 remaining).
+**986 of 999 placeholders filled** (13 remaining).
 
 | Guide | Captured | Remaining |
 |-------|---------:|----------:|
 | [00-getting-started.md](./00-getting-started.md) | 30 | 0 |
-| [01-membership.md](./01-membership.md) | 48 | 0 |
-| [02-training.md](./02-training.md) | 111 | 0 |
-| [03-scheduling.md](./03-scheduling.md) | 127 | 0 |
-| [04-events-meetings.md](./04-events-meetings.md) | 91 | 4 |
-| [05-inventory.md](./05-inventory.md) | 124 | 0 |
-| [06-apparatus-facilities.md](./06-apparatus-facilities.md) | 32 | 0 |
-| [07-documents-forms.md](./07-documents-forms.md) | 48 | 0 |
-| [08-admin-reports.md](./08-admin-reports.md) | 104 | 0 |
+| [01-membership.md](./01-membership.md) | 52 | 0 |
+| [02-training.md](./02-training.md) | 121 | 0 |
+| [03-scheduling.md](./03-scheduling.md) | 132 | 0 |
+| [04-events-meetings.md](./04-events-meetings.md) | 95 | 7 |
+| [05-inventory.md](./05-inventory.md) | 126 | 1 |
+| [06-apparatus-facilities.md](./06-apparatus-facilities.md) | 34 | 0 |
+| [07-documents-forms.md](./07-documents-forms.md) | 51 | 0 |
+| [08-admin-reports.md](./08-admin-reports.md) | 105 | 1 |
 | [09-skills-testing.md](./09-skills-testing.md) | 36 | 0 |
 | [10-mobile-pwa.md](./10-mobile-pwa.md) | 25 | 0 |
 | [11-finance.md](./11-finance.md) | 26 | 0 |
-| [12-grants-fundraising.md](./12-grants-fundraising.md) | 16 | 0 |
+| [12-grants-fundraising.md](./12-grants-fundraising.md) | 16 | 1 |
 | [13-medical-screening.md](./13-medical-screening.md) | 9 | 0 |
 | [14-elections.md](./14-elections.md) | 30 | 0 |
 | [15-prospective-members.md](./15-prospective-members.md) | 47 | 0 |
-| [16-integrations.md](./16-integrations.md) | 29 | 0 |
+| [16-integrations.md](./16-integrations.md) | 31 | 0 |
 | [17-privacy-data-rights.md](./17-privacy-data-rights.md) | 7 | 0 |
-| [18-storefront.md](./18-storefront.md) | 11 | 0 |
-| **Total** | **951** | **4** |
+| [18-storefront.md](./18-storefront.md) | 13 | 3 |
+| **Total** | **986** | **13** |
 

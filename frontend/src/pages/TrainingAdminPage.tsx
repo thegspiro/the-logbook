@@ -69,6 +69,7 @@ const TrainingEnhancementsTab = lazyWithRetry(() => import('./TrainingEnhancemen
 const ComplianceOfficerDashboard = lazyWithRetry(() => import('./ComplianceOfficerDashboard'));
 const CourseLibraryPage = lazyWithRetry(() => import('./CourseLibraryPage'));
 const CourseLinksPanel = lazyWithRetry(() => import('./training/CourseLinksPanel'));
+const DoubleCreditPanel = lazyWithRetry(() => import('./training/DoubleCreditPanel'));
 const CohortsPage = lazyWithRetry(() => import('./training/CohortsPage'));
 const MemberTrainingStatusPage = lazyWithRetry(() => import('./MemberTrainingStatusPage'));
 
@@ -112,6 +113,8 @@ const TabContent: React.FC<{
       return <AttendanceWaiverQueuePage embedded />;
     case 'sessions':
       return <CreateTrainingSessionPage />;
+    case 'double-credit':
+      return <DoubleCreditPanel onResolved={onQueueChanged} />;
     case 'cohorts':
       return <CohortsPage embedded />;
     case 'shift-reports':

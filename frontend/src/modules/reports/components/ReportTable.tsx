@@ -6,6 +6,7 @@
 
 import React, { useState, useMemo } from 'react';
 import { Pagination } from '../../../components/ux/Pagination';
+import { CardSortControl } from '../../../components/ux/CardSortControl';
 import { SortableHeader } from '../../../components/ux/SortableHeader';
 import type { SortDirection } from '../../../components/ux/SortableHeader';
 import { toStr } from '../utils/export';
@@ -91,6 +92,15 @@ export const ReportTable: React.FC<ReportTableProps> = ({
         role="region"
         aria-label="Report results"
       >
+        <CardSortControl
+          options={columns
+            .filter((col) => col.sortable !== false)
+            .map((col) => ({ field: col.key, label: col.header }))}
+          currentSort={sortKey}
+          currentDirection={sortKey ? sortDir : null}
+          onSort={handleSort}
+          {...(reflow === 'wide' ? { tier: 'wide' as const } : {})}
+        />
         <table className={`rwd-table ${reflow === 'wide' ? 'rwd-table-wide' : ''} w-full text-left text-sm`}>
           <thead className="text-theme-text-muted surface-secondary-opaque sticky top-0 z-10 text-xs uppercase">
             <tr>
