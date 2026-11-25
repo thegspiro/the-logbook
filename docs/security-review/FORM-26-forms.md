@@ -1,6 +1,116 @@
 # Security Review — Forms
 
-**Prefix:** `FORM` · **Iteration:** 26 · **Reviewed:** 2026-08-27 (pass 1), 2026-08-31 (pass 2), 2026-09-06 (pass 3), 2026-09-13 (pass 4), 2026-10-03 (pass 5), 2026-10-07 (pass 6), 2026-10-17 (pass 7), 2026-10-20 (pass 8), 2026-10-24 (pass 9), 2026-10-27 (pass 10), 2026-10-30 (pass 11), 2026-11-03 (pass 12), 2026-11-11 (pass 13), 2026-11-21 (pass 14) · **PR:** [#1908](https://github.com/thegspiro/the-logbook/pull/1908) (pass 1), [#2085](https://github.com/thegspiro/the-logbook/pull/2085) (pass 2)
+**Prefix:** `FORM` · **Iteration:** 26 · **Reviewed:** 2026-08-27 (pass 1), 2026-08-31 (pass 2), 2026-09-06 (pass 3), 2026-09-13 (pass 4), 2026-10-03 (pass 5), 2026-10-07 (pass 6), 2026-10-17 (pass 7), 2026-10-20 (pass 8), 2026-10-24 (pass 9), 2026-10-27 (pass 10), 2026-10-30 (pass 11), 2026-11-03 (pass 12), 2026-11-11 (pass 13), 2026-11-21 (pass 14), 2026-11-25 (pass 15) · **PR:** [#1908](https://github.com/thegspiro/the-logbook/pull/1908) (pass 1), [#2085](https://github.com/thegspiro/the-logbook/pull/2085) (pass 2)
+
+---
+
+## Pass 15 (2026-11-25) — near-zero delta; an additive sibling helper for an already-reviewed History widget, two cosmetic frontend changes; 0 fixed, 0 new findings (watchdog pickup)
+
+**Watchdog pickup:** the dedicated `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) remains unreachable (`ListAgents`, "No
+reachable agents"). A fresh `list_pull_requests` (state=open) against
+`thegspiro/the-logbook` found no `claude/security-review-*` head (the one
+open PR, #4702, is an unrelated docs pass) — PR #4701 (Feature 25, Messaging
+& notifications, pass 15) had already merged (`d7d0cc0e0`) — and row 26
+(Forms) was confirmed the next pending feature directly against
+`PROGRESS.md`'s rotation table on a freshly fetched `main`.
+
+**Scope:** loaded prior art (`CHECKLIST.md`, `SEC-00-cross-cutting-baseline.md`,
+`docs/module-audit/forms.md` — only FORM-4, already tracked below,
+`docs/app-review/forms.md` — same, and this file's passes 1-14) before
+touching code.
+
+**Baseline:** pass 14's merge, PR #4541 (`2d97d8402`). `git diff --stat
+2d97d8402..HEAD` restricted to all six declared backend scope files
+(`endpoints/forms.py`, `api/public/forms.py`, `forms_service.py`,
+`models/forms.py`, `schemas/forms.py`, `utils/embed_origins.py`) plus the
+frontend forms/embed/public-form surface (`modules/forms/`,
+`components/forms/`, `pages/PublicFormPage.tsx`, `pages/FormsPage.tsx`) shows
+real content in exactly three files: `utils/embed_origins.py` (+10, pure
+addition), a new file `components/forms/publicFormFields.ts` (+52), and
+`pages/FormsPage.tsx` (+16/-8). The other five backend files are
+byte-identical to pass 14.
+
+- **`embed_origins.py` gains `department_embed_origins`, a thin wrapper
+  reusing the unchanged `valid_embed_origins` to read
+  `org_settings["forms"]["embed_allowed_origins"]`.** Read the addition in
+  full: it is appended after the existing function with no line of that
+  function touched, so Forms' own embed-origin validation is unaffected.
+  The only two call sites are `history_public.py:69` and
+  `api/public/history.py:637` (`grep -rn "department_embed_origins"` across
+  `backend/` and `frontend/`) — the department history/honor-roll widget
+  (owner decision 2026-11-24, per the function's own docstring: "the
+  History widget is framed from the same list as embedded forms, so a
+  department keeps one list of its websites"). `history.py` and its
+  siblings are an already-known unclaimed module, reviewed directly in
+  `SEC-00-cross-cutting-baseline.md`'s **Pass 16**/**Pass 17** sections and
+  found sound — not re-reviewed here, since nothing in this diff changes
+  that verdict and the function this feature owns is additive-only. **No
+  finding.**
+- **`components/forms/publicFormFields.ts` (new file) is not Forms' own
+  code.** `grep -rln "publicFormFields"` across `frontend/src` finds its
+  only three consumers: `modules/prospective-members/pages/
+FollowUpFormPage.tsx` (Membership pipeline, Feature 08, ✅),
+  `pages/event-request-status/RequestFeedbackForm.tsx` (Events & requests,
+  Feature 16, ✅) and `types/event.ts`. It is a pure type/mapping helper
+  (`PublicFormField` → `FieldDefinition`) with no data fetching and no
+  `dangerouslySetInnerHTML`; it sits in `components/forms/` only because
+  that is where the shared `FieldRenderer` it feeds already lives (same
+  treatment as pass 11's note on `follow_up_forms.py`: owned and reviewed
+  by the feature that calls it). **No finding.**
+- **`FormsPage.tsx` (+16/-8) is purely cosmetic.** Three multi-line
+  checkbox labels (`One submission per person` ×2, `Public Form`,
+  `Allow anonymous submissions`) swap the `mobile-touch-row` utility (or a
+  hand-rolled flex row) for an explicit `flex min-h-11 items-start` plus
+  `mt-0.5` on each `<input type="checkbox">`, so the box aligns with the
+  label's first line instead of centering across the whole two-line block.
+  Same `formData`/`handleToggle*` state and API calls as pass 14; no new
+  prop, no new permission check. **No finding.**
+
+### Route inventory (re-enumerated by AST, not diffed)
+
+Re-ran the AST walk rather than trusting the empty diffstat on both endpoint
+files: **22** routes in `endpoints/forms.py` + **3** in `api/public/forms.py`
+= **25 total**, same count as pass 14. Both files are byte-identical to pass
+14 (confirmed by `git diff --stat`, empty for both), so every route's
+permission dependency is unchanged: `forms.view` ×3, `forms.manage` ×17, bare
+`get_current_user` ×2 (`member_lookup`, `submit_form`); the three public
+routes (`GET /{slug}`, `GET /{slug}/embed-policy`, `POST /{slug}/submit`)
+unchanged.
+
+### Re-verified this pass (unchanged, all hold)
+
+- **FORM-4** (form-definition text stored unescaped, flagged defense-in-depth
+  by design) — re-grepped `dangerouslySetInnerHTML` under
+  `frontend/src/components/forms/`, `pages/PublicFormPage.tsx`,
+  `modules/forms/`: zero matches, unchanged.
+- **FORM-12** (three submission endpoints ignore the `form_id` path segment)
+  — correctness-only API-shape gap, not a security boundary; unchanged.
+- BXC-1, sensitive-field sealing/row-locking, the embed `allow_embed`/
+  origin-allowlist machinery, the member-lookup contact-policy gate, LIKE
+  escaping (`FormsService.search_members`), and the admin CSV export (still
+  a frontend `Blob` download with its own `escapeCsvCell`, not a backend
+  `csv.writer` — n/a for Pitfall #15) — none of this pass's three real
+  changes touch any file these findings concern; nothing regressed.
+
+No new route, no permission string changed, no by-id query added without an
+org filter, no LIKE call added without `escape=LIKE_ESCAPE_CHAR`, no new
+migration on this feature's own scope files.
+
+### Completion gate (pass 15)
+
+| Check                                                                                                    | Result                                                            |
+| --------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| `flake8==7.4.1` on `app/ tests/ alembic/`                                                                | ✅ 0 violations                                                   |
+| `black==26.10.1 --check app/ tests/ alembic/`                                                            | ✅ clean, 3541 files unchanged                                    |
+| `isort==9.0.2 --check-only app/ tests/ alembic/`                                                         | ✅ clean                                                          |
+| `python3.13 scripts/validate_migrations.py --strict`                                                     | ✅ 844 revisions, single head `e9cf8ab7e4e4`                      |
+| `python3 scripts/check_route_permissions.py --strict`                                                    | ✅ 344 routes, 0 errors, 0 warnings                               |
+| `python3.13 scripts/generate_schema_docs.py --check`                                                      | ✅ `DATABASE_SCHEMA.md` up to date                                |
+| `pytest tests/ -q -k "form or applicant_field or sensitive_field or embed or event_request or outreach"` | ✅ 1874 passed, 1 pre-existing environment-only skip (`py_vapid`) |
+| `cd frontend && npm run typecheck`                                                                        | ✅ 0 errors                                                       |
+| `cd frontend && npm run lint`                                                                             | ✅ exit 0, 0 warnings                                             |
+| `npx vitest run src/components/forms src/pages/FormsPage.*.test.tsx src/hooks/useRanks.test.ts`          | ✅ 13 files, 67 tests passed                                      |
 
 ---
 
