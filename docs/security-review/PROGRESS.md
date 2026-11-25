@@ -16,6 +16,42 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#4693](https://github.com/thegspiro/the-logbook/pull/4693) (branch
+`claude/security-review-training-extended-p16`)**:
+Feature 18 (Training extended), pass 16 — watchdog pickup (the dedicated
+`/loop 30m /security-review` session, `session_011T1ZyyLrD5HagusgK9uDw2`,
+remains unreachable, confirmed via `ListAgents` → "No reachable agents").
+
+PR #4692 (Feature 17, Training core, pass 16) merged (`f6888842b`) before
+this iteration started; row 17 marked ✅ above. A fresh `list_pull_requests`
+(state=open) found no `claude/security-review-*` head open, so this
+iteration continued to Step 1: row 18 (Training extended) was the next ⬜
+row.
+
+Baseline `b07b25cab` (pass 15's merge, PR #4494). Pass 15 had deferred
+`attendance_waiver_requests.py` (21 routes by AST — corrects the "31" cited
+when it was folded into scope) and its services because PR #4481 was open
+and rewriting that exact surface. #4481 merged (`5ab28b471`) before this
+pass started, so this pass gave it its first full seven-dimension read
+against settled code: every by-id fetch is org- and workflow-scoped,
+separation of duties is enforced (a decider cannot be the request's own
+member; a Chief cannot override their own denial), every audit event
+carries ids only (never the note/reason, which may be medical), uploads go
+through the shared magic-byte/UUID pipeline, and the approval cap check
+takes a locking read under the member's own already-locked row (#27). Real
+delta elsewhere since pass 15 — training-waiver self-grant refusal,
+officer-id withholding on cohort detail, former-member grading exclusion
+through the shared classifier, a new attachment-deletion route — all
+already shipped and tested by their own commits, re-verified here. **0
+fixed, 0 new findings.** Full write-up:
+`docs/security-review/TRX-18-training-extended.md`'s **Pass 16** section.
+
+Row 18 → ✅ (pending this PR's merge); next is Feature 19 (Skills testing)
+— re-check `list_pull_requests` fresh rather than trusting this note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 17, Training core, pass 16, PR #4692, merged), preserved for history</summary>
+
 **PR [#4692](https://github.com/thegspiro/the-logbook/pull/4692) (branch
 `claude/security-review-training-core-p16`)**:
 Feature 17 (Training core), pass 16 — watchdog pickup (the dedicated
@@ -43,9 +79,10 @@ retired `GET /training/competency-matrix` is a pure attack-surface
 reduction. Full write-up: `docs/security-review/TR-17-training-core.md`'s
 **Pass 16** section.
 
-Row 17 → ✅ (pending this PR's merge); next is Feature 18 (Training
-extended) — re-check `list_pull_requests` fresh rather than trusting this
-note.
+Row 17 → ✅ (merged); next was Feature 18 (Training extended) — this
+entry's own pass above.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 16, Events & requests, pass 16, PR #4691, merged), preserved for history</summary>
