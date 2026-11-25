@@ -3,7 +3,8 @@ Printable CR80 member ID cards.
 
 Turns a set of members into a card-printer PDF (see
 :mod:`app.utils.id_card_renderer`) and keeps the department's chosen card
-layout — orientation, one or two sides, barcode or QR — in
+layout — orientation, one or two sides, barcode or QR, and whether the card
+carries the member's certifications — in
 ``organization.settings["id_card_print"]``. The layout is a department
 decision rather than an officer's: it follows the badge holders the
 department bought and the printer it owns, so whoever prints next gets the
@@ -11,23 +12,34 @@ same card.
 """
 
 import copy
+from dataclasses import dataclass
 from datetime import date
 from io import BytesIO
 from typing import Any, Dict, List, Optional, Tuple
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.models.operational_rank import OperationalRank
-from app.models.user import Organization, User
+from app.models.training import RequirementType, TrainingRequirement
+from app.models.user import ACTIVE_ACCOUNT_STATUSES, Organization, User
 from app.services.label_service import member_badge_value
 from app.services.member_badge_service import MemberBadgeService
 from app.services.member_service_history_service import (
     MemberServiceHistoryService,
 )
+from app.services.training_compliance import (
+    ComplianceGrading,
+    _load_compliance_config,
+    evaluate_member_requirement_detail,
+    load_graded_records,
+    member_join_date,
+)
 from app.utils.id_card_renderer import (
     ORIENTATION_LANDSCAPE,
     SIDES_FRONT,
+    IdCardCertification,
     IdCardDepartment,
     IdCardSpec,
     render_id_cards,
@@ -36,15 +48,21 @@ from app.utils.id_card_renderer import (
 )
 from app.utils.label_renderer import SYMBOLOGY_CODE128, validate_symbology
 from app.utils.membership import is_administrative
+from app.utils.org_timezone import resolve_org_today
 
 SETTINGS_KEY = "id_card_print"
 
 # What a department that has never chosen gets: the card every single-sided
 # printer can produce, with the barcode every scanner in the app already reads.
-DEFAULT_LAYOUT: Dict[str, str] = {
+# Certifications are off until an officer turns them on (owner decision,
+# 2026-11-24): a printed date goes stale the day a certificate is renewed, so
+# a department opts in knowingly, and no department's next print run changes
+# without anyone asking for it.
+DEFAULT_LAYOUT: Dict[str, Any] = {
     "orientation": ORIENTATION_LANDSCAPE,
     "sides": SIDES_FRONT,
     "symbology": SYMBOLOGY_CODE128,
+    "certifications": False,
 }
 
 # A department prints its roster in one go when it first adopts cards. This is
@@ -53,7 +71,7 @@ DEFAULT_LAYOUT: Dict[str, str] = {
 MAX_CARDS_PER_JOB = 500
 
 
-def _read_layout(settings: Any) -> Dict[str, str]:
+def _read_layout(settings: Any) -> Dict[str, Any]:
     """The stored layout, falling back field by field to the default.
 
     ``settings`` is free-form JSON. A value that no longer validates — hand
@@ -75,7 +93,52 @@ def _read_layout(settings: Any) -> Dict[str, str]:
                 layout[key] = validate(value)
             except ValueError:
                 pass
+    # Only a stored true turns it on: a layout saved before the option
+    # existed, or a value somebody typed wrong, keeps today's card.
+    layout["certifications"] = stored.get("certifications") is True
     return layout
+
+
+@dataclass(frozen=True)
+class _CardCertificate:
+    name: str
+    state: str  # "on_file" | "expired" | "missing"
+    expiry: Optional[date]
+
+
+def _card_date(day: date) -> str:
+    """ "Mar 14, 2027", as the app writes a calendar date."""
+    return f"{day:%b} {day.day}, {day.year}"
+
+
+def _valid_through(certificates: List[_CardCertificate]) -> Optional[date]:
+    """The soonest expiry among the certificates held now.
+
+    The date the digital card shows as "Card valid through" (owner decision,
+    2026-11-23); ``cardValidThrough`` in frontend/src/utils/certificationState.ts
+    is the same rule over the same server grading. A lapsed certificate is not
+    held, and one that never expires sets no date.
+    """
+    held = [c.expiry for c in certificates if c.state == "on_file" and c.expiry]
+    return min(held) if held else None
+
+
+def _card_certifications(
+    certificates: List[_CardCertificate],
+) -> List[IdCardCertification]:
+    """The back-of-card lines, in the words the digital card uses."""
+    lines = []
+    for cert in certificates:
+        if cert.state == "on_file":
+            status = f"Exp {_card_date(cert.expiry)}" if cert.expiry else "On file"
+        elif cert.state == "expired" and cert.expiry:
+            status = f"Expired {_card_date(cert.expiry)}"
+        elif cert.state == "expired":
+            status = "Expired"
+        else:
+            status = "Not recorded"
+        lines.append(IdCardCertification(name=cert.name, status=status))
+    return lines
 
 
 def _year(day: Optional[date]) -> Optional[str]:
@@ -119,17 +182,23 @@ class MemberIdCardService:
             raise ValueError("Organization not found")
         return org
 
-    async def get_layout(self, organization_id) -> Dict[str, str]:
+    async def get_layout(self, organization_id) -> Dict[str, Any]:
         org = await self._organization(organization_id)
         return _read_layout(org.settings)
 
     async def save_layout(
-        self, organization_id, orientation: str, sides: str, symbology: str
-    ) -> Dict[str, str]:
-        layout = {
+        self,
+        organization_id,
+        orientation: str,
+        sides: str,
+        symbology: str,
+        certifications: bool = False,
+    ) -> Dict[str, Any]:
+        layout: Dict[str, Any] = {
             "orientation": validate_orientation(orientation),
             "sides": validate_sides(sides),
             "symbology": validate_symbology(symbology),
+            "certifications": bool(certifications),
         }
         # Locked read-modify-write: org.settings holds every module's
         # configuration, and two officers saving different sections at once
@@ -149,6 +218,76 @@ class MemberIdCardService:
         )
         return {row.rank_code: row.display_name for row in rows}
 
+    async def _certificates_by_user(
+        self, organization_id, users: List[User]
+    ) -> Dict[str, List[_CardCertificate]]:
+        """Each member's certification requirements, graded.
+
+        Graded by the compliance matrix's own grader — the same requirement
+        set per member (``ComplianceGrading.for_member``), the same records
+        (``load_graded_records``) and the same evaluation — so a printed card
+        cannot disagree with the matrix or the digital card. A member the
+        matrix does not grade (a former member, or one exempt from
+        compliance) gets no certifications on the card.
+        """
+        org_id = str(organization_id)
+        requirements = list(
+            await self.db.scalars(
+                select(TrainingRequirement)
+                .where(
+                    TrainingRequirement.organization_id == org_id,
+                    TrainingRequirement.active == True,  # noqa: E712
+                )
+                .order_by(TrainingRequirement.name)
+            )
+        )
+        graded = [
+            u
+            for u in users
+            if u.status in ACTIVE_ACCOUNT_STATUSES and not u.compliance_exempt
+        ]
+        if not requirements or not graded:
+            return {}
+        today = await resolve_org_today(self.db, org_id)
+        grading = ComplianceGrading.from_config(
+            await _load_compliance_config(self.db, org_id)
+        )
+        records_by_user: Dict[str, list] = {}
+        for record in await load_graded_records(
+            self.db,
+            org_id,
+            [u.id for u in graded],
+            requirements,
+            today,
+            grading.include_current_month,
+        ):
+            records_by_user.setdefault(str(record.user_id), []).append(record)
+
+        result: Dict[str, List[_CardCertificate]] = {}
+        for user in graded:
+            certificates = []
+            for req in grading.for_member(user, requirements).requirements:
+                req_type = getattr(req.requirement_type, "value", req.requirement_type)
+                if req_type != RequirementType.CERTIFICATION.value:
+                    continue
+                ev = evaluate_member_requirement_detail(
+                    req,
+                    records_by_user.get(str(user.id), []),
+                    today,
+                    org_include_current_month=grading.include_current_month,
+                    join_date=member_join_date(user),
+                )
+                expiry = date.fromisoformat(ev.expiry_date) if ev.expiry_date else None
+                if ev.status == "completed":
+                    state = "on_file"
+                elif ev.status == "expired":
+                    state = "expired"
+                else:
+                    state = "missing"
+                certificates.append(_CardCertificate(req.name, state, expiry))
+            result[str(user.id)] = certificates
+        return result
+
     async def generate(
         self,
         organization_id,
@@ -156,6 +295,7 @@ class MemberIdCardService:
         orientation: Optional[str] = None,
         sides: Optional[str] = None,
         symbology: Optional[str] = None,
+        certifications: Optional[bool] = None,
     ) -> Tuple[BytesIO, int]:
         """Render cards for *user_ids* in the caller's organization.
 
@@ -173,6 +313,8 @@ class MemberIdCardService:
         orientation = orientation or layout["orientation"]
         sides = sides or layout["sides"]
         symbology = symbology or layout["symbology"]
+        if certifications is None:
+            certifications = bool(layout["certifications"])
 
         rows = await self.db.scalars(
             select(User)
@@ -181,6 +323,8 @@ class MemberIdCardService:
                 User.id.in_([str(i) for i in user_ids]),
                 User.deleted_at.is_(None),
             )
+            # Compliance profiles match on positions, a lazy relationship.
+            .options(selectinload(User.positions))
             .order_by(User.last_name, User.first_name)
         )
         users = rows.all()
@@ -194,8 +338,15 @@ class MemberIdCardService:
         since = await MemberServiceHistoryService(self.db).service_since_by_user(
             organization_id, users
         )
+        certificates = (
+            await self._certificates_by_user(organization_id, list(users))
+            if certifications
+            else {}
+        )
         cards = []
         for user in users:
+            held = certificates.get(str(user.id), [])
+            valid_through = _valid_through(held)
             if is_administrative(user.member_class, user.membership_type):
                 title = "Administrative"
             elif user.rank:
@@ -214,6 +365,8 @@ class MemberIdCardService:
                     member_number=user.membership_number,
                     member_since=_year(since.get(str(user.id))),
                     photo=user.photo_url,
+                    valid_through=_card_date(valid_through) if valid_through else None,
+                    certifications=_card_certifications(held),
                 )
             )
 

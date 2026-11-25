@@ -30,7 +30,7 @@ placeholders for `04-111` to `04-116`.
 | 09 | Skill template builder: a blank criterion label flagged, its section opened, **Fix these and save again** with "Section 1, Criterion 2: Give the criterion a label."; on an existing template "Template saved, except template name…" | Create `09-35-builder-errors` |
 | 09 | `09-04-template-builder`, `09-02-create-template` | Check for the old banner |
 | 03 | My Shifts → Hours: **Hours by position** card with the year and **All time** buttons, several seats, **No position recorded** and **Other departments** rows | Create `03-145-hours-by-position` |
-| 03 | `03-104-my-shifts-hours`, `03-143-hours-month-selected`, `03-113`: the new card sits between the chart and All shifts | Check |
+| 03 | `03-104-my-shifts-hours`, `03-146-hours-month-selected`, `03-113`: the new card sits between the chart and All shifts | Check |
 | 04 | **Settings → CRR Catalogue**: Smoke alarm install with its counts, Risks and Priority populations ticks, the Admin Hours category, Rename / Describe / Retire, one type marked **Coming soon** | Create `04-111-crr-catalogue` |
 | 04 | **Log a CRR activity**: Alarms installed 3, Fire ticked, ZIP with city and state, Add resident details unticked, one member at 60 minutes | Create `04-112-crr-activity-dialog` |
 | 04 | Outreach Impact **CRR activities**: By activity with a change badge, By risk, By ZIP code with **Show map** open and two or more circles | Create `04-113-crr-impact-map` |
@@ -392,7 +392,7 @@ Nothing was captured by this pass. The Create and Check rows were worked on
 | 03 | My Shifts → **Hours**, new layout: cards with the two-colour split bar, year arrows, the "<year> at a glance" chart and its summary tiles | **Replace** `03-104-my-shifts-hours` (shows the always-visible table and no chart) |
 | 03 | **All shifts** list: a department shift labelled with the short name, outside shifts with a blue edge, one **Not counted** with its reason, the filter chips, **Log outside shift** | **Replace** `03-108-member-outside-shifts` (the card it shows was removed) |
 | 03 | Hours with outside hours: a card reading "N FCVFD" / "+24 with other departments", **All shifts** below | **Replace** `03-113-member-hours-with-outside` |
-| 03 | A month bar selected on the chart, its shifts highlighted in the list | **CURRENT** 2026-11-23 as `03-143-hours-month-selected` (October, the latest month with credited hours) |
+| 03 | A month bar selected on the chart, its shifts highlighted in the list | **CURRENT** 2026-11-23 as `03-146-hours-month-selected` (October, the latest month with credited hours) |
 | 01 | Profile **Shift & Call History** in the new layout, officer view without **Log outside shift** | Optional |
 | 08 | Settings → Profile with **Short Name** and its hint | Created `08-125-profile-short-name` |
 | 03 | Shift template dialog reading "Template saved, except name" with the field flagged; the **Discard changes** confirmation | Created `03-143-template-saved-except-name`, `03-144-template-discard-changes` |
@@ -453,8 +453,8 @@ Nothing was captured by this pass.
 | Guide | Screen | Action |
 | --- | --- | --- |
 | 03 | Shift Planning → **Templates** tab: templates only, the heading's "make a pattern in **Shift patterns**" link, no Templates / Patterns switch | Check `03-12-shift-templates` and `03-129-template-reactivate`; replace either if it shows the old switch |
-| 03 | Shift Planning → **Patterns**: a pattern card with its **Edit** button; **Edit Pattern** open from it | Create; `03-133-pattern-form-template-inactive` was taken from the old Templates-tab form and should be re-shot from the Patterns tab |
-| 03 | My Shifts → **Past**: **Hours credited** / **Credited shifts** / **Avg hours/shift** tiles with "+N hrs awaiting close-out", a **Xh credited** pill and an amber **Xh · awaiting close-out** pill | **CURRENT** 2026-11-23 as `03-142-my-shifts-past-credited`, taken as the administrator: the demo member has no shift closed out, so its tiles read 0 |
+| 03 | Shift Planning → **Patterns**: a pattern card with its **Edit** button; **Edit Pattern** open from it | **CURRENT** 2026-11-24: `03-132-pattern-template-inactive` already shows the A/B/C card open with **Edit**, and `03-133-pattern-form-template-inactive` is **Edit Pattern** opened from the Patterns tab (re-shot 2026-11-24 after its Pattern Type hint stopped pointing to the Patterns tab it is on) |
+| 03 | My Shifts → **Past**: **Hours credited** / **Credited shifts** / **Avg hours/shift** tiles with "+N hrs awaiting close-out", a **Xh credited** pill and an amber **Xh · awaiting close-out** pill | **CURRENT** 2026-11-23 as `03-145-my-shifts-past-credited`, taken as the administrator: the demo member has no shift closed out, so its tiles read 0 |
 | 04 | **Check In Members** dialog with the new "credited from the scheduled start" line | Create |
 | 04 | Event settings → **Attendance** → **Mandatory event responses** with **Ask for a response** (60 days) and the error for an out-of-range value | Create |
 | 02 | Requirement **Member Categories** in a department with a Senior tier: **Operational members** selected, Senior ticked, the hint "Active, Probationary, Life and Senior Member" | Create (`02-135` stays valid for a department with no Senior tier) |
@@ -623,7 +623,7 @@ Nothing was captured by this pass.
 | Guide | Screen                                                                       | Action          |
 | ----- | ---------------------------------------------------------------------------- | --------------- |
 | 03    | My Shifts **Upcoming** under month headers                                   | Replace `03-04` |
-| 03    | My Shifts **Past** with Year dropdown, hours chart, month headers            | Superseded by the 2026-11-17 Past row: **CURRENT** 2026-11-23 as `03-142-my-shifts-past-credited` |
+| 03    | My Shifts **Past** with Year dropdown, hours chart, month headers            | Superseded by the 2026-11-17 Past row: **CURRENT** 2026-11-23 as `03-145-my-shifts-past-credited` |
 | 04    | Event attendance **Check In** dialog with **Add a member** on a closed event | Create          |
 | 02    | Training History records showing the source line                             | Create          |
 | 02    | Requirement card reading **No sessions held yet**                            | Create          |
@@ -639,7 +639,7 @@ Nothing was captured by this pass.
 
 | Guide | Screen                                                                         | Action  |
 | ----- | ------------------------------------------------------------------------------ | ------- |
-| 03    | My Shifts **Past** view with the Year dropdown, hours chart and month headings | Superseded by the 2026-11-17 Past row: **CURRENT** 2026-11-23 as `03-142-my-shifts-past-credited` |
+| 03    | My Shifts **Past** view with the Year dropdown, hours chart and month headings | Superseded by the 2026-11-17 Past row: **CURRENT** 2026-11-23 as `03-145-my-shifts-past-credited` |
 | 02    | Pipeline wizard with the resume-draft notice and **Save draft**                | Create  |
 | 10    | A reflowed table (audit log) as cards at 390px                                 | Create  |
 
@@ -1999,7 +1999,7 @@ guide now carries (`_[Screenshot needed: …]_`) replaced by a file.
 | 02 Training, Compliance Emails                                                      | **NEW**                                                                                                                               | The Notifications panel (its "Not yet active" warning is gone)                                                                                                                                                                                                 |
 | 02 Training, External Training Integrations                                         | **NEW**                                                                                                                               | Import Queue and All Mappings tabs with content — still open 2026-10-17: the seeded provider cannot be created where the provider's API host does not resolve                                                                                                  |
 | 03 Scheduling, Patterns                                                             | **NEW + REPLACE**                                                                                                                     | Manual Setup > Weekly with Separate day and night shifts; Weekend Only preset; list rows with sun/moon glyphs. Re-shoot the pattern-type table and start-date hint                                                                                             |
-| 03 Scheduling, templates/patterns                                                   | **NEW**                                                                                                                               | The delete confirmation dialog (was a single click)                                                                                                                                                                                                            |
+| 03 Scheduling, templates/patterns                                                   | **CURRENT** 2026-11-24 | The delete confirmation dialog (was a single click). Captured as `03-147-template-delete-confirm`                                                                                                                                                                                                            |
 | 05 Inventory, Catalog Links                                                         | **CURRENT** 2026-10-17 as `05-125` and `05-126`                                                                                       | The page with exact and likely matches, and the "linked by someone else" list                                                                                                                                                                                  |
 | 05 Inventory, items list (`05-0x` list shots)                                       | **CURRENT** 2026-10-17: `05-01` re-shot                                                                                               | Serial or asset tag under each name; location filter now reads **No location**; Issued-to-members headline                                                                                                                                                     |
 | 05 Inventory, Return requests                                                       | **NEW**                                                                                                                               | The Inspect dialog on a received notice                                                                                                                                                                                                                        |

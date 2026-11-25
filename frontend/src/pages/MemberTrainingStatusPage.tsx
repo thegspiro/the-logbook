@@ -19,6 +19,7 @@ import { formatHours, sumHoursToQuarter } from '../utils/hoursFormatting';
 import { escapeCsvCell } from '../utils/csv';
 import { SkeletonCard } from '../components/ux/Skeleton';
 import { EmptyState } from '../components/ux/EmptyState';
+import { CardSortControl } from '../components/ux/CardSortControl';
 import { SortableHeader, type SortDirection } from '../components/ux/SortableHeader';
 import { expectArray } from '../utils/asArray';
 import { StatGrid } from '@/components/ux/StatGrid';
@@ -306,6 +307,20 @@ const MemberTrainingStatusPage: React.FC = () => {
         />
       ) : (
         <div className="border-theme-surface-border rwd-table-container overflow-x-auto rounded-lg border">
+          <CardSortControl
+            options={[
+              { field: 'member_name', label: 'Member' },
+              { field: 'trainings_completed', label: 'Trainings' },
+              { field: 'hours_completed', label: 'Hours' },
+              { field: 'last_activity', label: 'Last activity' },
+              { field: 'compliance_status', label: 'Status' },
+            ]}
+            currentSort={sortField}
+            currentDirection={sortDir}
+            onSort={handleSort}
+            tier="wide"
+            className="px-4 pt-3"
+          />
           <table className="rwd-table rwd-table-wide min-w-full text-sm">
             <thead className="bg-theme-surface-secondary">
               <tr>

@@ -14,6 +14,12 @@ export interface IdCardLayout {
   orientation: IdCardOrientation;
   sides: IdCardSides;
   symbology: Symbology;
+  /**
+   * "Valid through" (the soonest current certificate expiry) on the front,
+   * and the member's certifications on the back of a two-sided card. Off
+   * until the department saves it on.
+   */
+  certifications: boolean;
 }
 
 export const memberIdCardService = {
