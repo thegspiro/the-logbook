@@ -16,6 +16,43 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#4704](https://github.com/thegspiro/the-logbook/pull/4704) (branch
+`claude/security-review-integrations`)**: Feature 27 (Integrations), pass
+15 — watchdog pickup (the dedicated `/loop 30m /security-review` session,
+`session_011T1ZyyLrD5HagusgK9uDw2`, remains unreachable, confirmed via
+`ListAgents` → "No reachable agents").
+
+PR #4703 (Feature 26, Forms, pass 15) merged clean as squash commit
+`46428e925` — GitHub's merge endpoint returned several transient 500/502
+errors first, but one of the retried attempts went through server-side
+regardless (confirmed by the `pull_request.closed`/merged webhook event
+arriving afterward; a merge-API error response does not by itself mean the
+merge did not happen — always re-check the PR's own state before retrying
+again). Row 26 marked ✅ above. A fresh `list_pull_requests` (state=open)
+found no `claude/security-review-*` head open (the one open PR, #4702, is
+an unrelated docs pass), so this iteration continued to Step 1: row 27
+(Integrations) was the next ⬜ row.
+
+Baseline `b554d86d0` (pass 14's own merge, PR #4543). All declared scope
+files are byte-identical to pass 14 except seven: two public webhook
+handlers now attribute their audit events to the integration's own
+`organization_id` (closing the same gap pass 14 itself fixed for
+`zeffy_webhook.py`); `historical_import_service.py` keeps the reviewer's
+typed name on a "create member" decision for a cleaner re-create after
+undo; `historical_import_undo.py` now queues a deleted training
+record's/drill's attachments into the already-reviewed
+`pending_file_deletions` queue, closing a real orphaned-file gap; three
+frontend files (two layout fixes plus real pagination replacing a hard
+"first 200" cap on outside-agency entries, with its own new regression
+test). **0 fixed, 0 new findings.** Full write-up:
+`docs/security-review/INT-27-integrations.md`'s **Pass 15** section.
+
+Row 27 → ✅ (pending this PR's merge); next is Feature 28 (Security, audit
+& IP) — re-check `list_pull_requests` fresh rather than trusting this note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 26, Forms, pass 15, PR #4703, merged), preserved for history</summary>
+
 **PR [#4703](https://github.com/thegspiro/the-logbook/pull/4703) (branch
 `claude/security-review-forms`)**: Feature 26 (Forms), pass 15 — watchdog
 pickup (the dedicated `/loop 30m
@@ -28624,7 +28661,7 @@ iteration's commit" rule.
 | 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`, `meeting_waiver_requests.py` (added pass 14)                                                                                                                                                                                                             | ✅     |
 | 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                                                                                                                                                         | ✅     |
 | 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                                                                                                                                                               | ✅     |
-| 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`, `historical_import.py` (33 routes incl. undo, added pass 14), `historical_staffing_*.py`, `historical_import_undo.py` (added pass 14)                                                                                                        | ⬜     |
+| 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`, `historical_import.py` (33 routes incl. undo, added pass 14), `historical_staffing_*.py`, `historical_import_undo.py` (added pass 14)                                                                                                        | ✅     |
 | 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`, `audit_ship_service.py`                                                                                                                                                                                 | ⬜     |
 | 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                                                                                                                                                                    | ⬜     |
 | 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (26 unauth bootstrap routes)                                                                                                                                                                                                                                   | ⬜     |
@@ -28704,6 +28741,58 @@ it to be rediscovered.
 ---
 
 ## Log
+
+### 2026-11-25 — Feature 26 (Forms, pass 15) merged (PR #4703, after GitHub's merge API returned transient 500/502 errors before one retry went through); Feature 27 (Integrations, pass 15): watchdog pickup, audit-log org attribution + undo attachment cleanup + pagination fix, 0 fixed, 0 new findings
+
+Scheduled watchdog check-in — the dedicated `/loop 30m /security-review`
+session (`session_011T1ZyyLrD5HagusgK9uDw2`) remains unreachable per
+`ListAgents`. PR #4703 (Feature 26, Forms, pass 15) was fully green on
+every CI check (`mergeable_state` `clean`); GitHub's `merge_pull_request`
+endpoint then returned several transient `500`/`502` server errors across
+repeated retries with backoff, but the `pull_request.closed` (merged)
+webhook event arrived shortly after, confirming one of the retried
+attempts had actually gone through server-side despite the error
+responses — a reminder that a merge-API error is not on its own proof the
+merge failed; the PR's own state settles it. A fresh `list_pull_requests`
+(state=open) found no `claude/security-review-*` head open (the one open
+PR, #4702, is an unrelated docs pass), so this iteration continued to Step
+1: row 27 (Integrations) was the next `⬜` row.
+
+Baseline `b554d86d0` (pass 14's own merge, PR #4543). All declared scope
+files across this feature's eleven route files, both models/schemas
+directories, every `historical_staffing_*`/`historical_import_*` service
+file and the frontend module are byte-identical to pass 14 except seven:
+`integrations_webhook.py`/`salesforce_webhook.py` now attribute their
+inbound-webhook audit events to the integration's own `organization_id`
+(never client-supplied — the row `_load_integration` already resolves by
+`integration_id`/`integration_type`/`enabled`), closing the same gap pass
+14 itself fixed for `zeffy_webhook.py`;
+`historical_import_service.py` keeps a reviewer's typed name on a
+"create member" decision (pure additive `copy.deepcopy` reassignment,
+Pitfall #12 unaffected) so an undo-then-recommit does not fall back to a
+generic placeholder name; `historical_import_undo.py` now queues a deleted
+training record's or drill's attachments into the already-reviewed
+`pending_file_deletions` queue (the same mechanism member hard-delete
+uses, including its `referenced_elsewhere` keep-if-shared check before
+actual removal) — closing a real orphaned-file gap undoing an import used
+to leave; and three frontend files replace a hard "first 200" cap on
+outside-agency entries with real pagination (plus two layout fixes and a
+new regression test for the pagination change). Route surface
+re-enumerated by AST: 72 routes, unchanged from pass 14.
+
+**0 fixed, 0 new findings.** Standing open items (INT-5, the uninvoked
+chat-webhook allowlist; INT-28, a test-coverage gap with no known unscoped
+query behind it) both re-confirmed unchanged. Completion gate: flake8/
+black/isort clean (CI's pins), migrations valid (844 revisions, single
+head), route-permissions check clean (344 routes), schema docs current,
+scoped backend pytest 13,560 passed/24 environment-only skips (up from
+pass 14's 12,923/24), frontend typecheck/lint clean, targeted vitest 157
+passed (4 files, up from pass 14's 156). Full write-up:
+`docs/security-review/INT-27-integrations.md`'s **Pass 15** section.
+
+Row 27 → ✅ (pending this PR's merge). Next is Feature 28 (Security, audit
+& IP) — re-check `list_pull_requests` fresh rather than trusting this
+note.
 
 ### 2026-11-25 — Feature 25 (Messaging & notifications, pass 15) merged (PR #4701, after resolving a concurrent-session merge conflict); Feature 26 (Forms, pass 15): watchdog pickup, near-zero delta (additive History-widget helper, two out-of-scope/cosmetic frontend changes), 0 fixed, 0 new findings
 
