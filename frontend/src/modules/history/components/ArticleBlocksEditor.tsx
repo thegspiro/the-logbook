@@ -7,7 +7,7 @@
  * editor with it rather than handing its words to a neighbour.
  */
 import React, { useState } from 'react';
-import { ArrowDown, ArrowUp, ImagePlus, Trash2, Type } from 'lucide-react';
+import { ArrowDown, ArrowUp, Image, Trash2, Type } from 'lucide-react';
 import { RichTextEditor } from '../../../components/ux/RichTextEditor';
 import { mediaFileUrl } from '../services/api';
 import type { ArticlePhotoSize, MediaSummary } from '../types';
@@ -53,7 +53,7 @@ export const ArticleBlocksEditor: React.FC<ArticleBlocksEditorProps> = ({ value,
         disabled={disabled}
         className="btn-secondary inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-sm"
       >
-        <ImagePlus className="h-4 w-4" aria-hidden="true" />
+        <Image className="h-4 w-4" aria-hidden="true" />
         Add photo{where}
       </button>
     </div>

@@ -14,7 +14,7 @@ import {
   Images,
   Landmark,
   Medal,
-  Newspaper,
+  PenLine,
   Settings,
   Truck,
   Users,
@@ -121,7 +121,7 @@ export const HistoryHomePage: React.FC = () => {
           <span className="text-theme-text-primary font-medium">Events</span>
         </Link>
         <Link to="/history/articles" className="card card-hover flex items-center gap-3 p-4">
-          <Newspaper className="h-5 w-5 shrink-0" aria-hidden="true" />
+          <PenLine className="h-5 w-5 shrink-0" aria-hidden="true" />
           <span className="text-theme-text-primary font-medium">Articles</span>
         </Link>
         <Link to="/history/apparatus" className="card card-hover flex items-center gap-3 p-4">
@@ -192,7 +192,7 @@ export const HistoryHomePage: React.FC = () => {
             id="articles-heading"
             className="text-theme-text-primary mb-3 flex items-center gap-2 text-lg font-semibold"
           >
-            <Newspaper className="h-5 w-5" aria-hidden="true" />
+            <PenLine className="h-5 w-5" aria-hidden="true" />
             Latest articles
           </h2>
           <ul className="divide-theme-surface-border divide-y">
