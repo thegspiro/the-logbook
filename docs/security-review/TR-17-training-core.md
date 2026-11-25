@@ -2,8 +2,8 @@
 
 **Prefix:** `TR` · **Iteration:** 17 · **Reviewed:** 2026-10-19 (pass 9),
 2026-10-24 (pass 10), 2026-10-26 (pass 11), 2026-10-29 (pass 12), 2026-11-02
-(pass 13), 2026-11-08 (pass 14), 2026-11-21 (pass 15) · **PR:** see
-`PROGRESS.md`'s **Open PR** row
+(pass 13), 2026-11-08 (pass 14), 2026-11-21 (pass 15), 2026-11-25 (pass 16) ·
+**PR:** see `PROGRESS.md`'s **Open PR** row
 
 **Backend:** `api/v1/endpoints/training.py`,
 `api/v1/endpoints/training_programs.py`,
@@ -2655,6 +2655,211 @@ confirmed) and no change to `node_modules/typescript` vs.
 `node_modules/typescript-native`'s split. Both `npm run typecheck` and
 `npm run lint` then passed clean — **this sandbox's incomplete dependency
 install, not training-core's code, was what the first run hit.**
+
+---
+
+## Pass 16 (2026-11-25) — 0 fixed, 0 new findings; real delta (31 commits), all of it grading-correctness fixes and one retirement, none a new security surface
+
+**Watchdog pickup.** The dedicated `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) remains unreachable (`ListAgents`, "No
+reachable agents"). A fresh `list_pull_requests` (state=open) found no
+`claude/security-review-*` head open; row 17 (Training core) was the next
+`⬜` row against the feature table on current `main`. Branch
+`claude/security-review-training-core-p16` — the leftover remote
+`-p13` (pass 15's note: mis-numbered, never opened as a PR) is still neither
+open nor usable, so `-p16` is the correct next suffix (Pitfall #24).
+
+### Window and method
+
+Baseline `b31b8dea` (pass 15's merge) — confirmed an ancestor of current
+`main` (`git merge-base --is-ancestor`) — to `d9d89215` (current `main`,
+PR #4691's merge). 31 non-merge commits touch this feature's declared files
+or their immediate backing services with a real diff; diffstat across the
+twelve files `git diff --numstat` names: **1,334 insertions / 907 deletions**.
+`training_programs.py`, `knowledge_tests.py`, `shift_evaluation_templates.py`
+and `api/public/shift_evaluations.py` carry **zero** diff in this window
+(`api/public/shift_evaluations.py`'s +4/-0 is a one-line docstring cross-
+reference, read and confirmed non-functional).
+
+**Route inventory, re-enumerated by AST-adjacent regex over every
+`@router.<verb>(` and its full signature, not trusted from the diff:**
+
+| File | Routes (pass 15) | Routes (pass 16) | Auth-gated |
+| --- | --- | --- | --- |
+| `training.py` | 45 | **46** | 46/46 |
+| `training_programs.py` | 48 | 48 | 48/48 |
+| `training_sessions.py` | 13 | 13 | 13/13 |
+| `knowledge_tests.py` | 13 | 13 | 13/13 |
+| `shift_evaluation_templates.py` | 8 | 8 | 8/8 |
+| `shift_evaluations.py` | 14 | 14 | 14/14 |
+| **Total** | 141 | **142** | **142/142** |
+
+Net +1 in `training.py` is +2/−1, confirmed by diffing only the
+`@router.` lines: added `GET /double-credit` and
+`POST /double-credit/{flag_id}/keep-both`; removed `GET /competency-matrix`
+(the retirement below). Every one of the 142 carries a `Depends(...)`
+resolving to `get_current_user`, `require_permission(...)` or
+`require_all_permissions(...)` — confirmed on every decorator, not sampled.
+
+### Real delta, read in full
+
+- **`GET /double-credit`, `POST /double-credit/{flag_id}/keep-both`
+  (new, `training.py`).** Both `training.manage`-gated. The new service,
+  `training_credit_duplicates.py` (whole file, 268 lines): `flag_duplicate_credit`
+  queries candidates with `TrainingRecord.organization_id == organization_id`
+  before inserting a flag, so a flag's `event_record_id`/`other_record_id`
+  are structurally guaranteed same-org as the flag itself — the invariant
+  the two by-id gets in `keep_both_double_credit`
+  (`training.py:887-889`, `db.get(TrainingRecord, ...)` with no explicit org
+  filter) rely on. This is "resolves through an already-org-scoped parent"
+  (checklist §3): `keep_both()` org-scopes the flag id first
+  (`training_credit_duplicates.py:252-259`, also `with_for_update()`), and
+  only then is the flag's own FKs dereferenced. `list_open_flags` joins
+  `User` and filters `User.organization_id == organization_id` as well as
+  the flag's own org, so a flag somehow pointing cross-org (never possible
+  given the invariant above) still could not surface a foreign member's
+  name. The unique pair constraint plus the "already resolved, do nothing"
+  branch in `keep_both()` makes a repeat call a no-op (pitfall #36).
+  Migration `66f64aabdda2`: new table only, both `CASCADE` FKs
+  `nullable=False` (correct — they are never optional), the one `SET NULL`
+  FK (`resolved_by`) is `nullable=True` (pitfall #2), `create_all`-tolerant
+  (pitfall #26).
+- **`GET /training/competency-matrix` retired** (commit `530d6cf19`,
+  `CompetencyMatrixService` deleted, 590 lines). Re-confirmed by direct
+  read: the route no longer exists in `training.py`, the service module
+  cannot be imported (`test_competency_matrix_endpoint_retired.py`), and
+  every doc cross-reference (`docs/README.md`, `docs/TROUBLESHOOTING.md`,
+  `docs/UPGRADING.md`, the wiki) already states the retirement and points
+  callers at `/training/compliance-matrix` instead. A pure reduction in
+  attack surface; not a finding.
+- **`training_approval_reminders.py` (new file, whole-file read).** Daily
+  scheduled task (`scheduled_tasks.py`'s `run_training_approval_reminders`,
+  one call per org via `_for_each_org`). Its own query filters
+  `TrainingApproval.organization_id`, `TrainingSession.organization_id` and
+  `Event.organization_id` all to the iterated org. Idempotent by
+  construction (pitfall #36, cited in its own docstring): `_claim()` is a
+  conditional `UPDATE ... WHERE reminder_sent_at IS NULL [OR ...] ` committed
+  *before* the email send, so a second run or a crash mid-send cannot double-
+  send. `_training_officers` filters role, org and
+  `User.status.in_(ACTIVE_ACCOUNT_STATUSES)` — the pitfall #32 hybrid, not a
+  literal `== ACTIVE`. The one `logger.error` call in `_send` passes every
+  value as a separate positional argument (pitfall #33), and logs the
+  approval id, not any free text. The template
+  (`email_templates_training_approval.py`) puts every variable through the
+  default escaping path (`RAW_HTML_VARIABLES` is empty), so the course/event
+  names an officer typed render escaped in the HTML body.
+- **Migration `07abf8e6553b`** (`rolling_requirement_last_met`, new table
+  backing the "tell a rolling-requirement lapse again after a member
+  meets and re-lapses it" fix) and **`9c41e7b2d5a3`** (anonymised
+  instructors read "Former member" retroactively, batched 500-row reads with
+  a keyset cursor, no column/constraint change) — both `create_all`-tolerant,
+  no backfill risk (new empty table / data-only rewrite), reversibility
+  stated accurately in each docstring. **`7d6769fca85c`** (stamp a stable id
+  on every stored training-attachment entry, same batching) likewise.
+  **`5845dae0c277`**/**`bfb747c095c3`** are the usual enum-widen-for-a-new-
+  email-template-type shape, idempotent and existing-row-safe.
+- **Grading/compliance arithmetic** (`training_compliance.py` +350/−73,
+  `training_session_service.py` +201/−16, `training_program_service.py`
+  +134/−5, `training_course_links.py` +122/−31, `training_service.py`
+  +143/−640 net, mostly the competency-matrix deletion): every new `select()`
+  added in this window was found and individually confirmed org-scoped —
+  `load_held_sessions`'s new `awaiting_sign_off` subquery
+  (`training_compliance.py:1030-1045`) filters
+  `pending.organization_id == str(org_id)`; `_earlier_approved_user_ids`
+  (`training_session_service.py`) filters
+  `TrainingApproval.organization_id`; the `RequirementProgress` re-select in
+  `training_program_service.py`'s new reopen path re-fetches an id
+  `_get_org_scoped_progress` already verified in-org two lines above, for
+  eager-loading only. `training_course_links.py`'s new `with_for_update()` +
+  re-check-before-update in `link()` is a concurrency correctness fix
+  (closing the same two-links-racing-past-each-other's read class pitfall
+  #27 describes), not a new tenancy surface — `organization_id` was and
+  remains in every clause. None of this arithmetic is itself security-
+  relevant (no new permission, no new client-supplied id); it is corrected
+  per-screen grading behaviour, each piece already shipped with its own
+  guard test (`test_requirement_credit_locking.py`-adjacent suites, all in
+  the scoped run below). Not re-derived line-by-line: the specific numeric
+  grading rules (monthly-pace weighting, biannual-lapse override) beyond
+  confirming each has a new unit test exercising it — this is business
+  correctness the compliance feature's own tests own, not a security
+  dimension.
+- **`training_sessions.py` draft-visibility widening** (+22/−9):
+  `get_training_session_by_event` and `list_training_sessions_calendar` now
+  use the shared `app/api/draft_visibility.py` (owner decision 2026-11-23:
+  `events.manage` sees every draft, `training.manage` sees Training-type
+  drafts, nobody else). Both call sites AND the new clause onto a query
+  already filtered to `current_user.organization_id` —
+  `event_visible_clause()`/`can_see_draft_of_type()` gate on permission only
+  and carry no org logic of their own, so there is nothing for them to leak
+  across org lines. This is the training-side half of a cross-feature
+  change; the events-side half is Feature 16's to re-verify.
+- **Frontend.** New component `pages/training/DoubleCreditPanel.tsx`
+  (whole file): uses `useConfirm()` for "keep both" and `PromptDialog` for
+  the void reason — no `window.confirm`/`alert`/`prompt` (pitfall #16); no
+  `dangerouslySetInnerHTML`; every value renders as JSX text (auto-escaped).
+  Sweep of this window's training-core-adjacent frontend diff for
+  `window.confirm`/`alert`/`prompt`, `dangerouslySetInnerHTML`, a bare
+  `toHaveBeenCalledWith()`, banned locale-method/`date-fns` imports, and
+  `localStorage.setItem`: no hits.
+
+### Re-verified standing items
+
+- **TR7-1 — still resolved, not merely superseded** (re-confirmed again this
+  pass, same method as pass 15: no `/enrollments` POST in `training.py`'s
+  current route list, `enroll_member`'s locking/creation behavior read
+  line-by-line and unchanged in this window's zero-diff on that function).
+- **TR14-2 — unchanged, still ACCEPTED** (owner decision 2026-11-10); zero
+  diff on every file it touches in this window.
+
+### Verdict
+
+**Zero new findings.** The real delta is dominated by grading-correctness
+fixes (each already shipped with its own guard test, several explicitly
+"review finding" or "owner decision" in their commit message) and one
+attack-surface *reduction* (the competency-matrix retirement). The two new
+routes and the one new scheduled task are each built to the checklist's
+standard before this pass read them: org-scoped throughout, idempotent
+where repetition is possible, and with no new client-supplied FK stored
+without validation.
+
+## Schema & migration notes (pass 16)
+
+Five migrations in the window touch this feature's tables, all described
+above: `66f64aabdda2` (double-credit flags, new table), `07abf8e6553b`
+(rolling-requirement last-met, new table), `9c41e7b2d5a3` (former-member
+instructor names, data-only), `7d6769fca85c` (attachment entry ids,
+data-only), `5845dae0c277`/`bfb747c095c3` (enum widenings for new email
+template types). All five are `create_all`-tolerant; the two new tables'
+`SET NULL` FKs are `nullable=True`; none alters or tightens an existing
+column. `validate_migrations.py --strict` confirms a single current head
+(`e9cf8ab7e4e4`, 844 revisions).
+
+## Guard tests added (pass 16)
+
+None — no new finding to guard. Verification relied on the guard tests the
+reviewed commits already shipped with (`test_competency_matrix_endpoint_retired.py`,
+and the scoped suite below), plus this pass's own route re-enumeration and
+per-query org-scope reads.
+
+## Completion gate (pass 16)
+
+| Check | Result |
+| --- | --- |
+| `flake8 app/ tests/ alembic/` (CI's pin) | ✅ 0 violations |
+| `black --check app/ tests/ alembic/` (CI's pin) | ✅ 3541 files unchanged |
+| `isort --check-only app/ tests/ alembic/` (CI's pin) | ✅ clean |
+| `python3 scripts/validate_migrations.py --strict` | ✅ 844 revisions, single head `e9cf8ab7e4e4` |
+| `python3 scripts/check_route_permissions.py --strict` | ✅ 344 routes, 0 errors, 0 warnings |
+| `python3.13 scripts/generate_schema_docs.py --check` | ✅ up to date |
+| `pytest tests/ -q -k "training or compliance or knowledge_test or shift_evaluation or requirement_override or session_attendance or course_link or program_milestone or evaluated_calls or double_credit"` | ✅ 3427 passed, 1 pre-existing environment-only skip (`py_vapid`) |
+| Standing guard suites (org-scoping ratchet, capacity locking, LIKE escaping, CSV sweep, migration `create_all` tolerance, account-status gates, log-call shape, baseline member grants) | ✅ 188 passed |
+| `cd frontend && npm run typecheck` | ✅ 0 errors |
+| `cd frontend && npm run lint` (`--max-warnings 10`) | ✅ 0 errors, 0 warnings |
+| `npx vitest run` (this feature's pages — `training/`, `TrainingAdminPage`, `TrainingProgramsPage`, `TrainingRequirementsPage`) | ✅ 392 passed (38 files) |
+
+Rotation row 17 → ✅ (pending this PR's merge). Next: Feature 18 (Training
+extended) — re-check `list_pull_requests` fresh rather than trusting this
+note.
 
 ---
 
