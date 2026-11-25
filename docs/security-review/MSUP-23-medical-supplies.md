@@ -7,7 +7,119 @@
 2026-10-17 (pass 14, PR #3352), 2026-10-20 (pass 15, PR #3455),
 2026-10-24 (pass 16, PR #3635), 2026-10-27 (pass 17, PR #3766),
 2026-10-30 (pass 18, PR #3848), 2026-11-03 (pass 19, PR #3976),
-2026-11-11 (pass 20, PR #4228), 2026-11-21 (pass 21, this PR)
+2026-11-11 (pass 20, PR #4228), 2026-11-21 (pass 21, PR #4504),
+2026-11-25 (pass 22, this PR)
+
+## Pass 22 (2026-11-25) — 0 fixed, 0 new findings (watchdog pickup)
+
+**Watchdog pickup.** The dedicated `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) remains unreachable. PR #4697 (Feature
+22, Grants & fundraising, pass 16) had just merged (`e2e6467d8`); a fresh
+`list_pull_requests` (state=open) found no `claude/security-review-` head
+branch. Row 23 (Medical supplies) confirmed as the first `⬜` row in
+`PROGRESS.md`'s rotation table on a freshly fetched `main`.
+
+**Scope check — re-enumerated by AST, not diffed.** Walked every `@router.`
+decorator in `medical_supplies.py` directly via an AST script: **29 routes**,
+unchanged from pass 21, every one carrying an auth/permission dependency in
+its signature.
+
+`git diff --stat b739fcae7..HEAD` (pass 21's own merge commit) restricted to
+this feature's files and the shared service methods its router calls found
+`medical_supplies.py`, `app/mcp/tools/medical_supplies.py`,
+`models/inventory.py` and `schemas/inventory.py` byte-identical to pass 21 —
+confirmed by an empty diffstat for all four, not assumed. The real delta is
+entirely in `inventory_service.py` (shared with Inventory/Feature 11 and
+Equipment check/Feature 14, both already ✅), `scheduled_tasks.py`, and three
+frontend files:
+
+- **`inventory_service.py` — traced call-by-call against this feature's own
+  router, not the whole file:**
+  - **`create_item` refactored into `validate_new_item` + `create_item`**
+    (for the CSV import dry-run, workflow review W43-5). Read both functions
+    in full: `validate_new_item` runs the exact same checks in the exact same
+    order (date, category requirements, in-org FK assertion, pool-quantity
+    guard, serial/identifier uniqueness, status/condition state) and returns
+    the same error strings; `create_item` now calls it first and, if clean,
+    continues with the unchanged purchase-price/barcode/style/color/commit
+    logic. Behaviorally identical. `medical_supplies.py` calls
+    `service.create_item(...)` directly at two call sites (receiving a
+    delivery, creating an item) and `create_item_if_absent` at a third — all
+    three still reach the same validation path. **No finding.**
+  - **`record_lot_recall`/`lift_lot_recall` gained row locking**
+    (INV2-6): the supply item row is locked first, then the "already
+    recalled" duplicate check is itself a locking read rather than a plain
+    `SELECT` — closing the exact read-then-write race Pitfall #27 describes
+    (two officers recalling the same lot at once could otherwise both pass
+    the duplicate check). `medical_supplies.py`'s own two recall routes call
+    these methods directly (`service.record_lot_recall`/`lift_lot_recall`) —
+    this is this feature's own surface, verified good, not merely read.
+  - **`_consume_from_lots`/the pool repay path and `get_never_inspected`/the
+    reorder `reject_null_for_required` guard are NOT reachable from
+    `medical_supplies.py`.** Traced the call chain: `_consume_from_lots` is
+    only called from `issue_from_pool`, and `get_never_inspected` and the
+    reorder-update guard have no caller in `medical_supplies.py` either —
+    grepped directly, zero hits. These belong to Inventory's/Equipment
+    check's own pool-issuance and maintenance surfaces (Features 11/14,
+    already ✅). Noted only because the file is shared; no finding against
+    this feature.
+  - **The impact-plan PDF helper's new `identity`/`report_number` fields**
+    are on `render_impact_plan_pdf`, which `medical_supplies.py` does not
+    call (it belongs to the grants/fundraising impact-plan print, Feature 22,
+    just reviewed clean). No finding.
+- **`scheduled_tasks.py` (+149/−0 lines):** `git diff` restricted to this
+  file has zero lines matching `medical|suppl|lot_recall|expiring_stock` —
+  both new scheduled tasks (`training_approval_reminders`,
+  `apparatus_seat_request_lapse`) belong to other domains (Training core,
+  Scheduling/Apparatus), confirmed by grepping the diff text itself.
+- **Frontend (3 files) — the table-reflow `min-w-0` wrapping pattern
+  (Pitfall #39), already reviewed on other modules:** `LotRecallsPanel.tsx`,
+  `MedicalSuppliesPage.tsx` and `MedicalCategoriesPage.tsx` (+its test) wrap
+  cell content in `min-w-0` divs so long text wraps inside a flex row instead
+  of forcing the row wide, plus one `card-grid`/`break-words` swap on the
+  categories list. Read every diff line: zero new API calls, zero banned
+  patterns (`grep -riE "fetch\(|axios|api\.|window\.(confirm|alert|prompt)|
+  dangerouslySetInnerHTML|localStorage"` over the diff — no hits). Pure
+  layout, no behavior change.
+
+**Re-verified directly against current code, not re-cited from pass 21's
+prose** (all four scope files byte-identical to pass 21, so these are
+guaranteed unchanged, confirmed rather than assumed by direct grep):
+
+- **Tenant isolation (§3):** unchanged — file byte-identical.
+- **CSV safety (§4):** all three CSV endpoints/template route still construct
+  through `SafeCsvWriter` (`grep -n "SafeCsvWriter"`: 3 hits, unchanged).
+- **Recall routes, MCP tools:** `medical_supplies.py` and
+  `app/mcp/tools/medical_supplies.py` byte-identical to pass 21.
+- **Frontend (HIPAA/PII, §5):** `UNCACHEABLE_PREFIXES` still excludes
+  `/medical-screening/` and not `/medical-supplies/` — unchanged, still the
+  correct split (department stock data here, not member PHI).
+
+**0 new findings.** MSUP-1 through MSUP-27 all re-verified intact (file
+byte-identical to pass 21, so line citations are unchanged). MSUP-4 and
+MSUP-11 remain the only open items, both owner-accepted (2026-10-05,
+`docs/KNOWN_LIMITATIONS.md`) and unchanged.
+
+### Completion gate (pass 22)
+
+| Check                                                                                  | Result                                                           |
+| --------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/` (flake8 7.4.1, CI's pinned version)                      | ✅ clean                                                                  |
+| `black --check app/ tests/ alembic/` (black 26.10.1, CI's pinned version)              | ✅ clean                                                                  |
+| `isort --check-only app/ tests/ alembic/` (isort 9.0.2, CI's pinned version)           | ✅ clean                                                                  |
+| `python3 scripts/validate_migrations.py --strict`                                      | ✅ 844 revisions, single head `e9cf8ab7e4e4`                             |
+| `python3 scripts/check_route_permissions.py --strict` (repo root)                      | ✅ 344 routes, 0 errors, 0 warnings                                       |
+| `python3 scripts/generate_schema_docs.py --check`                                      | ✅ `DATABASE_SCHEMA.md` up to date                                        |
+| `python3.13 -m pytest tests/ -q -k "medical_supplies or medical_supply or lot_recall"` | ✅ passed (see PR for exact count), 1 pre-existing environment-only skip (`py_vapid`) |
+| `cd frontend && npm run typecheck`                                                     | ✅ 0 errors                                                               |
+| `cd frontend && npm run lint`                                                          | ✅ 0 errors, 0 warnings                                                   |
+| `npx vitest run src/modules/medical-supplies`                                          | ✅ passed (see PR for exact count)                                        |
+
+No source file was modified by this pass itself — a true re-verification
+pass. The real delta since pass 21 (a dry-run-friendly `create_item` refactor,
+a lot-recall locking fix, two unrelated scheduled tasks, and a three-file
+table-reflow layout pass) was already merged to `main` by other, non-rotation
+work and is reviewed clean above.
 
 ## Pass 21 (2026-11-21) — 0 fixed, 0 new findings (watchdog pickup)
 

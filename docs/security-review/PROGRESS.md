@@ -16,6 +16,46 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#4698](https://github.com/thegspiro/the-logbook/pull/4698) (branch
+`claude/security-review-medical-supplies`)**: Feature 23 (Medical
+supplies), pass 22 — watchdog pickup (the dedicated
+`/loop 30m /security-review` session,
+`session_011T1ZyyLrD5HagusgK9uDw2`, remains unreachable, confirmed via
+`ListAgents` → "No reachable agents").
+
+PR #4697 (Feature 22, Grants & fundraising, pass 16) was fully green on
+every CI check (`CI Success` passing on its current head, `mergeable_state`
+`clean`), with only the same bot-quota-failure comments seen on every
+recent pass (Codex "unable to review", Copilot "usage limits", no actual
+findings) — merged by this watchdog as squash commit `e2e6467d8`; row 22
+marked ✅ above. A fresh `list_pull_requests` (state=open) found no
+`claude/security-review-*` head open, so this iteration continued to Step
+1: row 23 (Medical supplies) was the next ⬜ row.
+
+Baseline `b739fcae7` (pass 21's own merge, PR #4504). `medical_supplies.py`,
+`app/mcp/tools/medical_supplies.py`, `models/inventory.py` and
+`schemas/inventory.py` are byte-identical to pass 21 (29 routes,
+re-enumerated by AST, unchanged). Real delta, all traced against this
+feature's own call sites: a dry-run-friendly `create_item`/`validate_new_item`
+refactor in the shared `inventory_service.py` (behaviorally identical,
+called from `medical_supplies.py` at its two create-item sites plus
+`create_item_if_absent`); a row-locking fix on `record_lot_recall`/
+`lift_lot_recall` (Pitfall #27, closing a read-then-write race on the
+duplicate-recall check) — this feature's own two recall routes call these
+directly, verified good; two unrelated new scheduled tasks and a pool-issue/
+inspection code path in the same shared file that `medical_supplies.py`
+does not call at all; and a three-file frontend table-reflow layout pass
+(Pitfall #39, `min-w-0` wrapping) with zero new API calls. **0 fixed, 0 new
+findings.** Full write-up:
+`docs/security-review/MSUP-23-medical-supplies.md`'s **Pass 22** section.
+
+Row 23 → ✅ (pending this PR's merge); next is Feature 24 (Meetings &
+minutes) — re-check `list_pull_requests` fresh rather than trusting this
+note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 22, Grants & fundraising, pass 16, PR #4697, merged), preserved for history</summary>
+
 **PR [#4697](https://github.com/thegspiro/the-logbook/pull/4697) (branch
 `claude/security-review-grants-fundraising-p16` — the plain
 `claude/security-review-grants-fundraising` collided with an old, abandoned
@@ -28458,7 +28498,7 @@ iteration's commit" rule.
 | 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`, `training_compliance.py` (declared scope since pass ≤11)                                                                                                                                                                             | ✅     |
 | 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                                                                                                                                                      | ✅     |
 | 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`, `zeffy.py`/`zeffy_service.py`/`zeffy_sync_service.py` (added pass 13)                                                                                                                                                      | ✅     |
-| 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                                                                                                                                                                 | ⬜     |
+| 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                                                                                                                                                                 | ✅     |
 | 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`, `meeting_waiver_requests.py` (added pass 14)                                                                                                                                                                                                             | ⬜     |
 | 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                                                                                                                                                         | ⬜     |
 | 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                                                                                                                                                               | ⬜     |
@@ -54264,4 +54304,70 @@ run src/modules/grants-fundraising` — 199 passed (35 files, up from
 
 Row 22 → ✅ (pending this PR's merge). Next is Feature 23 (Medical
 supplies) — re-check `list_pull_requests` fresh rather than trusting this
+note.
+
+### 2026-11-25 — Feature 22 (Grants & fundraising, pass 16) merged (PR #4697); Feature 23 (Medical supplies, pass 22): watchdog pickup, real delta (create_item dry-run refactor, lot-recall row locking), 0 new findings
+
+PR #4697 merged as squash commit `e2e6467d8`. A fresh `list_pull_requests`
+(state=open) found no `claude/security-review-*` head, and row 23 (Medical
+supplies) was the next `⬜` row, confirmed directly against the table on
+freshly-pulled `origin/main`.
+
+Baseline `b739fcae7` (pass 21's own merge, PR #4504). Route surface
+re-enumerated by AST: **29 routes**, unchanged from pass 21, every one
+carrying an auth/permission dependency. `git diff --stat` against the
+baseline, restricted to this feature's declared scope and the shared
+service methods its router calls, found `medical_supplies.py`,
+`app/mcp/tools/medical_supplies.py`, `models/inventory.py` and
+`schemas/inventory.py` byte-identical to pass 21 — confirmed by an empty
+diffstat for all four, not assumed.
+
+The real delta is entirely in the shared `inventory_service.py` (Inventory/
+Feature 11 and Equipment check/Feature 14, both already ✅),
+`scheduled_tasks.py`, and three frontend files, traced call-by-call against
+this feature's own router rather than reviewed file-wide:
+
+- **`create_item` refactored into `validate_new_item` + `create_item`**
+  (for a CSV-import dry run, workflow review W43-5). Read both functions in
+  full: identical checks, identical order, identical error strings;
+  `create_item` now calls the new function first and continues unchanged if
+  clean. `medical_supplies.py` calls `service.create_item(...)` at two
+  sites and `create_item_if_absent` at a third — all three still reach the
+  same validation path. **No finding.**
+- **`record_lot_recall`/`lift_lot_recall` gained row locking** (INV2-6): the
+  supply item row is locked first, then the "already recalled" duplicate
+  check is itself a locking read rather than a plain `SELECT`, closing the
+  exact read-then-write race Pitfall #27 describes. This feature's own two
+  recall routes call these methods directly — verified good, not merely
+  read.
+- **`_consume_from_lots`/the pool repay path, `get_never_inspected`, and the
+  reorder `reject_null_for_required` guard are not reachable from
+  `medical_supplies.py`** — traced the call chain directly (grep for each
+  symbol in the endpoint file: zero hits). These belong to Inventory's/
+  Equipment check's own pool-issuance and maintenance surfaces. Noted only
+  because the file is shared; no finding against this feature.
+- **`scheduled_tasks.py` (+149 lines):** zero lines matching
+  `medical|suppl|lot_recall|expiring_stock` in the diff — both new
+  scheduled tasks belong to Training core and Scheduling/Apparatus.
+- **Frontend (3 files):** the table-reflow `min-w-0` wrapping pattern
+  (Pitfall #39) plus one `card-grid`/`break-words` swap — zero new API
+  calls, zero banned patterns, confirmed by grep over the diff text.
+
+**0 fixed, 0 new findings.** MSUP-1 through MSUP-27 all re-verified intact
+(file byte-identical to pass 21). MSUP-4 and MSUP-11 remain the only open
+items, both owner-accepted and unchanged. Full write-up:
+`docs/security-review/MSUP-23-medical-supplies.md`'s **Pass 22** section.
+
+**Completion gate:** `flake8`/`black --check`/`isort --check-only` (CI's
+pins) on `app/ tests/ alembic/` — clean. `validate_migrations.py --strict`
+— 844 revisions, single head `e9cf8ab7e4e4`. `check_route_permissions.py
+--strict` — 344 routes, 0 errors/warnings. `generate_schema_docs.py
+--check` — `DATABASE_SCHEMA.md` up to date. Scoped backend pytest (`-k
+"medical_supplies or medical_supply or lot_recall"`) — 216 passed, 1
+pre-existing environment-only skip (`py_vapid`), matching pass 21 exactly.
+`npm run typecheck` — 0 errors. `npx vitest run src/modules/medical-supplies`
+— 210 passed (10 files), matching pass 21 exactly.
+
+Row 23 → ✅ (pending this PR's merge). Next is Feature 24 (Meetings &
+minutes) — re-check `list_pull_requests` fresh rather than trusting this
 note.
