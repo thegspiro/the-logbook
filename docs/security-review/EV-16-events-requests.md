@@ -3,7 +3,8 @@
 **Prefix:** `EV` · **Iteration:** 16 · **Reviewed:** 2026-08-26 (pass 1),
 2026-09-17 (pass 6), 2026-10-06 (pass 7), 2026-10-15 (pass 8), 2026-10-19
 (pass 9), 2026-10-23 (pass 10), 2026-10-26 (pass 11), 2026-10-29 (pass 12),
-2026-11-02 (pass 13), 2026-11-08 (pass 14), 2026-11-20 (pass 15) ·
+2026-11-02 (pass 13), 2026-11-08 (pass 14), 2026-11-20 (pass 15), 2026-11-25
+(pass 16) ·
 **PR:**
 [#1848](https://github.com/thegspiro/the-logbook/pull/1848) (pass 1),
 [#2630](https://github.com/thegspiro/the-logbook/pull/2630) (pass 6),
@@ -28,11 +29,15 @@ watchdog pickup, 0 fixed, 0 flagged — owner-decision batch work reviewed
 clean),
 [#4473](https://github.com/thegspiro/the-logbook/pull/4473) (pass 15,
 watchdog pickup, 1 fixed — EV-31, a rank-only organizer silently skipped
-the guest-headcount reminder)
+the guest-headcount reminder),
+this PR (pass 16, watchdog pickup, 0 fixed, 0 new findings — real delta:
+outreach-request feedback, staff-entered requests, apparatus crew on a
+request, and a signup sheet on an event with no request)
 
-**Backend:** `api/v1/endpoints/events.py` (63 routes),
-`api/v1/endpoints/event_requests.py` (23 routes — includes the
-public outreach event-request intake pipeline),
+**Backend:** `api/v1/endpoints/events.py` (71 routes),
+`api/v1/endpoints/event_requests.py` (28 routes — includes the
+public outreach event-request intake pipeline and the public feedback
+status-link routes),
 `api/v1/endpoints/event_attendance_petitions.py` (7 routes, unchanged),
 `api/public/event_guest.py` (4 routes, unchanged),
 `services/event_service.py`,
@@ -41,10 +46,18 @@ public outreach event-request intake pipeline),
 `services/event_organizer_service.py`,
 `services/guest_check_in_service.py`,
 `services/qr_check_in_analytics.py`,
-`services/community_engagement_service.py` (added pass 15 — the new
-guest-headcount read/write `events.py`'s new route calls),
-`services/guest_headcount_reminder_service.py` (added pass 15 — new, the
+`services/community_engagement_service.py` (added pass 15 — guest-headcount
+and, added pass 16, outreach closeout),
+`services/guest_headcount_reminder_service.py` (added pass 15, the
 daily reminder task),
+`services/outreach_feedback_service.py` (new, added pass 16 — the public
+feedback form behind a request's status token),
+`services/outreach_feedback_notice_service.py` (new, added pass 16 — tells
+the coordinator a response arrived),
+`services/outreach_calendar_service.py` (new, added pass 16 — the Outreach
+Overview's calendar read),
+`services/event_staffing_service.py` (new, added pass 16 — the signup
+sheet shared between a request's event and one with no request),
 `mcp/tools/events.py` (added pass 15 — MCP read tools over this
 feature's own models/service),
 `models/event.py`, `models/event_request.py`
@@ -75,6 +88,272 @@ touching `event_requests.contact_email` and
 reviewed pass 14; `09f0171ccf5e` (events postponement columns),
 `790a86084359` (events guest headcount column) and `73f64017f9e2` (guest
 headcount reminder email template type) reviewed pass 15 — see below
+
+---
+
+## Pass 16 (2026-11-25) — real delta (outreach feedback, staff-entered requests, apparatus crew, standalone signup sheets), 0 fixed, 0 new findings
+
+**Watchdog pickup.** The dedicated `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) remains unreachable (`ListAgents` → no
+reachable agents), consistent with every prior pass recorded in this file.
+Step 0: found one unrelated open PR, #4689 ("fix(migrations): merge the
+history-public-settings and training-approval-reminder heads") — not a
+`claude/security-review-*` head. `main` had two Alembic heads (this
+session's own startup hook had failed on it), and that PR was already
+CI-green and `mergeable_state: clean`, so it was merged directly before
+continuing. PR #4690 (Feature 15, Scheduling, pass 16) then merged while
+this iteration was starting; a fresh `list_pull_requests` (state=open)
+found no `claude/security-review-*` PR open, so row 16 (Events & requests)
+was confirmed the next `⬜` on a freshly re-read rotation table.
+
+### Scope
+
+Baseline `cf6e2f0d` (PR #4473's merge, pass 15) to head `4ef3491a5` (PR
+#4690's merge, current `main`). This window carries the "Community
+Outreach" expansion across many features at once; diffing each declared
+file individually rather than trusting the overall commit count:
+
+- **Real diff:** `events.py` (+509/−39, 8 new routes), `event_requests.py`
+  (+547/−18, 5 new routes), `event_service.py` (+724/−63 — mostly the
+  postponement/headcount code pass 15 already reviewed, re-confirmed
+  unchanged below), `event_request_service.py` (+470/−156), `models/event.py`
+  (+56 — 7 new nullable columns), `models/event_request.py` (+95 — a `source`
+  enum, `preferred_date_start`/`_end` narrowed from `DateTime` to `Date`, and
+  the new `EventRequestFeedback` table), `schemas/event.py` (+282),
+  `schemas/event_request.py` (+201/−25), `community_engagement_service.py`
+  (+178/−4 — the new outreach-closeout write, alongside pass 15's
+  unchanged guest-headcount code), `guest_headcount_reminder_service.py`
+  (+12/−8 — EV-31's own fix, already reviewed pass 15, landing in this
+  window with an unrelated report-name rename).
+- **Zero diff** (re-verified, not re-derived): `event_attendance_petitions.py`,
+  `event_attendance_petition_service.py`, `event_organizer_service.py`,
+  `guest_check_in_service.py`, `qr_check_in_analytics.py`, `mcp/tools/events.py`,
+  `api/public/event_guest.py`.
+- **Scope correction — four files added**, all new this window:
+  `services/outreach_feedback_service.py` (the public feedback form behind a
+  request's status token), `services/outreach_feedback_notice_service.py`
+  (tells the coordinator a response arrived), `services/outreach_calendar_service.py`
+  (the Outreach Overview's calendar read), `services/event_staffing_service.py`
+  (the signup sheet shared between a request's event and an event with no
+  request). All four read in full below.
+- **Frontend real diff:** 42 files (+6100/−71) under `modules/events`,
+  `pages/EventsPage.tsx`, `pages/events-settings/` (a new `TypeRolePreset.tsx`),
+  and the rest of the declared list. Swept (grep over the full changed-file
+  list) for `window.confirm`/`alert`/`prompt`, `dangerouslySetInnerHTML`, a
+  bare `toHaveBeenCalledWith()`, banned locale-method/`date-fns` imports, and
+  `localStorage.setItem`: one hit, a pre-existing (zero-diff-in-window)
+  `localStorage.setItem` of a non-sensitive saved filter preset in
+  `EventsPage.tsx` — not new, not a finding.
+- **Correctly out of scope** (touched by the same "Community Outreach"
+  rollout, owned elsewhere): `apparatus_events.py`/`apparatus_event_service.py`
+  (Feature 13, already reviewed pass 24 — `attach_request_apparatus_crew`
+  below only reaches its already-reviewed `attach_template`), the CRR
+  catalogue/activities tables and `admin_hours` crediting (Feature 21/22's
+  own surface), leave-request escalation (Feature 7's own routes), training
+  attachment/credit-duplicate-flag columns (Feature 17/18).
+
+**Thirteen new routes** (`grep -c '^@router\.'`: `events.py` 63 → 71,
+`event_requests.py` 23 → 28; `event_attendance_petitions.py` 7,
+`api/public/event_guest.py` 4, both unchanged): `GET /settings/feedback-forms`,
+`POST /settings/feedback-forms/starter`, `GET /outreach-calendar`,
+`PUT /{event_id}/outreach-closeout`, `GET /{event_id}/staffing`,
+`GET /{event_id}/staffing/seats`, `POST /{event_id}/staffing`,
+`POST /{event_id}/volunteer-call` (all in `events.py`); `GET`/`POST
+/status/{token}/feedback`, `POST ""` (`create_staff_event_request`),
+`GET /{request_id}/feedback`, `POST /{request_id}/apparatus-crew` (all in
+`event_requests.py`), all reviewed below.
+
+### Real changes reviewed
+
+- **Public feedback, `/status/{token}/feedback` (GET/POST,
+  `event_requests.py:578,603`, `OutreachFeedbackService`, new file).** The
+  status token is the only credential, same as the existing `/status/{token}`
+  and `/status/{token}/cancel` routes — looked up by
+  `EventRequest.status_token_hash == hash_status_token(token)`, never a plain
+  value, and every unavailable state (unknown token, request not Completed, no
+  form configured, already answered) answers the same 404/409 so the endpoint
+  cannot be used as an oracle. Per-IP rate limit (`check_ip_rate_limit`,
+  limit 10) ahead of any DB work. The submit holds `.with_for_update()` on the
+  request row and `event_request_feedback.request_id` is a unique FK, so a
+  double tap or a retried POST hits the `IntegrityError` branch and answers
+  409 rather than filing twice (pitfall #36) — read in full,
+  `outreach_feedback_service.py:362-453`. Answers go through the Forms
+  module's own `FormsService._sanitize_submission_data`/`_split_sensitive`,
+  the same validation a logged-in form submission gets. The response email
+  (`OutreachFeedbackNoticeService`) interpolates `contact_name` — public,
+  attacker-influenceable text — into an HTML template via
+  `EmailTemplateService.render`, which escapes every `{{variable}}`
+  substituted into `html_body` by default (`render`, confirmed at
+  `email_template_service.py:4920`: only the subject and the text body pass
+  `escape_html=False`); not a finding.
+- **Settings: `GET /settings/feedback-forms`,
+  `POST /settings/feedback-forms/starter` (`events.py:1317,1361`).** Both
+  `events.manage`, both org-scoped (the form query filters
+  `organization_id`; `create_starter_form` locks the organization row before
+  checking for an existing form, so a double click makes one form, not two —
+  pitfall #27/#36). The rating-question id a department later supplies in
+  settings is validated against the chosen form's own fields and that it can
+  be averaged (`OutreachFeedbackService.validate_settings`) before being
+  stored, independently of this pass — not new, re-read to confirm the
+  settings save that wires to it stays consistent.
+- **`GET /outreach-calendar` (`events.py:1684`, `OutreachCalendarService`,
+  new file).** `events.manage`. Range capped at `MAX_RANGE_DAYS` (93) and the
+  query itself capped at `MAX_ROWS`, every query org-scoped; the linked
+  request/staffing lookups it joins are also filtered on the same
+  `organization_id`. No unbounded query (checklist §6).
+- **`PUT /{event_id}/outreach-closeout` (`events.py:3386`,
+  `CommunityEngagementService.set_outreach_closeout`).** `events.manage`.
+  Event fetch is org-scoped and row-locked before any write; refuses a
+  cancelled event, a non-outreach event, and an event that has not started.
+  The client-supplied `apparatus_ids` list is validated one by one through
+  `resolve_apparatus_ref(db, apparatus_id, organization_id)` — the same
+  in-org FK check EC2-3 fixed for equipment-check's item loops — before any
+  id is stored (pitfall #14c); an unresolvable id raises before anything is
+  written. `materials` are merged case-insensitively with quantities summed
+  into a fresh dict (pitfall #20, not a shallow-copy mutation). The audit log
+  records counts and the photo-consent choice, never the free-text outcome
+  note (checklist §5).
+- **`create_staff_event_request` (`event_requests.py:834`, new).**
+  `events.manage`. A coordinator entering a phone/email/in-person request on a
+  caller's behalf. The optional `assigned_to` is validated in-org and
+  `is_active` (the `ACTIVE_ACCOUNT_STATUSES` hybrid, not a literal `==
+ACTIVE` — pitfall #32) before being stored, the same check `assign_request`
+  already applies. `EventRequestSource.WEB` is excluded from the values this
+  endpoint's schema accepts (`STAFF_ENTERED_SOURCES`), so a coordinator
+  cannot misrepresent an entered request as one the public submitted.
+- **`attach_request_apparatus_crew` (`event_requests.py:2156`, new).**
+  Requires **both** `events.manage` and `apparatus_events.manage` — correctly
+  AND-gated, not OR, since this both staffs a request and commits an
+  apparatus's crew. The request is loaded org-scoped and locked
+  (`_load_request_for_staffing`); the template id is resolved through
+  `ApparatusEventService.attach_template`, which itself re-fetches the event
+  locked and the template org-scoped before any write (already reviewed in
+  depth at Feature 13/pass 24) — this route adds no new unscoped surface on
+  top of it.
+- **`GET/POST /{event_id}/staffing`, `GET /{event_id}/staffing/seats`,
+  `POST /{event_id}/volunteer-call` (`events.py`, new) and
+  `services/event_staffing_service.py` (new file, read in full).** The
+  shared signup-sheet machinery for an outreach event created directly (no
+  public request behind it) — same shape as a request's own sheet, which
+  `event_request_service.py` already implements and this file calls into
+  (`get_staffing_state`, `create_outreach_shift`, `validate_staffing_roles`,
+  `volunteer_call_recipients`, all unchanged this window). `events.manage`
+  gates every write; the one read route, `GET /{event_id}/staffing/seats`,
+  is `events.view` (held by every member, by design — it names members, like
+  the shift crew board) and additionally re-checks `can_see_draft` and
+  `is_cancelled` before returning anything, matching the event detail route's
+  own gate. `open_event_staffing` locks the event row before its
+  read-then-write on `staffing_shift_id`, closing the same double-sheet race
+  Scheduling's own open-shift code guards against (pitfall #27).
+  `sync_volunteer_rsvps` is explicitly idempotent by construction — it
+  compares current seat-holders against existing RSVPs and corrects rather
+  than appends (pitfall #36, cited in its own docstring) — and is org-scoped
+  throughout (`sheet_event`, the `ShiftAssignment`/`EventRSVP` queries).
+- **`models/event_request.py`'s new `EventRequestSource` /
+  `contact_email` nullable / `preferred_date_start`/`_end` → `Date`.**
+  Reviewed as data-shape changes, not authorization surface — see Migrations
+  below for how existing rows were settled.
+
+### Re-verified standing items
+
+- **EV-17, EV-23, EV-26, EV-30 — still fixed, unregressed.** Every file each
+  one touches shows zero diff since pass 15 (confirmed above).
+- **EV-31 — still fixed, unregressed.** `guest_headcount_reminder_service.py`'s
+  diff in this window is exactly pass 15's own fix landing (it had not yet
+  reached `main` at that pass's baseline) plus an unrelated report-name
+  rename ("Community Engagement" → "Outreach Impact"); `can_record_headcount`
+  still calls `user_has_permission`, not a hand-rolled permission loop.
+- **`check_request_status`'s 256-bit token, still unrate-limited by
+  design** — unchanged. The two new public feedback routes add their own
+  rate limit (`_rate_limit_status_link`, 10/IP) rather than relying on it.
+- **No new `.like()`/`.ilike()`, no new CSV export** (grep, 0 hits beyond
+  the already-reviewed pair).
+
+### Migrations reviewed in full
+
+All `create_all`-table tolerant (pitfall #26 — each checks the table/column's
+own presence before acting and is a no-op on a fresh install, which builds
+these tables from the model instead) and idempotent (safe to run twice):
+
+- **`5a41041e328b`** — `event_requests.contact_email` NOT NULL → nullable
+  (a coordinator-entered request may have only a phone number), adds `source`
+  (`String(20)`, `NOT NULL DEFAULT 'web'`, so every existing row is correctly
+  attributed to the public form it actually came through — pitfall #35
+  satisfied by the default rather than a backfill).
+- **`c4e7a9d2f1b8`** — re-applies `5a41041e328b`'s two changes for an
+  installation whose startup had stamped past it without running it (a
+  documented `main.py` failure-recovery path); a no-op wherever the original
+  already ran. Existing-row safety: identical to the migration it repeats.
+- **`e016062a4127`** — `event_requests.preferred_date_start`/`_end`:
+  `DateTime` → `Date`. Existing rows are settled *before* the type change:
+  a value already at UTC midnight keeps its date; any other value (only
+  possible from a coordinator-entered request on the branch that preceded
+  this revision) is read as UTC and converted to the department's own
+  calendar date first, because MySQL strict mode refuses a lossy
+  DATETIME→DATE conversion otherwise (pitfall #35 directly addressed, with
+  the row-settling logic read in full above).
+- **`9b73e3dcaec7`** — adds `events.staffing_shift_id`/`staffing_roles`,
+  both nullable, no default.
+- **`d1dfb6c68e9b`** — adds `events.outreach_outcome_note`/
+  `outreach_apparatus_ids`/`outreach_materials`/`outreach_photos`, all
+  nullable.
+- **`c7e1a94d2f58`** — adds `event_rsvps.is_volunteer`
+  (`Boolean NOT NULL DEFAULT false`); every existing RSVP correctly defaults
+  to "not crew" (pitfall #35 satisfied by the default).
+- **`e3b8d61f4a27`** — adds `events.volunteer_call_sent_at`, nullable.
+- **`0a4667186b2d`** — creates `event_request_feedback`: `organization_id`
+  CASCADE non-null, `request_id` CASCADE non-null **and unique** (the
+  idempotency backstop for the submit path above), `form_id`/
+  `form_submission_id` both `ondelete="SET NULL"` **and** `nullable=True`
+  (pitfall #2 satisfied).
+- **`d41f7a2c9e58`** — widens the email-template-type enum for
+  `outreach_feedback_received`, the usual checked-both-tables,
+  delete-before-narrow-on-downgrade pattern this repo's enum-widening
+  migrations already use.
+- Several merge revisions in this window (`c4e7a9d2f1b8`'s siblings,
+  `c6c2a665a8fe`, `3f93727e84ba`, etc.) are no-op graph joins for unrelated
+  features' forked heads, not reviewed individually; `main` now resolves to
+  a single head (confirmed below).
+
+### Verified good ✅ (pass 16)
+
+- All five new authenticated routes requiring a client-supplied FK
+  (coordinator on a staff-entered request, template id on a crew attach,
+  apparatus ids on an outreach closeout) validate it in-org before storing,
+  either directly or by calling into an already-reviewed helper.
+- The two new public routes are token-gated exactly like the feature's
+  existing public surface, rate-limited, answer uniformly on every
+  unavailable state, and are idempotent by a unique-constraint backstop
+  under a row lock.
+- The one new `events.view`-gated read (`staffing/seats`) re-applies the
+  event's own draft/cancellation visibility rules rather than assuming the
+  permission alone is enough.
+- No new unbounded query (the calendar read is range- and row-capped), no
+  new seeded-grant change, no JSON-column shallow-copy mutation, no new
+  `window.confirm`/`alert`/`prompt`, no new bare `toHaveBeenCalledWith()`.
+- Every new nullable-data column and the one new table's `ondelete="SET
+  NULL"` pair are correctly `nullable=True`; the one column-type narrowing
+  (`Date`) settles existing rows before altering, and the one new NOT NULL
+  column (`is_volunteer`) carries a safe default.
+
+### Completion gate (pass 16)
+
+| Check | Result |
+| --- | --- |
+| `flake8 app/ tests/ alembic/` (CI-pinned 7.4.1) | ✅ 0 violations |
+| `black --check app/ tests/ alembic/` (CI-pinned 26.10.1) | ✅ clean |
+| `isort --check-only app/ tests/ alembic/` (CI-pinned 9.0.2) | ✅ clean |
+| `python3 scripts/validate_migrations.py --strict` | ✅ 844 revisions, single head `e9cf8ab7e4e4` |
+| `python3 scripts/check_route_permissions.py --strict` | ✅ 344 routes, 0 errors, 0 warnings |
+| `python3.13 scripts/generate_schema_docs.py --check` | ✅ up to date |
+| Scoped backend pytest (`-k "event or guest or rsvp or attendance or outreach or feedback"`) | ✅ 3562 passed, 1 pre-existing environment-only skip (`py_vapid`) |
+| Standing guard suites (org-scoping ratchet, capacity locking, LIKE escaping, CSV sweep, migration chain, `create_all`-table tolerance, account-status gates, log-call shape, baseline member grants) | ✅ 209 passed |
+| `cd frontend && npm run typecheck` | ✅ 0 errors |
+| `cd frontend && npm run lint` (`eslint --max-warnings 10`) | ✅ 0 errors, 0 warnings |
+| `npx vitest run` (this feature's modules/pages/components) | ✅ 564 passed (48 files) |
+
+Rotation row 16 → ✅ (pending this PR's merge). Next: Feature 17 (Training
+core) — re-check `list_pull_requests` fresh rather than trusting this note.
 
 ---
 
