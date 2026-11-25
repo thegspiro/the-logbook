@@ -16,6 +16,36 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#4710](https://github.com/thegspiro/the-logbook/pull/4710) (branch
+`claude/security-review-core-infra-p16`)**: Feature 33 (Core infrastructure),
+pass 16 — watchdog pickup (the dedicated `/loop 30m /security-review` session
+remains unreachable).
+
+PR #4709 (Feature 32, Locations & kiosk, pass 15) was confirmed merged on a
+freshly fetched `main` (`8b8febfbf`, merge commit) before this iteration
+started, and a fresh `list_pull_requests` (state=open) returned 0 results, so
+this iteration continued to Step 1: row 33 (Core infrastructure) was the next
+`⬜` row. Row 32 marked ✅ above.
+
+Baseline `c01ab8df1` (pass 15's own merge, PR #4580). Near-zero delta: of the
+feature's three declared scope files, `database.py` and `config.py` are
+byte-identical to pass 15; `security_middleware.py` carries exactly two new
+entries in `SecurityMonitoringMiddleware.EXPORT_ENDPOINTS` /
+`EXPORT_ENDPOINT_TEMPLATES` (`/api/v1/users/leave-requests/export`,
+`/api/v1/history/articles/{article_id}/export`), both already-merged fixes
+for a real export-monitoring coverage gap caught by this repo's own
+schema-pinned test the same day each route landed — traced to both underlying
+routes and verified org-scoped (XC-3), permission-gated, audited and (for the
+CSV one) written with `SafeCsvWriter` and date-range bounded. The migration
+chain has a single head (844 revisions, `e9cf8ab7e4e4`), unforked. **0 fixed,
+0 new findings.** Full write-up: `docs/security-review/CI16-33-core-infra.md`.
+
+Row 33 → ✅ (pending this PR's merge); next is Feature 34 (Frontend shared) —
+re-check `list_pull_requests` fresh rather than trusting this note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 32, Locations & kiosk, pass 15, PR #4709, merged), preserved for history</summary>
+
 **PR [#4709](https://github.com/thegspiro/the-logbook/pull/4709) (branch
 `claude/security-review-locations-kiosk-p15`)**: Feature 32 (Locations &
 kiosk), pass 15 — watchdog pickup (the dedicated `/loop 30m
@@ -50,6 +80,8 @@ unchanged from pass 14. **0 fixed, 0 new findings.** Full write-up:
 Row 32 → ✅ (pending this PR's merge); next is Feature 33 (Core
 infrastructure) — re-check `list_pull_requests` fresh rather than trusting
 this note.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 31, Scheduled tasks, pass 15, PR #4708, merged), preserved for history</summary>
@@ -28865,7 +28897,7 @@ iteration's commit" rule.
 | 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (26 unauth bootstrap routes)                                                                                                                                                                                                                                   | ✅     |
 | 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                                                                                                                                                         | ✅     |
 | 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                                                                                                                                                        | ✅     |
-| 33  | Core infrastructure       | CORE   | `core/security_middleware.py`, `core/database.py`, `core/config.py`                                                                                                                                                                                                                   | ⬜     |
+| 33  | Core infrastructure       | CORE   | `core/security_middleware.py`, `core/database.py`, `core/config.py`                                                                                                                                                                                                                   | ✅     |
 | 34  | Frontend shared           | FE     | `utils/apiCache.ts`, module axios instances, `ProtectedRoute`, global stores                                                                                                                                                                                                          | ⬜     |
 
 **35 iterations per full pass.** After 34 the rotation wraps to 00, which
@@ -28979,6 +29011,65 @@ it to be rediscovered.
 ---
 
 ## Log
+
+### 2026-11-25 — Feature 32 (Locations & kiosk, pass 15) merged (PR #4709); Feature 33 (Core infrastructure, pass 16): watchdog pickup, near-zero delta (two already-fixed export-monitoring registry entries), 0 fixed, 0 new findings
+
+Scheduled watchdog check-in — this iteration's own briefing already confirmed
+`main`'s HEAD was `8b8febfbf` (merge of PR #4709) and that a fresh
+`list_pull_requests` (state=open) returned 0 results just before the
+briefing; both were independently re-verified at the start of this run
+(`git fetch origin` + `git log origin/main -1`, and a fresh
+`list_pull_requests` call) rather than trusted from the briefing alone,
+per this rotation's own collision-avoidance discipline. Row 32 marked ✅
+above. Row 33 (Core infrastructure) was confirmed the next `⬜` row by
+reading the rotation table directly on this freshly fetched `main`.
+
+Baseline `c01ab8df1` (pass 15's merge, PR #4580). 604 commits landed since
+then; a path-scoped diff against the feature's three declared scope files
+found `database.py` and `config.py` byte-identical to pass 15, and exactly
+two lines added to `security_middleware.py`'s
+`SecurityMonitoringMiddleware.EXPORT_ENDPOINTS` /
+`EXPORT_ENDPOINT_TEMPLATES` registry: `/api/v1/users/leave-requests/export`
+and `/api/v1/history/articles/{article_id}/export`. Both were already-merged
+fixes — one (the leave-requests entry) caught and fixed by this repository's
+own CI failing `test_every_non_parameterized_export_route_is_covered` the
+same day the route landed (commit `4a449056d`); the other (the history
+article entry) registered in the same commit that introduced the route
+(`2c5f40f72`). Both underlying routes were traced and read in full rather
+than trusted from the registry addition alone: `GET
+/users/leave-requests/export` (`leave_requests.py:342`) is gated
+`members.manage`, org-scoped via `_org(current_user)` through every query in
+`LeaveCalendarService.export_csv`, written with `SafeCsvWriter`, bounded by
+`MAX_EXPORT_DAYS`, and audited; `GET
+/history/articles/{article_id}/export` (`history_articles.py:363`) resolves
+the article through an org-filtered query
+(`HistoryArticle.organization_id == ...`) before a record-level read-
+permission check (`can_read_record(viewer.can_view_archive, item)`), so a
+cross-tenant or under-permissioned request 404s before any content is
+rendered, and the export is audited only after the render succeeds. The
+whole-repo migration chain re-confirmed at a single head (844 revisions,
+`e9cf8ab7e4e4`, up from 820 at pass 15 — purely additive, no new fork). Every
+item pass 15 carried forward (Redis/DB TLS `CERT_NONE` without a configured
+CA and the cache's lack of tenant namespacing, both owner-accepted 2026-10-05;
+WebSocket `accept()` preceding auth, out of this feature's three declared
+scope files and zero-diffed since pass 15; MFA recovery codes' 40-bit
+unsalted SHA-256, also out of scope) was re-verified by name rather than
+silently dropped — none changed disposition. **0 fixed, 0 new findings.**
+Full write-up: `docs/security-review/CI16-33-core-infra.md`.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` on
+`backend/app/ tests/ alembic/` all clean; `validate_migrations.py --strict`
+single head; `check_route_permissions.py --strict` 344 routes / 0
+errors / 0 warnings; the feature's own 19-file test selection 681 passed, 1
+pre-existing skip; the 11 cross-cutting guard-test files 255 passed;
+`frontend`'s `npm run typecheck` and `npm run lint` both clean (neither
+applies to this feature's own scope files, since none changed, but both were
+run anyway and found nothing to report).
+
+Row 33 → ✅ (pending this PR's merge). PR opened per this rotation's process
+note ("do not merge — a separate watchdog/tending process picks it up, runs
+CI, and merges once green"); next is Feature 34 (Frontend shared) — re-check
+`list_pull_requests` fresh rather than trusting this note.
 
 ### 2026-11-25 — Feature 29 (Reports & analytics, pass 17) merged (PR #4706); Feature 30 (Onboarding, pass 15): watchdog pickup, near-zero delta (a Drive-restore recovery script's own helpers in `google_drive_storage.py`), 0 fixed, 0 new findings
 
