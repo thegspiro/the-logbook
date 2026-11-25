@@ -16,14 +16,11 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR not yet opened for this iteration** (branch
-`claude/security-review-locations-kiosk-p15`): Feature 32 (Locations &
+**PR [#4709](https://github.com/thegspiro/the-logbook/pull/4709) (branch
+`claude/security-review-locations-kiosk-p15`)**: Feature 32 (Locations &
 kiosk), pass 15 — watchdog pickup (the dedicated `/loop 30m
 /security-review` session, `session_011T1ZyyLrD5HagusgK9uDw2`, remains
-unreachable, confirmed via `ListAgents` → "No reachable agents"). This row
-is updated with the real PR number/link in a follow-up commit on this same
-branch once the PR is opened, per the rotation's own rule against a
-docs-only PR.
+unreachable, confirmed via `ListAgents` → "No reachable agents").
 
 PR #4708 (Feature 31, Scheduled tasks, pass 15) was fully green on every
 CI check (`CI`, `Secret Scan`, `Supply Chain`, `Docs Site` all `success`
