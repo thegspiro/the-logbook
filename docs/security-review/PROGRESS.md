@@ -16,6 +16,63 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#4684](https://github.com/thegspiro/the-logbook/pull/4684) (branch
+`claude/friendly-babbage-xstbnj`)**: Feature 13
+(Apparatus & NFC), pass 24 — watchdog pickup (the dedicated `/loop 30m
+/security-review` session, `session_011T1ZyyLrD5HagusgK9uDw2`, remains
+unreachable). **Branch-name deviation**, same as prior watchdog-run passes
+recorded here: this session's environment restricts pushes to its own
+assigned branch rather than a freely-chosen
+`claude/security-review-apparatus-nfc` name.
+
+PR #4683 (Feature 12, Facilities, pass 17 — 0 fixed, 0 new findings) had
+already merged before this iteration started; row 12 marked ✅ above. A
+fresh `gh api search/issues` found no `claude/security-review-*` head open,
+so this iteration continued to Step 1: row 13 (Apparatus & NFC) was the
+next ⬜ row.
+
+Baseline `5ecee8110` (PR #4452's merge, pass 23). This file's own declared
+scope (`apparatus.py`, `nfc_tags.py`, and their established supporting
+services) showed only a small, already-correct `apply_updates` fix in
+`apparatus_service.py` — but a wider sweep of every `apparatus*`/`nfc*`
+backend path turned up a real feature the declared scope had not caught up
+to: **apparatus events**, a new ~2800-line backend surface (23 routes, a
+2151-line service, two supporting services, a model and a schema file) plus
+~4500 lines of frontend outside `modules/apparatus/` (a `pages/apparatus-events/`
+tree, `components/event-detail/apparatus-crew/`, and boundary touches on
+event detail/requests/scheduling/outreach pages) — outreach that rolls an
+apparatus with a named crew but is not a shift, landed across several
+feature commits since pass 23 without yet entering this file's scope list.
+Reviewed end to end against all seven `CHECKLIST.md` dimensions: every route
+carries a permission dependency; self-scoped writes (claiming/releasing/
+withdrawing one's own seat or request) are enforced in the service layer,
+not merely by the endpoint's OR-permission, and a request that is not the
+caller's own reads as 404 rather than 403 (no id-existence leak); every
+by-id read/write is org-scoped and every client-supplied FK
+(apparatus/category/duplicated-from template/target user) is validated
+in-org first; seat and request writes lock the parent event row, then take
+their own locking read, with a unique-index backstop
+(`ux_event_apparatus_seats_event_user`,
+`ux_apparatus_event_seat_requests_pending`) catching any ordering mistake;
+every piece of user text reaching an email (a coordinator's seat-call
+message, a decline note, seat/unit labels) is `html.escape`d; the four new
+migrations all guard their `create_table`/`add_column` on the
+table/column's own absence and give existing rows a safe default; and the
+one grant migration adds `apparatus_events.manage`/`.signup` on the exact
+evidence-based, idempotent, `is_system`-gated shape Pitfall #23 requires.
+`/apparatus-events/` is confirmed present in `UNCACHEABLE_PREFIXES`. **0
+fixed, 0 new findings** — the whole feature was already correct when
+reviewed. Full write-up: `docs/security-review/AP-13-apparatus-nfc.md`'s
+**Pass 24** section, which also updates this file's own declared backend/
+frontend/migration scope to name the new files explicitly.
+
+Row 13 → ✅ (pending this PR's merge); next is Feature 14 (Equipment check
+& shifts) — re-check `list_pull_requests`/`gh api search/issues` fresh
+rather than trusting this note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 12, Facilities, pass 17, PR #4683, merged), preserved for history</summary>
+
 **PR [#4683](https://github.com/thegspiro/the-logbook/pull/4683) (branch
 `claude/friendly-babbage-xstbnj`)**: Feature 12
 (Facilities), pass 17 — watchdog pickup (the dedicated `/loop 30m
@@ -28038,7 +28095,7 @@ iteration's commit" rule.
 | 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`, `services/member_documents.py` (LIFE-11 erasure, added pass 17)                                                                                                                                                         | ✅     |
 | 11  | Inventory                 | INV    | `endpoints/inventory.py` (7089 L), `inventory_service.py`                                                                                                                                                                                                                             | ✅     |
 | 12  | Facilities                | FAC    | `endpoints/facilities.py` (4394 L), `facilities_service.py`                                                                                                                                                                                                                           | ✅     |
-| 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                                                                                                                                                         | ⬜     |
+| 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`, `apparatus_events.py` (new, pass 24)                                                                                                                                                                                                                   | ✅     |
 | 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                                                                                                                                                           | ⬜     |
 | 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                                                                                                                                                      | ⬜     |
 | 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                                                                                                                                                             | ⬜     |
@@ -28120,6 +28177,80 @@ into row 13's declared scope rather than leaving it to be rediscovered.
 ---
 
 ## Log
+
+### 2026-11-25 — Feature 12 (Facilities, pass 17) merged (PR #4683); Feature 13 (Apparatus & NFC, pass 24): watchdog pickup, found a new feature (apparatus events) outside this file's declared scope, reviewed end to end, 0 fixed, 0 new findings
+
+PR #4683 merged; row 12 confirmed ✅ above. A fresh `gh api search/issues
+q='repo:thegspiro/the-logbook is:pr is:open head:claude/security-review'`
+found zero results, so this iteration continued to Step 1: row 13
+(Apparatus & NFC) was the next ⬜ row.
+
+Baseline `5ecee8110` (PR #4452's merge, pass 23). The declared scope's own
+files showed almost nothing — `apparatus.py`/`nfc_tags.py` byte-identical
+(94/11 routes, AST-reconfirmed), and `apparatus_service.py`'s only change a
+small, already-correct `apply_updates` swap on three hand-rolled update
+loops (Pitfall #1). A wider sweep of the whole `apparatus*`/`nfc*` backend
+surface — not just the files this document had listed — found the real
+story: **apparatus events**, a substantial new feature (outreach that rolls
+an apparatus with a named crew but is not a shift) landed across ten
+commits since pass 23, entirely unreviewed because this file's declared
+scope line had not been updated to include it. 23 new routes
+(`apparatus_events.py`), a 2151-line service, two supporting services
+(seat-call emails, seat-request-decision emails), a model, a schema, and
+four migrations — plus ~4500 lines of frontend living outside
+`modules/apparatus/` (`pages/apparatus-events/`,
+`components/event-detail/apparatus-crew/`, and touches on event
+detail/requests/scheduling/outreach pages).
+
+Reviewed against all seven `CHECKLIST.md` dimensions, read in full rather
+than sampled: every route carries a permission dependency (AST-confirmed,
+no bare route); self-scoped member writes (claiming/releasing/withdrawing
+one's own seat or request) are enforced in the service layer, not merely by
+the endpoint's OR-permission — `release_seat` raises `PermissionError` for
+a non-manager clearing someone else's seat, and `withdraw_request` returns
+404 for a request that is not the caller's own rather than leaking its
+existence; every by-id read/write filters `organization_id`, and every
+client-supplied FK (apparatus, admin-hours category, duplicated-from
+template, a seat's target user) is validated in-org before being stored
+(XC-1), with the target-user check also applying `ACTIVE_ACCOUNT_STATUSES`
+correctly (Pitfall #32's mechanism, not `== ACTIVE`); every seat/request
+write locks the parent event row then takes its own locking read
+(`with_for_update()` + `populate_existing`, closing the Pitfall #27
+snapshot-predates-the-lock gap), backed by two unique indexes as a second
+line of defense against a lock-ordering mistake; every piece of user text
+reaching an email (a seat-call message, a decline note, seat/unit labels)
+is `html.escape`d; and all four migrations guard their
+`create_table`/`add_column` on the table/column's own absence (Pitfall
+#26) and give existing rows a safe default (Pitfall #35), with the one
+grant migration (`apparatus_events.manage`/`.signup`) adding on the exact
+evidence-based, idempotent, `is_system`-gated shape Pitfall #23 requires.
+`/apparatus-events/` is confirmed present in `UNCACHEABLE_PREFIXES`. The
+one cross-feature call site (`event_requests.py`'s
+`/{request_id}/apparatus-crew`, which calls into this feature's
+`attach_template`) AND-gates two permissions and loads its target through
+an already org-scoped, locked fetch — reviewed at that boundary only, per
+this file's own pass 22/23 precedent for a one-caller review. **0 fixed, 0
+new findings** — the entire feature was already correct when reviewed. Full
+write-up: `docs/security-review/AP-13-apparatus-nfc.md`'s **Pass 24**
+section, which also updates the file's own declared scope line so the next
+pass does not have to rediscover this feature the same way.
+
+**Completion gate:** `flake8`/`black --check`/`isort --check-only` on
+`app/ tests/ alembic/` all clean. `validate_migrations.py --strict` — 839
+revisions, single head `1735810be510`. `check_route_permissions.py
+--strict` — 339 routes, 0 errors/0 warnings. Scoped backend pytest (`-k
+"apparatus or nfc or evoc or driver_exception or external_agency"`) — 1647
+passed, 1 pre-existing environment-only skip (`py_vapid`). Standing guard
+suites (capacity locking, org-scoping ratchet, LIKE escaping, CSV sweep,
+migration chain, `create_all`-table tolerance, account-status gates,
+log-call shape, baseline member grants) — 209 passed. `npm run typecheck` —
+0 errors. `npm run lint` — 0 errors, 0 warnings. `npx vitest run` (the
+apparatus-events tree + `apparatus-crew` + `modules/apparatus`) — 208
+passed (23 files).
+
+Row 13 → ✅ (pending this PR's merge). Next is Feature 14 (Equipment check
+& shifts) — re-check `gh api search/issues`/`list_pull_requests` fresh
+rather than trusting this note.
 
 ### 2026-11-25 — Feature 11 (Inventory, pass 17) merged (PR #4678); Feature 12 (Facilities, pass 17): watchdog pickup, real delta (FAC2-7/FAC2-9/FAC2-10 app-review correctness fixes, one security-relevant; a shared member-erasure `documents_service.py` extraction; a mobile-UX frontend rollout), 0 fixed, 0 new findings
 
