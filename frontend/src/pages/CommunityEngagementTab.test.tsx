@@ -266,6 +266,53 @@ describe('CommunityEngagementTab', () => {
     expect(within(section).getByRole('listitem', { name: '22046 Falls Church, VA' })).toBeInTheDocument();
   });
 
+  it("shows this year's goals beside the report", async () => {
+    getCommunityEngagement.mockResolvedValue(
+      report({
+        goals: {
+          year: 2026,
+          year_fraction: 1,
+          year_complete: false,
+          goals: [
+            {
+              id: 'g-events',
+              year: 2026,
+              kind: 'outreach',
+              measure_id: null,
+              outreach_metric: 'events_held',
+              label: 'Events held',
+              target: 40,
+              actual: 44,
+              pace_target: 40,
+              met: true,
+              on_pace: true,
+            },
+            {
+              id: 'g-alarms',
+              year: 2026,
+              kind: 'crr_measure',
+              measure_id: 'm-alarms',
+              outreach_metric: null,
+              label: 'Smoke alarm install · Alarms installed',
+              target: 200,
+              actual: 150,
+              pace_target: 200,
+              met: false,
+              on_pace: false,
+            },
+          ],
+        },
+      })
+    );
+    renderTab();
+
+    const section = await screen.findByRole('region', { name: 'Goals for 2026' });
+    expect(within(section).getByRole('progressbar', { name: 'Events held' })).toHaveAttribute(
+      'aria-valuetext',
+      '44 of 40, met'
+    );
+  });
+
   it('leaves the CRR section out of a report that carries none', async () => {
     renderTab();
 

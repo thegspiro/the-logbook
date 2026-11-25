@@ -26,6 +26,7 @@ import {
   ShieldCheck,
   Truck,
   Users,
+  Target,
 } from 'lucide-react';
 import { dashboardService, eventRequestService, eventService } from '../../services/api';
 import type { CommunityReachTotals } from '../../services/api';
@@ -44,6 +45,9 @@ import { getErrorMessage } from '../../utils/errorHandling';
 import { REQUEST_BOARD_PATH, requestPagePath } from '../event-requests/requestInbox';
 import { toDateKey } from '../../modules/scheduling/utils/shiftBoard';
 import OutreachCalendar from './OutreachCalendar';
+import type { OutreachGoalYear } from '../../services/outreachGoalServices';
+import GoalProgressBar from '../community-engagement/GoalProgressBar';
+import { GOAL_SETTINGS_PATH, behindPace } from '../community-engagement/goalProgress';
 import {
   ATTENTION_LIST_LIMIT,
   CLOSEOUT_LOOKBACK_DAYS,
@@ -163,6 +167,43 @@ const Tile: React.FC<{ icon: React.ElementType; label: string; value: string; su
   </div>
 );
 
+/** The year's goals furthest behind pace, so the manager sees what needs work. */
+const GoalsBehindPace: React.FC<{ goals: OutreachGoalYear }> = ({ goals }) => {
+  const behind = behindPace(goals.goals).slice(0, ATTENTION_LIST_LIMIT);
+  return (
+    <div className="card mt-3 p-4" role="group" aria-labelledby="outreach-goals-heading">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <h3 id="outreach-goals-heading" className="text-theme-text-primary flex items-center gap-2 font-semibold">
+          <Target className="h-4 w-4 shrink-0 text-red-700 dark:text-red-400" aria-hidden="true" />
+          Goals for {goals.year}
+        </h3>
+        <Link
+          to={goals.goals.length ? IMPACT_PATH : GOAL_SETTINGS_PATH}
+          className="text-theme-text-secondary focus-visible:ring-theme-focus-ring touch:min-h-11 inline-flex items-center text-sm font-medium hover:underline focus-visible:ring-2 focus-visible:outline-none"
+        >
+          {goals.goals.length ? 'All goals' : 'Set goals'}
+        </Link>
+      </div>
+      {goals.goals.length === 0 ? (
+        <p className="text-theme-text-muted mt-2 text-sm">No goals set for this year.</p>
+      ) : behind.length === 0 ? (
+        <p className="text-theme-text-muted mt-2 text-sm">Every goal is on pace or met.</p>
+      ) : (
+        <>
+          <p className="text-theme-text-muted mt-0.5 text-sm">Furthest behind pace</p>
+          <ul className="mt-3 space-y-3">
+            {behind.map((goal) => (
+              <li key={goal.id}>
+                <GoalProgressBar goal={goal} yearComplete={goals.year_complete} />
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+    </div>
+  );
+};
+
 const OutreachOverviewTab: React.FC = () => {
   const tz = useTimezone();
   const compact = useMediaQuery('(max-width: 767px)');
@@ -178,6 +219,7 @@ const OutreachOverviewTab: React.FC = () => {
   const [ahead, setAhead] = useState<Loadable<OutreachCalendarItem[]> | null>(null);
   const [requests, setRequests] = useState<Loadable<EventRequestListItem[]> | null>(null);
   const [impact, setImpact] = useState<Loadable<CommunityReachTotals | null> | null>(null);
+  const [goals, setGoals] = useState<OutreachGoalYear | null>(null);
 
   const days = useMemo(() => viewDays(view, visibleDate), [view, visibleDate]);
 
@@ -205,6 +247,8 @@ const OutreachOverviewTab: React.FC = () => {
           ? { data: impactResult.value.current, error: null }
           : { data: null, error: getErrorMessage(impactResult.reason, 'Outreach Impact could not be loaded.') }
       );
+      // The same report carries this year's goals; no second request.
+      setGoals(impactResult.status === 'fulfilled' ? (impactResult.value.goals ?? null) : null);
     });
     return () => {
       cancelled = true;
@@ -437,6 +481,7 @@ const OutreachOverviewTab: React.FC = () => {
             />
           </div>
         )}
+        {goals && <GoalsBehindPace goals={goals} />}
       </section>
     </div>
   );

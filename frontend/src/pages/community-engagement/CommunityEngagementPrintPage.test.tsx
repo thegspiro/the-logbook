@@ -218,6 +218,53 @@ describe('CommunityEngagementPrintPage', () => {
     expect(within(zips).getByRole('rowheader', { name: '22046 Falls Church, VA' })).toBeInTheDocument();
   });
 
+  it("prints the year's goals with what each reached and whether it was met", async () => {
+    getCommunityEngagement.mockResolvedValue(
+      report({
+        goals: {
+          year: 2026,
+          year_fraction: 1,
+          year_complete: true,
+          goals: [
+            {
+              id: 'g-events',
+              year: 2026,
+              kind: 'outreach',
+              measure_id: null,
+              outreach_metric: 'events_held',
+              label: 'Events held',
+              target: 40,
+              actual: 44,
+              pace_target: 40,
+              met: true,
+              on_pace: true,
+            },
+            {
+              id: 'g-alarms',
+              year: 2026,
+              kind: 'crr_measure',
+              measure_id: 'm-alarms',
+              outreach_metric: null,
+              label: 'Smoke alarm install · Alarms installed',
+              target: 200,
+              actual: 150,
+              pace_target: 200,
+              met: false,
+              on_pace: false,
+            },
+          ],
+        },
+      })
+    );
+    renderPage();
+
+    const table = await screen.findByRole('table', { name: 'Goals for 2026' });
+    expect(within(table).getByRole('row', { name: 'Events held 40 44 Met' })).toBeInTheDocument();
+    expect(
+      within(table).getByRole('row', { name: 'Smoke alarm install · Alarms installed 200 150 Missed' })
+    ).toBeInTheDocument();
+  });
+
   it('opens the print dialog once the report has loaded', async () => {
     renderPage();
 

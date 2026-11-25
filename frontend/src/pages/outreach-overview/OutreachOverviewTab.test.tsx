@@ -156,6 +156,85 @@ describe('OutreachOverviewTab', () => {
     );
   });
 
+  it("shows this year's goals furthest behind pace, from the same report", async () => {
+    getCommunityEngagement.mockResolvedValue({
+      current: totals,
+      goals: {
+        year: 2026,
+        year_fraction: 0.5,
+        year_complete: false,
+        goals: [
+          {
+            id: 'g-ahead',
+            year: 2026,
+            kind: 'outreach',
+            measure_id: null,
+            outreach_metric: null,
+            label: 'People reached',
+            target: 100,
+            actual: 80,
+            pace_target: 50,
+            met: false,
+            on_pace: true,
+          },
+          {
+            id: 'g-near',
+            year: 2026,
+            kind: 'outreach',
+            measure_id: null,
+            outreach_metric: null,
+            label: 'Events held',
+            target: 100,
+            actual: 45,
+            pace_target: 50,
+            met: false,
+            on_pace: false,
+          },
+          {
+            id: 'g-far',
+            year: 2026,
+            kind: 'outreach',
+            measure_id: null,
+            outreach_metric: null,
+            label: 'Member hours',
+            target: 100,
+            actual: 10,
+            pace_target: 50,
+            met: false,
+            on_pace: false,
+          },
+        ],
+      },
+    });
+    renderTab();
+
+    const card = await screen.findByRole('group', { name: 'Goals for 2026' });
+    expect(
+      within(card)
+        .getAllByRole('progressbar')
+        .map((bar) => bar.getAttribute('aria-label'))
+    ).toEqual(['Member hours', 'Events held']);
+    expect(within(card).getByRole('link', { name: 'All goals' })).toHaveAttribute(
+      'href',
+      '/events/admin?tab=community'
+    );
+    expect(getCommunityEngagement).toHaveBeenCalledTimes(1);
+  });
+
+  it('offers to set goals when the year has none', async () => {
+    getCommunityEngagement.mockResolvedValue({
+      current: totals,
+      goals: { year: 2026, year_fraction: 0.5, year_complete: false, goals: [] },
+    });
+    renderTab();
+
+    const card = await screen.findByRole('group', { name: 'Goals for 2026' });
+    expect(within(card).getByRole('link', { name: 'Set goals' })).toHaveAttribute(
+      'href',
+      '/events/admin?tab=settings&section=goals'
+    );
+  });
+
   it('sends "Log a request" to the requests board with its dialog open', async () => {
     renderTab();
 
