@@ -11,6 +11,7 @@ import React, { useEffect, useState } from 'react';
 import { useTimezone } from '../../../../hooks/useTimezone';
 import { formatCalendarDate, formatDateTime } from '../../../../utils/dateFormatting';
 import type { EvaluationDetail } from '../../types/evaluations';
+import { MAX_ANSWER_TEXT } from '../../utils/evaluationRecord';
 
 interface ResponsePanelProps {
   detail: EvaluationDetail;
@@ -65,7 +66,7 @@ export const ResponsePanel: React.FC<ResponsePanelProps> = ({ detail, busy, onSa
       <textarea
         id="member-response"
         className="form-input min-h-32"
-        maxLength={5000}
+        maxLength={MAX_ANSWER_TEXT}
         value={text}
         onChange={(e) => setText(e.target.value)}
       />

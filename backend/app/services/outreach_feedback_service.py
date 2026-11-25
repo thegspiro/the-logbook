@@ -54,6 +54,9 @@ from app.schemas.membership_pipeline import PublicFollowUpFormField
 from app.services.event_request_service import get_pipeline_settings
 from app.services.follow_up_form_service import display_answer
 from app.services.forms_service import FormsService, as_plain_number
+from app.services.outreach_feedback_notice_service import (
+    OutreachFeedbackNoticeService,
+)
 
 FORM_SETTING = "feedback_form_id"
 RATING_SETTING = "feedback_rating_field_id"
@@ -425,11 +428,20 @@ class OutreachFeedbackService:
                 details={"rating": rating, "form_submission_id": str(submission.id)},
             )
         )
+        # The bells join this transaction, so they exist exactly when the
+        # response does; the emails wait for the commit.
+        notices = OutreachFeedbackNoticeService(self.db)
+        notice = await notices.prepare(
+            event_request,
+            organization,
+            rating,
+            rating_scale_max(rating_field) if rating_field is not None else None,
+        )
         try:
             await self.db.commit()
         except IntegrityError:
             # Two sends raced past the check above; the unique constraint kept
-            # the first.
+            # the first, and rolled this one's bells back with it.
             await self.db.rollback()
             raise FeedbackAlreadySent()
         logger.info(
@@ -437,6 +449,7 @@ class OutreachFeedbackService:
             event_request.id,
             rating,
         )
+        await notices.send_emails(notice)
         return stamp
 
     # ------------------------------------------------------------------

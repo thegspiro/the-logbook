@@ -1980,12 +1980,15 @@ the capped page column (a card is at most ~1278px on any screen), and a dialog
   sub-line in one `min-w-0` div (in card mode a cell is a flex row, so bare
   siblings sit side by side and cannot wrap). Never drop a column or shorten
   data to make it fit.
-- **A table that is still cards on a tablet** (it needs more than the ~40rem a
-  tablet leaves it) takes `rwd-table-fields` beside its tier. From a 30rem card
-  up, the `rwd-table-lead` cell is the card's title and the other cells sit in
+- **A wide, xwide or 2xwide table that is cards in a card of 30rem or more**
+  (a tablet, or a laptop under its tier) sets each row out as a grid: the
+  `rwd-table-lead` cell is the card's title and the other cells sit in 10rem
   columns, label above value, instead of a label at the left edge and its
-  value a screen's width away. `rwd-table-corner` pins a selection checkbox to
-  the card's top right. The member roster is the example.
+  value a screen's width away. Nothing opts in. A value must fit a 10rem
+  column: text wraps there whatever `whitespace-nowrap` says, and a row of
+  buttons or inputs needs `flex-wrap`. `rwd-table-corner` pins a selection
+  checkbox to the card's top right. Mark the cell that names the row
+  `rwd-table-lead`; the member roster and the apparatus list are examples.
 - **Labels:** every body `<td>` gets a `data-label` naming its column; an
   unlabelled cell is hidden in card mode, and `rwdTableLabelIntegrity.test.ts`
   fails the build on one. A full-width row (detail, empty state, group header)

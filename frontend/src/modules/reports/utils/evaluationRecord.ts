@@ -112,6 +112,11 @@ export function partItems(definition: TemplateDefinition, kind: EvaluationPartKi
 
 export const emptyContent = (): PartContent => ({ answers: {} });
 
+/** The server's cap on every written answer, comment and reason in a part, and
+ * on the member's response (`MAX_ANSWER_TEXT` in schemas/evaluation.py). Held in
+ * the box so an over-long entry is never typed only to be refused on save. */
+export const MAX_ANSWER_TEXT = 5000;
+
 /** A copy of `content` with one item's answer merged in. */
 export function withAnswer(content: PartContent, key: string, patch: Partial<ItemAnswer>): PartContent {
   const current = content.answers[key] ?? {};

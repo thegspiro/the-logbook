@@ -3709,6 +3709,36 @@ class ElectionService:
                 eligible += 1
         return eligible, len(members)
 
+    @staticmethod
+    def _remap_merged_votes(votes: List[Any], merge_map: Dict[str, str]) -> List[Any]:
+        """Credit merged write-in variants' votes to their merge target.
+
+        Lightweight copies, never the ORM rows, because a vote's signature
+        embeds its candidate_id. The copy must carry every field a count
+        reads: ``paper_ballot_id`` is what groups a ranked paper sheet's rows
+        into one ballot, and leaving it off split every sheet carrying a
+        merged write-in into a ballot per row, its lower rankings counted as
+        first choices (ELEC2-12).
+        """
+        return [
+            (
+                SimpleNamespace(
+                    id=v.id,
+                    candidate_id=merge_map[v.candidate_id],
+                    position=v.position,
+                    voter_hash=v.voter_hash,
+                    voter_id=v.voter_id,
+                    vote_rank=v.vote_rank,
+                    paper_ballot_id=getattr(v, "paper_ballot_id", None),
+                    is_manual=v.is_manual,
+                    manual_batch_id=v.manual_batch_id,
+                )
+                if v.candidate_id in merge_map
+                else v
+            )
+            for v in votes
+        ]
+
     async def get_election_results(
         self,
         election_id: UUID | str,
@@ -3794,23 +3824,7 @@ class ElectionService:
             and c.merged_into_candidate_id in candidate_ids
         }
         if merge_map:
-            all_votes = [
-                (
-                    SimpleNamespace(
-                        id=v.id,
-                        candidate_id=merge_map[v.candidate_id],
-                        position=v.position,
-                        voter_hash=v.voter_hash,
-                        voter_id=v.voter_id,
-                        vote_rank=v.vote_rank,
-                        is_manual=v.is_manual,
-                        manual_batch_id=v.manual_batch_id,
-                    )
-                    if v.candidate_id in merge_map
-                    else v
-                )
-                for v in all_votes
-            ]
+            all_votes = self._remap_merged_votes(all_votes, merge_map)
             candidates = [c for c in candidates if c.id not in merge_map]
 
         # Count total eligible voters (excludes non-voting membership tiers)
@@ -4032,7 +4046,13 @@ class ElectionService:
             victory_condition = election.victory_condition
             victory_percentage = election.victory_percentage
 
-        if voting_method == "ranked_choice":
+        # An Approve/Deny item decides one question and is never ranked,
+        # whatever the election's method — the rule contest_is_ranked states
+        # for the paper tally. Sending it through instant runoff broke an even
+        # split by candidate id and ignored the item's own victory condition
+        # (ELEC2-11).
+        is_approval_item = item is not None and item.get("vote_type") == "approval"
+        if voting_method == "ranked_choice" and not is_approval_item:
             return self._calculate_ranked_choice_results(
                 candidates, votes, election, total_eligible
             )
@@ -4053,9 +4073,7 @@ class ElectionService:
         # A Yes/No item decides one question; only a candidate race fills
         # seats (W50-11).
         seats = (
-            1
-            if item is not None and item.get("vote_type") == "approval"
-            else (getattr(election, "seats_per_position", 1) or 1)
+            1 if is_approval_item else (getattr(election, "seats_per_position", 1) or 1)
         )
 
         # A multi-seat race has the same shape: a voter marks up to one
@@ -4123,32 +4141,21 @@ class ElectionService:
                 else:
                     tied_top[0].is_winner = True
 
-        elif victory_condition == "majority":
-            # Strictly more than half. Use integer math: floor(n/2)+1 is the
-            # smallest vote count exceeding half. The previous (n/2)+1 float
-            # form over-required by a full vote for odd totals — e.g. with 3
-            # votes it demanded 2.5 (→3), so a candidate with 2 of 3 (a clear
-            # 66% majority) was wrongly denied the win.
-            required_votes = total_votes // 2 + 1
-            for result in results:
-                if result.vote_count >= required_votes:
-                    result.is_winner = True
-
-        elif victory_condition == "supermajority":
-            required_percentage = victory_percentage or 67
-            for result in results:
-                if result.percentage >= required_percentage:
-                    result.is_winner = True
-
-        elif victory_condition == "threshold":
-            if election.victory_threshold:
-                for result in results:
-                    if result.vote_count >= election.victory_threshold:
-                        result.is_winner = True
-            elif victory_percentage:
-                for result in results:
-                    if result.percentage >= victory_percentage:
-                        result.is_winner = True
+        elif victory_condition in ("majority", "supermajority", "threshold"):
+            # One seat is a seat count of one. Marking every candidate over
+            # the bar a winner elected two people to one office whenever two
+            # cleared it — an approval majority, a vote threshold, a
+            # supermajority of 50% or less (ELEC2-10). The seat declaration
+            # caps the winners and applies the tie policy to a tie for the
+            # seat. Its majority bar is floor(n/2)+1, strictly more than half.
+            self._declare_seat_winners(
+                results,
+                election,
+                victory_condition,
+                1,
+                victory_percentage,
+                total_votes,
+            )
 
         return results
 
@@ -7680,25 +7687,19 @@ class ElectionService:
         )
         pkgs_by_id = {p.id: p for p in pkgs_result.scalars().all()}
 
-        votes_result = await self.db.execute(
-            select(Vote)
-            .where(Vote.election_id == election.id)
-            .where(Vote.deleted_at.is_(None))
-            .where(Vote.is_test.is_(False))
-            .where(self._is_attested_vote(election.id))
+        # The outcome is whatever the results call decided for the item's
+        # Approve row: the item's own victory condition, quorum, write-in
+        # merges and attestation all apply there. Re-counting Approve against
+        # Deny here set a 67% membership vote won 6 to 4 to elected while the
+        # results screen, certified PDF and report email all said it failed,
+        # and elected applicants on an advisory vote that missed quorum
+        # (ELEC2-13, pitfall #29).
+        results = await self.get_election_results(
+            election.id, organization_id, _internal_bypass_visibility=True
         )
-        all_votes = votes_result.scalars().all()
-
-        # Batch-fetch all candidate names to avoid N+1 queries
-        candidate_ids = {v.candidate_id for v in all_votes if v.candidate_id}
-        candidate_names: Dict[str, str] = {}
-        if candidate_ids:
-            cand_result = await self.db.execute(
-                select(Candidate.id, Candidate.name).where(
-                    Candidate.id.in_(list(candidate_ids))
-                )
-            )
-            candidate_names = {str(row.id): row.name for row in cand_result.all()}
+        contests = results.results_by_position if results else []
+        by_item = {r.ballot_item_id: r for r in contests if r.ballot_item_id}
+        by_position = {r.position: r for r in contests}
 
         for item in pkg_items:
             pkg = pkgs_by_id.get(item["prospect_package_id"])
@@ -7706,24 +7707,29 @@ class ElectionService:
                 continue
 
             position = item.get("position") or item["id"]
-            item_votes = [v for v in all_votes if v.position == position]
+            item_id = item.get("id")
+            contest = (by_item.get(item_id) if item_id else None) or by_position.get(
+                position
+            )
+            rows = {
+                c.candidate_name: c for c in (contest.candidates if contest else [])
+            }
+            approve = rows.get("Approve")
+            deny = rows.get("Deny")
+            approve_count = approve.vote_count if approve else 0
+            deny_count = deny.vote_count if deny else 0
 
-            approve_count = 0
-            deny_count = 0
-            for vote in item_votes:
-                name = candidate_names.get(str(vote.candidate_id))
-                if name == "Approve":
-                    approve_count += 1
-                elif name == "Deny":
-                    deny_count += 1
-
-            new_status = "elected" if approve_count > deny_count else "not_elected"
+            new_status = "elected" if approve and approve.is_winner else "not_elected"
             pkg.status = new_status
 
             logger.info(
-                f"Package status synced | package={pkg.id} "
-                f"prospect={pkg.prospect_id} approve={approve_count} "
-                f"deny={deny_count} status={new_status}"
+                "Package status synced | package={} prospect={} approve={} "
+                "deny={} status={}",
+                pkg.id,
+                pkg.prospect_id,
+                approve_count,
+                deny_count,
+                new_status,
             )
             await self._audit(
                 "election_package_result_synced",

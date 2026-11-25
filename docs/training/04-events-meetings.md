@@ -3669,6 +3669,16 @@ The link is added to the built-in status email. A request email template your
 department attached to the **Completed** trigger itself is sent as written,
 without it.
 
+When a requester sends feedback, the request's coordinator gets an email and a
+bell notification linking to the request. If the request has no coordinator,
+or the coordinator has left or can no longer manage events, it goes to the
+**Default Coordinator** in Request Handling instead, and failing that to every
+member who manages events. A rating in the bottom three-fifths of the scale (3
+or less out of 5) starts the subject with **Low rating:**. Each officer can
+stop the email under **Event officer duties** in their notification
+preferences; the bell still arrives. To stop it for the whole department, or
+reword it, edit **Requester Feedback Received** under **Email Templates**.
+
 > **Screenshots needed:** (`04-114-feedback-form-setting.png`) **Settings →
 > Public Requests → Handling**, the **Feedback From Requesters** block with the
 > starter form chosen as **Feedback form** and **How did the visit go?** as

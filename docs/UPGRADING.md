@@ -869,6 +869,19 @@ Nothing blocks a restart, and no migration ships with this change.
 - A file that cannot be removed straight away (an unreachable remote store)
   is retried by the hourly `pending_file_deletions` sweep.
 
+### Outreach feedback notifies the request's coordinator (2026-11-24)
+
+Nothing blocks a restart. Migration `d41f7a2c9e58` adds
+`outreach_feedback_received` to `email_templates.template_type` and
+`scheduled_emails.template_type`, and changes no other table. A downgrade
+deletes rows of that type, a department's edits included.
+
+Nothing is sent until a department has chosen a feedback form (see
+`0a4667186b2d` below). Once one is chosen, each response sends the request's
+coordinator (or the default coordinator, or failing both every member who
+manages events) an email and an in-app notice. There is no backlog to catch
+up: only responses sent after the upgrade notify anyone.
+
 ### Erasure repairs, apparatus sign-up approval, requester feedback and waiver rules (2026-11-23)
 
 Nothing blocks a restart. Ten migrations arrive together and run in one
@@ -945,7 +958,7 @@ Goals.
 Nothing blocks a restart. Migration `5845dae0c277` adds the
 `training_approval_reminder` email template type to
 `email_templates.template_type` and `scheduled_emails.template_type`, and
-changes no other table. It builds on `1735810be510`.
+changes no other table. It builds on `d41f7a2c9e58`.
 
 - **A one-time burst of sign-off reminders.** The new daily
   `training_approval_reminders` task (07:50) emails the training officers

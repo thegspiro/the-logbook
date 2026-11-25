@@ -69,7 +69,10 @@ const PaperBallotBatchesPanel: React.FC<PaperBallotBatchesPanelProps> = ({
             currentUserId !== null &&
             batch.recorded_by !== currentUserId &&
             !alreadyAttested;
-          const canVoid = electionOpen && batch.status !== 'voided';
+          // Voiding stays available after close: the backend never gates it on
+          // status, and a post-close correction is kept and marked as a results
+          // revision (owner decision 2026-10-05, ELEC2-15).
+          const canVoid = batch.status !== 'voided';
           return (
             <li key={batch.batch_id} className="border-theme-surface-border rounded-md border p-4">
               <div className="flex flex-wrap items-center justify-between gap-2">

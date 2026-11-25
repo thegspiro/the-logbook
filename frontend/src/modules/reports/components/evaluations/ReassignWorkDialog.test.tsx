@@ -81,6 +81,7 @@ describe('ReassignWorkDialog', () => {
       ],
       evaluators: [],
       periods: [],
+      templates: [],
     });
     reassignmentHolders.mockResolvedValue([{ user_id: 'old', name: 'Former Captain', evaluations: 2 }]);
     reassignmentPreview.mockResolvedValue(plan);

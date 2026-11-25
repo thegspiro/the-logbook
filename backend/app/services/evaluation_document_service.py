@@ -281,18 +281,25 @@ class EvaluationDocumentService:
         self.evaluations = EvaluationService(db)
 
     async def _document(
-        self, evaluation: Evaluation, with_response: bool = False
+        self,
+        evaluation: Evaluation,
+        with_response: bool = False,
+        *,
+        latest: bool = False,
     ) -> Optional[EvaluationDocument]:
-        return (
-            await self.db.execute(
-                select(EvaluationDocument).where(
-                    EvaluationDocument.evaluation_id == evaluation.id,
-                    EvaluationDocument.organization_id == evaluation.organization_id,
-                    EvaluationDocument.revision == evaluation.revision,
-                    EvaluationDocument.includes_response.is_(with_response),
-                )
-            )
-        ).scalar_one_or_none()
+        query = select(EvaluationDocument).where(
+            EvaluationDocument.evaluation_id == evaluation.id,
+            EvaluationDocument.organization_id == evaluation.organization_id,
+            EvaluationDocument.revision == evaluation.revision,
+            EvaluationDocument.includes_response.is_(with_response),
+        )
+        if latest:
+            # Under InnoDB's REPEATABLE READ a plain SELECT answers from the
+            # snapshot this transaction took at its first read, which predates
+            # a row another request has just committed; a locking read sees
+            # the latest committed row (CLAUDE.md pitfall #27).
+            query = query.with_for_update()
+        return (await self.db.execute(query)).scalar_one_or_none()
 
     async def ensure_document(
         self,
@@ -301,10 +308,15 @@ class EvaluationDocumentService:
         actor: User,
         *,
         with_response: bool = False,
+        commit: bool = True,
     ) -> Optional[EvaluationDocument]:
         """The revision's frozen PDF, building it on first call. None when
         the evaluation does not exist or is not finalized, or, for the
-        response PDF, when no response has been submitted."""
+        response PDF, when no response has been submitted.
+
+        ``commit=False`` leaves the new row for the caller to commit, so the
+        build can run inside the caller's savepoint (see ``_build_document``
+        in the endpoints)."""
         evaluation = await self.evaluations._evaluation(organization_id, evaluation_id)
         if evaluation is None or evaluation.status != EvaluationStatus.FINALIZED.value:
             return None
@@ -348,11 +360,12 @@ class EvaluationDocumentService:
         try:
             async with self.db.begin_nested():
                 self.db.add(document)
-            await self.db.commit()
+            if commit:
+                await self.db.commit()
         except IntegrityError:
             # Another request stored it first; keep theirs, drop this copy.
             await file_storage.delete_quietly(stored.path)
-            return await self._document(evaluation, with_response)
+            return await self._document(evaluation, with_response, latest=True)
         logger.info(
             "Stored evaluation document for evaluation {} revision {} (response: {})",
             evaluation.id,

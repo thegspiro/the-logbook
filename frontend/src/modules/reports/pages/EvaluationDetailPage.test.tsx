@@ -352,6 +352,30 @@ describe('EvaluationDetailPage', () => {
     expect(await screen.findByText('All changes saved')).toBeInTheDocument();
   });
 
+  it('saves unsaved edits before Update figures replaces the part', async () => {
+    const saved = (content: unknown) =>
+      detail({
+        parts: [
+          { kind: 'evaluator', status: 'draft', content: content as never, submitted_at: null, updated_at: null },
+        ],
+      });
+    let stored: unknown = { answers: {} };
+    savePart.mockImplementation((_id: string, _kind: string, content: unknown) => {
+      stored = content;
+      return Promise.resolve(saved(content));
+    });
+    refreshData.mockImplementation(() => Promise.resolve(saved(stored)));
+    const user = userEvent.setup();
+    renderPage();
+    await user.click(await screen.findByRole('radio', { name: /Level 4/ }));
+    await user.click(screen.getByRole('button', { name: 'Update figures' }));
+
+    await waitFor(() => expect(refreshData).toHaveBeenCalledWith('ev1'));
+    expect(savePart).toHaveBeenCalledTimes(1);
+    expect(savePart.mock.invocationCallOrder[0]).toBeLessThan(refreshData.mock.invocationCallOrder[0] ?? 0);
+    expect(screen.getByRole('radio', { name: /Level 4/ })).toBeChecked();
+  });
+
   it('submits only after the evaluator confirms', async () => {
     submitPart.mockResolvedValue({ outcome: 'submitted', evaluation: detail() });
     const user = userEvent.setup();
@@ -586,6 +610,22 @@ describe('EvaluationDetailPage', () => {
     await user.type(screen.getByLabelText(/Reason \(shown to Pat Member\)/), '  Drafted twice.  ');
     await user.click(confirmDelete);
     await waitFor(() => expect(remove).toHaveBeenCalledWith('ev1', 'Drafted twice.'));
+  });
+
+  it('returns a reader without the conduct list to where they came from after a delete', async () => {
+    permissions = ['evaluations.delete'];
+    remove.mockResolvedValue({});
+    get.mockResolvedValue(
+      detail({ viewer: { ...detail().viewer, can_delete: true, can_edit_evaluation: false, can_refresh_data: false } })
+    );
+    const user = userEvent.setup();
+    renderPage();
+    await user.click(await screen.findByRole('button', { name: 'Delete' }));
+    await user.type(screen.getByLabelText(/Reason \(shown to Pat Member\)/), 'Drafted twice.');
+    await user.click(screen.getByRole('button', { name: 'Delete evaluation' }));
+
+    await waitFor(() => expect(window.location.pathname).toBe('/members/my-crew'));
+    permissions = [];
   });
 
   it('offers no delete when the server does not', async () => {

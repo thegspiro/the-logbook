@@ -1,24 +1,20 @@
-"""Training approval reminder becomes an email template
+"""Requester feedback received becomes an email template
 
 ``email_templates.template_type`` and ``scheduled_emails.template_type`` gain
-``training_approval_reminder``: the email to the training officers when a
-training session's sign-off has waited 7 days, and again at 14 (owner decision
-2026-11-23). No template row is created; ``ensure_default_templates`` makes
-it. Which approvals were reminded is stamped in the existing
-``training_approvals.reminder_sent_at``, which nothing wrote before, so no
-column is added.
+``outreach_feedback_received``: the email to the officer handling an outreach
+request when its requester sends feedback through the status page. No
+template row is created; ``ensure_default_templates`` makes it.
 
 Existing rows: only an enum value is added, so no row is touched (pitfall
 #35). Safe to run twice: the upgrade checks for the value first.
 
 Downgrade deletes any rows of the new type, a department's edits to the
-template included, and narrows the enum back. ``reminder_sent_at`` stamps are
-left as they are, so an upgrade after a downgrade does not remind about those
-approvals again.
+template included, and narrows the enum back. The feedback itself, in
+``event_request_feedback``, is not touched either way.
 
-Revision ID: 5845dae0c277
+Revision ID: d41f7a2c9e58
 Revises: 1735810be510
-Create Date: 2026-11-23 07:12:00.000000
+Create Date: 2026-11-24 05:00:00.000000
 """
 
 from typing import Sequence, Union
@@ -27,15 +23,14 @@ import sqlalchemy as sa
 from alembic import op
 
 # revision identifiers, used by Alembic.
-revision: str = "5845dae0c277"
+revision: str = "d41f7a2c9e58"
 down_revision: Union[str, None] = "1735810be510"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
-_NEW_TEMPLATE_TYPES = ("training_approval_reminder",)
+_NEW_TEMPLATE_TYPES = ("outreach_feedback_received",)
 
-# EmailTemplateType as this revision finds it (bfb747c095c3's ALL_TYPES; the
-# revisions between it and 1735810be510 add no template type).
+# EmailTemplateType as this revision finds it (bfb747c095c3's ALL_TYPES).
 # Written out rather than imported so a later edit to the enum cannot rewrite
 # this step.
 _EXISTING_TEMPLATE_TYPES = (

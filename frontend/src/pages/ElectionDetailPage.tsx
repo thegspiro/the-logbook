@@ -1102,6 +1102,9 @@ export const ElectionDetailPage: React.FC = () => {
       toast.success('Vote voided');
       setVoidVoteId('');
       setVoidVoteReason('');
+      // A void after close stamps a results revision on the election, which
+      // the revised-results banner reads (ELEC2-16).
+      await fetchElection();
       // Refresh forensics if open
       if (forensicsReport) {
         void handleLoadForensics();

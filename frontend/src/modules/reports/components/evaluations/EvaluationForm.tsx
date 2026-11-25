@@ -29,7 +29,13 @@ import type {
 } from '../../types/evaluations';
 import { GOAL_RESULT_LABELS } from '../../types/evaluations';
 import { formatCalendarDate } from '../../../../utils/dateFormatting';
-import { figureDetail, formatFigure, needsJustification, withAnswer } from '../../utils/evaluationRecord';
+import {
+  MAX_ANSWER_TEXT,
+  figureDetail,
+  formatFigure,
+  needsJustification,
+  withAnswer,
+} from '../../utils/evaluationRecord';
 import { GradePanel } from './GradePanel';
 
 interface EvaluationFormProps {
@@ -159,6 +165,7 @@ export const EvaluationForm: React.FC<EvaluationFormProps> = ({
                 Goal {index + 1}
               </label>
               <textarea
+                maxLength={MAX_ANSWER_TEXT}
                 id={`${id}-${goal.id}-text`}
                 className="form-input"
                 value={goal.text}
@@ -260,6 +267,7 @@ export const EvaluationForm: React.FC<EvaluationFormProps> = ({
                     Comment on {goal.label}
                   </label>
                   <textarea
+                    maxLength={MAX_ANSWER_TEXT}
                     id={`${id}-${goal.key}-comment`}
                     className="form-input"
                     value={rating?.comment ?? ''}
@@ -392,6 +400,7 @@ export const EvaluationForm: React.FC<EvaluationFormProps> = ({
                   {item.label}
                 </label>
                 <textarea
+                  maxLength={MAX_ANSWER_TEXT}
                   id={`${id}-text`}
                   className="form-input min-h-24"
                   value={answer?.text ?? ''}
@@ -411,6 +420,7 @@ export const EvaluationForm: React.FC<EvaluationFormProps> = ({
                   Comment{item.comment === 'required' ? ' (required)' : ''}
                 </label>
                 <textarea
+                  maxLength={MAX_ANSWER_TEXT}
                   id={`${id}-comment`}
                   className="form-input"
                   value={answer?.comment ?? ''}
@@ -428,6 +438,7 @@ export const EvaluationForm: React.FC<EvaluationFormProps> = ({
                   Describe a specific example (required at this level)
                 </label>
                 <textarea
+                  maxLength={MAX_ANSWER_TEXT}
                   id={`${id}-example`}
                   className="form-input"
                   value={answer?.example ?? ''}
@@ -445,6 +456,7 @@ export const EvaluationForm: React.FC<EvaluationFormProps> = ({
                   Why does your rating differ from the suggested one? (required)
                 </label>
                 <textarea
+                  maxLength={MAX_ANSWER_TEXT}
                   id={`${id}-justification`}
                   className="form-input"
                   value={answer?.justification ?? ''}
@@ -573,6 +585,7 @@ export const EvaluationForm: React.FC<EvaluationFormProps> = ({
               {evaluator ? 'Summary' : 'Anything else'}
             </label>
             <textarea
+              maxLength={MAX_ANSWER_TEXT}
               id={`${kind}-overall-comment`}
               className="form-input mt-2 min-h-24"
               value={content.overall_comment ?? ''}

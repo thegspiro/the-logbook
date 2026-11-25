@@ -1,17 +1,31 @@
 """
-Member performance evaluation endpoints — setup.
+Member performance evaluation endpoints.
+
+Setup:
 
 * ``/templates`` — ``evaluations.configure`` builds the forms and their
-  workflows. Reading them is also open to ``evaluations.manage``, who needs
-  to see which form each member will get when drafting.
+  workflows (``/templates/starters`` lists the ready-made ones,
+  ``/templates/preview`` and ``/templates/preview-options`` show a form as it
+  stands). Reading them is also open to ``evaluations.manage``, who needs to
+  see which form each member will get when drafting.
 * ``/periods`` — ``evaluations.manage`` opens and closes review periods;
-  ``evaluations.configure`` may read them.
+  ``evaluations.configure`` may read them. ``/periods/{id}/reassign-options``,
+  ``/reassign-preview`` and ``/reassign`` hand one person's open work in a
+  period to another (``evaluations.manage``; the last needs a re-verified
+  session).
 * ``/data-sources`` and ``/builder-options`` — what the builder offers: the
   catalog a data block chooses from, and the department's positions and ranks.
+* ``/grades`` — the stateless grade calculation the evaluation screen and the
+  builder preview share.
+
+Evaluations:
 
 * ``""`` — evaluations a holder of ``evaluations.conduct`` evaluates, or every
   one for ``evaluations.view_all`` / ``evaluations.manage``; ``POST`` drafts
-  one.
+  one, and ``/draft-options`` lists what the drafting dialog offers.
+* ``/export``, ``/grade-spread`` and ``/export-pdfs`` — a period's results as
+  CSV, its grades by evaluator, and its signed PDFs as a zip, for
+  ``evaluations.view_all`` (the zip also needs a re-verified session).
 * ``/bulk-preview`` and ``/bulk`` — ``evaluations.manage`` drafts a whole
   review period at once: a preview of every current member and why any is
   left out, then the drafts for the members the manager kept.
@@ -20,11 +34,16 @@ Member performance evaluation endpoints — setup.
 * ``/mine``, ``/mine/live-data`` and ``/mine/removed`` — a member's own
   evaluations, their figures for the current period and the records of any
   deleted, on authentication alone: the member is entitled to their own
-  record whatever positions the department grants.
+  record whatever positions the department grants. ``/crew`` lists the
+  evaluations of the members the caller supervises today, and ``/attention``
+  the counts on the section strip.
 * ``/{evaluation_id}`` and its actions — open to anyone with a part in the
   evaluation. The service decides who that is and what each may read and do;
-  anyone else is told it does not exist. ``/{evaluation_id}/delete`` needs
-  ``evaluations.delete`` and a re-verified session; ``/{evaluation_id}/amend``
+  anyone else is told it does not exist. ``/{evaluation_id}/history`` is the
+  member's other finalized reviews, for ``evaluations.view_all``.
+  ``/{evaluation_id}/delete`` needs ``evaluations.delete`` and a re-verified
+  session; ``/{evaluation_id}/steps/{key}/assignee`` needs
+  ``evaluations.manage`` and a re-verified session; ``/{evaluation_id}/amend``
   needs ``evaluations.manage``.
 """
 
@@ -588,23 +607,42 @@ async def _evaluation(
 
 
 async def _build_document(
-    db: AsyncSession, current_user: User, evaluation_id: str
+    db: AsyncSession,
+    current_user: User,
+    evaluation_id: str,
+    *,
+    with_response: bool = False,
 ) -> None:
-    """Freeze the PDF the moment an evaluation finalizes.
+    """Freeze the PDF the moment an evaluation finalizes, then commit.
 
     A failure here does not undo the signature or the submission that
-    finalized it: it is logged as an error, and the download endpoint builds
-    the document on first request instead (``ensure_document`` is idempotent).
+    finalized it, nor the audit row the caller has just added: the build runs
+    in a savepoint, so only its own work is rolled back, the commit after it
+    keeps the audit row, and the download endpoint builds the document on
+    first request instead (``ensure_document`` is idempotent).
+
+    A full ``db.rollback()`` here would discard that audit row and expire every
+    loaded object, ``current_user`` and its positions included, so the
+    response built straight afterwards would lazy-load on an AsyncSession and
+    fail with ``MissingGreenlet``. Rolling back a savepoint expires only what
+    changed inside it.
     """
     try:
-        await EvaluationDocumentService(db).ensure_document(
-            current_user.organization_id, evaluation_id, current_user
-        )
+        async with db.begin_nested():
+            await EvaluationDocumentService(db).ensure_document(
+                current_user.organization_id,
+                evaluation_id,
+                current_user,
+                with_response=with_response,
+                commit=False,
+            )
     except Exception:
-        await db.rollback()
         logger.exception(
-            "Could not build the PDF for evaluation {} at finalization", evaluation_id
+            "Could not build the {} for evaluation {}",
+            "response PDF" if with_response else "PDF at finalization",
+            evaluation_id,
         )
+    await db.commit()
 
 
 @router.get("", response_model=List[EvaluationSummary])
@@ -1311,17 +1349,7 @@ async def submit_evaluation_response(
         "evaluation_response_submitted",
         {"evaluation_id": evaluation_id},
     )
-    try:
-        await EvaluationDocumentService(db).ensure_document(
-            current_user.organization_id,
-            evaluation_id,
-            current_user,
-            with_response=True,
-        )
-    except Exception:
-        # Built on first download instead; the response itself is saved.
-        await db.rollback()
-        logger.exception(
-            "Could not build the response PDF for evaluation {}", evaluation_id
-        )
+    # Built on first download instead if this fails; the response itself is
+    # saved, and so is its audit row.
+    await _build_document(db, current_user, evaluation_id, with_response=True)
     return await _evaluation(service, current_user, evaluation_id)

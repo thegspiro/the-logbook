@@ -1260,8 +1260,15 @@ class EvaluationService:
                 roles is not None and roles.is_member and s.step_type == _CALIBRATION
             )
         ]
+        open_steps = [s for s in visible if s.status == EvaluationStepStatus.OPEN.value]
+        # The evaluator's step stays open while their submitted part is with
+        # calibration, but nothing waits on the evaluator then: calibration is
+        # what the evaluation is waiting on, and its due date is the one that
+        # counts. The member never sees calibration, so for them it stays on
+        # the evaluator.
         waiting = next(
-            (s for s in visible if s.status == EvaluationStepStatus.OPEN.value), None
+            (s for s in open_steps if s.step_type == _CALIBRATION),
+            open_steps[0] if open_steps else None,
         )
         labels = {s.key: s.label for s in self._workflow(evaluation).steps}
         member = people.get(evaluation.member_id)
@@ -1992,8 +1999,33 @@ class EvaluationService:
             .scalars()
             .all()
         )
+        # Active templates with a published version: the ones create_evaluation
+        # accepts as template_id.
+        templates = (
+            (
+                await self.db.execute(
+                    select(EvaluationTemplate)
+                    .join(
+                        EvaluationTemplateVersion,
+                        EvaluationTemplateVersion.template_id == EvaluationTemplate.id,
+                    )
+                    .where(
+                        EvaluationTemplate.organization_id == organization_id,
+                        EvaluationTemplate.is_active.is_(True),
+                        EvaluationTemplateVersion.published_at.isnot(None),
+                    )
+                    .distinct()
+                    .order_by(EvaluationTemplate.name)
+                )
+            )
+            .scalars()
+            .all()
+        )
         return {
             "members": [{"id": u.id, "name": u.full_name} for u in members],
+            "templates": [
+                {"id": t.id, "name": t.name, "kind": t.kind} for t in templates
+            ],
             "evaluators": [
                 {"id": u.id, "name": u.full_name}
                 for u in members
@@ -2125,11 +2157,19 @@ class EvaluationService:
         member = await self._member(organization_id, data.member_id)
         if member is None:
             raise ValueError("Member not found.")
+        # The drafting dialog, bulk drafting, step assignment and handing over
+        # work all offer current members only (pitfall #32); a direct request
+        # must not draft a retired member, nor name an evaluator who has left
+        # and could never act on it.
+        if member.status not in ACTIVE_ACCOUNT_STATUSES:
+            raise ValueError(f"{member.full_name} is not a current member.")
         evaluator = await self._member(
             organization_id, evaluator_id, with_positions=True
         )
         if evaluator is None:
             raise ValueError("Evaluator not found.")
+        if evaluator.status not in ACTIVE_ACCOUNT_STATUSES:
+            raise ValueError("Name a current member of the department.")
         if not user_has_permission(evaluator, "evaluations.conduct"):
             raise ValueError(
                 f"{evaluator.full_name} is not able to conduct evaluations."

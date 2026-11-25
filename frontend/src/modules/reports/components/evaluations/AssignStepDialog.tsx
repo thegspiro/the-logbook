@@ -26,7 +26,7 @@ interface AssignStepDialogProps {
 
 /** What "nobody named" means for this kind of step. */
 function workflowActor(step: EvaluationStep): string {
-  return step.type === 'calibration' ? 'any holder of evaluations.view_all' : "the holders of the step's position";
+  return step.type === 'calibration' ? 'anyone who may read every evaluation' : "the holders of the step's position";
 }
 
 export const AssignStepDialog: React.FC<AssignStepDialogProps> = ({ evaluationId, step, busy, onClose, onAssign }) => {

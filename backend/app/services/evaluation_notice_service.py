@@ -555,15 +555,33 @@ class EvaluationNoticeService:
             member = people.get(evaluation.member_id)
             member_name = member.full_name if member else "a former member"
             period = _period_name(evaluation)
+            # A check-in has no acknowledgement step, so its member is never
+            # asked to acknowledge it again and must not be told they will be.
+            acknowledges = await self.db.scalar(
+                select(EvaluationStep.id)
+                .where(
+                    EvaluationStep.evaluation_id == evaluation.id,
+                    EvaluationStep.organization_id == evaluation.organization_id,
+                    EvaluationStep.revision == evaluation.revision,
+                    EvaluationStep.step_type
+                    == EvaluationStepType.MEMBER_ACKNOWLEDGEMENT.value,
+                )
+                .limit(1)
+            )
+            member_summary = (
+                f"{actor.full_name} amended your evaluation for {period}. "
+                "It goes back through its steps"
+                + (
+                    ", and you will be asked to acknowledge it again."
+                    if acknowledges
+                    else "."
+                )
+            )
             recipients = [
                 _Recipient(
                     user=user,
                     kind=EmailKind.PERFORMANCE_EVALUATIONS,
-                    summary=(
-                        f"{actor.full_name} amended your evaluation for {period}. "
-                        "It goes back through its steps, and you will be asked to "
-                        "acknowledge it again."
-                    ),
+                    summary=member_summary,
                 )
                 for user in await self._own(organization_id, evaluation.member_id)
             ]
@@ -781,6 +799,28 @@ class EvaluationNoticeService:
                 counts[outcome] += 1
         return counts
 
+    async def _with_calibration(self, step: EvaluationStep) -> bool:
+        """Whether ``step`` is an evaluator's step whose submitted part is with
+        calibration. The step stays open then, but the evaluator cannot act on
+        it ("The evaluation is with calibration."), so it is neither reminded
+        nor reported overdue; left unstamped, it is noticed again once
+        calibration hands it back."""
+        if step.step_type != EvaluationStepType.EVALUATOR.value:
+            return False
+        return (
+            await self.db.scalar(
+                select(EvaluationStep.id)
+                .where(
+                    EvaluationStep.evaluation_id == step.evaluation_id,
+                    EvaluationStep.organization_id == step.organization_id,
+                    EvaluationStep.revision == step.revision,
+                    EvaluationStep.step_type == EvaluationStepType.CALIBRATION.value,
+                    EvaluationStep.status == EvaluationStepStatus.OPEN.value,
+                )
+                .limit(1)
+            )
+        ) is not None
+
     async def _notify_one(
         self, step_id: str, organization_id: str, now: datetime
     ) -> Optional[str]:
@@ -814,6 +854,7 @@ class EvaluationNoticeService:
                 evaluation is None
                 or evaluation.status != EvaluationStatus.IN_PROGRESS.value
                 or evaluation.revision != step.revision
+                or await self._with_calibration(step)
             ):
                 await self.db.commit()
                 return None
