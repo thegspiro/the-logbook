@@ -16,12 +16,10 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR not yet opened for this iteration** (branch
-`claude/security-review-scheduled-tasks-p15`): Feature 31 (Scheduled
+**PR [#4708](https://github.com/thegspiro/the-logbook/pull/4708) (branch
+`claude/security-review-scheduled-tasks-p15`)**: Feature 31 (Scheduled
 tasks), pass 15 — watchdog pickup (the dedicated `/loop 30m
-/security-review` session remains unreachable). This row is updated with
-the real PR number/link in a follow-up commit on this same branch once the
-PR is opened, per the rotation's own rule against a docs-only PR.
+/security-review` session remains unreachable).
 
 PR #4707 (Feature 30, Onboarding, pass 15) merged clean — confirmed by
 `2aa03ecdc` being the current tip of `origin/main` (merge of PR #4707), not
