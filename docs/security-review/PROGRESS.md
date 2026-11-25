@@ -16,6 +16,40 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#4692](https://github.com/thegspiro/the-logbook/pull/4692) (branch
+`claude/security-review-training-core-p16`)**:
+Feature 17 (Training core), pass 16 — watchdog pickup (the dedicated
+`/loop 30m /security-review` session, `session_011T1ZyyLrD5HagusgK9uDw2`,
+remains unreachable, confirmed via `ListAgents` → "No reachable agents").
+
+PR #4691 (Feature 16, Events & requests, pass 16) merged (`d9d892152`)
+before this iteration started; row 16 marked ✅ above. A fresh
+`list_pull_requests` (state=open) found no `claude/security-review-*` head
+open, so this iteration continued to Step 1: row 17 (Training core) was the
+next ⬜ row.
+
+Baseline `b31b8dea` (pass 15's merge). Real delta across 31 commits in
+`training_compliance.py`, `training_session_service.py`,
+`training_program_service.py`, `training_course_links.py`,
+`training_service.py` (mostly the competency-matrix deletion), plus two new
+routes in `training.py` (`GET /double-credit`,
+`POST /double-credit/{flag_id}/keep-both`) and three new files
+(`training_approval_reminders.py`, `email_templates_training_approval.py`,
+`training_credit_duplicates.py`). **0 fixed, 0 new findings** — the new
+double-credit review queue resolves through an already-org-scoped flag
+before dereferencing its FKs; the new daily reminder task is org-scoped and
+idempotent (pitfall #36); every new migration is `create_all`-tolerant; the
+retired `GET /training/competency-matrix` is a pure attack-surface
+reduction. Full write-up: `docs/security-review/TR-17-training-core.md`'s
+**Pass 16** section.
+
+Row 17 → ✅ (pending this PR's merge); next is Feature 18 (Training
+extended) — re-check `list_pull_requests` fresh rather than trusting this
+note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 16, Events & requests, pass 16, PR #4691, merged), preserved for history</summary>
+
 **PR [#4691](https://github.com/thegspiro/the-logbook/pull/4691) (branch
 `claude/security-review-events-requests-p16`)**:
 Feature 16 (Events & requests), pass 16 — watchdog pickup (the dedicated
@@ -48,6 +82,8 @@ settles existing rows before narrowing a column. Full write-up:
 
 Row 16 → ✅ (pending this PR's merge); next is Feature 17 (Training core) —
 re-check `list_pull_requests` fresh rather than trusting this note.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 15, Scheduling, pass 16, PR #4690, merged), preserved for history</summary>
@@ -28200,7 +28236,7 @@ iteration's commit" rule.
 | 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                                                                                                                                                           | ✅     |
 | 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                                                                                                                                                      | ✅     |
 | 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                                                                                                                                                             | ✅     |
-| 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`, `knowledge_tests.py` (added pass 12), `shift_evaluation_templates.py`/`shift_evaluations.py` (added pass 13), `api/public/shift_evaluations.py` (added pass 15)                                                        | ⬜     |
+| 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`, `knowledge_tests.py` (added pass 12), `shift_evaluation_templates.py`/`shift_evaluations.py` (added pass 13), `api/public/shift_evaluations.py` (added pass 15)                                                        | ✅     |
 | 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py`, `training_module_config.py` (added pass 14), `attendance_waiver_requests.py` (31 routes, added pass 17)                              | ⬜     |
 | 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3855 L)                                                                                                                                                                                                                                                | ⬜     |
 | 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`, `training_compliance.py` (declared scope since pass ≤11)                                                                                                                                                                             | ⬜     |
@@ -28278,6 +28314,8 @@ into row 13's declared scope rather than leaving it to be rediscovered.
 ---
 
 ## Log
+
+### 2026-11-25 — Feature 16 (Events & requests, pass 16) merged (PR #4691); Feature 17 (Training core, pass 16): watchdog pickup, real delta (double-credit review queue, approval-reminder task, competency-matrix retirement), 0 fixed, 0 new findings
 
 ### 2026-11-25 — Feature 13 (Apparatus & NFC, pass 24) merged (PR #4684); Feature 14 (Equipment check & shifts, pass 17): watchdog pickup, a small already-escaped cross-cutting landing (document provenance on exported PDFs), and a stale `docs/app-review/equipment-check.md` finding (EC2-3) corrected to FIXED after re-verifying it against the current code, 0 fixed in this file's own scope, 0 new findings
 
