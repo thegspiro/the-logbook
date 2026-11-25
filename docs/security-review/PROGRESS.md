@@ -16,9 +16,31 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-_(none yet — this iteration's PR for Feature 14, Equipment check & shifts,
-pass 17, is opened after this commit; its number is recorded here in a
-second commit on the same branch, per `security-review`'s Step 8.)_
+**PR [#4685](https://github.com/thegspiro/the-logbook/pull/4685) (branch
+`claude/security-review-equipment-check-shifts`)**: Feature 14 (Equipment
+check & shifts), pass 17 — watchdog pickup (the dedicated `/loop 30m
+/security-review` session, `session_011T1ZyyLrD5HagusgK9uDw2`, remains
+unreachable). No branch-name deviation this time — the environment accepted
+pushing to the rotation's own preferred branch name directly.
+
+PR #4684 (Feature 13, Apparatus & NFC, pass 24) had already merged before this
+iteration started; row 13 marked ✅ above. A fresh `list_pull_requests`
+(state=open) found no `claude/security-review-*` head open, so this
+iteration continued to Step 1: row 14 (Equipment check & shifts) was the
+next ⬜ row.
+
+Baseline `f0547e6ae` (PR #4452's merge). Of this feature's six declared
+backend files, only `equipment_check.py` changed (+15/−4) — a small,
+already-correct, already-escaped owner-decision feature (report numbers and
+a preparer line on exported PDFs). **0 fixed in this file's own scope, 0 new
+findings.** While re-verifying `docs/app-review/equipment-check.md`'s two
+open items per Step 2, found EC2-3 had already been fixed by commit
+`f37e67603` (merged 2026-11-11) without that doc being updated; corrected it
+to ✅ FIXED. Full write-up: `docs/security-review/EC-14-equipment-check-shifts.md`'s
+**Pass 17** section.
+
+Row 14 → ✅ (pending this PR's merge); next is Feature 15 (Scheduling) —
+re-check `list_pull_requests` fresh rather than trusting this note.
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 13, Apparatus & NFC, pass 24, PR #4684, merged), preserved for history</summary>
