@@ -21,17 +21,35 @@ const MyEvaluationsPage: React.FC = () => {
   const [removed, setRemoved] = useState<EvaluationDeletionRecord[]>([]);
   const [error, setError] = useState<string | null>(null);
 
+  const [secondaryError, setSecondaryError] = useState<string | null>(null);
+
+  // Three independent requests, so a failure loading the current figures or
+  // the deletion records never hides the member's own evaluations.
   useEffect(() => {
     let cancelled = false;
-    Promise.all([evaluationsService.mine(), evaluationsService.liveData(), evaluationsService.myRemoved()])
-      .then(([mine, figures, deleted]) => {
-        if (cancelled) return;
-        setEvaluations(mine);
-        setLive(figures);
-        setRemoved(deleted);
+    evaluationsService
+      .mine()
+      .then((mine) => {
+        if (!cancelled) setEvaluations(mine);
       })
       .catch((err: unknown) => {
         if (!cancelled) setError(getErrorMessage(err, 'Could not load your evaluations.'));
+      });
+    evaluationsService
+      .liveData()
+      .then((figures) => {
+        if (!cancelled) setLive(figures);
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) setSecondaryError(getErrorMessage(err, 'Could not load your current figures.'));
+      });
+    evaluationsService
+      .myRemoved()
+      .then((deleted) => {
+        if (!cancelled) setRemoved(deleted);
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) setSecondaryError(getErrorMessage(err, 'Could not load your deleted evaluations.'));
       });
     return () => {
       cancelled = true;
@@ -50,6 +68,11 @@ const MyEvaluationsPage: React.FC = () => {
         {error && (
           <div className="alert-danger mb-6">
             <p className="text-theme-alert-danger-text text-sm">{error}</p>
+          </div>
+        )}
+        {secondaryError && (
+          <div className="alert-warning mb-6">
+            <p className="text-theme-alert-warning-text text-sm">{secondaryError}</p>
           </div>
         )}
 

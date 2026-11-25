@@ -562,12 +562,15 @@ export interface EvaluationCreate {
   period_id: string;
   evaluator_id?: string | undefined;
   kind: EvaluationTemplateKind;
+  template_id?: string | undefined;
 }
 
 export interface DraftOptions {
   members: PersonRef[];
   evaluators: PersonRef[];
   periods: { id: string; name: string; start_date: string; end_date: string }[];
+  /** Active, published forms a drafter may choose over the matched one. */
+  templates: { id: string; name: string; kind: EvaluationTemplateKind }[];
 }
 
 /** Finalized reviews counted by grade: `counts` follows `GradeSpread.levels`; `other` has no place on the five grades (a weighted percentage, or no overall). */
