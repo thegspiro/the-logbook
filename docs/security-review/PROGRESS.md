@@ -16,6 +16,42 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#4694](https://github.com/thegspiro/the-logbook/pull/4694) (branch
+`claude/security-review-skills-testing`)**: Feature 19 (Skills testing),
+pass 16 — watchdog pickup (the dedicated `/loop 30m /security-review`
+session, `session_011T1ZyyLrD5HagusgK9uDw2`, remains unreachable, confirmed
+via `ListAgents` → "No reachable agents").
+
+PR #4693 (Feature 18, Training extended, pass 16) was fully green on every
+CI check (23/23 including `CI Success`), with only bot-quota-failure
+comments (Codex and Copilot both reported "unable to review"/"usage
+limits", no actual findings) — merged by this watchdog as squash commit
+`67efccdff`; row 18 marked ✅ above. A fresh `list_pull_requests` (state=open)
+found no `claude/security-review-*` head open, so this iteration continued
+to Step 1: row 19 (Skills testing) was the next ⬜ row.
+
+Baseline `c0baae039` (pass 14's effective landing commit; re-confirmed
+byte-identical for the third pass running). All four declared backend scope
+files remain byte-identical — true zero backend delta. Frontend carried a
+real, scoped delta: a new offline save/drain version-race fix
+(`recordDrainedVersion`/`drainedVersionFor`, consumed by
+`skillsTestingStore.ts`) that only ever substitutes a newer,
+same-device-owned `expected_version` into a save that would otherwise
+spuriously 409 — traced end-to-end and confirmed it cannot weaken the
+server's unchanged optimistic-concurrency check in either direction. The
+rest of the frontend delta (`SkillTemplateBuilderPage.tsx` and four sibling
+pages) is the repo-wide forms-review/accessibility rollout, no new API
+surface. Every standing SKT fix re-confirmed present; route surface 29/29,
+route-permission registry 344/0 errors. **0 fixed, 0 new findings.** Full
+write-up: `docs/security-review/SKT-19-skills-testing.md`'s **Pass 16**
+section.
+
+Row 19 → ✅ (pending this PR's merge); next is Feature 20 (Compliance) —
+re-check `list_pull_requests` fresh rather than trusting this note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 18, Training extended, pass 16, PR #4693, merged), preserved for history</summary>
+
 **PR [#4693](https://github.com/thegspiro/the-logbook/pull/4693) (branch
 `claude/security-review-training-extended-p16`)**:
 Feature 18 (Training extended), pass 16 — watchdog pickup (the dedicated
@@ -48,6 +84,8 @@ fixed, 0 new findings.** Full write-up:
 
 Row 18 → ✅ (pending this PR's merge); next is Feature 19 (Skills testing)
 — re-check `list_pull_requests` fresh rather than trusting this note.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 17, Training core, pass 16, PR #4692, merged), preserved for history</summary>
@@ -28275,7 +28313,7 @@ iteration's commit" rule.
 | 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                                                                                                                                                             | ✅     |
 | 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`, `knowledge_tests.py` (added pass 12), `shift_evaluation_templates.py`/`shift_evaluations.py` (added pass 13), `api/public/shift_evaluations.py` (added pass 15)                                                        | ✅     |
 | 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py`, `training_module_config.py` (added pass 14), `attendance_waiver_requests.py` (21 routes, corrected pass 16; added pass 15)             | ✅     |
-| 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3855 L)                                                                                                                                                                                                                                                | ⬜     |
+| 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3855 L)                                                                                                                                                                                                                                                | ✅     |
 | 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`, `training_compliance.py` (declared scope since pass ≤11)                                                                                                                                                                             | ⬜     |
 | 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                                                                                                                                                      | ⬜     |
 | 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`, `zeffy.py`/`zeffy_service.py`/`zeffy_sync_service.py` (added pass 13)                                                                                                                                                      | ⬜     |
@@ -53880,3 +53918,45 @@ src/modules/medical-screening` — 88 passed (16 files, up from 85/15 at pass
 
 Row 09 → ✅ (pending this PR's merge). Next is Feature 10 (Documents & legal)
 — re-check `list_pull_requests` fresh rather than trusting this note.
+
+### 2026-11-25 — Feature 18 (Training extended, pass 16) merged; Feature 19 (Skills testing, pass 16): watchdog pickup, real delta (frontend only), 0 new findings
+
+A fresh `list_pull_requests` (state=open) found no `claude/security-review-*`
+head. PR #4693 (Feature 18, Training extended, pass 16) was fully green on
+every CI check (23/23, including `CI Success`) with only bot-quota-failure
+comments (Codex and Copilot both reported "unable to review"/"usage limits",
+no actual findings) — merged by this watchdog as squash commit `67efccdff`.
+Row 18 marked ✅; row 19 (Skills testing) confirmed the next `⬜` row.
+
+Baseline `c0baae039` (pass 14's effective landing commit; pass 15 confirmed
+it byte-identical and this pass re-confirmed it again). All four declared
+backend scope files (`skills_testing.py`, `skills_testing_service.py`,
+`schemas/skills_testing.py`, `models/skills_testing.py`) remain
+byte-identical — true zero backend delta for the third pass running (9, 12,
+15, now effectively 16 on the backend half). Frontend carried a real, scoped
+delta: a new offline save/drain version-race fix
+(`recordDrainedVersion`/`drainedVersionFor` in
+`skillsTestOfflineStore.ts`/`skillsTestOffline.ts`, consumed by
+`skillsTestingStore.ts`) that only ever substitutes a *newer*,
+same-device-owned `expected_version` into a save that would otherwise
+spuriously 409 against the server's unchanged optimistic-concurrency check —
+traced end-to-end and confirmed it cannot weaken that check in either
+direction. The rest of the frontend delta
+(`SkillTemplateBuilderPage.tsx` +1184/−453, plus four sibling pages) is the
+repo-wide forms-review/accessibility rollout (FormField/useFieldErrors,
+heading-level and contrast fixes, a nested-interactive card fix) with no new
+API surface. Every standing SKT fix (SKT-1 through SKT5-1, the pass-14
+milestone hook) re-confirmed present by direct code read; route surface
+29/29, route-permission registry 344/0 errors. **0 fixed, 0 new findings.**
+Full write-up: `docs/security-review/SKT-19-skills-testing.md`'s **Pass 16**
+section.
+
+**Completion gate:** `flake8`/`black --check`/`isort --check-only` (CI's
+pins) on `app/ tests/ alembic/` — clean. `validate_migrations.py --strict` —
+844 revisions, single head `e9cf8ab7e4e4`. `check_route_permissions.py
+--strict` — 344 routes, 0 errors/warnings. Scoped backend pytest (`-k "skill
+or skt"`) — 643 passed, 1 pre-existing environment-only skip (`py_vapid`).
+`npm run typecheck` — 0 errors. `npm run lint` — 0 errors, 0 warnings.
+
+Row 19 → ✅ (pending this PR's merge). Next is Feature 20 (Compliance) —
+re-check `list_pull_requests` fresh rather than trusting this note.

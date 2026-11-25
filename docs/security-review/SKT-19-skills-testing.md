@@ -3204,6 +3204,199 @@ errors) unchanged in shape. No open findings remain in this feature.
 
 ---
 
+## Pass 16 (2026-11-25) — watchdog pickup, real delta (frontend only), 0 new findings
+
+**Prefix:** `SKT16` · **PR:** see `PROGRESS.md`'s **Open PR** row.
+
+**Watchdog note.** The dedicated `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) was unreachable (`ListAgents` → "No
+reachable agents"). `list_pull_requests` (state `open`) found zero PRs with a
+`claude/security-review-` head — PR #4693 (Feature 18, Training extended,
+pass 16) had just merged (squash commit `67efccdff`). Row 19 (Skills testing)
+confirmed the next `⬜` row directly against a freshly fetched `main`.
+
+### Scope check — real delta, frontend only, since pass 15
+
+Baseline: `c0baae039` (pass 15's reviewed state — pass 14's content, confirmed
+byte-identical by pass 15 and re-confirmed here).
+
+```
+git diff c0baae039..HEAD --stat -- \
+  backend/app/api/v1/endpoints/skills_testing.py \
+  backend/app/services/skills_testing_service.py \
+  backend/app/schemas/skills_testing.py \
+  backend/app/models/skills_testing.py
+```
+
+Empty output — all four declared backend scope files remain byte-identical to
+pass 14/15. No new migration touches a skills-testing table
+(`git diff --stat` against `alembic/versions/` directly, not source-scoped).
+
+Frontend: a real, scoped delta. `git diff c0baae039..HEAD --stat -- frontend/src`
+filtered to files this feature actually owns (not the wider `training/`
+directory outreach/cohort/attendance-waiver work that belongs to Features
+16–18):
+
+- `utils/skillsTestOfflineStore.ts`, `utils/skillsTestOffline.ts`,
+  `utils/skillsTestFlush.ts`, `stores/skillsTestingStore.ts` — a real
+  functional change (see below).
+- `pages/SkillTemplateBuilderPage.tsx` (+1184/−453, the largest diff by far),
+  `pages/SkillsTestingPage.tsx`, `pages/SkillsTestingTemplatesTab.tsx`,
+  `pages/SkillsTestingTestRecordsTab.tsx`, `pages/StartSkillTestPage.tsx` —
+  plus their test files and two new ones
+  (`SkillTemplateBuilderPage.save.test.tsx`, `skillsTestOffline.test.ts`
+  additions).
+
+### Change reviewed — offline save/drain version race (traced safe, 0 fixes needed)
+
+**What changed.** `recordDrainedVersion()` (new, `skillsTestOfflineStore.ts`)
+lets the service-worker/background drain path record the `version` its own
+queued save produced for a test, keyed to the same device's `ownerId`.
+`drainedVersionFor()` (new, `skillsTestOffline.ts`) reads it back.
+`skillsTestingStore.ts`'s `updateTest`/pending-reconciliation paths consult it:
+if a drain's save produced a version newer than the one the open screen is
+about to save against, the screen's save is sent with the drain's version as
+`expected_version` instead of its own stale one, and the locally-held
+`currentTest.version` is advanced with `Math.max(current.version, test.version)`
+rather than ever moved backwards.
+
+**Why this is a correctness fix, not new attack surface.** The server-side
+optimistic-concurrency check this works around is unchanged and unweakened —
+`update_test` (`skills_testing.py:1884`) still 409s whenever a caller-supplied
+`expected_version` disagrees with the row's actual `version`, exactly as
+verified at every prior pass. What changed is only which value the *client*
+picks to send:
+
+- `drainedVersionFor` returns a value only when `isOwnedByCurrentMember(row)`
+  is true (checked directly: `skillsTestOffline.ts`'s helper filters on the
+  cached row's own `ownerId`) — a version produced by another device's or
+  member's write is never substituted in. The in-code comment on
+  `recordDrainedVersion` states the same invariant from the write side:
+  "Another member's row is left alone."
+- The substitution only ever moves the sent `expected_version` **forward**
+  (`drained > data.expected_version`), never backward — so this cannot be used
+  to retry a save against an *older* version than the screen actually saw,
+  which is the direction that would matter for a conflict check (an attacker
+  sending a stale `expected_version` on purpose gains nothing new: the
+  existing 409 path already catches that, unchanged, and this code cannot
+  make the client send an older value than its own prior knowledge).
+- The value being substituted is not attacker- or server-trusted input in a
+  new way — it is this same device's own prior write, echoed back by the
+  same device's own IndexedDB cache, for the same test it already had open.
+  No new data reaches the client that the server did not already send it in
+  the response to its own earlier save.
+- No backend file changed, so the actual conflict decision — whatever the
+  client sends as `expected_version` — is still made entirely server-side by
+  comparing it to the committed row.
+
+**Practical effect.** This closes a real but narrow UX bug (an officer's save
+spuriously 409s because their own device's background sync already advanced
+the version), not a security gap: the failure mode being fixed was
+over-restrictive (rejecting a legitimate save), and the fix cannot make the
+check under-restrictive, since it can never send a version older than what the
+screen or the device's own drain actually produced.
+
+**The large `SkillTemplateBuilderPage.tsx` diff and the four other page files**
+are the forms-review rollout already documented repo-wide (CLAUDE.md's
+`FormField`/`useFieldErrors`/`ErrorSummary` pattern) plus accessibility fixes
+(heading-level correction `h3`→`h2`, `touch:min-h-11` targets, a nested-
+interactive fix replacing a clickable `role="button"` card with a `role="group"`
++ inner `<button>`, AAA-contrast shade bumps `-600`/`-700`→`-900`/`-700`,
+`type="search"` + an explicit `aria-label` since the placeholder disappears as
+the member types). Confirmed by reading the diffs directly: no new API call,
+no new field sent to or read from the backend, no `window.confirm`/`alert`/
+`prompt`, no `dangerouslySetInnerHTML`, no direct `fetch(`, no `.toLocale*`/
+`date-fns`/raw-ISO-slice date handling, no `localStorage`/`sessionStorage` use
+beyond the already-reviewed `apiCache`/offline-store machinery. All API calls
+still route through `skillsTestingService` → the shared `api` client
+(`withCredentials`, CSRF interceptor) — no bespoke module axios instance
+introduced (Pitfall #7 n/a). `utils/apiCache.ts`'s `UNCACHEABLE_PREFIXES` is
+unchanged for this feature (`git diff c0baae039..HEAD -- frontend/src/utils/apiCache.ts`
+has no `skill` hit) — the existing `/training/skills-testing/tests` entry
+still covers every full-detail route.
+
+### Re-verification, by direct grep/read against current code
+
+- **SKT-1** — `update_template` still routes through `apply_updates`
+  (`skills_testing.py:764`).
+- **SKT-2/SKT-3 and all four separation-of-duties sites** —
+  `assert_different_person(...)` present at `create_test` (`:1610`),
+  `validate_test` (`:2447`), `void_test` (`:3098`),
+  `return_test_for_correction` (`:3268`) — unchanged.
+- **SKT-4** — `lock_attempt_capacity`'s `.with_for_update()` (`service.py:785`)
+  and the capacity count's `.with_for_update(of=SkillTest)` (`:891`) both
+  still present.
+- **SKT2-1** — zero `is_practice ==` literal comparisons (`grep -c` → 0,
+  endpoint and service files).
+- **SKT3-1** — `add_test_viewer` still rejects naming the examiner (`:2830`).
+- **SKT5-1** — `redact_test_for_view`'s `scores` branch still scrubs
+  `waive_reason` (`service.py:1315`).
+- **SKT3-2 / SKT4-1 / SKT4-2** — the `max_length` caps on template sections,
+  criteria, checklist items, section results, and `result_viewer_positions`
+  are all still present in `schemas/skills_testing.py`; `list_tests`/
+  `export_tests_csv`/`list_templates` remain paginated/bounded.
+- **SKT4-7** — `update_test` still refuses a direct `result`/`overall_score`
+  write and any `status` other than `in_progress` (`:1856-1872`).
+- **Pitfall #32** — `search_candidates` still uses
+  `User.status.in_(ACTIVE_ACCOUNT_STATUSES)` (`:1055`), not a literal
+  `== ACTIVE`.
+- **Milestone hook (pass 14's finding)** — `process_milestones_for_user` still
+  called from `complete_test` and `validate_test` under the same
+  `result == PASS and not is_practice and validated_at` guard, org-scoped,
+  fails closed.
+
+**Route surface.** Fresh AST walk over every `@router.get/post/put/patch/delete`
+decorator in `skills_testing.py`: **29/29 routes**, identical paths, methods
+and auth dependencies to every prior pass (script output checked directly,
+not assumed). `python3 scripts/check_route_permissions.py --strict` (repo
+root): **344 total application routes, 0 errors, 0 warnings** (up from pass
+15's 329 from other features' passes 16–18 merging in the interim — confirms
+no new top-level page from this feature, Pitfall #30a n/a).
+
+### Findings
+
+**0 new findings.** No backend file in this feature's declared scope changed
+since pass 14/15. The one real frontend change — the offline drain/save
+version-race fix — was traced end-to-end and only ever narrows a spurious
+conflict rejection; it cannot weaken the server-side optimistic-concurrency
+check, which is unchanged. Every standing SKT fix re-confirmed present at its
+current citation. No open or flagged item existed entering this pass, and
+none is newly opened.
+
+### Corrections to prior write-ups
+
+None.
+
+### Guard tests added
+
+None — no defect found to guard against. The reviewed frontend change already
+ships with its own test coverage (`skillsTestingStore.offline.test.ts`,
+`skillsTestOffline.test.ts`) as part of the commit that added it, which this
+pass read rather than duplicated.
+
+### Completion gate (pass 16)
+
+| Check                                                                                                   | Result                                                   |
+| --------------------------------------------------------------------------------------------------------| --------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/` (`flake8==7.4.1`, CI's pin, installed this pass — ambient resolved 7.5.0) | ✅ 0 violations                                          |
+| `black --check app/ tests/ alembic/` (`black==26.10.1`, CI's pin)                                       | ✅ 3541 files unchanged                                  |
+| `isort --check-only app/ tests/ alembic/` (`isort==9.0.2`, CI's pin)                                    | ✅ clean                                                 |
+| `python3 scripts/validate_migrations.py --strict`                                                       | ✅ 844 revisions, single head `e9cf8ab7e4e4`             |
+| `python3 scripts/check_route_permissions.py --strict` (root)                                            | ✅ 344 routes, 0 errors, 0 warnings                      |
+| `pytest tests/ -q -k "skill or skt"` (via `python3.13`)                                                 | ✅ 643 passed, 1 skipped (pre-existing `pywebpush` skip) |
+| `cd frontend && npm run typecheck`                                                                      | ✅ 0 errors                                              |
+| `cd frontend && npm run lint`                                                                           | ✅ 0 errors, 0 warnings                                  |
+
+**Final disposition: 0 fixed, 0 newly flagged, 0 findings closed.** Zero
+backend delta; a real, narrow frontend correctness fix (offline save/drain
+version race) traced safe end-to-end, plus an unrelated forms/accessibility
+rollout with no new API surface. Every standing fix re-confirmed present by
+direct code read. Route surface (29/29) and route-permission registry (344, 0
+errors) unchanged in shape beyond the expected growth from other features. No
+open findings remain in this feature.
+
+---
+
 ## Pass 15 (2026-11-21) — watchdog pickup, true zero delta, 0 new findings
 
 **Prefix:** `SKT15` · **PR:** see `PROGRESS.md`'s **Open PR** row.
