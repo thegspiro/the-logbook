@@ -256,6 +256,18 @@ describe('ErrorMonitoringPage', () => {
     expect(screen.getByText(/\[LB-SYS-001\]/)).toBeInTheDocument();
   });
 
+  it('shows the reference a member quotes, so IT can find the one occurrence', async () => {
+    mockGetErrors.mockResolvedValue([
+      makeError({ context: { source: 'backend', error_code: 'LB-SYS-001', reference: '3f2a9c1e44aa0b12' } }),
+    ]);
+
+    renderWithRouter(<ErrorMonitoringPage />);
+
+    await userEvent.click(await screen.findByRole('button', { name: /^View details of/ }));
+    expect(screen.getByText('Reference')).toBeInTheDocument();
+    expect(screen.getByText('3f2a9c1e44aa0b12')).toBeInTheDocument();
+  });
+
   it('shows a retryable error instead of false healthy data when loading fails', async () => {
     mockGetErrors.mockRejectedValueOnce(new Error('offline')).mockResolvedValueOnce([]);
     const user = userEvent.setup();
