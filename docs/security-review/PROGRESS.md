@@ -16,6 +16,63 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#4706](https://github.com/thegspiro/the-logbook/pull/4706) (branch
+`claude/security-review-reports-analytics`)**: Feature 29 (Reports &
+analytics), pass 17 — watchdog pickup (the dedicated
+`/loop 30m /security-review` session, `session_011T1ZyyLrD5HagusgK9uDw2`,
+remains unreachable, confirmed via `ListAgents` → "No reachable agents").
+
+PR #4705 (Feature 28, Security, audit & IP, pass 15) was fully green on
+every CI check (`CI Success` passing on its current head, `mergeable_state`
+`clean`) and merged clean as squash commit `264bf154c`. Row 28 marked ✅
+above. A fresh `list_pull_requests` (state=open) found nothing open at all,
+so this iteration continued to Step 1: row 29 (Reports & analytics) was the
+next ⬜ row. The plain branch name `claude/security-review-reports-analytics`
+was checked against the remote twice (before starting, and again
+immediately before pushing) and found unused both times.
+
+Baseline `cd811e934` (pass 16's own commit). Real delta: a new "Hours by
+Position" report (`reports_service.py`, owner decisions 2026-11-24),
+sourced from the same query the member's own My Hours screen uses
+(Pitfall #29) and gated via `PII_REPORT_PERMISSIONS["position_hours"] =
+"scheduling.report"` the same way `admin_hours` already is; and three
+additions to the existing `GET /dashboard/community-engagement` response
+(no new route) — CRR activity impact, requester feedback ratings, outreach
+goals — each traced to its own org-scoped service, every query filtering
+`organization_id` from the route's own `current_user`. Route surface
+re-enumerated by AST: 38 routes, unchanged from pass 16. **0 fixed, 0 new
+findings.**
+
+Cross-feature, not fixed here: tracing this feature's own Evaluations
+frontend found `evaluations.py` (an unclaimed module SEC-00 found sound at
+34 routes) has grown to 49 with no pass covering the growth; the six routes
+this feature's frontend reaches were checked lightly and found correctly
+gated, the other ~9 were not — recorded above in "New modules with no
+rotation row yet" for the next absorbing pass. Full write-up:
+`docs/security-review/RPT6-29-reports-analytics.md`'s **Pass 17** section.
+
+**Tending update (same PR, still open):** a second iteration found this PR
+fully green except two then-`in_progress` "Frontend Tests" shards (no
+merge conflict, no unresolved review thread — the two Codex-bot comments
+are the same usage-limit failure noise seen on every recent pass, not an
+actionable finding). While confirming that, it also found this pass's own
+commit had reviewed only the _consuming_ side of `crr.py`/`outreach_goals.py`
+(the two new standalone resource files `dashboard.py` reads through
+`CrrImpactService`/`OutreachGoalService`), leaving their own 17+4 routes as
+unflagged as `evaluations.py` above. Rather than let that gap merge
+unrecorded, this tending commit reads both files in full and appends the
+result to this same PR/branch — see the addendum in
+`RPT6-29-reports-analytics.md`'s **Pass 17** section and the new paragraph
+above. **0 additional findings.** Per the rotation's own rule, this update
+rides on the already-open PR rather than opening a second one for the same
+feature.
+
+Row 29 → ✅ (pending this PR's merge); next is Feature 30 (Onboarding) —
+re-check `list_pull_requests` fresh rather than trusting this note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 28, Security, audit & IP, pass 15, PR #4705, merged), preserved for history</summary>
+
 **PR [#4705](https://github.com/thegspiro/the-logbook/pull/4705) (branch
 `claude/security-review-security-audit-ip`)**: Feature 28 (Security, audit
 & IP), pass 15 — watchdog pickup (the dedicated
@@ -46,6 +103,8 @@ key). **0 fixed, 0 new findings.** Full write-up:
 Row 28 → ✅ (pending this PR's merge); next is Feature 29 (Reports &
 analytics) — re-check `list_pull_requests` fresh rather than trusting this
 note.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 27, Integrations, pass 15, PR #4704, merged), preserved for history</summary>
@@ -370,7 +429,7 @@ only once, ever" gap; `classify_standing` and a new `classify_average`
 share one pct-to-standing ladder for a member and a department average
 alike; `is_current_member`/`STANDING_NOT_CURRENT_MEMBER` give Feature 17's
 profile card and officer view the one shared "is this a current member"
-check. Frontend: the matrix's `toneOf` no longer lets a *met* hours/courses
+check. Frontend: the matrix's `toneOf` no longer lets a _met_ hours/courses
 cell's own next renewal date demote it to lapsed (it contradicted the
 backend's own status); the officer dashboard's forecast averages now read
 the server's own classification instead of computing local percentage
@@ -28688,7 +28747,7 @@ iteration's commit" rule.
 | 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                                                                                                                                                      | ✅     |
 | 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                                                                                                                                                             | ✅     |
 | 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`, `knowledge_tests.py` (added pass 12), `shift_evaluation_templates.py`/`shift_evaluations.py` (added pass 13), `api/public/shift_evaluations.py` (added pass 15)                                                        | ✅     |
-| 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py`, `training_module_config.py` (added pass 14), `attendance_waiver_requests.py` (21 routes, corrected pass 16; added pass 15)             | ✅     |
+| 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py`, `training_module_config.py` (added pass 14), `attendance_waiver_requests.py` (21 routes, corrected pass 16; added pass 15)           | ✅     |
 | 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3855 L)                                                                                                                                                                                                                                                | ✅     |
 | 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`, `training_compliance.py` (declared scope since pass ≤11)                                                                                                                                                                             | ✅     |
 | 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                                                                                                                                                      | ✅     |
@@ -28699,7 +28758,7 @@ iteration's commit" rule.
 | 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                                                                                                                                                               | ✅     |
 | 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`, `historical_import.py` (33 routes incl. undo, added pass 14), `historical_staffing_*.py`, `historical_import_undo.py` (added pass 14)                                                                                                        | ✅     |
 | 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`, `audit_ship_service.py`                                                                                                                                                                                 | ✅     |
-| 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                                                                                                                                                                    | ⬜     |
+| 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`, `crr.py`/`outreach_goals.py` (17+4 routes, folded in pass 17 — see below)                                                                                                                         | ✅     |
 | 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (26 unauth bootstrap routes)                                                                                                                                                                                                                                   | ⬜     |
 | 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                                                                                                                                                         | ⬜     |
 | 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                                                                                                                                                        | ⬜     |
@@ -28719,6 +28778,46 @@ backend scope into an existing row (Feature 17, Training core, which already
 absorbed `shift_evaluations.py` the same way; or Feature 07, Users &
 organizations, for `member_supervisors.py`/`history.py`) rather than leaving
 them to be re-discovered by SEC-00 every lap.
+
+**`evaluations.py` has grown by 15 routes since that sweep (34 → 49),
+unreviewed by anyone.** Found while tracing Feature 29's own pass 17: the
+Evaluations frontend (routed under `/reports/evaluations/*`, so this
+feature's own UI scope) now calls six new routes —
+`GET/POST /periods/{id}/reassign-options`/`reassign-preview`/`reassign`
+(evaluator-workload reassignment within a review period),
+`GET /grade-spread` and `GET /export-pdfs` (a period's grades/signed PDFs,
+`evaluations.view_all`, the PDF export also step-up), and
+`GET /{evaluation_id}/history` (a member's other finalized reviews,
+`evaluations.view_all`) — none of which existed at SEC-00's pass-16 count.
+A light check (permission decorator + `current_user.organization_id` passed
+into the service call, for these six only, not a full pass) found each
+correctly gated and org-scoped by construction, matching the module's own
+docstring. The other ~9 new routes since the 34-route baseline were not
+traced. This module still needs the fold-in named above, or its own SEC-00
+pass, before it goes another lap without a seven-dimension read.
+
+**Community risk reduction (CRR) and Outreach Goals (`crr.py`, 17 routes;
+`outreach_goals.py`, 4 routes) were a second, un-flagged gap in this same
+pass 17 — caught and closed before this PR merged, not left for a future
+lap.** Both landed after pass 16's baseline (first commit `ac916ece5`,
+2026-11-22) as standalone resources, named in no feature doc; pass 17's
+first commit on this branch reviewed only the side that feeds `dashboard.py`
+(`CrrImpactService`/`OutreachGoalService.progress`), not these two files'
+own CRUD routes. A tending pass on this same PR read both files in full
+against all seven checklist dimensions — every by-id query org-scoped
+(XC-3), every client-supplied FK validated in-org (XC-1: tag ids, member
+ids, `admin_hours_category_id`, `measure_id`), resident PII
+(`street_address`/`resident_name`/`resident_phone`/`resident_email`/`notes`)
+encrypted at rest and gated on `crr.view_contact` at the response layer
+rather than the route, disclosure audited by activity id only (Pitfall #33),
+the retention clear actually registered in `scheduled_tasks.py`'s
+`TASK_RUNNERS` and idempotent (Pitfall #36), both migrations guarded on
+`create_all` (Pitfall #26) and the seeded-grant migration following Pitfall
+#23. **0 findings.** Unlike `evaluations.py`, this one has an obvious home —
+it feeds this feature's own `dashboard.py` directly — so it is folded into
+row 29's scope above rather than left as a dangling module. Full write-up in
+this addendum's own subsection of `RPT6-29-reports-analytics.md`'s **Pass
+17** section.
 
 **Three more `history.py` siblings, same situation:** `history_documents.py`
 (17 routes), `history_media.py` (23 routes) and `history_import.py` (9
@@ -28777,6 +28876,67 @@ it to be rediscovered.
 ---
 
 ## Log
+
+### 2026-11-25 — Feature 28 (Security, audit & IP, pass 15) merged (PR #4705); Feature 29 (Reports & analytics, pass 17): watchdog pickup, real delta (Hours by Position report, Outreach Impact CRR/feedback/goals), 0 fixed, 0 new findings; `evaluations.py` growth (34→49 routes) recorded for the next absorbing pass
+
+Scheduled watchdog check-in — the dedicated `/loop 30m /security-review`
+session (`session_011T1ZyyLrD5HagusgK9uDw2`) remains unreachable per
+`ListAgents`. PR #4705 (Feature 28, Security, audit & IP, pass 15) was
+fully green on every CI check (`CI Success` passing on its current head,
+`mergeable_state` `clean`) — merged by this watchdog as squash commit
+`264bf154c`. A fresh `list_pull_requests` (state=open) found nothing open
+at all, so this iteration continued to Step 1: row 29 (Reports & analytics)
+was the next `⬜` row.
+
+Baseline `cd811e934` (pass 16's own commit). `analytics.py`,
+`platform_analytics.py`, `labels.py`, `label_service.py`,
+`label_printer_service.py` byte-identical to pass 16. Real delta: a new
+"Hours by Position" report (`reports_service.py`, owner decisions
+2026-11-24) sourced from the same query the member's own My Hours screen
+uses (Pitfall #29), gated via `PII_REPORT_PERMISSIONS["position_hours"] =
+"scheduling.report"` the same way `admin_hours` already is; and three
+additions to the existing `GET /dashboard/community-engagement` response
+(no new route) — CRR activity impact, requester feedback ratings, and
+outreach goals — each traced to its own org-scoped service
+(`CrrImpactService`, `OutreachFeedbackService`, `OutreachGoalService`),
+every query filtering `organization_id` from the route's own
+`current_user`, never a client-supplied id. Route surface re-enumerated by
+AST: 38 routes, unchanged from pass 16. **0 fixed, 0 new findings.**
+
+**Cross-feature finding, not this feature's scope, recorded rather than
+fixed:** tracing this feature's own Evaluations frontend (routed under
+`/reports/evaluations/*`) surfaced that `evaluations.py` — an unclaimed
+module SEC-00 found sound at 34 routes in its own pass 16 — has grown to
+49 routes with no pass covering the growth. The six routes this feature's
+frontend newly calls (period reassignment, grade-spread, export-pdfs,
+review history) were checked lightly and found correctly gated and
+org-scoped; the other ~9 new routes were not traced. Recorded in this
+file's "New modules with no rotation row yet" paragraph above so the
+Feature 17 fold-in, or a fresh SEC-00 sweep, picks it up.
+
+Full write-up: `docs/security-review/RPT6-29-reports-analytics.md`'s
+**Pass 17** section.
+
+**Completion gate:** `flake8`/`black --check`/`isort --check-only` (CI's
+pins) on `app/ tests/ alembic/` all clean. `validate_migrations.py
+--strict` — 844 revisions, single head `e9cf8ab7e4e4`.
+`check_route_permissions.py --strict` — 344 routes, 0 errors/warnings.
+`generate_schema_docs.py --check` — up to date. Scoped backend pytest
+(`-k "reports or label or analytics or dashboard or attendance_dashboard
+or pipeline or prospect_privacy or membership_pipeline or dues_overdue or
+saved_report or evaluation or meeting or minutes or outreach or
+community_engagement or leave or crr"`) — 5227 passed, 1 pre-existing
+environment-only skip (`py_vapid`), up from pass 16's 4863. `npm run
+typecheck` — 0 errors. `npm run lint` — 0 errors, 0 warnings. `npx vitest
+run src/modules/reports src/pages/AnalyticsDashboardPage.test.tsx
+src/pages/Dashboard.test.tsx src/components/labels/LabelPrintPage.test.tsx
+src/components/labels/barcodeGeometry.test.ts
+src/components/labels/printerDpi.test.ts
+src/pages/PlatformAnalyticsPage.test.tsx` — 470 passed (36 files), up from
+pass 16's 438/33.
+
+Row 29 → ✅ (pending this PR's merge). Next is Feature 30 (Onboarding) —
+re-check `list_pull_requests` fresh rather than trusting this note.
 
 ### 2026-11-25 — Feature 27 (Integrations, pass 15) merged (PR #4704); Feature 28 (Security, audit & IP, pass 15): watchdog pickup, true zero-delta in scope (shared export allowlist + cosmetic frontend only), 0 fixed, 0 new findings
 
@@ -54593,7 +54753,7 @@ byte-identical — true zero backend delta for the third pass running (9, 12,
 delta: a new offline save/drain version-race fix
 (`recordDrainedVersion`/`drainedVersionFor` in
 `skillsTestOfflineStore.ts`/`skillsTestOffline.ts`, consumed by
-`skillsTestingStore.ts`) that only ever substitutes a *newer*,
+`skillsTestingStore.ts`) that only ever substitutes a _newer_,
 same-device-owned `expected_version` into a save that would otherwise
 spuriously 409 against the server's unchanged optimistic-concurrency check —
 traced end-to-end and confirmed it cannot weaken that check in either
@@ -54676,7 +54836,7 @@ exposure:
   residual naming issue), no behavior change.
 - Frontend (`ComplianceMatrixTab.tsx`, `complianceMatrixModel.ts`,
   `complianceForecast.ts` (new), `ComplianceOfficerDashboard.tsx`) — a
-  `toneOf` fix so a *met* hours/courses cell's own next renewal date can no
+  `toneOf` fix so a _met_ hours/courses cell's own next renewal date can no
   longer demote it to lapsed (it contradicted the backend's own status); a
   new response-shape guard for the forecast endpoint's `{members, averages}`
   envelope; the forecast's department averages and their colour now read
