@@ -16,12 +16,11 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR TBD (branch `claude/security-review-compliance`)**: Feature 20
-(Compliance), pass 16 — watchdog pickup (the dedicated
-`/loop 30m /security-review` session, `session_011T1ZyyLrD5HagusgK9uDw2`,
-remains unreachable, confirmed via `ListAgents` → "No reachable agents").
-PR number and link recorded in a follow-up commit on this same branch once
-opened (never a PR of its own).
+**PR [#4695](https://github.com/thegspiro/the-logbook/pull/4695) (branch
+`claude/security-review-compliance`)**: Feature 20 (Compliance), pass 16 —
+watchdog pickup (the dedicated `/loop 30m /security-review` session,
+`session_011T1ZyyLrD5HagusgK9uDw2`, remains unreachable, confirmed via
+`ListAgents` → "No reachable agents").
 
 PR #4694 (Feature 19, Skills testing, pass 16) was fully green on every CI
 check once its second (tracker-recording) commit's own run completed
