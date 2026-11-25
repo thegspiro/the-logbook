@@ -26,7 +26,10 @@ export const ElectionDetailRoute: React.FC = () => {
     return <Navigate to={`${target}${rest ? `?${rest}` : ''}${location.hash}`} replace />;
   }
 
-  return <ElectionDetailPage />;
+  // Keyed by the election, so moving to another one (a runoff in the chain, a
+  // clone) is a new page: the last election's integrity result, forensics,
+  // paper batches and pending void must not carry over (ELEC2-14).
+  return <ElectionDetailPage key={electionId} />;
 };
 
 export default ElectionDetailRoute;

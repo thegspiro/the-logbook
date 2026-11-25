@@ -24,12 +24,7 @@ import { useAuthStore } from '../stores/authStore';
 import { DEFAULT_PAGE_SIZE, PAGE_SIZE_OPTIONS } from '../constants/config';
 import { COURSE_QUALIFICATIONS } from '../constants/enums';
 import { formCoercions } from '../utils/formValues';
-import type {
-  TrainingCourse,
-  TrainingCourseCreate,
-  TrainingCategory,
-  TrainingType,
-} from '../types/training';
+import type { TrainingCourse, TrainingCourseCreate, TrainingCategory, TrainingType } from '../types/training';
 import { TrainingPageHeader } from '../components/training/TrainingPageHeader';
 import { ErrorSummary } from '../components/ux/ErrorSummary';
 import { FIELD_ERROR_CLASS, FormField } from '../components/ux/FormField';

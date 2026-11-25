@@ -762,7 +762,7 @@ const Members: React.FC = () => {
                   tier="xwide"
                   className="px-4 pt-3"
                 />
-                <table className="rwd-table rwd-table-xwide rwd-table-fields w-full">
+                <table className="rwd-table rwd-table-xwide w-full">
                   <thead className="bg-theme-input-bg border-theme-surface-border border-b">
                     <tr>
                       {canPrintBadges && (

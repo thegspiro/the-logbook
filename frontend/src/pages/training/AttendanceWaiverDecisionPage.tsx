@@ -394,18 +394,18 @@ export const AttendanceWaiverDecisionPage: React.FC<AttendanceWaiverDecisionPage
             ((request.attachments ?? []).length > 0 ||
               request.can_attach ||
               (request.attachments_removed_count ?? 0) > 0) && (
-            <WaiverAttachmentList
-              requestId={request.id}
-              attachments={request.attachments ?? []}
-              canAttach={request.can_attach === true}
-              onAttached={() => void reload()}
-              removedCount={request.attachments_removed_count}
-              removedAt={request.attachments_removed_at}
-              {...(request.can_remove_attachment
-                ? { onRemove: (a: WaiverAttachment) => void handleRemoveAttachment(a), removingId }
-                : {})}
-            />
-          )}
+              <WaiverAttachmentList
+                requestId={request.id}
+                attachments={request.attachments ?? []}
+                canAttach={request.can_attach === true}
+                onAttached={() => void reload()}
+                removedCount={request.attachments_removed_count}
+                removedAt={request.attachments_removed_at}
+                {...(request.can_remove_attachment
+                  ? { onRemove: (a: WaiverAttachment) => void handleRemoveAttachment(a), removingId }
+                  : {})}
+              />
+            )}
         </section>
 
         {awaitsReconfirmation(request) &&

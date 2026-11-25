@@ -489,7 +489,7 @@ export const ApparatusListPage: React.FC = () => {
                             apparatus.isArchived ? 'opacity-60' : ''
                           }`}
                         >
-                          <td data-label="Unit" className="px-3 py-4 sm:px-6">
+                          <td data-label="Unit" className="rwd-table-lead px-3 py-4 sm:px-6">
                             <div className="flex items-center">
                               <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-red-800 font-bold text-white">
                                 {/* Unit numbers are hyphenated ("E-1", "B-5"), so a
@@ -548,7 +548,7 @@ export const ApparatusListPage: React.FC = () => {
                             </div>
                           </td>
                           <td data-label="Actions" className="px-3 py-4 text-right whitespace-nowrap sm:px-6">
-                            <div className="flex items-center justify-end space-x-1 sm:space-x-2">
+                            <div className="flex flex-wrap items-center justify-end gap-x-1 sm:gap-x-2">
                               <button
                                 onClick={() => void navigate(`/apparatus/print-labels?ids=${apparatus.id}`)}
                                 className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-secondary hidden min-h-[44px] min-w-[44px] items-center justify-center rounded-sm p-2 transition-colors sm:inline-flex"

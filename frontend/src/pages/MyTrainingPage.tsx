@@ -1231,22 +1231,22 @@ const MyTrainingPage: React.FC = () => {
                 role="region"
                 aria-label="Training records"
               >
-                <table className="rwd-table rwd-table-wide w-full text-left text-sm">
+                <table className="rwd-table rwd-table-narrow w-full text-left text-sm">
                   <thead className="text-theme-text-muted bg-theme-surface-secondary text-xs uppercase">
                     <tr>
-                      <th scope="col" className="px-4 py-2">
+                      <th scope="col" className="px-2.5 py-2">
                         Course
                       </th>
-                      <th scope="col" className="px-4 py-2">
+                      <th scope="col" className="px-2.5 py-2">
                         Date
                       </th>
-                      <th scope="col" className="px-4 py-2">
+                      <th scope="col" className="px-2.5 py-2">
                         Hours
                       </th>
-                      <th scope="col" className="px-4 py-2">
+                      <th scope="col" className="px-2.5 py-2">
                         Status
                       </th>
-                      <th scope="col" className="px-4 py-2">
+                      <th scope="col" className="px-2.5 py-2">
                         Submitted
                       </th>
                     </tr>
@@ -1254,7 +1254,7 @@ const MyTrainingPage: React.FC = () => {
                   <tbody className="divide-theme-surface-border divide-y">
                     {data.submissions.map((s) => (
                       <tr key={s.id} className="text-theme-text-secondary">
-                        <td className="rwd-table-lead px-4 py-2" data-label="Course">
+                        <td className="rwd-table-lead px-2.5 py-2" data-label="Course">
                           <div className="min-w-0">
                             {s.course_name}
                             {(s.file_removals ?? []).map((removal, i) => (
@@ -1268,13 +1268,13 @@ const MyTrainingPage: React.FC = () => {
                             ))}
                           </div>
                         </td>
-                        <td className="px-4 py-2 whitespace-nowrap" data-label="Date">
+                        <td className="px-2.5 py-2 whitespace-nowrap" data-label="Date">
                           {formatDate(s.completion_date, tz)}
                         </td>
-                        <td className="px-4 py-2 whitespace-nowrap" data-label="Hours">
+                        <td className="px-2.5 py-2 whitespace-nowrap" data-label="Hours">
                           {formatHours(s.hours_completed)}
                         </td>
-                        <td className="px-4 py-2" data-label="Status">
+                        <td className="px-2.5 py-2" data-label="Status">
                           <span className={`rounded-sm px-2 py-1 text-xs ${getTrainingStatusColor(s.status)}`}>
                             {getTrainingStatusLabel(s.status)}
                           </span>
