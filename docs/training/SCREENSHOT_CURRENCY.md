@@ -1,5 +1,50 @@
 # Screenshot currency
 
+## Queued by the November 24 – 25 documentation pass
+
+Source: [CHANGE_AUDIT_2026-11](../CHANGE_AUDIT_2026-11.md#change-audit-november-24--25-2026).
+Nothing was captured by this pass. Every new id below has a placeholder in
+its guide. Two older clashes are settled: the signature-lines shot moves from
+`08-125` (an existing image) to `08-130`, and the leave-requested shot from
+`03-141` to `03-157`.
+
+| Guide | Screen | Action |
+| --- | --- | --- |
+| 01 | **Members** on a tablet with the sidebar open: **Sort by** above the cards, the cards laid out in columns, the checkbox in each card's corner | Create `01-75-member-roster-tablet` |
+| 01 | **Print ID Cards**, Front and back, with **Certifications and valid-through date** ticked and its hint | Create `01-73-print-id-cards-certifications` |
+| 01 | The back of a printed test card: return address, Certifications list, barcode | Create `01-74-id-card-back-certifications` |
+| 01 | `01-43-print-id-cards`: now has the new tick-box | **Replace** |
+| 01 | History article editor: a text block and a half-width photo block, with **Add text below** / **Add photo below** | Create `01-76-history-article-form` |
+| 01 | History article page: **PDF** and **Word** buttons, Sources, "Photos not cleared for the public" in the side column | Create `01-77-history-article-page` |
+| 01 | **History → Titles, lists and clearance → Public website**: the **Show on the website** switches and the widget section after **Make a widget link** | Create `01-78-history-public-website` |
+| 02 | **Records → Possible Double Credit** with one pair: "Same name" and the date found, **From the event** beside **Self-report**, **Keep both** and the two **Void** buttons | Create `02-177-possible-double-credit` |
+| 02 | Member Training History → Files on a record whose certificate retention removed: the "Certificate file removed under the department's retention policy on …" note, no **Download** | Create `02-178-certificate-removed-notice` |
+| 02 | A decided waiver request, **Supporting documents** reading "2 documents removed under retention on …" | Create `02-179-waiver-documents-removed` |
+| 02 | **New evaluation** with the **Form** list open ("Matched to the member's class and status", two forms) | Create `02-180-evaluation-new-form-choice` |
+| 02 | `02-66-compliance-matrix`: a missing certification's figure now reads **Not recorded** (caption and manifest alt text already updated) | **Replace** |
+| 02 | `02-01-my-training`: Recent Training columns tightened; Self-Reported Training is a table at tablet width | Check |
+| 03 | **Settings → General → Community outreach hours** after **Check past outreach sheets** | Create `03-155-outreach-credit-card` |
+| 03 | Shift details for an outreach sheet: the event's title, the **Community outreach** tag, the **Volunteers** heading, a seat per role, **Open role** | Create `03-156-outreach-sheet-details` |
+| 03 | `03-05`, `03-59`, `03-100`, `03-105`, `19-34`: if the demo data has an outreach sheet, it now shows the event's name and tag | Check |
+| 04 | **Volunteer staffing** as the organizer: seat rows, an **Essential** badge, "(You)" with **Give up my spot**, **Assign someone** / **Sign myself up**, an optional position | **Replace** `04-105-event-volunteer-staffing` |
+| 04 | An outreach event as a member: the **Volunteer staffing** seat board (placeholder rewritten for the board) | Create `04-109-event-volunteer-signup` |
+| 04 | **Settings → Public Requests → Types & roles**: preset rows with an **Essential** tick and its help line | **Replace** `04-104-type-role-preset` |
+| 04 | `04-102-event-request-page`: the staffing summary is now a readiness badge | Check |
+| 04 | **Settings → Outreach Goals**: the year buttons, goals with bars, Target / **Save** / **Remove**, **Add goal** | Create `04-117-outreach-goals-settings` |
+| 04 | Outreach Impact goals section with **On pace**, **Behind pace** and **Met**, and **Edit goals** | Create `04-118-outreach-impact-goals` |
+| 04 | Apparatus & Crew card: the essential count in the heading, coloured night chips, an optional position, **Assign someone** | Create `04-119-apparatus-crew-card-essential` |
+| 04 | Schedule nights after **Every day**, Hours 3.5, **Route or place** on its own line | Create `04-120-schedule-nights-every-day` |
+| 04 | `04-116` placeholder (apparatus seat requests): the crew card has been redrawn since the placeholder was written | Check its text before capturing |
+| 08 | **Hours by Position** report: the four cards, the Position list set to Driver/Operator with its total, the filtered table | Create `08-128-report-hours-by-position` |
+| 08 | A report on a phone as cards, **Sort by** set to a column with the descending arrow | Create `08-129-report-card-sort` |
+| 08 | `08-06-reports`: the card grid now includes Hours by Position | **Replace** |
+| 08 | `08-11-error-monitor` with a server row open: the new **Reference** line | Check (optional retake) |
+| 04 | The **Delete Event** dialog now has the attachments sentence | Check any shot of it |
+| 06 | `06-01-apparatus-list` if taken at tablet width: cards now laid out in columns | Check |
+| 14 | `14-18-paper-batches`: the open-election shot still holds; a closed election now also shows **Void Batch** | Check |
+
+**Made wrong by this range:** `01-43`, `02-66`, `04-104`, `04-105`, `08-06`.
+
 ## Queued by the November 23 – 24 documentation pass
 
 Source: [CHANGE_AUDIT_2026-11](../CHANGE_AUDIT_2026-11.md#change-audit-november-23--24-2026).

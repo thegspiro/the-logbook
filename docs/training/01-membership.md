@@ -117,7 +117,7 @@ right. Wherever the roster is cards, a **Sort by** list above them sorts it by
 Date**; the arrow button beside it switches between ascending and descending.
 On a desktop, select a column heading as before.
 
-> **Screenshot to create:** `01-75-member-roster-tablet.png`, **Members** on a
+> **Screenshot needed** (`01-75-member-roster-tablet.png`): **Members** on a
 > tablet with the side navigation open: the **Sort by** list above the cards,
 > and each member's card with the name at the top, the selection box in its
 > corner and the other details in columns. See
@@ -283,12 +283,14 @@ Organization settings.
 Print one **Test card** first to check the alignment. Cards print in black
 only, so they look the same on a black-only ribbon as on a colour one.
 
-> **Screenshot to create:** `01-73-print-id-cards-certifications.png`, **Print
+> **Screenshot needed** (`01-73-print-id-cards-certifications.png`): **Print
 > ID Cards** with **Front and back** chosen and **Certifications and
 > valid-through date** ticked, its hint reading that each certification goes on
-> the back; and, as `01-74-id-card-back-certifications.png`, the back of a
-> printed test card with the return address, the **Certifications** list and
-> the barcode. See [SCREENSHOT_CURRENCY.md](./SCREENSHOT_CURRENCY.md).
+> the back. See [SCREENSHOT_CURRENCY.md](./SCREENSHOT_CURRENCY.md).
+
+> **Screenshot needed** (`01-74-id-card-back-certifications.png`): the back of
+> a printed test card with the return address, the **Certifications** list and
+> the barcode.
 
 ![Print ID Cards for two members with Front and back chosen: the Orientation, Sides and Code choices, Test card and Save as department layout, the duplex printing note, and the Accept old badges switch at the bottom](./images/01-43-print-id-cards.png)
 
@@ -3532,12 +3534,16 @@ coming week is empty too.
 
 The Public Portal's **Configuration** tab points to this section.
 
-> **Screenshots needed:** `01-76-history-article-form` (a text block and a
-> half-width photo block, with **Add text below** and **Add photo below**),
-> `01-77-history-article-page` (the **PDF** and **Word** buttons, Sources,
-> and **Photos not cleared for the public** in the side column),
-> `01-78-history-public-website` (the **Show on the website** switches and
-> the widget section, just after **Make a widget link**).
+> **Screenshot needed** (`01-76-history-article-form.png`): a text block and
+> a half-width photo block, with **Add text below** and **Add photo below**.
+
+> **Screenshot needed** (`01-77-history-article-page.png`): the **PDF** and
+> **Word** buttons, Sources, and **Photos not cleared for the public** in the
+> side column.
+
+> **Screenshot needed** (`01-78-history-public-website.png`): the **Show on
+> the website** switches and the widget section, just after **Make a widget
+> link**.
 
 ### What History Does Not Do Yet
 

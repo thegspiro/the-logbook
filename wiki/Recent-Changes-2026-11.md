@@ -5,6 +5,54 @@ section at the top of the current month's page, and a new month starts a
 new page. The engineering audit behind each pass is in
 [`docs/CHANGE_AUDIT_2026-11.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-11.md).
 
+## Recent changes: November 24 – 25, 2026
+
+The engineering audit is
+[`docs/CHANGE_AUDIT_2026-11.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-11.md#change-audit-november-24--25-2026).
+
+- **History articles and the public website.** Historians can write
+  articles from text and archive photos, cite sources, and download each one
+  as a PDF or a Word file. Public History records can now appear on the
+  department's own website, and a "Today in history" widget can be added to
+  it. Choose what shows under **History → Titles, lists and clearance →
+  Public website**. See [History](Module-History).
+- **Volunteer seats on outreach events.** Members sign up for a particular
+  seat, and can give it up from the same card. Organizers can assign someone
+  to a seat. A seat or role can be marked optional, so a coordinator sees at a
+  glance whether every **essential** seat is filled. Apparatus nights are
+  scheduled with **Add a night** and **Every day** / **Every week**. See
+  [Events](Module-Events).
+- **Outreach hours, not shift hours.** Time on a community outreach signup
+  sheet now counts as outreach hours on the event it staffs, not as shift
+  hours. Some members' shift hours may drop after the upgrade. An officer can
+  credit past sheets once from Scheduling **Settings → General**. Sheets are
+  named by their event, with a **Community outreach** tag. See
+  [Scheduling](Module-Scheduling).
+- **Yearly outreach goals.** Set targets for outreach figures and CRR counts
+  and watch the pace on Outreach Impact. The coordinator is emailed when a
+  requester leaves feedback. See [Public Programs](Public-Programs).
+- **Training sign-offs** waiting 7 days, and again at 14, are emailed to the
+  training officers. **Possible double credit:** when a finalized event
+  repeats a self-report or a hand-entered record, both are kept and the pair
+  is listed for an officer to keep or void. See [Training](Module-Training).
+- **Removed files say so.** A certificate removed by retention or the malware
+  scan leaves a dated note, and a waiver request says how many documents
+  retention removed.
+- **Deleting an event deletes its attachments**, and the dialog now says so.
+  Download anything you need first.
+- **Reports → Hours by Position** shows every member's credited hours,
+  shifts and calls by seat. Tables shown as cards can be sorted with **Sort
+  by**, and on a tablet the cards are laid out in columns.
+- **Printed ID cards** can carry a member's certifications and a valid-through
+  date. See [Member ID Cards](Member-ID-Cards).
+- **Evaluations and elections.** Evaluation drafts pick a matching form and
+  keep your edits when you update figures. Election counts now follow each
+  race's own rules (one winner for a one-seat race, a motion's own winning
+  rule), and a paper batch can be voided after the close. See
+  [Evaluations](Module-Evaluations) and [Elections](Module-Elections).
+- **Restoring Shared Drive files** from a copy now has a relink command. See
+  [Backup and Recovery](Backup-Recovery).
+
 ## Recent changes: November 23 – 24, 2026
 
 The engineering audit is

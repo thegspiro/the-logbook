@@ -1,5 +1,42 @@
 # Script currency
 
+## 2026-11-25 pass
+
+**Edited:**
+
+- **12 Elections deep dive, Chapter 11 "Reading the Results".** The
+  narration promised "full round-by-round elimination" for a ranked-choice
+  race. The results page has only ever shown the final round, which ELEC2-21
+  (#4681) records as a decision still open. The line now describes what the
+  page shows. A dated production note asks for a re-shoot of any footage
+  showing a one-seat race with two winners or an instant-runoff motion: both
+  now count differently (#4681).
+
+**Flagged, not edited:** nothing they say is wrong.
+
+- **03 IT Manager.** Could add three things: the **Certifications and
+  valid-through date** option in the Print ID Cards beat (#4672);
+  `relink_restored_drive_files.py` in the Shared Drive backup beat (#4658);
+  and startup migration recovery now skipping only the failing migration
+  (#4583).
+- **04 Fire Chief.** The Scheduling Reports beat could mention **Reports →
+  Hours by Position** (#4679).
+- **05 Training Officer.** The Finalizing beat could mention the sign-off
+  reminders at 7 and 14 days (#4623). The retention presenter note could add
+  that a removed certificate now leaves "Certificate file removed under the
+  department's retention policy on …" in its place (#4657).
+- **16 Training Officer part 2.** The finalize beat could mention **Records →
+  Possible Double Credit** (#4617).
+- **06 Member guide.** An outreach sheet now shows its event's name and a
+  **Community outreach** tag in Open Shifts and My Shifts. Its time counts as
+  outreach hours, not shift hours (#4652, #4671).
+- **07 Secretary.** The "Deleting events" row below: the delete now also
+  removes the files on the event's Attachments, and the dialog says so
+  (#4656). The outreach beat could show the **Volunteer staffing** seat board
+  and yearly goals (#4583, #4673).
+- **History articles and the public website widget** (#4620) appear in no
+  script.
+
 ## 2026-11-24 pass
 
 **Edited:**

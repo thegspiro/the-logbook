@@ -6578,11 +6578,12 @@ a rating or comment. A daily task sends reminders and overdue notices once each.
 > evaluation's **Last year's goals** item with two goals, results and a
 > comment) and `02-162-evaluation-data-sources-new` (the **Data shown with this
 > item** list open on the **Apparatus & equipment** and **Inventory** groups).
-> Also needed _(2026-11-24)_: `02-181-evaluation-new-form-choice` (the **New
+> The wiki's [Performance Evaluations](../../wiki/Module-Evaluations.md) page
+> now carries screenshots from the running app of most screens listed above.
+
+> **Screenshot needed** (`02-180-evaluation-new-form-choice.png`): the **New
 > evaluation** dialog with the **Form** list open below **Kind**, showing
-> **Matched to the member's class and status** and two forms). The wiki's
-> [Performance Evaluations](../../wiki/Module-Evaluations.md) page now carries
-> screenshots from the running app of most screens listed above.
+> **Matched to the member's class and status** and two forms.
 
 ---
 
