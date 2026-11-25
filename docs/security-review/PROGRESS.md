@@ -16,7 +16,7 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR #<pending> (branch
+**PR [#4704](https://github.com/thegspiro/the-logbook/pull/4704) (branch
 `claude/security-review-integrations`)**: Feature 27 (Integrations), pass
 15 — watchdog pickup (the dedicated `/loop 30m /security-review` session,
 `session_011T1ZyyLrD5HagusgK9uDw2`, remains unreachable, confirmed via
