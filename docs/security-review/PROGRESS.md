@@ -16,6 +16,40 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#4705](https://github.com/thegspiro/the-logbook/pull/4705) (branch
+`claude/security-review-security-audit-ip`)**: Feature 28 (Security, audit
+& IP), pass 15 — watchdog pickup (the dedicated
+`/loop 30m /security-review` session, `session_011T1ZyyLrD5HagusgK9uDw2`,
+remains unreachable, confirmed via `ListAgents` → "No reachable agents").
+
+PR #4704 (Feature 27, Integrations, pass 15) was fully green on every CI
+check (`CI Success` passing on its current head, `mergeable_state`
+`clean`) and merged clean as squash commit `1bb6c27b8`. Row 27 marked ✅
+above. A fresh `list_pull_requests` (state=open) found nothing open at all
+(not even an unrelated PR), so this iteration continued to Step 1: row 28
+(Security, audit & IP) was the next ⬜ row. The plain branch name
+`claude/security-review-security-audit-ip` was checked against the remote
+first — only the old, stale `-p12` suffix branch from a much earlier pass
+exists, so the plain name is used here without a numeric suffix.
+
+Baseline `78809b873` (pass 14's own merge, PR #4547). Eight of nine backend
+scope files are byte-identical to pass 14; the ninth
+(`core/security_middleware.py`) carries the same recurring shape pass 14
+itself saw and accepted — two more feature-owned export routes appended to
+the shared, test-pinned `EXPORT_ENDPOINTS` allowlist, nothing else changed.
+Two frontend files carry a genuine post-pass-14 diff, both cosmetic
+(a `min-w-0` table-reflow wrap, plus one new "Reference" field on the
+error-detail panel reading an existing, already-permission-gated context
+key). **0 fixed, 0 new findings.** Full write-up:
+`docs/security-review/SEC2-28-security-audit-ip.md`'s **Pass 15** section.
+
+Row 28 → ✅ (pending this PR's merge); next is Feature 29 (Reports &
+analytics) — re-check `list_pull_requests` fresh rather than trusting this
+note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 27, Integrations, pass 15, PR #4704, merged), preserved for history</summary>
+
 **PR [#4704](https://github.com/thegspiro/the-logbook/pull/4704) (branch
 `claude/security-review-integrations`)**: Feature 27 (Integrations), pass
 15 — watchdog pickup (the dedicated `/loop 30m /security-review` session,
@@ -49,6 +83,8 @@ test). **0 fixed, 0 new findings.** Full write-up:
 
 Row 27 → ✅ (pending this PR's merge); next is Feature 28 (Security, audit
 & IP) — re-check `list_pull_requests` fresh rather than trusting this note.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 26, Forms, pass 15, PR #4703, merged), preserved for history</summary>
@@ -28662,7 +28698,7 @@ iteration's commit" rule.
 | 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                                                                                                                                                         | ✅     |
 | 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                                                                                                                                                               | ✅     |
 | 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`, `historical_import.py` (33 routes incl. undo, added pass 14), `historical_staffing_*.py`, `historical_import_undo.py` (added pass 14)                                                                                                        | ✅     |
-| 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`, `audit_ship_service.py`                                                                                                                                                                                 | ⬜     |
+| 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`, `audit_ship_service.py`                                                                                                                                                                                 | ✅     |
 | 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                                                                                                                                                                    | ⬜     |
 | 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (26 unauth bootstrap routes)                                                                                                                                                                                                                                   | ⬜     |
 | 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                                                                                                                                                         | ⬜     |
@@ -28741,6 +28777,60 @@ it to be rediscovered.
 ---
 
 ## Log
+
+### 2026-11-25 — Feature 27 (Integrations, pass 15) merged (PR #4704); Feature 28 (Security, audit & IP, pass 15): watchdog pickup, true zero-delta in scope (shared export allowlist + cosmetic frontend only), 0 fixed, 0 new findings
+
+Scheduled watchdog check-in — the dedicated `/loop 30m /security-review`
+session (`session_011T1ZyyLrD5HagusgK9uDw2`) remains unreachable per
+`ListAgents`. PR #4704 (Feature 27, Integrations, pass 15) was fully green
+on every CI check (`CI Success` passing on its current head,
+`mergeable_state` `clean`) — merged by this watchdog as squash commit
+`1bb6c27b8`. A fresh `list_pull_requests` (state=open) found nothing open
+at all, so this iteration continued to Step 1: row 28 (Security, audit &
+IP) was the next `⬜` row.
+
+Baseline `78809b873` (pass 14's own merge, PR #4547). Eight of nine backend
+scope files (`security_monitoring.py` endpoint + service,
+`ip_security.py` endpoint + service, `audit_logs.py`, `error_logs.py`,
+`core/audit.py`, `core/geoip.py`, `audit_ship_service.py`) are
+byte-identical to pass 14. The ninth, `core/security_middleware.py`,
+carries the same recurring shape pass 14 itself already saw and accepted:
+two more paths and one more template appended to the shared, hand-maintained
+`EXPORT_ENDPOINTS`/`EXPORT_ENDPOINT_TEMPLATES` allowlist by other features'
+own commits (training evaluations' export-pdfs route, leave-requests'
+export route, history articles' export route) — confirmed, not assumed,
+that `tests/test_security_middleware.py::TestExportEndpointsCoverage`
+still pins this set bidirectionally against the live route table. Route
+surface re-enumerated by AST: **37 routes**, unchanged from pass 14.
+
+Two frontend files carry a genuine post-pass-14 diff, both cosmetic:
+`IPExceptionTable.tsx` wraps two multi-line cells in a `min-w-0` div (the
+Pitfall #39 reflow-fit shape), and `ErrorMonitoringPage.tsx` does the same
+plus adds a new "Reference" field to the error-detail panel that reads an
+existing, already-permission-gated `error.context` key through the
+already-reviewed generic `contextText()` extractor — not new backend data
+collection, since no backend file in scope changed. **0 fixed, 0 new
+findings.** SEC2-28-6 (the unlocked IP-exception duplicate-request check)
+and the dead-detector-code note (pass 3) both re-confirmed open and
+unchanged. Full write-up:
+`docs/security-review/SEC2-28-security-audit-ip.md`'s **Pass 15** section.
+
+**Completion gate:** `flake8`/`black --check`/`isort --check-only` (CI's
+pins) on `app/ tests/ alembic/` all clean. `validate_migrations.py
+--strict` — 844 revisions, single head `e9cf8ab7e4e4`.
+`check_route_permissions.py --strict` — 344 routes, 0 errors/warnings.
+`generate_schema_docs.py --check` — up to date. Scoped backend pytest
+(`-k "security_monitoring or ip_security or ip_exception or audit_log or
+error_log or geoip or audit_ship or security_middleware or
+export_endpoint"`) — 293 passed, 1 pre-existing environment-only skip
+(`py_vapid`). `npm run typecheck` — 0 errors. `npm run lint` — 0
+errors/warnings. `npx vitest run src/modules/ip-security
+src/pages/AuditLogPage.test.tsx src/pages/ErrorMonitoringPage.test.tsx` —
+66 passed (5 files).
+
+Row 28 → ✅ (pending this PR's merge). Next is Feature 29 (Reports &
+analytics) — re-check `list_pull_requests` fresh rather than trusting this
+note.
 
 ### 2026-11-25 — Feature 26 (Forms, pass 15) merged (PR #4703, after GitHub's merge API returned transient 500/502 errors before one retry went through); Feature 27 (Integrations, pass 15): watchdog pickup, audit-log org attribution + undo attachment cleanup + pagination fix, 0 fixed, 0 new findings
 
