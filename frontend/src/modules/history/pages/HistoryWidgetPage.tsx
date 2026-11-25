@@ -4,13 +4,16 @@
  * the widget's only credential, and which sites may frame it is decided by
  * nginx from the Public Portal's allowed websites.
  *
+ * The server writes each anniversary's day in words, so this page imports
+ * no date formatter: it is framed on other sites, and keeping it out of the
+ * shared date chunk keeps that chunk with the rest of the first load.
+ *
  * On a day with nothing, the server sends "This week in history" instead;
  * with nothing in the coming week either, the widget renders nothing at all,
  * so the host page shows no empty box.
  */
 import React, { useEffect, useState } from 'react';
 import { useParams } from 'react-router';
-import { formatCalendarDate } from '../../../utils/dateFormatting';
 import { historyWidgetService } from '../services/publicWidget';
 import type { HistoryWidgetToday, PublicWidgetTheme } from '../types';
 
@@ -80,7 +83,7 @@ export const HistoryWidgetPage: React.FC = () => {
           <li key={`${entry.key}:${entry.anniversary}`} className="text-sm">
             <span className="font-semibold">
               {answer.mode === 'week'
-                ? `${formatCalendarDate(entry.anniversary, { month: 'long', day: 'numeric' })}, ${entry.date.slice(0, 4)}`
+                ? `${entry.anniversary_label}, ${entry.date.slice(0, 4)}`
                 : entry.date.slice(0, 4)}
             </span>{' '}
             <span>{entry.label}</span>

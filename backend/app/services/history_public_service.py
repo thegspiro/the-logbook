@@ -1005,7 +1005,14 @@ class HistoryPublicService:
     def _on_day(entries: list[dict[str, Any]], day: date) -> list[dict[str, Any]]:
         days = set(today_days(day))
         found = [
-            {**e, "years_ago": day.year - e["date"].year, "anniversary": day}
+            {
+                **e,
+                "years_ago": day.year - e["date"].year,
+                "anniversary": day,
+                # Written out here so the widget needs no date formatter: a
+                # calendar date, the same words on every viewer's screen.
+                "anniversary_label": f"{day:%B} {day.day}",
+            }
             for e in entries
             if e["precision"] == "day"
             and (e["date"].month, e["date"].day) in days

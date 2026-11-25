@@ -1407,6 +1407,8 @@ export interface HistoryWidgetEntry {
   detail: string | null;
   years_ago: number;
   anniversary: string;
+  /** The anniversary's day in words ("March 4"), written by the server. */
+  anniversary_label: string;
 }
 
 /** What the "Today in history" widget shows. */

@@ -29,6 +29,7 @@ const answer = (overrides: Partial<HistoryWidgetToday> = {}): HistoryWidgetToday
       detail: 'Main Street',
       years_ago: 115,
       anniversary: '2026-03-04',
+      anniversary_label: 'March 4',
     },
   ],
   theme: 'light',

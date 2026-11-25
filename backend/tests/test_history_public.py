@@ -480,6 +480,8 @@ class TestToday:
         week = await service.today(records, date(2026, 2, 28))
         assert week["mode"] == "week"
         assert [e["label"] for e in week["entries"]] == ["Mill fire"]
+        # The day each falls on, written out for the widget.
+        assert [e["anniversary_label"] for e in week["entries"]] == ["March 4"]
         # The year-precision event is stored as 1 January: not an anniversary.
         assert (await service.today(records, date(2026, 1, 1)))["mode"] == "none"
         quiet = await service.today(records, date(2026, 6, 1))
