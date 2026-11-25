@@ -863,6 +863,31 @@ class TestEventLifecycle:
         assert approved_row.status == AttendanceWaiverStatus.VOIDED
         assert approved_row.event_id is None
 
+    async def test_cancelling_an_approved_request_takes_the_waiver_off_the_minutes(
+        self, db_session, dept
+    ):
+        """The other half of giving an approved waiver back (pass 16): not
+        just the request's own status, but the minutes-record attendee row
+        `grant_meeting_waiver` wrote onto. Left excused, the member would
+        read as excused on the minutes for a meeting that was never held."""
+        meeting_id = await make_minutes_record(
+            db_session, dept.org, dept.ids["secretary"], event_id=dept.meeting
+        )
+        approved = await _submit(db_session, dept)
+        await _svc(db_session).approve(dept.org, dept.clerk, approved.id)
+        attendee = await _attendee(db_session, meeting_id, dept.ids["member"])
+        assert attendee.excused is True
+        assert attendee.waiver_request_id == approved.id
+
+        await EventService(db_session).cancel_event(dept.meeting, dept.org, "Snow")
+
+        attendee = await _attendee(db_session, meeting_id, dept.ids["member"])
+        assert attendee.excused is False
+        assert attendee.waiver_reason is None
+        assert attendee.waiver_request_id is None
+        assert attendee.waiver_granted_by is None
+        assert attendee.waiver_granted_at is None
+
     async def test_training_requests_are_voided_too(self, db_session, dept):
         """One engine: the training workflow's pending requests go the same
         way when their session is cancelled."""
