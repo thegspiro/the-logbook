@@ -29,6 +29,7 @@ import { useProspectiveMembersStore } from '../store/prospectiveMembersStore';
 import { useTimezone } from '../../../hooks/useTimezone';
 import { formatDate } from '../../../utils/dateFormatting';
 import { ApplicantStatus as ApplicantStatusEnum } from '../../../constants/enums';
+import { CardSortControl } from '../../../components/ux/CardSortControl';
 import { SortableHeader, type SortDirection } from '../../../components/ux/SortableHeader';
 import { getErrorMessage } from '../../../utils/errorHandling';
 
@@ -155,6 +156,22 @@ export const PipelineTable: React.FC<PipelineTableProps> = ({
       {/* Table */}
       <div className="card bg-theme-input-bg overflow-hidden">
         <div className="rwd-table-container overflow-x-auto">
+          <CardSortControl
+            options={[
+              { field: 'name', label: 'Name' },
+              { field: 'email', label: 'Email' },
+              { field: 'current_stage_name', label: 'Current Stage' },
+              { field: 'status', label: 'Status' },
+              { field: 'days_in_stage', label: 'Days in Stage' },
+              { field: 'target_membership_type', label: 'Target Type' },
+              { field: 'created_at', label: 'Applied' },
+            ]}
+            currentSort={sortField}
+            currentDirection={sortDirection}
+            onSort={handleSort}
+            tier="wide"
+            className="px-4 pt-3"
+          />
           <table className="rwd-table rwd-table-wide w-full">
             <thead>
               <tr className="border-theme-surface-border border-b">

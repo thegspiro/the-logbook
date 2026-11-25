@@ -1749,6 +1749,49 @@ input:is(.form-checkbox, [class~='h-4']) {
   }
 }
 
+/*
+ * Card-mode sort control (`components/ux/CardSortControl`).
+ *
+ * Shown exactly while a reflowing table is cards, which is exactly while its
+ * <thead>, and the sort buttons in it, are hidden: below a 768px viewport for
+ * every `rwd-table`, and inside a `rwd-table-container` narrower than its tier
+ * for a tiered one. The thresholds repeat the reflow's own and must move with
+ * them. Kept out of the tier blocks above on purpose: `rwdTableTiers.test.ts`
+ * holds those identical apart from the tier class, and a second class per
+ * tier would break that. Screen only, as the tiers are, so a printed table
+ * stays a table with no stray control above it.
+ */
+.rwd-card-sort {
+  display: none;
+}
+@media screen and (max-width: 767px) {
+  .rwd-card-sort {
+    display: flex;
+  }
+}
+@media screen {
+  @container rwd-table (width < 32rem) {
+    .rwd-card-sort.rwd-card-sort-narrow {
+      display: flex;
+    }
+  }
+  @container rwd-table (width < 64rem) {
+    .rwd-card-sort.rwd-card-sort-wide {
+      display: flex;
+    }
+  }
+  @container rwd-table (width < 78rem) {
+    .rwd-card-sort.rwd-card-sort-xwide {
+      display: flex;
+    }
+  }
+  @container rwd-table (width < 96rem) {
+    .rwd-card-sort.rwd-card-sort-2xwide {
+      display: flex;
+    }
+  }
+}
+
 /* Comparison matrices intentionally scroll instead of reflowing. Keeping the
  * region focusable gives keyboard users the same access as touch users. */
 .responsive-matrix {
