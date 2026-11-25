@@ -16,9 +16,40 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-_To be recorded as a second commit on this pass's own branch, once its PR
-exists — per the rotation's rule that an Open PR record never gets a PR of
-its own._
+**PR [#4697](https://github.com/thegspiro/the-logbook/pull/4697) (branch
+`claude/security-review-grants-fundraising-p16` — the plain
+`claude/security-review-grants-fundraising` collided with an old, abandoned
+branch from pass 9, closed but never merged)**: Feature 22 (Grants &
+fundraising), pass 16 — watchdog pickup (the dedicated
+`/loop 30m /security-review` session, `session_011T1ZyyLrD5HagusgK9uDw2`,
+remains unreachable, confirmed via `ListAgents` → "No reachable agents").
+
+PR #4696 (Feature 21, Admin hours, pass 16) was fully green on every CI
+check (`CI Success` passing on its current head, `mergeable_state`
+`clean`), with only the same bot-quota-failure comments seen on every
+recent pass (Codex "unable to review", Copilot "usage limits", no actual
+findings) — merged by this watchdog as squash commit `0dd346ebb`; row 21
+marked ✅ above. A fresh `list_pull_requests` (state=open) found no
+`claude/security-review-*` head open, so this iteration continued to Step
+1: row 22 (Grants & fundraising) was the next ⬜ row.
+
+Real delta since pass 15: **ADV2-11**, an owner-decided fix (2026-11-21) for
+a Zeffy membership payment that used to be credited to whichever member's
+email the payer typed, letting anyone choose whose dues a payment settled
+and turn an overpayment into a donation in that member's name. The sync now
+holds such payments until a `finance.manage` holder confirms the member
+through two new routes. Traced end to end: both org-scoped and
+current-member-filtered (Pitfall #32), the payment resolved under its own
+row lock first (Pitfall #27), the self-pay refusal and idempotent
+transaction reference inherited from the pre-existing
+`FinanceService.record_dues_payment` (Pitfall #36), the audit event
+carrying ids only (Pitfall #33). **0 fixed, 0 new findings** — verified
+good, not a defect to report. Full write-up:
+`docs/security-review/GF-22-grants-fundraising.md`'s **Pass 16** section.
+
+Row 22 → ✅ (pending this PR's merge); next is Feature 23 (Medical
+supplies) — re-check `list_pull_requests` fresh rather than trusting this
+note.
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 21, Admin hours, pass 16, PR #4696, merged), preserved for history</summary>
