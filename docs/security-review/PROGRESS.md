@@ -16,7 +16,7 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR [#TBD](https://github.com/thegspiro/the-logbook/pull/TBD) (branch
+**PR [#4700](https://github.com/thegspiro/the-logbook/pull/4700) (branch
 `claude/security-review-meetings-minutes-p16`)**: Feature 24 (Meetings &
 minutes), pass 16 — watchdog pickup (the dedicated
 `/loop 30m /security-review` session,
