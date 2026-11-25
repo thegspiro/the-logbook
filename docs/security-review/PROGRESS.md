@@ -16,6 +16,37 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR not yet opened for this iteration** (branch
+`claude/security-review-scheduled-tasks-p15`): Feature 31 (Scheduled
+tasks), pass 15 — watchdog pickup (the dedicated `/loop 30m
+/security-review` session remains unreachable). This row is updated with
+the real PR number/link in a follow-up commit on this same branch once the
+PR is opened, per the rotation's own rule against a docs-only PR.
+
+PR #4707 (Feature 30, Onboarding, pass 15) merged clean — confirmed by
+`2aa03ecdc` being the current tip of `origin/main` (merge of PR #4707), not
+by trusting this row. Row 30 marked ✅ above. A fresh `list_pull_requests`
+(state=open) found nothing open repo-wide, so this iteration continued to
+Step 1: row 31 (Scheduled tasks) was the next ⬜ row.
+
+Baseline `42f390383` (pass 14's own merge, PR #4566). Real delta: 3 new
+registered tasks (`apparatus_seat_request_lapse`, `training_approval_reminders`,
+`crr_resident_details_retention`, each delegating to its own already-tested
+service with its own idempotency/org-scoping, verified good) plus a new,
+correctly org-scoped and idempotent side effect appended to the existing
+`run_shift_auto_checkout` (outreach signup-sheet hours now credited through
+the event via `outreach_sheet_credit.sync_sheet_attendance`). Registry
+re-counted fresh (not trusted from pass 14's number): 91/91/90+1, up from 88. The pre-existing 2-head Alembic fork pass 14 flagged is now resolved to
+a single head. **0 fixed, 0 new findings.** Full write-up:
+`docs/security-review/CRON15-31-scheduled-tasks.md`.
+
+Row 31 → ✅ (pending this PR's merge); next is Feature 32 (Locations &
+kiosk) — re-check `list_pull_requests` fresh rather than trusting this
+note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 30, Onboarding, pass 15, PR #4707, merged), preserved for history</summary>
+
 **PR [#4707](https://github.com/thegspiro/the-logbook/pull/4707) (branch
 `claude/security-review-onboarding`)**: Feature 30 (Onboarding), pass 15 —
 watchdog pickup (the dedicated `/loop 30m /security-review` session,
@@ -42,6 +73,8 @@ dry-run-by-default apply. **0 fixed, 0 new findings.** Full write-up:
 Row 30 → ✅ (pending this PR's merge); next is Feature 31 (Scheduled
 tasks) — re-check `list_pull_requests` fresh rather than trusting this
 note.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 29, Reports & analytics, pass 17, PR #4706, merged), preserved for history</summary>
@@ -28792,7 +28825,7 @@ iteration's commit" rule.
 | 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`, `audit_ship_service.py`                                                                                                                                                                                 | ✅     |
 | 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`, `crr.py`/`outreach_goals.py` (17+4 routes, folded in pass 17 — see below)                                                                                                                         | ✅     |
 | 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (26 unauth bootstrap routes)                                                                                                                                                                                                                                   | ✅     |
-| 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                                                                                                                                                         | ⬜     |
+| 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                                                                                                                                                         | ✅     |
 | 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                                                                                                                                                        | ⬜     |
 | 33  | Core infrastructure       | CORE   | `core/security_middleware.py`, `core/database.py`, `core/config.py`                                                                                                                                                                                                                   | ⬜     |
 | 34  | Frontend shared           | FE     | `utils/apiCache.ts`, module axios instances, `ProtectedRoute`, global stores                                                                                                                                                                                                          | ⬜     |
@@ -55173,3 +55206,85 @@ files), up from 545/66 at pass 14.
 Row 24 → ✅ (pending this PR's merge). Next is Feature 25 (Messaging &
 notifications) — re-check `list_pull_requests` fresh rather than trusting
 this note.
+
+### 2026-11-25 — Feature 30 (Onboarding, pass 15) merged (PR #4707); Feature 31 (Scheduled tasks, pass 15): watchdog pickup, 3 new delegate tasks plus a new credit-sync side effect on an existing runner, all verified good, 0 fixed, 0 new findings
+
+A fresh `list_pull_requests` (state=open) found 0 results, so no
+`claude/security-review-*` PR was open. `git pull` fast-forwarded local
+`main` to `2aa03ecdc` (merge of PR #4707), matching the briefing. Row 31
+(Scheduled tasks) was confirmed the next `⬜` row by direct read of the
+rotation table, not inferred from narrative.
+
+Baseline `42f390383` (pass 14's own merge, PR #4566). `scheduled.py`: 0
+diff, re-confirmed by a full re-read (83 L, 2 routes, same gating as every
+prior pass). `scheduled_tasks.py`: +149/-0 lines — 3 new tasks
+(`apparatus_seat_request_lapse`, `training_approval_reminders`,
+`crr_resident_details_retention`) plus a new side effect appended to the
+existing `run_shift_auto_checkout`. Registry re-counted fresh by AST (not
+trusted from pass 14's number): `SCHEDULE`/`TASK_RUNNERS`/
+`TASK_INTERVALS_SECONDS`/`_MANUAL_ONLY_TASKS` = 91/91/90+1, exactly
+88 + 3 new.
+
+Each new task was read in full for idempotency and org-scoping (the
+business logic belongs to its owning feature, per pass 14's own
+convention):
+
+- **`apparatus_seat_request_lapse`** — closes (and commits) a seat request
+  only once its night has started, been cancelled, or had attendance
+  finalized, filtered on `organization_id` and taken
+  `.with_for_update()`; stamps the close before sending the member's
+  notice (Pitfall #36), so a second run or a manual trigger racing the
+  scheduler finds nothing `pending` left to act on. The notice layer is
+  explicitly email-only (Pitfall #18) and never raises out of its own
+  `deliver()`.
+- **`training_approval_reminders`** — every join filters
+  `organization_id`; a conditional `UPDATE` on `TrainingApproval.
+reminder_sent_at` is the idempotency claim (committed before the send,
+  `rowcount` gates whether anything is actually emailed), capped at two
+  reminders (7 days, then 14, then stop); a subquery correctly restricts
+  to the newest, still-live approval per session so a superseded roster is
+  never chased.
+- **`crr_resident_details_retention`** — its own org loop (not
+  `_for_each_org`, matching `attendance_waiver_expiry`'s precedent),
+  skips deactivated orgs, and is idempotent by a stamp
+  (`resident_details_cleared_at`) re-read on every query rather than a time
+  window, so a cleared row stays cleared. `retention_months()` reads the
+  org's JSON setting defensively (a stray `bool` does not slip past the
+  `isinstance(value, int)` check because of Python's `bool`-subclasses-`int`
+  behavior; it still falls back to the 24-month default) — Pitfall #19's
+  "absence must mean current behaviour" done correctly. The audit event
+  carries only an org id and a count, no resident PII.
+- **`run_shift_auto_checkout`'s new side effect** — after an outreach
+  sheet's auto-checkout commits, `sync_sheet_attendance` mirrors its
+  attendance onto the event's RSVPs (org-scoped throughout, confirmed by
+  tracing `org_id` from the loop's own query through to the call), in its
+  own per-sheet try/commit/except/rollback so one sheet's failure costs
+  only that sheet; it is a compare-and-correct mirror keyed on the RSVP id
+  (Pitfall #36), and locks the event row before locking the RSVPs it reads
+  (Pitfall #27), so it cannot interleave with a concurrent finalize.
+
+**0 fixed, 0 new findings.** Every item pass 14 and the app-review track
+left open was re-verified at its current location and is unchanged:
+CRON4-31-2 (no per-task lock on `POST /run-task`), CRON-4 (raw `str(e)` in
+`_for_each_org`'s results, which none of the three new tasks repeats —
+`crr_resident_details_retention` follows pass 14's stricter
+`pending_file_deletions` precedent instead), CRON-31-8 (`run_event_
+reminders` stamps a due interval sent with zero recipients, by design), and
+the Redis-down fallback still failing open by design. The 2-head Alembic
+fork pass 14 flagged (deferred to PR #4560) is now resolved to a single
+head. Full write-up: `docs/security-review/CRON15-31-scheduled-tasks.md`.
+
+**Completion gate:** `flake8`/`black --check`/`isort --check-only` (CI's
+pins — flake8 7.4.1, black 26.10.1, isort 9.0.2, installed fresh since this
+sandbox had none) on `app/ tests/ alembic/` — clean. `validate_
+migrations.py --strict` — 844 revisions, single head. `check_route_
+permissions.py --strict` — 344 routes, 0 errors/warnings.
+`test_scheduled_task_coverage.py` — 5 passed. Scoped backend pytest (`-k
+"scheduled or cron or background_claim or apparatus_seat_request or
+training_approval_reminder or crr_activit or outreach_sheet_credit"`) — 256
+passed, 1 pre-existing skip (`pywebpush`), 0 failed. `npm run typecheck` —
+0 errors. `npm run lint` — 0 errors, 0 warnings.
+
+Row 31 → ✅ (pending this PR's merge). Next is Feature 32 (Locations &
+kiosk) — re-check `list_pull_requests` fresh rather than trusting this
+note.
