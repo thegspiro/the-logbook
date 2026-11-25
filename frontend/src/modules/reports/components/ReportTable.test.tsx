@@ -36,8 +36,9 @@ describe('ReportTable', () => {
     const rows = [{ name: 'Alice', value: 10 }];
     render(<ReportTable rows={rows} columns={columns} />);
 
-    expect(screen.getByText('Name')).toBeInTheDocument();
-    expect(screen.getByText('Value')).toBeInTheDocument();
+    // By role: the card-mode Sort by control lists the same labels as options.
+    expect(screen.getByRole('columnheader', { name: 'Name' })).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: 'Value' })).toBeInTheDocument();
   });
 
   it('shows row count', () => {
@@ -57,7 +58,7 @@ describe('ReportTable', () => {
     render(<ReportTable rows={rows} columns={columns} />);
 
     // Click Name header to sort
-    await user.click(screen.getByText('Name'));
+    await user.click(screen.getByRole('button', { name: 'Name' }));
 
     const cells = screen.getAllByRole('cell');
     // After asc sort, first name cell should be Alice
@@ -77,6 +78,11 @@ describe('ReportTable', () => {
       render(<ReportTable rows={rows} columns={columns} />);
       const nameHeader = screen.getByRole('columnheader', { name: 'Name' });
 
+      // jsdom applies no stylesheet, so the card-mode Sort by select, hidden
+      // at a desktop width in a browser, is in the tab order here: region,
+      // select, then the header (the direction button is disabled until a
+      // column is chosen).
+      await user.tab();
       await user.tab();
       await user.tab();
       expect(screen.getByRole('button', { name: 'Name' })).toHaveFocus();

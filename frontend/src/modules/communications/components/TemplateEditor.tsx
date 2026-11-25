@@ -396,7 +396,7 @@ export const TemplateEditor: React.FC<TemplateEditorProps> = ({
         <div className="card-secondary">
           <button
             onClick={() => setShowVariables(!showVariables)}
-            className="text-theme-text-secondary hover:text-theme-text-primary touch:min-h-11 flex w-full items-center justify-between px-4 py-2.5 text-sm transition-colors"
+            className="text-theme-text-secondary hover:text-theme-text-primary touch:min-h-11 flex w-full items-center justify-between px-4 py-2.5 text-left text-sm transition-colors"
           >
             <span className="flex items-center space-x-2">
               <Variable className="h-4 w-4" />
@@ -432,7 +432,7 @@ export const TemplateEditor: React.FC<TemplateEditorProps> = ({
         <div className="card-secondary">
           <button
             onClick={() => setShowOfficerVariables(!showOfficerVariables)}
-            className="text-theme-text-secondary hover:text-theme-text-primary touch:min-h-11 flex w-full items-center justify-between px-4 py-2.5 text-sm transition-colors"
+            className="text-theme-text-secondary hover:text-theme-text-primary touch:min-h-11 flex w-full items-center justify-between px-4 py-2.5 text-left text-sm transition-colors"
           >
             <span className="flex items-center space-x-2">
               <UserCheck className="h-4 w-4" />

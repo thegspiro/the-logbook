@@ -73,6 +73,15 @@ class IdCardDepartment:
 
 
 @dataclass
+class IdCardCertification:
+    """One certification line for the back of the card, display-ready."""
+
+    name: str
+    # "Exp Mar 14, 2027", "Expired Mar 14, 2026", "Not recorded"
+    status: str
+
+
+@dataclass
 class IdCardSpec:
     """One member's card, already resolved to display-ready values."""
 
@@ -83,6 +92,12 @@ class IdCardSpec:
     member_number: Optional[str] = None
     member_since: Optional[str] = None
     photo: Optional[str] = None
+    # The soonest expiry among the member's current certificates, printed on
+    # the front ("Valid through Dec 1, 2026"); the certificates themselves go
+    # on the back, which has the room. Both empty when the department has not
+    # switched certifications on.
+    valid_through: Optional[str] = None
+    certifications: List[IdCardCertification] = field(default_factory=list)
 
 
 def validate_orientation(orientation: str) -> str:
@@ -200,8 +215,15 @@ def _draw_qr_symbol(c, value, x, y, max_w, max_h):
     return size
 
 
-def _detail_lines(spec: IdCardSpec) -> List[Tuple[str, str, float]]:
-    """(text, font, size) for the lines under the name, in display order."""
+def _detail_lines(
+    spec: IdCardSpec, valid_through_own_line: bool = True
+) -> List[Tuple[str, str, float]]:
+    """(text, font, size) for the lines under the name, in display order.
+
+    With ``valid_through_own_line`` false, "Valid through" joins the last
+    line instead of adding one: on a portrait card the code sits under these
+    lines across the full width, so every extra line comes out of the code.
+    """
     lines: List[Tuple[str, str, float]] = []
     if spec.title:
         lines.append((spec.title, "Helvetica", 7.5))
@@ -211,6 +233,13 @@ def _detail_lines(spec: IdCardSpec) -> List[Tuple[str, str, float]]:
         lines.append((f"No. {spec.member_number}", "Helvetica-Bold", 7))
     if spec.member_since:
         lines.append((f"Member since {spec.member_since}", "Helvetica", 6.5))
+    if spec.valid_through:
+        valid = f"Valid through {spec.valid_through}"
+        if valid_through_own_line or not lines:
+            lines.append((valid, "Helvetica-Bold", 6.5))
+        else:
+            text, _font, _size = lines[-1]
+            lines[-1] = (f"{text} · {valid}", "Helvetica", 6.5)
     return lines
 
 
@@ -279,14 +308,20 @@ def _front_landscape(c, spec, dept, logo, symbology, include_code, page_w, page_
     y = body_top - 12
     _draw_line(c, spec.name, "Helvetica-Bold", 12, 7, text_x, y, text_w)
     y -= 12
+    # Where the QR's room is measured from. The "Valid through" line is left
+    # out: it is short and sits at the left, clear of the code at the bottom
+    # right, so it need not cost the code the 0.12 in it otherwise would.
+    qr_top = y
     for text, font, size in _detail_lines(spec):
         _draw_line(c, text, font, size, 5.5, text_x, y, text_w)
+        if not text.startswith("Valid through"):
+            qr_top = y - size - 3
         y -= size + 3
 
     if not include_code:
         return
     if symbology == SYMBOLOGY_QR:
-        qr_box = min(0.65 * inch, y - m)
+        qr_box = min(0.65 * inch, qr_top - m)
         _draw_qr_symbol(c, spec.barcode_value, page_w - m - qr_box, m, qr_box, qr_box)
     else:
         strip_top = body_top - photo_h - 3
@@ -314,7 +349,7 @@ def _front_portrait(c, spec, dept, logo, symbology, include_code, page_w, page_h
     y = body_top - photo_h - 12
     _draw_line(c, spec.name, "Helvetica-Bold", 11, 7, m, y, usable_w, True)
     y -= 10
-    for text, font, size in _detail_lines(spec):
+    for text, font, size in _detail_lines(spec, valid_through_own_line=False):
         _draw_line(c, text, font, size, 5.5, m, y, usable_w, True)
         y -= size + 2.5
 
@@ -348,6 +383,54 @@ def _wrap_return_lines(lines: List[str], width: float) -> List[Tuple[str, str]]:
 
 _RETURN_FONT_SIZE = 7
 _RETURN_LEADING = 8.5
+_CERT_FONT_SIZE = 6.5
+_CERT_LEADING = 8
+# The smallest code the back may shrink to when certifications share it: a
+# Code 128 bar this tall and a QR this wide still scan from a phone camera at
+# arm's length. The list gives way below this, never the code.
+_MIN_BACK_BAR_INCH = 0.3
+_MIN_BACK_QR_INCH = 0.6
+_LANDSCAPE_QR_WITH_CERTS_INCH = 1.1
+
+
+def _draw_certifications(
+    c,
+    certs: List[IdCardCertification],
+    x: float,
+    top: float,
+    width: float,
+    bottom: float,
+) -> float:
+    """The member's certifications from *top* down, no lower than *bottom*.
+
+    One line each: the name at the left, shrunk or cut to fit, and the status
+    whole at the right — the date is the part a reader at a scene needs. When
+    the card cannot hold them all, the last line says how many more there
+    are rather than dropping them silently; the digital card lists them all.
+    Returns the y below the last line drawn, or *top* when nothing fit.
+    """
+    if not certs:
+        return top
+    available = int((top - bottom) // _CERT_LEADING) - 1  # less the heading
+    if available < 1:
+        return top
+    shown = certs if len(certs) <= available else certs[: available - 1]
+    y = top - _CERT_FONT_SIZE
+    c.setFont("Helvetica-Bold", _CERT_FONT_SIZE)
+    c.drawString(x, y, "Certifications")
+    for cert in shown:
+        y -= _CERT_LEADING
+        status_w = c.stringWidth(cert.status, "Helvetica-Bold", _CERT_FONT_SIZE)
+        c.setFont("Helvetica-Bold", _CERT_FONT_SIZE)
+        c.drawRightString(x + width, y, cert.status)
+        _draw_line(
+            c, cert.name, "Helvetica", _CERT_FONT_SIZE, 5, x, y, width - status_w - 6
+        )
+    if len(shown) < len(certs):
+        y -= _CERT_LEADING
+        c.setFont("Helvetica-Oblique", _CERT_FONT_SIZE)
+        c.drawString(x, y, f"+{len(certs) - len(shown)} more on the digital ID card")
+    return y - 3
 
 
 def _back(c, spec, dept, symbology, orientation, page_w, page_h):
@@ -359,15 +442,26 @@ def _back(c, spec, dept, symbology, orientation, page_w, page_h):
 
     if symbology == SYMBOLOGY_QR and orientation == ORIENTATION_LANDSCAPE:
         box = page_h - 2 * m
-        size = _draw_qr_symbol(c, spec.barcode_value, m, m, box, box)
+        if spec.certifications:
+            # The list shares the column beside the code; a full-height code
+            # left it too narrow for a certification's name.
+            box = min(box, _LANDSCAPE_QR_WITH_CERTS_INCH * inch)
+        size = _draw_qr_symbol(c, spec.barcode_value, m, (page_h - box) / 2, box, box)
         text_x = m + size + 8
         text_w = page_w - m - text_x
         lines = _wrap_return_lines(dept.return_lines, text_w)
-        y = page_h / 2 + (len(lines) * _RETURN_LEADING) / 2 - _RETURN_FONT_SIZE
+        block_h = len(lines) * _RETURN_LEADING
+        if spec.certifications:
+            # The column is shared, so it starts at the top rather than
+            # centring the address alone.
+            y = page_h - m - _RETURN_FONT_SIZE
+        else:
+            y = page_h / 2 + block_h / 2 - _RETURN_FONT_SIZE
         for text, font in lines:
             c.setFont(font, _RETURN_FONT_SIZE)
             c.drawString(text_x, y, text)
             y -= _RETURN_LEADING
+        _draw_certifications(c, spec.certifications, text_x, y + 2, text_w, m)
         return
 
     y = page_h - m - 8
@@ -376,6 +470,16 @@ def _back(c, spec, dept, symbology, orientation, page_w, page_h):
         c.drawCentredString(page_w / 2, y, text)
         y -= _RETURN_LEADING
     code_top = y - 2
+    if spec.certifications:
+        # Between the address and the code, leaving the code its minimum.
+        reserve = (
+            _MIN_BACK_QR_INCH * inch
+            if symbology == SYMBOLOGY_QR
+            else _MIN_BACK_BAR_INCH * inch + 8
+        )
+        code_top = _draw_certifications(
+            c, spec.certifications, m, code_top, usable_w, m + reserve + 2
+        )
     if symbology == SYMBOLOGY_QR:
         _draw_qr_symbol(c, spec.barcode_value, m, m, usable_w, code_top - m)
     else:

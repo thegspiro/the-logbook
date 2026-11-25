@@ -62,8 +62,9 @@ describe('program progress labels', () => {
 
     await userEvent.click(screen.getByRole('button', { name: 'Program Progress by Requirement' }));
 
-    expect(screen.getByText('Program Progress %')).toBeInTheDocument();
-    expect(screen.getByText('Members Graded')).toBeInTheDocument();
+    // By role: the card-mode Sort by control lists the same labels as options.
+    expect(screen.getByRole('columnheader', { name: 'Program Progress %' })).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: 'Members Graded' })).toBeInTheDocument();
     expect(screen.getByText(/catch-up period, are left out/i)).toBeInTheDocument();
   });
 

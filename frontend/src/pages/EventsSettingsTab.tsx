@@ -16,8 +16,8 @@
  */
 
 import React, { useEffect, useState, useCallback } from 'react';
-import { useNavigate } from 'react-router';
-import { Settings, Loader2, Globe, Clock, Tag, LayoutGrid, ShieldCheck, Users } from 'lucide-react';
+import { useNavigate, useSearchParams } from 'react-router';
+import { Settings, Loader2, Globe, Clock, Tag, LayoutGrid, ShieldCheck, Target, Users } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { eventService, eventRequestService, userService } from '../services/api';
 import type {
@@ -34,6 +34,7 @@ import {
   OutreachSection,
   HourTrackingSection,
   CrrCatalogueSection,
+  OutreachGoalsSettings,
   AttendanceSection,
   PipelineSection,
   EmailSection,
@@ -62,7 +63,8 @@ const DEFAULT_CATEGORY_COLOR = 'bg-blue-100 text-blue-800 dark:bg-blue-500/20 da
 
 // ─── Section Definitions ───────────────────────────────────────────────────────
 
-type SectionKey = 'visibility' | 'categories' | 'attendance' | 'hour_tracking' | 'public_requests' | 'crr' | 'metrics';
+type SectionKey =
+  'visibility' | 'categories' | 'attendance' | 'hour_tracking' | 'public_requests' | 'crr' | 'goals' | 'metrics';
 
 const SECTIONS: SettingsSection<SectionKey, PublicRequestsPage>[] = [
   { key: 'visibility', label: 'Visibility', icon: Settings, description: 'Primary filter categories' },
@@ -93,6 +95,7 @@ const SECTIONS: SettingsSection<SectionKey, PublicRequestsPage>[] = [
     icon: ShieldCheck,
     description: 'Community risk reduction activities, their counts and tags',
   },
+  { key: 'goals', label: 'Outreach Goals', icon: Target, description: 'Yearly targets for outreach and CRR figures' },
   { key: 'metrics', label: 'Headline Metrics', icon: LayoutGrid, description: 'The four cards above this page' },
 ];
 
@@ -106,7 +109,12 @@ interface EventsSettingsTabProps {
 const EventsSettingsTab: React.FC<EventsSettingsTabProps> = ({ onMetricsSaved }) => {
   const navigate = useNavigate();
   const { confirm } = useConfirm();
-  const [activeSection, setActiveSection] = useState<SectionKey>('visibility');
+  const [searchParams] = useSearchParams();
+  // A link may open a section (Outreach Impact's "Set goals" does). Read once:
+  // the section stays in state as before, so changing it touches no URL.
+  const [activeSection, setActiveSection] = useState<SectionKey>(
+    () => SECTIONS.find((section) => section.key === searchParams.get('section'))?.key ?? 'visibility'
+  );
   const [requestsPage, setRequestsPage] = useState<PublicRequestsPage>('overview');
   const [settings, setSettings] = useState<EventModuleSettings | null>(null);
   const [loading, setLoading] = useState(true);
@@ -748,6 +756,8 @@ const EventsSettingsTab: React.FC<EventsSettingsTabProps> = ({ onMetricsSaved })
         return <HourTrackingSection settings={settings} />;
       case 'crr':
         return <CrrCatalogueSection />;
+      case 'goals':
+        return <OutreachGoalsSettings />;
       case 'metrics':
         return (
           <AdminMetricsSettings

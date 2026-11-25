@@ -946,6 +946,13 @@ Behaviour that changes on upgrade, with no setting to restore the old one:
   against the department (#4644). Rows written before the upgrade stay
   platform-level; there is no backfill.
 
+### Yearly outreach goals (2026-11-24)
+
+Nothing blocks a restart. Migration `1735810be510` creates `outreach_goals`
+and changes no existing table; the downgrade drops it and every goal in it.
+No goal exists until a department sets one under Events Settings → Outreach
+Goals.
+
 ### Community risk reduction tracking, and a street map that loads tiles from OpenStreetMap (2026-11-23)
 
 Nothing blocks a restart. Migrations `89c0b481fe55` and `5c2e8a417d90` create

@@ -577,7 +577,7 @@ const EmailTemplatesPage: React.FC = () => {
                   void handleSendTest();
                 }}
                 disabled={isSendingTest || draft.isDirty}
-                className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover mobile-touch-target flex items-center gap-2 rounded-lg border px-4 py-2 text-sm transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+                className="btn-secondary flex items-center gap-2 disabled:cursor-not-allowed"
                 // The endpoint renders the stored row, so with unsaved edits
                 // on screen this would mail the previous version while the
                 // preview beside it shows the new one — and the whole point
@@ -593,11 +593,7 @@ const EmailTemplatesPage: React.FC = () => {
                 <span>Send Test to Me</span>
               </button>
               {draft.isDirty && (
-                <button
-                  onClick={draft.discard}
-                  disabled={isSaving}
-                  className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover mobile-touch-target flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm transition-colors disabled:opacity-50"
-                >
+                <button onClick={draft.discard} disabled={isSaving} className="btn-secondary flex items-center gap-1.5">
                   <Undo2 className="h-4 w-4" />
                   <span>Discard</span>
                 </button>

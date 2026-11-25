@@ -217,6 +217,13 @@ class EventRequestSchedule(BaseModel):
         default=True,
         description="Whether to create a calendar Event record",
     )
+    acknowledge_conflicts: bool = Field(
+        default=False,
+        description=(
+            "Move an apparatus crew onto a date where its apparatus is already "
+            "committed, once the coordinator has seen the conflicts"
+        ),
+    )
 
     @model_validator(mode="after")
     def _end_after_start(self) -> "EventRequestSchedule":
@@ -367,6 +374,13 @@ class EventRequestPostpone(BaseModel):
     reason: Optional[str] = Field(None, max_length=2000)
     new_event_date: Optional[datetime] = Field(None, description="Optional new date")
     new_event_end_date: Optional[datetime] = None
+    acknowledge_conflicts: bool = Field(
+        default=False,
+        description=(
+            "Move an apparatus crew onto a date where its apparatus is already "
+            "committed, once the coordinator has seen the conflicts"
+        ),
+    )
 
     @model_validator(mode="after")
     def _new_window_ordered(self) -> "EventRequestPostpone":

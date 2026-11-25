@@ -16,6 +16,91 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#4678](https://github.com/thegspiro/the-logbook/pull/4678) (branch
+`claude/friendly-babbage-xstbnj`)**: Feature 11
+(Inventory), pass 17 — watchdog pickup (the dedicated `/loop 30m
+/security-review` session, `session_011T1ZyyLrD5HagusgK9uDw2`, remains
+unreachable). **Branch-name deviation**, same as prior watchdog-run passes
+recorded here: this session's environment restricts pushes to its own
+assigned branch rather than a freely-chosen
+`claude/security-review-inventory` name.
+
+PR #4670 (Feature 10, Documents & legal, pass 17 — 0 fixed, 0 new findings)
+had already merged before this iteration started; row 10 marked ✅ above. A
+fresh `list_pull_requests`/`gh api search/issues` found no
+`claude/security-review-*` head open, so this iteration continued to Step 1.
+
+Baseline `ff815adf9` (PR #4445's merge, pass 16), confirmed an ancestor of
+`origin/main` via `git merge-base --is-ancestor`. Real delta: a CSV-import
+dry-run preview (workflow review W43-5) that factors `create_item`'s checks
+into a shared `validate_new_item` so the preview can't drift from the real
+import; a new `GET /maintenance/never-inspected` route (W42-6), correctly
+gated `inventory.view` and org-scoped with no client-supplied id; three
+already-shipped concurrency fixes (INV2-4/5/6: a null-field guard, two
+`populate_existing` cache fixes, and a lot-recall row lock) re-verified sound
+against the live code; and the impact-plan PDF export picking up the
+owner's letterhead/report-number decision via the same `document_provenance.py`
+helpers this lap's Documents & legal pass already verified. **0 fixed, 0 new
+findings.**
+
+**Also corrected pass 16's own documentation regression:** pass 16 had
+re-marked INV-16 and INV-17 "OPEN/FLAGGED, owner decision pending", which
+contradicts this file's own pass 8 (both "✅ FIXED, confirmed sound") and
+`KNOWN_LIMITATIONS.md`'s "Resolved (owner decision...2026-10-11/12)" entries,
+and which passes 9–15 never repeated. Re-verified both fixes are still in the
+live code (row-locked `update_reorder_request`, `_apply_completion_to_item` +
+`open_only`) and corrected the record to RESOLVED. INV-22 remains the one
+standing (owner-accepted) open finding. Also corrected a route-count
+double-error: pass 16 claimed 199 routes at its own baseline when the true
+AST count there was 198 (a stray, unexplained "+3" in its six-number
+breakdown for five files); current `origin/main` is genuinely 199, via the
+one new route above, not a second instance of the same miscount. Full
+write-up: `docs/security-review/INV-11-inventory.md`'s **Pass 17** section.
+
+Row 11 → ✅ (pending this PR's merge); next is Feature 12 (Facilities) —
+re-check `list_pull_requests` fresh rather than trusting this note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 10, Documents & legal, pass 17, PR #4670, merged), preserved for history</summary>
+
+**PR [#4670](https://github.com/thegspiro/the-logbook/pull/4670) (branch
+`claude/friendly-babbage-2isqey`)**: Feature 10
+(Documents & legal), pass 17 — watchdog pickup (the dedicated `/loop 30m
+/security-review` session, `session_011T1ZyyLrD5HagusgK9uDw2`, remains
+unreachable). **Branch-name deviation**, same as prior watchdog-run passes
+recorded here: this session's environment restricts pushes to its own
+assigned branch rather than a freely-chosen
+`claude/security-review-documents-legal` name.
+
+PR #4666 (Feature 09, Medical screening PHI, pass 17 — 0 fixed, 0 new
+findings) had already merged before this iteration started; row 09 marked
+✅ above. A concurrent watchdog session's duplicate pass for the same
+feature (PR #4665, same conclusion) was closed in #4666's favor — see that
+PR's own comment thread, mirroring the #4643/#4644 and #4660/#4662
+precedents.
+
+Baseline `b3274989` (PR #4440's merge, pass 16), confirmed an ancestor of
+`HEAD` directly via `git merge-base --is-ancestor`. Two files with a real
+delta, both read in full: `documents_service.py` extracts `delete_folder`'s
+body into a `_delete_folder_subtree` helper with no behavior change, so a
+new member-erasure path (LIFE-11's `member_documents.py`, swept for and
+read) reuses the existing DOC-32 History guard automatically rather than
+needing its own copy; `print_document_service.py` titles a community-
+outreach shift's printed roster using the department's own configured
+outreach-role vocabulary, unrelated feature work with no new query or
+permission. **0 fixed, 0 new findings.** No OPEN or FLAGGED finding exists
+for this feature (DOC-9/DOC-31/DOC-32 all FIXED/RESOLVED, re-confirmed
+against `KNOWN_LIMITATIONS.md` directly). Full write-up:
+`docs/security-review/DOC-10-documents-legal.md`'s **Pass 17** section.
+
+Row 10 → ✅ (pending this PR's merge); next is Feature 11 (Inventory) —
+re-check `list_pull_requests` fresh rather than trusting this note.
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 09, Medical screening PHI, pass 17, PR #4666, merged), preserved for history</summary>
+
 **PR [#4666](https://github.com/thegspiro/the-logbook/pull/4666) (branch
 `claude/friendly-babbage-5w0f57`)**: Feature 09 (Medical
 screening, PHI), pass 17 — watchdog pickup (the dedicated `/loop 30m
@@ -82,6 +167,8 @@ no behavior change). Full write-up:
 Row 08 → ✅ (pending this PR's merge); next is Feature 09 (Medical
 screening, PHI) — re-check `list_pull_requests` fresh rather than trusting
 this note.
+
+</details>
 
 </details>
 
@@ -27911,8 +27998,8 @@ iteration's commit" rule.
 | 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`, `leave_requests.py` (20 routes, added pass 17; Chief routing, approver cover, escalation, calendar/export added pass 17)                                                                                      | ✅     |
 | 08  | Membership pipeline       | MP     | `membership_pipeline.py` (64 routes), `membership_pipeline_service.py`, `models/membership_pipeline.py` (`identity_edited_by_applicant_at`, added pass 18)                                                                                                                            | ✅     |
 | 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`, `screening_reminder_service.py` (added pass 16)                                                                                                                                                                               | ✅     |
-| 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                                                                                                                                                          | ⬜     |
-| 11  | Inventory                 | INV    | `endpoints/inventory.py` (7089 L), `inventory_service.py`                                                                                                                                                                                                                             | ⬜     |
+| 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`, `services/member_documents.py` (LIFE-11 erasure, added pass 17)                                                                                                                                                         | ✅     |
+| 11  | Inventory                 | INV    | `endpoints/inventory.py` (7089 L), `inventory_service.py`                                                                                                                                                                                                                             | ✅     |
 | 12  | Facilities                | FAC    | `endpoints/facilities.py` (4394 L), `facilities_service.py`                                                                                                                                                                                                                           | ⬜     |
 | 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                                                                                                                                                         | ⬜     |
 | 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                                                                                                                                                           | ⬜     |
@@ -27996,6 +28083,89 @@ into row 13's declared scope rather than leaving it to be rediscovered.
 ---
 
 ## Log
+
+### 2026-11-24 — Feature 10 (Documents & legal, pass 17) merged (PR #4670); Feature 11 (Inventory, pass 17): watchdog pickup, real delta (CSV-import dry-run preview, new "never inspected" maintenance view, 3 already-shipped concurrency fixes), 0 fixed, 0 new findings; **corrected pass 16's wrongful reopening of INV-16/INV-17**
+
+PR #4670 merged; row 10 confirmed ✅ above. A fresh `list_pull_requests`
+(state=open) and `gh api search/issues
+q='repo:thegspiro/the-logbook is:pr is:open head:claude/security-review'`
+both found zero `claude/security-review-*` heads, so this iteration
+continued to Step 1: row 11 (Inventory) was the next ⬜ row.
+
+Baseline `ff815adf9` (PR #4445's merge, pass 16), confirmed an ancestor of
+`origin/main` via `git merge-base --is-ancestor`. AST-enumerating the five
+scope files against that exact commit gives **198** routes, not the 199
+pass 16's own text claimed for the same commit (its "150+4+2+29+3+11"
+breakdown has six numbers for five files — the "3" has no file behind it).
+Current `origin/main` is genuinely 199: one real new route,
+`GET /maintenance/never-inspected` (workflow review W42-6), correctly gated
+`inventory.view` and org-scoped with no client-supplied id. The rest of the
+real delta — a CSV-import `dry_run` preview (W43-5) built on a
+`validate_new_item` helper extracted verbatim from `create_item` so the two
+paths can't drift; three already-shipped concurrency fixes (INV2-4/5/6:
+a null-required-field guard, two stale-cache `populate_existing` fixes, and
+a row lock on the lot-recall duplicate check); and the impact-plan PDF
+export picking up the owner's report-number/letterhead decision via helpers
+this lap's Documents & legal pass already verified — was all already correct
+when shipped. **0 fixed, 0 new findings.**
+
+**Documentation correction:** pass 16 had re-marked INV-16 and INV-17
+"OPEN/FLAGGED, owner decision pending", contradicting this file's own pass 8
+(both "✅ FIXED, confirmed sound") and `KNOWN_LIMITATIONS.md`'s "Resolved
+(owner decision...2026-10-11/12)" entries — and contradicting passes 9–15,
+which never repeated the FLAGGED language. Re-verified both fixes are still
+live in the code (`update_reorder_request`'s row lock,
+`_apply_completion_to_item` + `open_only`) with their guard tests present
+and green, and corrected the record to RESOLVED. INV-22 remains the sole
+standing (owner-accepted) open finding. Full write-up:
+`docs/security-review/INV-11-inventory.md`'s **Pass 17** section.
+
+Row 11 → ✅ (pending this PR's merge); next is Feature 12 (Facilities) —
+re-check `list_pull_requests` fresh rather than trusting this note.
+
+---
+
+### 2026-11-24 — Feature 09 (Medical screening PHI, pass 17) merged (PR #4666); Feature 10 (Documents & legal, pass 17): watchdog pickup, real delta (a no-op refactor lets LIFE-11's erasure reuse the DOC-32 History guard; an unrelated outreach-roster print label), 0 fixed, 0 new findings
+
+PR #4666 merged; row 09 confirmed ✅ above. (PR #4665, a duplicate pass for
+the same feature opened by a concurrent watchdog session at nearly the same
+moment, reached the same conclusion and was closed in #4666's favor — see
+that PR's own comment thread, mirroring the #4643/#4644 and #4660/#4662
+precedents.) A fresh `list_pull_requests` (state=open) found zero
+`claude/security-review-*` heads, so this iteration continued to Step 1:
+row 10 (Documents & legal) was the next ⬜ row.
+
+Baseline: pass 16's real merge commit `b3274989` (PR #4440), confirmed an
+ancestor of `HEAD` directly via `git merge-base --is-ancestor`, not assumed
+from the file's own text. Real delta, two files: `documents_service.py`
+extracts `delete_folder`'s body into a `_delete_folder_subtree` helper with
+no observable behavior change, so a new member-erasure path (LIFE-11's
+`app/services/member_documents.py`, swept for and read as a new unclaimed
+file) can call it directly inside its own transaction and inherit the
+existing DOC-32 History guard automatically, rather than needing a second
+copy of it; `print_document_service.py` titles a community-outreach
+shift's printed roster from the department's own configured outreach-role
+vocabulary, unrelated feature work with no new query or permission. **0
+fixed, 0 new findings** — no OPEN or FLAGGED finding exists for this
+feature (DOC-9/DOC-31/DOC-32 all FIXED/RESOLVED, re-confirmed against
+`KNOWN_LIMITATIONS.md` directly). Route count unchanged at 26 (AST
+re-enumerated). Full write-up:
+`docs/security-review/DOC-10-documents-legal.md`'s **Pass 17** section.
+
+**Completion gate:** `flake8`, `black --check` (26.10.1) and
+`isort --check-only` (9.0.2) on `app/ tests/ alembic/` all clean (via
+`python3.13`, matching CI's pins). `validate_migrations.py --strict` — 837
+revisions, single head `bbb6eac6ae34` (no fork this pass). `check_route_
+permissions.py --strict` — 339 routes, 0 errors/warnings. Schema docs
+already current. Scoped backend pytest (`-k "document or legal or
+station_document or facility_folder or folder or admin_only or
+minutes_attachment or published_minutes"`) — 491 passed, 1 pre-existing
+environment-only skip (`py_vapid`). `npm run typecheck` — 0 errors. `npm
+run lint` — 0 errors, 0 warnings. `npx vitest run` on the feature's
+component tests — 85 passed (6 files).
+
+Row 10 → ✅ (pending this PR's merge). Next is Feature 11 (Inventory) —
+re-check `list_pull_requests` fresh rather than trusting this note.
 
 ### 2026-11-24 — Feature 05 (Finance & approvals, pass 17) merged (PR #4655); Feature 06 (Elections & ballots, pass 17): watchdog pickup, real delta (report numbers and a letterhead identity line on two PDF exports), 0 fixed, 0 new findings
 

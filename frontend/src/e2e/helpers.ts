@@ -397,6 +397,54 @@ const outreachCalendar = () => {
   ];
 };
 
+// This year's outreach goals: long labels, one behind pace, one met.
+const OUTREACH_GOALS = {
+  year: new Date().getFullYear(),
+  year_fraction: 0.5,
+  year_complete: false,
+  goals: [
+    {
+      id: 'goal-events',
+      year: new Date().getFullYear(),
+      kind: 'outreach',
+      measure_id: null,
+      outreach_metric: 'events_held',
+      label: 'Events held',
+      target: 40,
+      actual: 21,
+      pace_target: 20,
+      met: false,
+      on_pace: true,
+    },
+    {
+      id: 'goal-alarms',
+      year: new Date().getFullYear(),
+      kind: 'crr_measure',
+      measure_id: 'crr-m-alarms',
+      outreach_metric: null,
+      label: 'Car seat inspection and installation · Seats installed or corrected',
+      target: 200,
+      actual: 61,
+      pace_target: 100,
+      met: false,
+      on_pace: false,
+    },
+    {
+      id: 'goal-hours',
+      year: new Date().getFullYear(),
+      kind: 'outreach',
+      measure_id: null,
+      outreach_metric: 'member_hours',
+      label: 'Member hours',
+      target: 300,
+      actual: 312.5,
+      pace_target: 150,
+      met: true,
+      on_pace: true,
+    },
+  ],
+};
+
 const COMMUNITY_ENGAGEMENT = {
   total_public_events: 21,
   total_member_attendees: 160,
@@ -509,6 +557,7 @@ const COMMUNITY_ENGAGEMENT = {
     },
   ],
   // CRR breakdowns with long names, so the cards are measured at their widest.
+  goals: OUTREACH_GOALS,
   crr: {
     activities: 14,
     previous_activities: 9,
@@ -5726,6 +5775,18 @@ const routes = ({
   // Events Settings -> CRR Catalogue: one built-in type, one the department
   // added, and a tag of each kind, so every control the section draws renders.
   ['**/api/v1/crr/catalogue', () => (empty ? { activity_types: [], tags: [] } : CRR_CATALOGUE)],
+  [
+    '**/api/v1/outreach-goals**',
+    () => ({
+      ...OUTREACH_GOALS,
+      current_year: OUTREACH_GOALS.year,
+      metrics: [
+        { value: 'events_held', label: 'Events held' },
+        { value: 'people_reached', label: 'People reached' },
+        { value: 'member_hours', label: 'Member hours' },
+      ],
+    }),
+  ],
   // The CRR log and its form: one activity with resident details (the
   // signed-in manager may see them), one at an event with a cleared address.
   [

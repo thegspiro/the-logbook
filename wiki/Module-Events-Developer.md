@@ -224,6 +224,26 @@ The map (`CrrZipMap.tsx`, Leaflet, lazy) draws OpenStreetMap's tiles only once
 in `img-src` and nothing else from outside, which `tests/test_csp_map_tiles.py`
 holds.
 
+### Outreach goals
+
+```
+GET    /outreach-goals?year=                     # A year's goals with progress; the department's current year when omitted (manage)
+POST   /outreach-goals                           # Set a goal: year, target, and measure_id or outreach_metric (manage)
+PATCH  /outreach-goals/{id}                      # Change a goal's target (manage)
+DELETE /outreach-goals/{id}                      # Remove a goal (manage)
+```
+
+`outreach_goals` holds one row per department, year and figure: a CRR count
+(`measure_id`, cascading with the count) or one of `events_held`,
+`people_reached`, `member_hours` (`outreach_metric`), never both. Progress is
+computed by `OutreachGoalService.progress`: CRR counts sum activity
+quantities in the calendar year in the department's timezone; outreach figures
+come from `CommunityEngagementService.window_totals`, the report's own totals.
+`pace_target` is the target times the share of the year gone. The Outreach
+Impact response carries this year's goals as `goals`. Writes are audited as
+`outreach_goal.created|updated|deleted`. Events Settings opens on a section
+named by `?section=` (used by the "Set goals" links).
+
 ### Check-in and attendance
 
 ```

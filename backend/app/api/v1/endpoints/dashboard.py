@@ -62,6 +62,7 @@ from app.schemas.dashboard_pulse import (
     resolve_pulse_layout,
     stored_layout,
 )
+from app.schemas.outreach_goal import OutreachGoalProgress
 from app.services.apparatus_service import ApparatusService
 from app.services.community_engagement_service import CommunityEngagementService
 from app.services.dashboard_widget_service import PERIOD_LABELS, DashboardWidgetService
@@ -746,6 +747,15 @@ class CrrImpact(BaseModel):
     unplaced_activities: int
 
 
+class OutreachGoalYear(BaseModel):
+    """A year's goals as Outreach Impact shows them (OutreachGoalService)."""
+
+    year: int
+    year_fraction: float
+    year_complete: bool
+    goals: list[OutreachGoalProgress]
+
+
 class CommunityEngagement(BaseModel):
     """Outreach Impact metrics for the Community Outreach Manager.
 
@@ -774,6 +784,8 @@ class CommunityEngagement(BaseModel):
     materials: list[CommunityMaterial] = []
     recent_events: list[CommunityEventReach]
     crr: CrrImpact
+    # This calendar year's outreach goals, whatever the period.
+    goals: OutreachGoalYear
 
 
 class OperationsItem(BaseModel):

@@ -1130,7 +1130,10 @@ Administration → Community Outreach → Apparatus Events**
   Add apparatus crew**, below Volunteer Staffing (`POST /event-requests/{id}/apparatus-crew`, needs
   `events.manage` and `apparatus_events.manage`). The crew goes on the
   request's own calendar event, so a new date moves it and a cancellation
-  stands it down. Volunteer signups stay available alongside it.
+  stands it down. Volunteer signups stay available alongside it. Schedule and
+  Postpone re-check the crew's apparatus at the new date and answer 409 with
+  the conflicts until `acknowledge_conflicts` is sent; an accepted conflict
+  is noted in the request's activity log.
 
 API under `/api/v1/apparatus-events/` (uncacheable — crew boards name
 members).

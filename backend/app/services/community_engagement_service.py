@@ -517,6 +517,35 @@ class CommunityEngagementService:
             for r in await self._held_events(organization_id, org, start, end)
         ]
 
+    async def window_totals(
+        self, organization_id: str, start: datetime, end: datetime
+    ) -> Totals:
+        """The report's event figures for any window, for outreach goals.
+
+        The same held events and the same totals the report shows, so a goal
+        for people reached agrees with the figure beside it (pitfall #29).
+        Requests are not counted: no goal targets them.
+        """
+        org = (
+            await self.db.execute(
+                select(Organization).where(Organization.id == organization_id)
+            )
+        ).scalar_one_or_none()
+        rows = await self._held_events(organization_id, org, start, end)
+        return self._totals(rows, (0, 0))
+
+    async def _goals(self, organization_id: str) -> dict:
+        """This year's goals, whatever period the report covers: goals are set
+        per calendar year, and the page says which year it shows."""
+        # Imported here: the goal service reads this one's window_totals, so a
+        # module-level import each way would be circular.
+        from app.services.outreach_goal_service import OutreachGoalService
+
+        service = OutreachGoalService(self.db)
+        return await service.progress(
+            organization_id, await service.current_year(organization_id)
+        )
+
     async def report(self, organization_id: str, period: str) -> dict:
         org, tz, now, start, end, previous = await self._context(
             organization_id, period
@@ -568,6 +597,7 @@ class CommunityEngagementService:
             "crr": await CrrImpactService(self.db).breakdown(
                 organization_id, start, end, previous
             ),
+            "goals": await self._goals(organization_id),
         }
 
     async def load_event(self, organization_id: str, event_id: str) -> Optional[Event]:

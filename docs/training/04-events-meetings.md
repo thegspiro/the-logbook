@@ -1589,16 +1589,16 @@ the events list. On any occurrence's page:
 
 ### Recurring Event Edge Cases
 
-| Scenario                                    | What happens                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
-| ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Monthly or annual by weekday, **Last**      | Uses the last such weekday of the month, whether the month has four or five of them                                                                                                                                                                                                                                                                                                                                                                                                               |
-| Monthly on the 31st                         | Falls on the last day of shorter months, and goes back to the 31st in longer ones                                                                                                                                                                                                                                                                                                                                                                                                                 |
-| Annual event on 29 February                 | Falls on 28 February in other years, and goes back to the 29th in leap years                                                                                                                                                                                                                                                                                                                                                                                                                      |
-| A series using a booked room                | Creating a series does not check the room for double-booking. Check the room's calendar yourself. A later "This and all future events" edit that moves the series or changes its room does check every occurrence it moves (2026-11-23)                                                                                                                                                                                                                                                           |
-| Series spanning a daylight-saving change    | Each occurrence keeps its local time — a 7:00 PM drill stays at 7:00 PM                                                                                                                                                                                                                                                                                                                                                                                                                           |
-| Editing a series with finalized occurrences | Refused when the save would change a finalized occurrence's times, type, category or check-in rules — for example "(2 of 3 finalized occurrences would change)". Since 2026-11-23 only the fields you changed are sent, so a description-only edit goes through, from an open or a finalized occurrence. Changing the type, category, check-in rules or times is still refused while a later finalized occurrence would take the change; edit those occurrences one at a time                     |
-| Cancelling or deleting a series             | Refused whenever any occurrence is finalized                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
-| Duplicating an occurrence                   | Makes a stand-alone event. The recurrence is not copied. A Training event's training details and **Counts toward attendance** links are copied, but not its finalized attendance (2026-11-11)                                                                                                                                                                                                                                                                                                     |
+| Scenario                                    | What happens                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| ------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Monthly or annual by weekday, **Last**      | Uses the last such weekday of the month, whether the month has four or five of them                                                                                                                                                                                                                                                                                                                                                                                           |
+| Monthly on the 31st                         | Falls on the last day of shorter months, and goes back to the 31st in longer ones                                                                                                                                                                                                                                                                                                                                                                                             |
+| Annual event on 29 February                 | Falls on 28 February in other years, and goes back to the 29th in leap years                                                                                                                                                                                                                                                                                                                                                                                                  |
+| A series using a booked room                | Creating a series does not check the room for double-booking. Check the room's calendar yourself. A later "This and all future events" edit that moves the series or changes its room does check every occurrence it moves (2026-11-23)                                                                                                                                                                                                                                       |
+| Series spanning a daylight-saving change    | Each occurrence keeps its local time — a 7:00 PM drill stays at 7:00 PM                                                                                                                                                                                                                                                                                                                                                                                                       |
+| Editing a series with finalized occurrences | Refused when the save would change a finalized occurrence's times, type, category or check-in rules — for example "(2 of 3 finalized occurrences would change)". Since 2026-11-23 only the fields you changed are sent, so a description-only edit goes through, from an open or a finalized occurrence. Changing the type, category, check-in rules or times is still refused while a later finalized occurrence would take the change; edit those occurrences one at a time |
+| Cancelling or deleting a series             | Refused whenever any occurrence is finalized                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| Duplicating an occurrence                   | Makes a stand-alone event. The recurrence is not copied. A Training event's training details and **Counts toward attendance** links are copied, but not its finalized attendance (2026-11-11)                                                                                                                                                                                                                                                                                 |
 
 ---
 
@@ -1809,8 +1809,14 @@ down. Manage the crew on that event's page.
 > **Postponed to a date TBD?** That cancels the request's calendar event, and
 > rescheduling the request later opens a new one. The crew stayed on the
 > cancelled event, so add it again from the request once it is rescheduled.
-> A moved date is not re-checked for apparatus conflicts; look at **Shift
-> Scheduling** for that day if the engine might be committed elsewhere. **Volunteer signups** for the same request stay
+
+> **Moving a request that has a crew.** When you schedule or postpone it to a
+> new date, the apparatus is checked on that date. If it is already on another
+> apparatus night, or out of service, the move is held back and the reason is
+> listed. Tick **Move anyway** if you have confirmed the apparatus can cover
+> both, and confirm again; the request's activity log notes that you did.
+> Moving the event from its own event page is not checked, so move a request's
+> visit from the request. **Volunteer signups** for the same request stay
 > available; a visit can have an engine crew and extra educators.
 
 ---
@@ -2162,6 +2168,7 @@ and who may see the list, is covered in
 | **Attendance**       | _"Who sees who's going; who takes requests"_, and **Mandatory event responses** |
 | **Hour Tracking**    | Mapping events to admin hours                                                   |
 | **CRR Catalogue**    | Community risk reduction activities, their counts and tags                      |
+| **Outreach Goals**   | Yearly targets for outreach figures and CRR counts                              |
 | **Public Requests**  | Everything about outreach events the public asks for — see below                |
 | **Headline Metrics** | The four numbers at the top of the page                                         |
 
@@ -3025,6 +3032,7 @@ scheduling and communication.
      can still change the roles before opening the sheet.
 
    ![Event settings, Public Requests, Types & roles: Station Tour reading Usually needs 2 × Tour Guide, 1 × Greeter, and Fire Safety Demo open for editing with its Demonstrator and Educator rows, Add a role, Cancel, Clear preset and Save roles](./images/04-104-type-role-preset.png)
+
 4. Under **Handling** (**Request Handling**), set:
    - **Default Coordinator** — the member assigned every new request. The
      list shows each member's rank by name ("Jordan Avery — Firefighter").
@@ -3281,6 +3289,26 @@ or cancelled.
 
 ![The Volunteer staffing card on an outreach event created directly: 3 of 5 signed up, each role with how many it needs and has, and the members who signed up with the role each took](./images/04-105-event-volunteer-staffing.png)
 
+### Outreach Goals
+
+**Who can do this:** officers who can manage events.
+
+**Manage Events → Settings → Outreach Goals** sets targets for the calendar
+year: how many **Events held**, **People reached** or **Member hours**, or how
+much of any CRR count (for example, **Smoke alarm install · Alarms installed**:
+200). Choose **last year**, **this year** or **next year** across the top.
+
+- **Add a goal**: choose the **Figure** and type the **Target**. Each figure
+  can have one goal a year.
+- **Target**, beside each goal, changes it; **Remove** takes the goal away
+  without touching the work counted toward it.
+
+Each goal shows how far it has got, a bar with a mark where it should be by
+now, and whether it is **On pace**, **Behind pace** or **Met**. Pace assumes
+the work is spread evenly through the year, so a goal for seasonal work can
+read as behind for part of it. Once the year is over, a goal is **Met** or
+**Missed**.
+
 ### The CRR Catalogue
 
 **Who can do this:** officers who can manage events — usually the Community
@@ -3440,7 +3468,8 @@ it.
   request each came from. On a phone, the month shows how many events each day
   has, and the week is a list of days.
 - **This year at a glance** — the four Outreach Impact figures, with a link to
-  the full report.
+  the full report, and this year's [goals](#outreach-goals) furthest behind
+  pace.
 
 An outreach event is the same one Outreach Impact counts: a public education,
 fundraiser, ceremony or social event, or any event a request was scheduled
@@ -3541,6 +3570,11 @@ activities at events:
   still show, over a blank background.
 
 The printed summary carries the same three lists, without the map.
+
+**Goals.** Above the community risk reduction lists, **Goals for** this year
+shows each [goal](#outreach-goals) against its target and pace. It always
+shows the calendar year, whichever period you chose. The printed summary lists
+each goal with what it reached and whether it was met.
 
 > **Screenshot needed** (`04-113-crr-impact-map.png`): the **CRR activities**
 > section of **Outreach Impact** for this year, with **By activity** showing
