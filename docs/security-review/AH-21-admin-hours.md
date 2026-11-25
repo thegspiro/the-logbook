@@ -1,6 +1,201 @@
 # Security Review — Admin Hours
 
-**Prefix:** `AH` · **Iteration:** 21 · **Reviewed:** 2026-08-26/27 (pass 1), 2026-08-30 (pass 2), 2026-09-05 (pass 3), 2026-09-11 (pass 4), 2026-09-15 (pass 5), 2026-10-03 (pass 6), 2026-10-07 (pass 7), 2026-10-16 (pass 8), 2026-10-20 (pass 9), 2026-10-24 (pass 10), 2026-10-27 (pass 11), 2026-10-30 (pass 12), 2026-11-02 (pass 13), 2026-11-10 (pass 14), 2026-11-21 (pass 15) · **PR:** [#1903](https://github.com/thegspiro/the-logbook/pull/1903) (pass 1, merged), [#2065](https://github.com/thegspiro/the-logbook/pull/2065) (pass 2, merged), [#2247](https://github.com/thegspiro/the-logbook/pull/2247) (pass 3, merged), [#2481](https://github.com/thegspiro/the-logbook/pull/2481) (pass 4, merged), [#2585](https://github.com/thegspiro/the-logbook/pull/2585) (pass 5, merged), [#2874](https://github.com/thegspiro/the-logbook/pull/2874) (pass 6, merged), [#2978](https://github.com/thegspiro/the-logbook/pull/2978) (pass 7, merged), [#3336](https://github.com/thegspiro/the-logbook/pull/3336) (pass 8, merged), [#3451](https://github.com/thegspiro/the-logbook/pull/3451) (pass 9, merged), [#3632](https://github.com/thegspiro/the-logbook/pull/3632) (pass 10, merged), [#3764](https://github.com/thegspiro/the-logbook/pull/3764) (pass 11, merged), [#3846](https://github.com/thegspiro/the-logbook/pull/3846) (pass 12, merged), [#3955](https://github.com/thegspiro/the-logbook/pull/3955) (pass 13, merged), [#4224](https://github.com/thegspiro/the-logbook/pull/4224) (pass 14, merged), pass 15 (this PR)
+**Prefix:** `AH` · **Iteration:** 21 · **Reviewed:** 2026-08-26/27 (pass 1), 2026-08-30 (pass 2), 2026-09-05 (pass 3), 2026-09-11 (pass 4), 2026-09-15 (pass 5), 2026-10-03 (pass 6), 2026-10-07 (pass 7), 2026-10-16 (pass 8), 2026-10-20 (pass 9), 2026-10-24 (pass 10), 2026-10-27 (pass 11), 2026-10-30 (pass 12), 2026-11-02 (pass 13), 2026-11-10 (pass 14), 2026-11-21 (pass 15), 2026-11-25 (pass 16) · **PR:** [#1903](https://github.com/thegspiro/the-logbook/pull/1903) (pass 1, merged), [#2065](https://github.com/thegspiro/the-logbook/pull/2065) (pass 2, merged), [#2247](https://github.com/thegspiro/the-logbook/pull/2247) (pass 3, merged), [#2481](https://github.com/thegspiro/the-logbook/pull/2481) (pass 4, merged), [#2585](https://github.com/thegspiro/the-logbook/pull/2585) (pass 5, merged), [#2874](https://github.com/thegspiro/the-logbook/pull/2874) (pass 6, merged), [#2978](https://github.com/thegspiro/the-logbook/pull/2978) (pass 7, merged), [#3336](https://github.com/thegspiro/the-logbook/pull/3336) (pass 8, merged), [#3451](https://github.com/thegspiro/the-logbook/pull/3451) (pass 9, merged), [#3632](https://github.com/thegspiro/the-logbook/pull/3632) (pass 10, merged), [#3764](https://github.com/thegspiro/the-logbook/pull/3764) (pass 11, merged), [#3846](https://github.com/thegspiro/the-logbook/pull/3846) (pass 12, merged), [#3955](https://github.com/thegspiro/the-logbook/pull/3955) (pass 13, merged), [#4224](https://github.com/thegspiro/the-logbook/pull/4224) (pass 14, merged), [#4500](https://github.com/thegspiro/the-logbook/pull/4500) (pass 15, merged), pass 16 (this PR)
+
+## Pass 16 (2026-11-25) — 0 fixed, 0 new findings; real delta (a CRR-activity credit path, a training-compliance profile-resolver swap, two UI-only frontend fixes) traced safe; a new unclaimed cross-feature module (Community Risk Reduction) found and recorded
+
+**Watchdog pickup.** The dedicated `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) remains unreachable (`ListAgents` →
+"No reachable agents"). PR [#4695](https://github.com/thegspiro/the-logbook/pull/4695)
+(Feature 20, Compliance, pass 16) was fully green on every CI check (`CI
+Success` passing on its current head, `mergeable_state` `clean`) with only
+the same bot-quota-failure comments seen on every recent pass (Codex
+"unable to review", Copilot "usage limits" — no actual findings), so this
+watchdog merged it (squash commit `74f6fd0d7`) before starting this
+feature. A fresh `list_pull_requests` (state `open`) found no
+`claude/security-review-*` head, and row 21 was confirmed the next `⬜` row
+directly against `PROGRESS.md`'s rotation table on a freshly pulled `main`.
+
+**Baseline `fd8ba8c53`** (PR #4500's merge, pass 15). `git diff --stat
+fd8ba8c53..origin/main` across every file this feature declares in scope
+(`endpoints/admin_hours.py`, `admin_hours_service.py`, `models/admin_hours.py`,
+`schemas/admin_hours.py`, `utils/admin_hours_settings.py`,
+`core/seed_admin_hours.py`, the `admin-hours` frontend module) finds real
+movement in two backend files and two frontend files. The endpoint and
+schema files are byte-identical to pass 15 — no new route, no new
+permission string, no column change to anything this feature owns.
+
+### The service/model delta, read in full
+
+1. **A new credited-hours source: Community Risk Reduction (CRR) activity
+   logging.** `models/admin_hours.py` gains
+   `AdminHoursEntryMethod.CRR_ACTIVITY` (`:44`) and a nullable
+   `source_crr_activity_id` FK to `crr_activities.id`
+   (`ondelete="SET NULL"`, `nullable=True` — CLAUDE.md Pitfall #2 satisfied;
+   `:186-192`), plus a matching index. Migration
+   `20261122_1613_5c2e8a417d90_crr_activities_and_grants.py` adds the column
+   nullable with no backfill needed (purely additive) and documents the
+   decision in its own docstring.
+
+   The writer is `CrrActivityService._credit_hours`
+   (`app/services/crr_activity_service.py:453-485`), called from `create`
+   (`:420-431`) only when the activity has members and no linked event
+   (an activity tied to an outreach event credits nothing — its attendance
+   already does, per the module's own docstring). Traced end-to-end:
+   - **Every client-supplied member id is validated in-org and active**
+     before any `AdminHoursEntry` is created: `_members`
+     (`crr_activity_service.py:315-334`) runs
+     `select(User.id).where(User.organization_id == org_id, User.id.in_(...),
+     User.status.in_(ACTIVE_ACCOUNT_STATUSES))` and raises `ValueError` if
+     any requested id doesn't come back — CLAUDE.md Pitfall #14c (validate a
+     client-supplied FK in-org before persisting it) and Pitfall #32 (gate on
+     "current member", not a bare `== ACTIVE` literal) both satisfied.
+   - **The credited category is resolved org-scoped.** `_categories`
+     (`:434-451`) either looks up the activity type's own
+     `AdminHoursCategory` filtered `AdminHoursCategory.organization_id ==
+     org_id` and `is_active`, or falls back to
+     `AdminHoursService.get_mappings_for_event(org_id, "public_education",
+     None)` — the same org-scoped mapping apparatus nights already use
+     (verified good at pass 15). No client-supplied category id reaches a
+     write.
+   - **`AdminHoursEntry.organization_id`, `user_id` and `category_id` are
+     all set from already-validated, org-scoped values** — `org_id` is the
+     caller's own organization, never client-supplied; `user_id` comes from
+     the validated `members` dict; `category_id` comes from the org-scoped
+     `_categories` result.
+   - **Deletion is symmetric and narrowly scoped.** `delete`
+     (`:568-584`) removes only `AdminHoursEntry` rows filtered
+     `organization_id == org_id`, `source_crr_activity_id == activity.id`
+     **and** `entry_method == CRR_ACTIVITY` — an entry an officer has since
+     re-entered by hand (a different `entry_method`) survives, matching the
+     rule event-attendance crediting already follows. `update`
+     (`:487-566`) does not allow changing the type, event, timing or who
+     carried it out once recorded — the docstring states this is because
+     Admin Hours were already credited from those fields; changing them
+     requires deleting and re-recording, which re-runs the same validated
+     credit path rather than mutating an already-credited entry in place.
+
+   **No finding** — verified good, not merely read. This is a second writer
+   into this feature's own table in as many passes (apparatus-night credits
+   at pass 15, CRR activities here); both follow the same org-scoping and
+   FK-validation discipline.
+
+2. **`get_requirement_progress`'s profile resolution now calls the shared
+   `admin_hours_profile()`** (`app/services/training_compliance.py:2290-2306`,
+   new this pass, exported from Feature 20's own pass-16 work — see
+   `CMP-20-compliance.md`) instead of this file's own local
+   filter/priority-sort of `config.profiles`. `admin_hours_profile` and the
+   `matching_profiles`/`ordered_profiles` it calls are pure functions over
+   already-loaded arguments — no query of their own — so org-scoping is
+   entirely a property of the caller, confirmed unchanged at the call site
+   (`admin_hours_service.py:2360-2383`): `user` is loaded
+   `.where(UserModel.id == user_id, UserModel.organization_id ==
+   organization_id)` and `config` is loaded
+   `.where(ComplianceConfig.organization_id == organization_id)` — both
+   already present and already reviewed at prior passes (the surrounding
+   comment at `:2350-2358` already documents exactly this org-scoping
+   concern for a non-admin caller passing another org's `user_id`, and
+   predates this pass). Behaviorally this prefers the profile that grades
+   the member's training when it sets admin-hours requirements, falling
+   back to the old priority-order rule only when it doesn't (owner decision
+   2026-11-23, Feature 20's own) — a correctness/consistency fix already
+   proven correct in the feature that owns the shared rule (Pitfall #29),
+   recorded here because it is this feature's own call site. **No finding.**
+
+### The frontend delta, read in full
+
+Two files, both pure UI: `CategoriesTab.tsx` (a header row that wraps
+instead of overflowing on narrow widths, and an inactive-category badge's
+text colour moved from `red-800`/`red-400` to `red-900`/`red-300` — an
+AA/AAA contrast correction in the same family as CLAUDE.md's 2026-09-07
+sweep) and `AdminHoursManagePage.tsx` (an `aria-label`/`role="group"` and a
+comment on the existing `hscroll` tab strip, no new element, no new
+behavior). Neither touches a network call, a stored value, or an existing
+banned pattern. Zero new API calls; swept for every standing banned pattern
+(`window.confirm`/`alert`/`prompt`, `dangerouslySetInnerHTML`, `innerHTML`,
+a bare `fetch(`, `.toLocale*`/`date-fns`) with zero hits. Neither file nor
+any other file under `modules/admin-hours/` references CRR — the new
+credit path is entirely backend-side; a CRR-credited entry displays through
+this module's existing entry list/CSV export unchanged, which the pass-15
+Source-column mapping (`admin_hours_imported`/`label_for`, confirmed
+present and unchanged this pass) already labels by `entry_method`.
+
+### A new unclaimed cross-feature module, read only at its admin-hours-touching slice
+
+Community Risk Reduction (`app/api/v1/endpoints/crr.py`, 622 L, gated
+`events.manage`/`crr.record`; `app/services/crr_activity_service.py`,
+649 L; `app/services/crr_catalogue_service.py`; `models/crr.py`,
+`schemas/crr.py`; migration `20261122_1613_5c2e8a417d90`, "Add the CRR
+catalogue, the bundled ZIP lookup and the GeoNames credit") landed
+(commit `43c12880d`, 2026-11-22) with no feature row covering it — logging
+outreach activities (resident contacts, public-education events, home
+inspections) with their own catalogue of activity types, measures and
+tags, resident-detail fields encrypted at rest and gated behind
+`crr.view_contact`, ZIP-code-to-place lookup, and a sizeable frontend
+footprint (`pages/crr/`, `pages/community-engagement/`, an
+`events-settings` catalogue editor). This is the same situation Apparatus
+Events was in at pass 15 (now resolved — folded into Feature 13 at pass
+24) and Historical Data Import was in at pass 14 (resolved into Feature
+27 at pass 13): a substantial new surface with no rotation row, found
+because it happens to write into this feature's own table.
+
+Only the slice touching `AdminHoursEntry`/`AdminHoursCategory` was traced
+(above, no finding). The module as a whole — resident-detail access
+control, the retention/clearing job, the ZIP lookup's input handling, the
+catalogue CRUD, org-scoping of every by-id route — has **not** had a
+seven-dimension pass and should not be read as cleared. Its permission
+prefix (`events.manage`/`crr.record`) and its dependency on `Event`
+(activities may be recorded against an outreach event) both point to
+Feature 16 (Events & requests) as the natural home, the same way Apparatus
+Events' and Historical Data Import's own permission prefixes pointed them
+to their homes. A note was added to `PROGRESS.md`'s "New modules with no
+rotation row yet" paragraph; a future pass should fold it into row 16's
+declared scope rather than leaving it to be rediscovered. The stale
+Apparatus-Events note in that same paragraph (superseded by row 13 already
+showing `apparatus_events.py` ✅ at pass 24) was removed in the same edit.
+
+### Route inventory, re-enumerated by AST (not trusted from pass 15's count)
+
+A Python `ast` walk over every `@router.*` decorator in `admin_hours.py`
+(not a text grep) finds **30 routes**, byte-identical to pass 15 — matching
+the zero-diff confirmed above, but re-run rather than assumed. Depends
+extracted the same way, per route: **17** carry
+`Depends(require_permission("admin_hours.manage"))`; **13** carry
+`Depends(get_current_user)` alone; 17 + 13 = 30, no route with zero auth
+dependency.
+
+### Standing findings
+
+No open or flagged finding carries forward from passes 1–15 — all were
+already closed (by fix or owner decision) as of pass 15, and nothing in
+this pass's delta (the CRR credit path, the profile-resolver swap, the two
+frontend fixes) touches any of them. `KNOWN_LIMITATIONS.md`'s two
+admin-hours rows were re-read and still match the current code exactly —
+no edit needed.
+
+### Completion gate (pass 16)
+
+| Check                                                             | Result                                                       |
+| ----------------------------------------------------------------- | ------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/` (flake8 7.4.1, CI's pin)            | ✅ 0 violations                                               |
+| `black --check app/ tests/ alembic/` (black 26.10.1, CI's pin)    | ✅ 3541 files unchanged                                       |
+| `isort --check-only app/ tests/ alembic/` (isort 9.0.2, CI's pin) | ✅ clean                                                       |
+| `python3 scripts/validate_migrations.py --strict`                 | ✅ 844 revisions, single head `e9cf8ab7e4e4`                 |
+| `python3 scripts/generate_schema_docs.py --check`                 | ✅ up to date (no model/schema change owned by this pass)    |
+| `pytest tests/ -q -k "admin_hours or crr"`                         | ✅ 258 passed, 1 pre-existing environment-only skip          |
+| `python3 scripts/check_route_permissions.py --strict` (repo root) | ✅ 344 routes, 0 errors/warnings                              |
+| `cd frontend && npm run typecheck`                                 | ✅ 0 errors                                                   |
+| `cd frontend && npm run lint`                                      | ✅ 0 errors/warnings (`--max-warnings 10`)                    |
+| `npx vitest run src/modules/admin-hours`                           | ✅ 131 passed (15 files, up from pass 15)                     |
+
+No admin-hours backend route, schema, or permission changed this pass — the
+real delta (the CRR credit path and the profile-resolver swap) was reviewed,
+not written, here. This pass's own contribution is the trace above, the
+route re-enumeration, and recording the new unclaimed CRR module.
+
+Next: Feature 22 (Grants & fundraising).
+
+---
 
 ## Pass 15 (2026-11-21) — 0 fixed, 0 new findings; real backend delta (an apparatus-night category override, a CSV Source column, a shared profile tie-break) traced safe; a new unclaimed cross-feature module (Apparatus Events) found and recorded
 
