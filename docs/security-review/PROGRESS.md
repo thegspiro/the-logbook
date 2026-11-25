@@ -16,7 +16,8 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR (number recorded in the next commit on this branch)**: Feature 14
+**PR [#4686](https://github.com/thegspiro/the-logbook/pull/4686) (branch
+`claude/friendly-babbage-xstbnj`)**: Feature 14
 (Equipment check & shifts), pass 17 — watchdog pickup (the dedicated
 `/loop 30m /security-review` session, `session_011T1ZyyLrD5HagusgK9uDw2`,
 remains unreachable, confirmed via `ListAgents`, "No reachable agents").
