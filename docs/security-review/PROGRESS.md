@@ -16,7 +16,8 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR [#TBD] (branch `claude/security-review-training-core-p16`)**:
+**PR [#4692](https://github.com/thegspiro/the-logbook/pull/4692) (branch
+`claude/security-review-training-core-p16`)**:
 Feature 17 (Training core), pass 16 — watchdog pickup (the dedicated
 `/loop 30m /security-review` session, `session_011T1ZyyLrD5HagusgK9uDw2`,
 remains unreachable, confirmed via `ListAgents` → "No reachable agents").
