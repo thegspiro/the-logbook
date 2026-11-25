@@ -75,4 +75,31 @@ describe('LiveTurnoutPanel', () => {
     });
     expect(screen.queryByText(/Quorum/)).not.toBeInTheDocument();
   });
+  // ELEC2-17: the panel compared the backend's two-decimal turnout against a
+  // target it worked out itself, so it could disagree with the results call,
+  // which compares the raw voter count (or the raw ratio) with the bar.
+  describe('decides quorum the way the results do', () => {
+    it('counts 7 of 30 voters as meeting a 7-voter quorum', async () => {
+      mockGetStats.mockResolvedValue({
+        ...stats,
+        total_eligible_voters: 30,
+        total_voters: 7,
+        voter_turnout_percentage: 23.33,
+      });
+      render(<LiveTurnoutPanel electionId="e1" election={{ ...election, quorum_type: 'count', quorum_value: 7 }} />);
+      expect(await screen.findByText('MET')).toBeInTheDocument();
+    });
+
+    it('does not count 2 of 3 as meeting a 66.67% quorum', async () => {
+      mockGetStats.mockResolvedValue({
+        ...stats,
+        total_eligible_voters: 3,
+        total_voters: 2,
+        voter_turnout_percentage: 66.67,
+      });
+      render(<LiveTurnoutPanel electionId="e1" election={{ ...election, quorum_value: 66.67 }} />);
+      expect(await screen.findByText(/Quorum progress/)).toBeInTheDocument();
+      expect(screen.queryByText('MET')).not.toBeInTheDocument();
+    });
+  });
 });

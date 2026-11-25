@@ -12156,6 +12156,76 @@ shelf rule. A lot that expired yesterday is in the list but not in the count.
 
 **The decision:** which rule both should use.
 
+## Elections — Five Counting and Ballot Decisions From App Review B5 Pass 7 (2026-11-24)
+
+Recorded rather than changed. Details in `docs/app-review/elections.md` →
+Pass 7.
+
+That pass also fixed four counting bugs that broke the module's own rules (two
+winners in one seat, a motion counted by instant runoff, a merged write-in
+splitting a paper ballot, a package status that ignored the result). **Results
+are recomputed on every read, not snapshotted at close.** So a closed election
+that hit one of those cases now displays the corrected result, and no revision
+stamp records the change. The owner approved this on 2026-11-24. The decisions
+below would also change past results once built, for the same reason.
+
+### ELEC2-18 — How is an instant-runoff tie for elimination settled?
+
+When two candidates tie for last place in a round, the one with the lower
+internal id is eliminated. `tie_policy` is not consulted, and nothing tells the
+officer that a tie occurred. The id is effectively random, so the order is
+arbitrary and cannot be explained to members.
+
+**The decision:** the bylaw rule. Options:
+
+- the prior round's count;
+- the first-choice count;
+- lot, drawn by the officer and recorded;
+- a runoff, per `tie_policy`.
+
+Whatever the rule, the tie should be shown in the result.
+
+### ELEC2-19 — What denominator does a paper-only approval or multi-seat race use?
+
+When a paper batch has no attested `ballots_cast`, the number of ballots is
+taken as the largest candidate's tally. Percentages are then measured against
+too few ballots, and a majority bar is easier to clear than it should be.
+
+**The decision:** whether recording `ballots_cast` becomes mandatory for these
+races, or the race is reported as unverifiable without it.
+
+### ELEC2-20 — When does a runoff happen?
+
+- A runoff fires when `enable_runoffs` is on, whatever `tie_policy` says.
+- A quorum failure creates a top-two runoff.
+- Unfilled seats in a multi-seat race get none.
+- A tie at the runoff cut-line is settled without saying so.
+- A correction after close (a void) re-runs neither the runoff check nor the
+  membership-package sync.
+
+**The decision:** one rule for which of tie, no majority, unfilled seat and
+failed quorum leads to a runoff, and whether a post-close correction should
+re-run either step.
+
+### ELEC2-21 — What should a ranked-choice result show?
+
+Only the final round is shown. Eliminated candidates read 0 votes, there is no
+round-by-round history, and the election's victory condition is ignored (the
+last candidate standing wins). `total_votes` counts ranking rows, not ballots.
+
+**The decision:** whether to show the rounds, and whether a ranked-choice
+election may carry a majority or supermajority bar at all.
+
+### ELEC2-22 — When does a ballot-builder edit save?
+
+Each keystroke in a ballot item sends the whole ballot to the server. The
+responses can land out of order, and a failed save leaves the edit on screen as
+if it had saved.
+
+**The decision:** save on blur or after a pause, with an unsaved marker and a
+rollback on failure. This changes when edits take effect, so it is a UX choice
+rather than a bug fix.
+
 ## Facilities — Four Decisions From App Review B4 Pass 6 (2026-11-23)
 
 Recorded rather than changed. Details in `docs/app-review/facilities.md` →

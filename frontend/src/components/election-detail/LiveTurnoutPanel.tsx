@@ -58,13 +58,22 @@ const LiveTurnoutPanel: React.FC<LiveTurnoutPanelProps> = ({ electionId, electio
   const voters = stats?.total_voters ?? 0;
   const turnout = stats?.voter_turnout_percentage ?? 0;
 
+  // quorumTarget only sizes the progress bar. Whether quorum is met mirrors
+  // get_election_results: a count quorum compares voters with the bar, a
+  // percentage quorum the unrounded ratio — never the two-decimal turnout,
+  // which can land either side of the bar the raw figure does (ELEC2-17).
+  const quorumValue = election.quorum_value ?? 0;
   const quorumTarget =
-    election.quorum_type === 'percentage'
-      ? (election.quorum_value ?? 0)
-      : election.quorum_type === 'count' && eligible > 0
-        ? ((election.quorum_value ?? 0) / eligible) * 100
-        : null;
-  const quorumMet = quorumTarget !== null && turnout >= quorumTarget;
+    quorumValue <= 0
+      ? null
+      : election.quorum_type === 'percentage'
+        ? quorumValue
+        : election.quorum_type === 'count' && eligible > 0
+          ? (quorumValue / eligible) * 100
+          : null;
+  const quorumMet =
+    quorumTarget !== null &&
+    (election.quorum_type === 'count' ? voters >= quorumValue : (voters / eligible) * 100 >= quorumValue);
 
   return (
     <div ref={containerRef} className="card bg-theme-surface mb-6" role="status" aria-live="polite">
