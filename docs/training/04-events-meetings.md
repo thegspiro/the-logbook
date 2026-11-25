@@ -1809,8 +1809,14 @@ down. Manage the crew on that event's page.
 > **Postponed to a date TBD?** That cancels the request's calendar event, and
 > rescheduling the request later opens a new one. The crew stayed on the
 > cancelled event, so add it again from the request once it is rescheduled.
-> A moved date is not re-checked for apparatus conflicts; look at **Shift
-> Scheduling** for that day if the engine might be committed elsewhere. **Volunteer signups** for the same request stay
+
+> **Moving a request that has a crew.** When you schedule or postpone it to a
+> new date, the apparatus is checked on that date. If it is already on another
+> apparatus night, or out of service, the move is held back and the reason is
+> listed. Tick **Move anyway** if you have confirmed the apparatus can cover
+> both, and confirm again; the request's activity log notes that you did.
+> Moving the event from its own event page is not checked, so move a request's
+> visit from the request. **Volunteer signups** for the same request stay
 > available; a visit can have an engine crew and extra educators.
 
 ---

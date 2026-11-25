@@ -23,8 +23,12 @@ from app.models.event_request import (
     EventRequestStatus,
 )
 from app.models.user import User
+from app.schemas.apparatus_event import NightSpec, ScheduleNightsRequest
 from app.services.admin_hours_service import AdminHoursService
-from app.services.apparatus_event_service import ConflictsNotAcknowledged
+from app.services.apparatus_event_service import (
+    ApparatusEventService,
+    ConflictsNotAcknowledged,
+)
 from tests.clock_support import reread_each_test
 from tests.test_apparatus_event_service import (
     _clock,
@@ -279,6 +283,7 @@ async def bench(db_session: AsyncSession):
         "request": request.id,
         "event": event.id,
         "template": template.id,
+        "engine": w.engine.id,
     }
     holder: dict = {}
 
@@ -404,3 +409,227 @@ class TestTheRequestPipeline:
 
         assert response.status_code == 400
         assert "no calendar event" in response.json()["detail"]
+
+
+# ---------------------------------------------------------------------------
+# Moving a request that carries a crew (owner decision of 2026-11-24)
+# ---------------------------------------------------------------------------
+
+
+def _iso(moment) -> str:
+    return moment.isoformat()
+
+
+class TestMovingARequestWithACrew:
+    """A reschedule carries the crew to the new date, so the apparatus is
+    checked there first. A conflict is held back until the coordinator has
+    seen it, then accepted and noted, never refused outright."""
+
+    async def _crew_on_request(self, client, act_as, ids) -> None:
+        await act_as("events.manage", "apparatus_events.manage")
+        attached = await client.post(
+            f"/event-requests/{ids['request']}/apparatus-crew",
+            json={"template_id": ids["template"]},
+        )
+        assert attached.status_code == 201, attached.text
+
+    async def _engine_busy(self, db, ids, start, hours: int = 3) -> None:
+        """Another apparatus night on the same engine at *start*."""
+        await ApparatusEventService(db).schedule_nights(
+            ids["template"],
+            ScheduleNightsRequest(
+                title="Holiday Parade",
+                nights=[
+                    NightSpec(
+                        start_datetime=start,
+                        end_datetime=start + timedelta(hours=hours),
+                    )
+                ],
+                acknowledge_conflicts=True,
+            ),
+            ids["org"],
+            ids["coordinator"],
+        )
+        await db.commit()
+
+    async def _event_start(self, db, ids):
+        # A fresh read rather than expire_all(), which would also expire the
+        # signed-in user the app is handed and fail the next request.
+        start = await db.scalar(
+            select(Event.start_datetime)
+            .where(Event.id == ids["event"])
+            .execution_options(populate_existing=True)
+        )
+        return start.replace(tzinfo=None)
+
+    async def test_postponing_onto_a_busy_date_waits_for_acknowledgement(
+        self, bench, db_session: AsyncSession
+    ):
+        client, act_as, ids = bench
+        await self._crew_on_request(client, act_as, ids)
+        busy = FUTURE + timedelta(days=50)
+        await self._engine_busy(db_session, ids, busy)
+        before = await self._event_start(db_session, ids)
+
+        held = await client.patch(
+            f"/event-requests/{ids['request']}/postpone",
+            json={"new_event_date": _iso(busy)},
+        )
+
+        assert held.status_code == 409, held.text
+        (conflict,) = held.json()["detail"]["conflicts"]
+        assert conflict["conflicting_title"] == "Holiday Parade"
+        assert await self._event_start(db_session, ids) == before
+        status = await db_session.scalar(
+            select(EventRequest.status)
+            .where(EventRequest.id == ids["request"])
+            .execution_options(populate_existing=True)
+        )
+        assert status == EventRequestStatus.SCHEDULED
+
+        # The refusal rolled the session back; sign in again.
+        await act_as("events.manage", "apparatus_events.manage")
+        moved = await client.patch(
+            f"/event-requests/{ids['request']}/postpone",
+            json={"new_event_date": _iso(busy), "acknowledge_conflicts": True},
+        )
+
+        assert moved.status_code == 200, moved.text
+        assert await self._event_start(db_session, ids) == busy.replace(tzinfo=None)
+        activity = await db_session.scalar(
+            select(EventRequestActivity).where(
+                EventRequestActivity.request_id == ids["request"],
+                EventRequestActivity.action == "postponed",
+            )
+        )
+        assert "Apparatus conflict accepted" in activity.notes
+        assert "Holiday Parade" in activity.notes
+        assert len(activity.details["apparatus_conflicts_accepted"]) == 1
+
+    async def test_scheduling_onto_a_busy_date_waits_for_acknowledgement(
+        self, bench, db_session: AsyncSession
+    ):
+        client, act_as, ids = bench
+        await self._crew_on_request(client, act_as, ids)
+        busy = FUTURE + timedelta(days=55)
+        await self._engine_busy(db_session, ids, busy)
+        await db_session.execute(
+            text("UPDATE event_requests SET status = 'postponed' WHERE id = :id"),
+            {"id": ids["request"]},
+        )
+        await db_session.commit()
+        db_session.expire_all()
+        await act_as("events.manage", "apparatus_events.manage")
+
+        held = await client.patch(
+            f"/event-requests/{ids['request']}/schedule",
+            json={"event_date": _iso(busy)},
+        )
+        assert held.status_code == 409, held.text
+        assert held.json()["detail"]["conflicts"][0]["conflicting_title"] == (
+            "Holiday Parade"
+        )
+
+        # The refusal rolled the session back; sign in again.
+        await act_as("events.manage", "apparatus_events.manage")
+        moved = await client.patch(
+            f"/event-requests/{ids['request']}/schedule",
+            json={"event_date": _iso(busy), "acknowledge_conflicts": True},
+        )
+        assert moved.status_code == 200, moved.text
+        assert await self._event_start(db_session, ids) == busy.replace(tzinfo=None)
+
+    async def test_a_free_date_moves_without_asking(
+        self, bench, db_session: AsyncSession
+    ):
+        client, act_as, ids = bench
+        await self._crew_on_request(client, act_as, ids)
+        await self._engine_busy(db_session, ids, FUTURE + timedelta(days=50))
+        free = FUTURE + timedelta(days=52)
+
+        moved = await client.patch(
+            f"/event-requests/{ids['request']}/postpone",
+            json={"new_event_date": _iso(free)},
+        )
+
+        assert moved.status_code == 200, moved.text
+        assert await self._event_start(db_session, ids) == free.replace(tzinfo=None)
+
+    async def test_keeping_the_same_window_does_not_ask_again(
+        self, bench, db_session: AsyncSession
+    ):
+        client, act_as, ids = bench
+        await self._crew_on_request(client, act_as, ids)
+        current = await self._event_start(db_session, ids)
+        # The engine is busy at the crew's present time, accepted when it
+        # went on; saving the request again on the same date is not a move.
+        await self._engine_busy(db_session, ids, FUTURE + timedelta(days=40))
+        await db_session.execute(
+            text("UPDATE event_requests SET status = 'postponed' WHERE id = :id"),
+            {"id": ids["request"]},
+        )
+        await db_session.commit()
+        db_session.expire_all()
+        await act_as("events.manage", "apparatus_events.manage")
+
+        response = await client.patch(
+            f"/event-requests/{ids['request']}/schedule",
+            json={"event_date": _iso(FUTURE + timedelta(days=40))},
+        )
+
+        assert response.status_code == 200, response.text
+        assert await self._event_start(db_session, ids) == current
+
+    async def test_a_request_without_a_crew_is_not_checked(
+        self, bench, db_session: AsyncSession
+    ):
+        client, act_as, ids = bench
+        await act_as("events.manage", "apparatus_events.manage")
+        busy = FUTURE + timedelta(days=50)
+        await self._engine_busy(db_session, ids, busy)
+
+        moved = await client.patch(
+            f"/event-requests/{ids['request']}/postpone",
+            json={"new_event_date": _iso(busy)},
+        )
+
+        assert moved.status_code == 200, moved.text
+
+
+class TestMoveConflictCheck:
+    async def test_a_window_longer_than_a_night_is_still_checked(
+        self, db_session: AsyncSession
+    ):
+        w = await _world(db_session)
+        event = await _event(db_session, w)
+        template = await _template(w)
+        await w.service.attach_template(
+            event.id, template.id, w.org.id, acknowledge_conflicts=True
+        )
+        await _scheduled(w, db_session, nights=None)
+        start = FUTURE - timedelta(hours=6)
+
+        conflicts = await w.service.check_move_conflicts(
+            event.id, start, start + timedelta(hours=36), w.org.id
+        )
+
+        assert [c.conflicting_title for c in conflicts] == ["Santamobile 2026"]
+
+    async def test_an_archived_engine_still_on_the_night_does_not_block(
+        self, db_session: AsyncSession
+    ):
+        w = await _world(db_session)
+        event = await _event(db_session, w)
+        template = await _template(w)
+        await w.service.attach_template(
+            event.id, template.id, w.org.id, acknowledge_conflicts=True
+        )
+        w.engine.is_archived = True
+        await db_session.flush()
+        start = FUTURE + timedelta(days=60)
+
+        conflicts = await w.service.check_move_conflicts(
+            event.id, start, start + timedelta(hours=2), w.org.id
+        )
+
+        assert conflicts == []
