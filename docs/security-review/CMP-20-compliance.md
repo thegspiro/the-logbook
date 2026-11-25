@@ -4,7 +4,8 @@
 2026-08-30 (pass 2), 2026-09-05 (pass 3), 2026-09-11 (pass 4), 2026-09-15
 (pass 5), 2026-10-03 (pass 6), 2026-10-07 (pass 7), 2026-10-16 (pass 8),
 2026-10-19 (pass 9), 2026-10-24 (pass 10), 2026-10-26 (pass 11), 2026-10-30
-(pass 12), 2026-11-02 (pass 13), 2026-11-10 (pass 14) ·
+(pass 12), 2026-11-02 (pass 13), 2026-11-10 (pass 14), 2026-11-21 (pass 15),
+2026-11-25 (pass 16) ·
 **PR:** #1902 (pass 1, merged),
 [#2059](https://github.com/thegspiro/the-logbook/pull/2059) (pass 2, merged),
 #2245 (pass 3, merged), [#2476](https://github.com/thegspiro/the-logbook/pull/2476)
@@ -18,7 +19,239 @@
 (pass 11, merged), [#3845](https://github.com/thegspiro/the-logbook/pull/3845)
 (pass 12, merged), #3940 (pass 13, merged),
 [#4213](https://github.com/thegspiro/the-logbook/pull/4213) (pass 14,
-merged), pass 15 (this PR)
+merged), [#4497](https://github.com/thegspiro/the-logbook/pull/4497) (pass
+15, merged), pass 16 (this PR)
+
+## Pass 16 (2026-11-25) — watchdog pickup, real delta (monthly-pace proration, shift-credited HOURS, rolling-requirement notice key, former-member standing, department-average classification), 0 new findings
+
+**Prefix:** `CMP16` · **PR:** see `PROGRESS.md`'s **Open PR** row
+
+**Watchdog note.** The dedicated `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) remains unreachable (`ListAgents` → "No
+reachable agents"). This watchdog merged PR #4694 (Feature 19, Skills
+testing, pass 16) after its CI went fully green, then confirmed via a fresh
+`list_pull_requests` (state=open) that no `claude/security-review-*` head
+remained before starting this feature. Row 20 (Compliance) was confirmed the
+next `⬜` row by reading the rotation table directly on freshly-pulled
+`origin/main`.
+
+### Scope check — real delta since pass 15
+
+Baseline `38b981470` (pass 15's own merge, PR #4497) to current `main`. Three
+backend files and four frontend files carry a real diff; every other
+declared-scope file (`compliance_config.py`, `compliance_officer.py`,
+`compliance_config_service.py`, `compliance_profiles.py`, both
+`schemas`/`models` files, `ComplianceRequirementsConfigPage.tsx`,
+`requirementPace.ts`) is byte-identical to pass 15, confirmed by
+`git diff --stat`, not assumed from the commit log.
+
+- `backend/app/services/training_compliance.py` (+215/−30, the feature's own
+  grading module) — five independent pieces, below.
+- `backend/app/services/compliance_member_notices.py` (+98/−7) — the
+  rolling-requirement notice key now carries the last date the member met the
+  requirement, via a new `RollingRequirementLastMet` table, rather than the
+  bare requirement id pass 15 shipped (which told a member only once, ever).
+- `backend/app/services/compliance_officer_service.py` (+3/−1) — a
+  mislabelled annual-report field renamed from `records_with_certification`
+  to `records_with_course_name` (CS-9: it was always a course-name check, no
+  certification field fed it).
+- `frontend/src/pages/ComplianceMatrixTab.tsx` (+17/−2),
+  `frontend/src/pages/training/complianceMatrixModel.ts` (+45/−9),
+  `frontend/src/utils/complianceForecast.ts` (new, +23) — certification
+  expiry columns on the matrix CSV export, a certification-specific cell
+  wording, a tone fix so a met hours/courses cell's *next* renewal date can no
+  longer flip it to "lapsed", and a response-shape guard for the forecast
+  endpoint's new `{members, averages}` envelope.
+- `frontend/src/pages/ComplianceOfficerDashboard.tsx` (+29/−35) — the
+  forecast's department averages and their colouring now come from the
+  server's own classification (`ComplianceGrading.classify_average`) instead
+  of this screen's locally-computed percentage bands (CLAUDE.md Pitfall #29).
+
+New shared code this delta leans on, read in full: `app/utils/duty_shifts.py`
+(`duty_shifts_only()` — a pure `Shift.is_outreach.is_(False)` filter clause,
+owned by Scheduling/Feature 15, already ✅; composed into this feature's
+already org-scoped `load_credited_shift_dates` query with no scoping effect
+of its own).
+
+### The real work — `training_compliance.py`
+
+Read in full, each piece traced for tenancy/injection/exposure even where the
+commit message already states intent:
+
+- **`monthly_pace`'s proration fix.** Pass 15 shipped an all-or-nothing
+  `waived` filter that dropped an entire month's hours whenever any part of
+  it was excused. This pass weights each month by `1 - waived_share`
+  (clamped to [0, 1]), so a half-excused month counts half a month and half
+  its hours. Pure arithmetic over rows a caller already computed — no query,
+  no new input, confirmed `average = hours / active_months` only sums when
+  `weight > 0`, so a fully-excused month is still excluded exactly as before
+  (division-by-zero guarded by `active_months > 0`).
+- **Shift-credited HOURS requirements** (`CreditedHours` dataclass,
+  `credited_hours` parameter threaded through
+  `evaluate_member_requirement_detail` → `_grade_member_requirement`). A new
+  caller (the Scheduling Shift Compliance report — Feature 15, not this
+  feature) can substitute shift hours for training records on an HOURS
+  requirement. The branch is additive and backward-compatible: every
+  existing caller passes `credited_hours=None` and gets the unchanged
+  `hours_record_counts` path; the new branch reuses the same `apply_recency`
+  cut-off and window bounds, so a shift-credited figure is prorated by
+  exactly the same rules as a training-record one (the point, per the
+  function's own docstring). No I/O in this file — the caller loads and
+  org-scopes the shift rows (Feature 15's concern; this feature's one touch
+  is the pure dataclass shape and the grading branch).
+- **`load_credited_shift_dates`'s new `duty_shifts_only()` clause** excludes
+  outreach-sheet shifts from counting toward shift-credited totals (owner
+  decision 2026-11-24, to stop double-counting hours already credited
+  through the outreach sheet). Composed inside the pre-existing
+  `Shift.organization_id == str(org_id)` filter — no scoping change, the
+  query was already org-scoped and remains so.
+- **`matching_profiles`/`admin_hours_profile` refactor.** `_find_matching_profile`
+  (used by all of this feature's own grading) is now `matching_profiles(...)[0]`
+  — identical behavior, confirmed by reading both functions: same
+  `ordered_profiles` resolution order, same `is_active`/membership-type/role
+  matching, same "first match wins". The new `admin_hours_profile` (consumed
+  by `admin_hours_service.py`, Feature 21, not yet in rotation) walks the
+  same ordered match list for the first profile that actually sets
+  `admin_hours_requirements`. Its one call site
+  (`admin_hours_service.py:2389`) resolves both `user` and `config` through
+  already org-scoped queries (`UserModel.id == user_id, UserModel.organization_id
+  == organization_id`; `ComplianceConfig.organization_id == organization_id`)
+  before calling it — no client-supplied id reaches `admin_hours_profile`
+  unscoped.
+- **`classify_standing`/`_standing_for_pct` split** factors the
+  pct-to-standing threshold ladder into a shared pure function, called with
+  the already-rounded `pct` so a displayed 75.0 still reads the same side of
+  a 75 bar as before (Pitfall #29's "one definition" discipline, just
+  factored rather than duplicated).
+- **`ComplianceGrading.classify_average`** (new) — a department-wide average
+  over `(pct, standing)` tuples a caller already computed per member,
+  classified by the department's own thresholds/threshold type rather than
+  the caller inventing its own bands. Consumed by
+  `training_enhancement_service.py`'s forecast report (Feature 18, already
+  ✅ this lap, reviewed there) and by `ComplianceOfficerDashboard.tsx` below.
+  Pure, no query.
+- **`is_current_member`/`STANDING_NOT_CURRENT_MEMBER`** (new) — the one
+  definition of "is this a current member" (`ACTIVE_ACCOUNT_STATUSES` per
+  CLAUDE.md Pitfall #32, plus `deleted_at is None`), consumed by
+  `training.py`'s profile card and `training_module_config.py`'s officer
+  member view (both Feature 17, already ✅ this lap) so neither screen grades
+  a former member — the exact Pitfall #29 failure mode this feature's own
+  pass-15 note flagged as a risk, now closed for these two call sites.
+
+No tenancy, authorization, injection, or data-exposure gap in any of the
+above: the only new table write (`RollingRequirementLastMet`, below) is
+org-scoped on read and write; every other change is pure computation over
+already-scoped, already-loaded inputs.
+
+### The real work — `compliance_member_notices.py` / `RollingRequirementLastMet`
+
+`_record_rolling_met` is called for every graded member (not just those
+emailed) once per `send_member_compliance_notices` run, which the scheduled-
+task claim mechanism (`app/core/background_claim.py`, CLAUDE.md's standing
+table) already prevents from running concurrently for one org. It reads
+`RollingRequirementLastMet` filtered by `organization_id == org_id` (the
+caller's own org, never client-supplied — this function runs from a
+scheduled task, not a request handler), and writes through a lookup-then-
+insert-or-advance pattern backed by a `UniqueConstraint("user_id",
+"requirement_id")` on the model (`backend/app/models/training.py:5424`,
+migration `20261123_0626_07abf8e6553b`) — idempotent per Pitfall #36: a
+second run the same day finds the row and only ever moves `last_met_on`
+forward (`elif row.last_met_on < today`), never backward, and a row that
+already reflects today's date is left untouched. Both FKs
+(`organization_id`, `user_id`, `requirement_id`) are `ondelete="CASCADE"`
+and `nullable=False`, matching Pitfall #2's shape for a column that is never
+optional. The notice key itself (`_unmet_key`) embeds only an id and an ISO
+date — no free text, nothing PHI-bearing, consistent with Pitfall #33's "an
+id answers the question" preference over logging/keying on free text.
+
+`compliance_officer_service.py`'s `records_with_course_name` rename is a
+one-line label fix with no behavior change (the value it reports,
+`field_lookup.get("course_name", 0)`, is unchanged) — not a finding, a
+correction of CS-9's own residual naming issue.
+
+### Frontend
+
+All four changed files re-swept for `window.confirm`/`alert`/`prompt`,
+`dangerouslySetInnerHTML`, banned `.toLocale*`/`date-fns`, a bare `fetch(` —
+zero hits, matching every prior pass. No new API call in any of them.
+`complianceMatrixModel.ts`'s `toneOf` fix (an hours/courses cell that is
+*met* can no longer be flipped to `LAPSED`/`SOON` by its own next renewal
+date — that demotion contradicted the backend's own `status`, the same
+Pitfall #29 shape as the standing-colour fixes above) is read-only display
+logic over server-sent fields, confirmed by tracing every branch of the
+`if (MET_STATUSES.has(cell.status))` block. `complianceForecast.ts`'s new
+`isForecastReport` type guard rejects a malformed or captive-portal response
+before it reaches the table (confirmed: `generate_compliance_forecast_report`
+in `training_enhancement_service.py`, Feature 18's own file, is the only
+producer of this shape, and matches the guard's `{members, averages:
+{current, days_30, days_60, days_90}}` shape field-for-field). The CSV
+export's new per-certification expiry columns (`certificationExpiryText`)
+format only a date string or one of three fixed labels — no new free-text
+field reaches the exported CSV, so no new Pitfall #15-class concern (this
+export already builds client-side via `buildCsv`/`downloadCsv`, not
+`SafeCsvWriter`, which is a backend-only mechanism; unchanged by this pass).
+
+### Route re-enumeration
+
+Both endpoint files re-walked by AST: **21 routes** (13 + 8), unchanged from
+pass 15. Both files are byte-identical to pass 15 (confirmed via
+`git diff --stat`, zero hunks). Every route still carries a recognized
+`Depends(require_permission(...))` — re-confirmed by direct grep of both
+files, not by trusting the unchanged-file claim alone.
+
+### Standing findings re-verified at their current citation
+
+- **CS-8 (attestation dual control / immutability) — OPEN by design,
+  unchanged.** `create_attestation`/`get_attestations`
+  (`compliance_officer.py:104,121`) remain the only two routes touching an
+  attestation; no update or delete route exists.
+- **`grace_period_days` unwired — unchanged, OPEN by design.** Fresh
+  `grep -rn "grace_period_days" backend/app` hits only this feature's own
+  declaration files (`models/compliance_config.py:113`,
+  `schemas/compliance_config.py:125,175`) plus `dues_terms.py`,
+  `medical_screening_service.py`, `training_enhancement_service.py`, and
+  `finance.py`'s own unrelated same-named columns on different models,
+  confirmed by model rather than by name alone. Still no reader on
+  `ComplianceConfig`'s own column.
+- **CS-8-b / CS-9 residual** — CS-9's naming half (the mislabelled
+  "records_with_certification" field) is now fixed, above; the self-attested-
+  percentage and monthly-windowing residuals are unchanged.
+- **CMP2-1** (`compliance_member_notices`) — re-confirmed above (the
+  rolling-requirement notice-key fix), still registered and unchanged in
+  `scheduled_tasks.py`.
+
+No OPEN or FLAGGED item exists beyond CS-8 and `grace_period_days` (both
+owner-accepted, by design); neither reopened by this pass's delta.
+
+### Findings
+
+**0 new findings.** A real delta across five independent pieces of
+`training_compliance.py`, a new idempotent notice-key table, and a
+department-average classification fix — all traced end to end: the one new
+table write is org-scoped and idempotent, every grading change operates on
+already-scoped inputs or is pure arithmetic, the shift-credited HOURS branch
+reuses the existing proration rules rather than inventing new ones, and the
+frontend changes consume the server's own classification rather than
+re-deriving it. Every standing CMP/CS item re-verified unchanged at its
+current citation.
+
+## Completion gate (pass 16)
+
+| Check                                                                                                                                                         | Result                                                                |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| `flake8==7.4.1` (CI's pin) on `app/ tests/ alembic/`                                                                                                           | ✅ 0 violations                                                       |
+| `black==26.10.1 --check` on `app/ tests/ alembic/`                                                                                                             | ✅ clean                                                               |
+| `isort==9.0.2 --check-only` on `app/ tests/ alembic/`                                                                                                          | ✅ clean                                                               |
+| `python3.13 scripts/validate_migrations.py --strict`                                                                                                           | ✅ 844 revisions, single head `e9cf8ab7e4e4`                          |
+| `python3.13 scripts/generate_schema_docs.py --check`                                                                                                           | ✅ `DATABASE_SCHEMA.md` is up to date                                 |
+| `python3 scripts/check_route_permissions.py --strict` (repo root)                                                                                              | ✅ 344 routes, 0 errors, 0 warnings                                   |
+| `python3.13 -m pytest tests/ -q -k "compliance or attestation or evaluation_credit or monthly_pace or mandatory_tier or session_attendance or rolling_requirement"` | ✅ 913 passed, 1 skipped (pre-existing `pywebpush` optional-dep skip) |
+| `cd frontend && npm run typecheck`                                                                                                                              | ✅ 0 errors                                                           |
+| `cd frontend && npm run lint`                                                                                                                                   | ✅ 0 errors/warnings (`--max-warnings 10`)                            |
+
+**Final disposition: 0 fixed (none needed — the delta was already correct),
+0 newly flagged. CS-8 and `grace_period_days` (both owner-accepted, by
+design) remain the only standing OPEN items, re-verified unchanged.**
 
 ## Pass 15 (2026-11-21) — watchdog pickup, real delta (evaluated-shift credit, optional requirements, monthly pace), 0 new findings
 

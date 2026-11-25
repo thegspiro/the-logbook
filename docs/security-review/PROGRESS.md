@@ -16,6 +16,59 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR TBD (branch `claude/security-review-compliance`)**: Feature 20
+(Compliance), pass 16 — watchdog pickup (the dedicated
+`/loop 30m /security-review` session, `session_011T1ZyyLrD5HagusgK9uDw2`,
+remains unreachable, confirmed via `ListAgents` → "No reachable agents").
+PR number and link recorded in a follow-up commit on this same branch once
+opened (never a PR of its own).
+
+PR #4694 (Feature 19, Skills testing, pass 16) was fully green on every CI
+check once its second (tracker-recording) commit's own run completed
+(mergeable_state `clean`), with only the same bot-quota-failure comments
+seen on every recent pass (Codex "unable to review", Copilot "usage
+limits", no actual findings) — merged by this watchdog as squash commit
+`bf7cecd86`; row 19 marked ✅ above. A fresh `list_pull_requests`
+(state=open) found no `claude/security-review-*` head open, so this
+iteration continued to Step 1: row 20 (Compliance) was the next ⬜ row.
+
+Baseline `38b981470` (pass 15's own merge, PR #4497). Three backend files
+and four frontend files carried a real delta; every other declared-scope
+file (both endpoint files, `compliance_config_service.py`,
+`compliance_profiles.py`, both schema/model files,
+`ComplianceRequirementsConfigPage.tsx`, `requirementPace.ts`) is
+byte-identical to pass 15. The real work: `monthly_pace` now prorates a
+partly-excused month by its unexcused share instead of dropping the whole
+month (pass 15's own all-or-nothing filter was the bug); a new
+`credited_hours` path lets the Scheduling Shift Compliance report (a
+different, already-✅ feature) substitute shift hours for training records
+on an HOURS requirement, reusing the exact same window/recency rules; a new
+`RollingRequirementLastMet` table (org-scoped, unique-constrained, FKs
+`ondelete="CASCADE"`) keys the rolling-requirement non-compliance notice on
+the member's last-met date instead of the bare requirement id, so a member
+is told again after a recovery and a lapse — fixing pass 15's own "told
+only once, ever" gap; `classify_standing` and a new `classify_average`
+share one pct-to-standing ladder for a member and a department average
+alike; `is_current_member`/`STANDING_NOT_CURRENT_MEMBER` give Feature 17's
+profile card and officer view the one shared "is this a current member"
+check. Frontend: the matrix's `toneOf` no longer lets a *met* hours/courses
+cell's own next renewal date demote it to lapsed (it contradicted the
+backend's own status); the officer dashboard's forecast averages now read
+the server's own classification instead of computing local percentage
+bands — both continuing Pitfall #29's "report what the backend decided"
+discipline. All new tenancy-relevant code (the one new table's reads/writes,
+the one new query's filter) confirmed org-scoped; `admin_hours_profile`'s
+one call site resolves both its arguments through already org-scoped
+queries before calling it. Route surface 21/21 (13+8), unchanged; both
+endpoint files byte-identical to pass 15. **0 fixed, 0 new findings.** Full
+write-up: `docs/security-review/CMP-20-compliance.md`'s **Pass 16** section.
+
+Row 20 → ✅ (pending this PR's merge); next is Feature 21 (Admin hours) —
+re-check `list_pull_requests` fresh rather than trusting this note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 19, Skills testing, pass 16, PR #4694, merged), preserved for history</summary>
+
 **PR [#4694](https://github.com/thegspiro/the-logbook/pull/4694) (branch
 `claude/security-review-skills-testing`)**: Feature 19 (Skills testing),
 pass 16 — watchdog pickup (the dedicated `/loop 30m /security-review`
@@ -48,6 +101,8 @@ section.
 
 Row 19 → ✅ (pending this PR's merge); next is Feature 20 (Compliance) —
 re-check `list_pull_requests` fresh rather than trusting this note.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 18, Training extended, pass 16, PR #4693, merged), preserved for history</summary>
@@ -28314,7 +28369,7 @@ iteration's commit" rule.
 | 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`, `knowledge_tests.py` (added pass 12), `shift_evaluation_templates.py`/`shift_evaluations.py` (added pass 13), `api/public/shift_evaluations.py` (added pass 15)                                                        | ✅     |
 | 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py`, `training_module_config.py` (added pass 14), `attendance_waiver_requests.py` (21 routes, corrected pass 16; added pass 15)             | ✅     |
 | 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3855 L)                                                                                                                                                                                                                                                | ✅     |
-| 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`, `training_compliance.py` (declared scope since pass ≤11)                                                                                                                                                                             | ⬜     |
+| 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`, `training_compliance.py` (declared scope since pass ≤11)                                                                                                                                                                             | ✅     |
 | 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                                                                                                                                                      | ⬜     |
 | 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`, `zeffy.py`/`zeffy_service.py`/`zeffy_sync_service.py` (added pass 13)                                                                                                                                                      | ⬜     |
 | 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                                                                                                                                                                 | ⬜     |
@@ -53959,4 +54014,93 @@ or skt"`) — 643 passed, 1 pre-existing environment-only skip (`py_vapid`).
 `npm run typecheck` — 0 errors. `npm run lint` — 0 errors, 0 warnings.
 
 Row 19 → ✅ (pending this PR's merge). Next is Feature 20 (Compliance) —
+re-check `list_pull_requests` fresh rather than trusting this note.
+
+### 2026-11-25 — Feature 19 (Skills testing, pass 16) merged; Feature 20 (Compliance, pass 16): watchdog pickup, real delta (monthly-pace proration, shift-credited HOURS, rolling-requirement notice key, department-average classification), 0 new findings
+
+PR #4694 merged as squash commit `bf7cecd86`. A fresh `list_pull_requests`
+(state=open) found no `claude/security-review-*` head, and row 20
+(Compliance) was the next `⬜` row, confirmed directly against the table on
+freshly-pulled `origin/main` rather than trusted from the prior note.
+
+Baseline `38b981470` (pass 15's own merge, PR #4497). `git diff --stat`
+across the full declared scope (both endpoint files, every service, both
+schema/model files, the frontend module) found exactly three backend files
+and four frontend files carrying a real diff; everything else is
+byte-identical to pass 15, confirmed directly rather than assumed.
+
+Real delta, each piece read in full and traced for tenancy/injection/
+exposure:
+
+- `training_compliance.py` (+215/−30) — **`monthly_pace`'s proration fix**:
+  pass 15 shipped an all-or-nothing `waived` filter that dropped an entire
+  month's hours whenever any part of it was excused; this pass weights each
+  month by `1 - waived_share`, pure arithmetic over already-computed rows,
+  confirmed the fully-excused case (and the division-by-zero guard) is
+  unchanged. **Shift-credited HOURS requirements** (`CreditedHours`, a new
+  optional `credited_hours` parameter): additive and backward-compatible —
+  every existing caller still passes `None` and gets the unchanged
+  `hours_record_counts` path; the new branch reuses the same window/recency
+  rules, so a shift-credited figure prorates exactly like a training-record
+  one. A new `duty_shifts_only()` clause (owned by Scheduling, already ✅)
+  composes into the pre-existing org-scoped `load_credited_shift_dates`
+  query with no scoping effect of its own.
+  **`matching_profiles`/`admin_hours_profile` refactor**: `_find_matching_profile`
+  is now `matching_profiles(...)[0]`, confirmed behaviourally identical; the
+  new `admin_hours_profile` (consumed by `admin_hours_service.py`, Feature
+  21, not yet reviewed) has its one call site resolve both `user` and
+  `config` through already org-scoped queries before calling it.
+  **`classify_standing`/`_standing_for_pct` split** and new
+  **`ComplianceGrading.classify_average`** share one pct-to-standing ladder
+  for a member and a department average — pure, no query.
+  **`is_current_member`/`STANDING_NOT_CURRENT_MEMBER`** (new) is the one
+  shared "is this a current member" check (`ACTIVE_ACCOUNT_STATUSES` per
+  CLAUDE.md Pitfall #32), consumed by Feature 17's profile card and officer
+  member view so neither grades a former member — closing the exact
+  Pitfall #29 risk this feature's own pass 15 flagged.
+- `compliance_member_notices.py` (+98/−7) — **the rolling-requirement
+  notice-key fix**: a new `RollingRequirementLastMet` table (org-scoped on
+  every read/write, `UniqueConstraint("user_id", "requirement_id")`, both
+  FKs `ondelete="CASCADE"`/`nullable=False`, migration
+  `20261123_0626_07abf8e6553b`) keys the non-compliance notice on the
+  member's last-met date instead of the bare requirement id — pass 15's own
+  fix stopped the daily repeat but told a member only once, ever; this pass
+  lets them be told again after a recovery and a new lapse. Lookup-then-
+  insert-or-advance is idempotent per Pitfall #36 (a second same-day run
+  only ever moves the date forward, never back) and relies on the scheduled-
+  task claim mechanism to prevent concurrent runs for one org, consistent
+  with every other scheduled-task write in this codebase.
+- `compliance_officer_service.py` (+3/−1) — a one-line label fix
+  (`records_with_certification` → `records_with_course_name`, CS-9's own
+  residual naming issue), no behavior change.
+- Frontend (`ComplianceMatrixTab.tsx`, `complianceMatrixModel.ts`,
+  `complianceForecast.ts` (new), `ComplianceOfficerDashboard.tsx`) — a
+  `toneOf` fix so a *met* hours/courses cell's own next renewal date can no
+  longer demote it to lapsed (it contradicted the backend's own status); a
+  new response-shape guard for the forecast endpoint's `{members, averages}`
+  envelope; the forecast's department averages and their colour now read
+  the server's own classification instead of locally-computed percentage
+  bands. Continuing Pitfall #29's "report what the backend decided"
+  discipline on both counts. Zero new API calls; swept for every standing
+  banned pattern with zero hits.
+
+Route surface re-enumerated by AST: **21 routes** (13 + 8), unchanged from
+pass 15; both endpoint files byte-identical. Standing findings (CS-8
+attestation dual control, `grace_period_days` unwired — both owner-accepted,
+by design) re-verified unchanged at their current citation. **0 fixed, 0 new
+findings.** Full write-up: `docs/security-review/CMP-20-compliance.md`'s
+**Pass 16** section.
+
+**Completion gate:** `flake8==7.4.1`/`black==26.10.1 --check`/
+`isort==9.0.2 --check-only` (CI's pins) on `app/ tests/ alembic/` — clean.
+`validate_migrations.py --strict` — 844 revisions, single head
+`e9cf8ab7e4e4`. `check_route_permissions.py --strict` — 344 routes, 0
+errors/warnings. `generate_schema_docs.py --check` — `DATABASE_SCHEMA.md`
+up to date. Scoped backend pytest (`-k "compliance or attestation or
+evaluation_credit or monthly_pace or mandatory_tier or session_attendance
+or rolling_requirement"`) — 913 passed, 1 pre-existing environment-only
+skip (`py_vapid`). `npm run typecheck` — 0 errors. `npm run lint` — 0
+errors, 0 warnings.
+
+Row 20 → ✅ (pending this PR's merge). Next is Feature 21 (Admin hours) —
 re-check `list_pull_requests` fresh rather than trusting this note.
