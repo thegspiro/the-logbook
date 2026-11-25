@@ -3365,3 +3365,153 @@ beyond what is traced above. Everything in the new waiver-request workflow
 was landed by other (non-rotation) work and independently re-verified here
 against all seven `CHECKLIST.md` dimensions for the meeting side
 specifically.
+
+## Pass 15 (2026-11-25) — watchdog pickup, real delta already landed and verified good, 0 fixed, 0 new findings
+
+Watchdog pickup of `/loop 30m /security-review`: the dedicated loop session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) remains unreachable. `list_pull_requests`
+(state `open`) found no `claude/security-review-*` head immediately before
+starting; PR #4698 (Feature 23, Medical supplies, pass 22) had already
+merged, and row 24 (Meetings & minutes) was confirmed the next `⬜` row on a
+freshly fetched `main`. Baseline: pass 14's own merge, `f571296e3` (PR #4507).
+
+**Backend, diffed in full against the baseline:** `git diff --stat
+f571296e3..HEAD` over the feature's own declared files plus every file pass
+14 named as in scope. `meetings.py`, `minutes.py`, `minutes.py`'s own routes,
+`api/public/minutes.py`, `mcp/tools/meetings.py`, `meetings_service.py`,
+`minute_service.py`, `minutes_record_service.py`, `quorum_service.py`,
+`attendance_dashboard_service.py`, `models/minute.py`, `schemas/meetings.py`
+and `schemas/minute.py` are all byte-identical to pass 14 (zero-line diffstat,
+confirmed not assumed). Five files carried real delta, all read in full:
+`models/meeting.py` (−1 line), `api/v1/endpoints/minutes_records.py` (+12),
+`api/v1/endpoints/meeting_waiver_requests.py` (+33), `schemas/attendance_waiver.py`
+(+76/−16) and `services/attendance_waiver_service.py` (+192/−52, shared with
+Training/Feature 17-18). One new migration: `20261123_0600_b37218495d33`.
+**Frontend:** `AttendanceWaiverDecisionPage.tsx` (+49/−14) and
+`AttendanceWaiverQueuePage.tsx` (+106/−52, shared pages serving both
+workflows per pass 14's own note), plus two test-file diffs
+(`ReminderSettingsPanel.test.tsx`, `SignDialog.test.tsx`).
+
+### Real delta, traced against the meeting side specifically
+
+- **`idx_meeting_attendees_meeting` dropped as redundant** — the unique index
+  on `(meeting_id, user_id)` (added by `7b6db9dd8e4f`, pass 14) already leads
+  on `meeting_id` and serves the same lookups and the FK; the single-column
+  index only cost write time. Migration `b37218495d33` guards the drop on the
+  index existing, another index still covering the FK, and the table
+  existing at all (Pitfall #26); downgrade restores it. No rows change
+  either way. **Checklist §7, verified good.**
+- **`GET /meetings/waiver-requests/policy` no longer exposes who decides to
+  every member.** `AttendanceWaiverPolicy` now subclasses a new
+  `AttendanceWaiverMemberPolicy` that drops `approver_position_ids`,
+  `cc_position_ids` and `chief_alternate_user_id` — the officers a member
+  would be asking, which the request form never needed. The route checks
+  `user_has_permission(current_user, "meetings.manage")` and returns the full
+  policy only to a manager; everyone else gets `member_policy(policy)`
+  (owner decision 2026-11-20 review / 2026-11-23 fix). This closes a real
+  over-exposure (Checklist §5) that existed at pass 14 and every pass before
+  it — the policy fetch was unconditional. Verified by reading the route and
+  both schema classes directly, not assumed from the commit message.
+  **Data exposure, security-positive fix already landed; verified good.**
+- **The approver-queue split (`state=pending|decided`) is correctly
+  org/workflow-scoped.** `list_for_decider`'s new `state` condition is
+  appended to the same `conditions` list that already filters
+  `organization_id == org_id` and `workflow == self.workflow`, so a
+  `meetings.manage` holder's "pending" or "decided" page can only ever
+  contain business-meeting requests in their own org. Fixes a real bug
+  (pass 14's queue page dropped pending rows whenever a decided page was
+  fetched unfiltered) rather than opening anything. **XC-3, verified good.**
+- **`_not_counted_refusal` extracted and reused by `_reconfirm_refusal`.**
+  Previously a meeting request's reconfirmation (triggered when its session
+  is rescheduled) checked only `_on_leave`; training's reconfirmation checked
+  nothing of the kind at all. Both now run the same not-counted check a new
+  request gets. For the meeting side this is behaviorally identical to pass
+  14 (on-leave is still the only meeting-side check, since
+  `self.workflow == TRAINING_WORKFLOW` branches first); the exemption/
+  requirement-link check only fires for training, which is reviewed under
+  Feature 17-18, not here. **No change in meeting-side behavior; verified
+  unchanged by reading both branches.**
+- **`_correction_keeps_decision` added to `reconfirm_for_rescheduled_events`.**
+  An approval survives a moved start only when the session had already begun
+  (a correction to a held session) or the new start keeps the same local
+  date; only the event snapshot is then updated, idempotently re-running the
+  same no-op on a repeated call for the same edit (Pitfall #36, named in the
+  code's own comment). Any other move still reopens the request exactly as
+  before. Applies identically to both workflows; meeting-side locking
+  (the event row, held by the caller per the existing docstring) is
+  unchanged. **Verified good.**
+- **`member_record_email_kind` for `MEETING_SPEC` changed from
+  `EVENT_CHANGES` to `TRAINING_RECORD_CHANGES`** (owner decision 2026-11-23:
+  "each of these notices can end in a charged absence on the minutes").
+  A notification-policy choice, not an access-control change — it decides
+  only whether the notice is suppressible by the member's own preference
+  toggle (CLAUDE.md Pitfall #18), and does not change who receives it or
+  what it contains. **n/a to this checklist; noted for completeness.**
+- **Minutes PDF export now stamps a report number and the department's
+  letterhead identity.** `document_provenance.report_number_for` (shared,
+  cross-feature) returns `RPT-YYYYMMDD-XXXX` with a random, non-sequential
+  4-character suffix (`report_number.py`, by design — no counter table, no
+  lock, collision is a one-in-a-million-per-pair event and the audit row's
+  timestamp and member still disambiguate it). `election_pdf_style.department_identity`
+  formats already-loaded `org` fields with no new query. The export's audit
+  event now carries `report_number` alongside the existing `minutes_id`/
+  `status` — an id, not free text (Pitfall #33). Both the report number and
+  the org lookup happen after the existing org-scoped `minutes`/`org` fetch
+  in the route, so neither introduces a new unscoped read. **Checklist §4/§5,
+  verified good.**
+- **`can_remove_attachment`/`attachments_removed_count`/`attachments_removed_at`
+  added to the shared response schema, but inert for this workflow.** The
+  meeting spec keeps `takes_documents=False`, which already forces
+  `policy.attachment` to `"off"` and leaves `files` empty for every meeting
+  request (no upload route exists in `meeting_waiver_requests.py`), so
+  `can_remove_attachment`'s own `len(files) > (1 if required else 0)` term is
+  always `0 > 0` = `False` for a meeting request, and the two removed-count
+  fields stay at their column defaults (`0`/`None`). The actual removal route
+  (`attendance_waiver_requests.py`'s own `DELETE .../attachments/{id}`) and
+  its service (`attendance_waiver_attachments.py`, +148/−16 this window) are
+  Training's own surface (Feature 17-18) and out of this feature's scope —
+  confirmed only that the meeting side cannot reach them. **n/a, verified by
+  tracing the gating condition rather than assumed from the workflow name.**
+
+Route surface re-enumerated by AST: **98 routes** (17 `meetings.py` + 32
+`minutes.py` + 30 `minutes_records.py` + 2 `api/public/minutes.py` + 17
+`meeting_waiver_requests.py`), unchanged from pass 14. Every route still
+carries an auth dependency; `check_route_permissions.py --strict` clean.
+
+**0 fixed, 0 new findings.** Every real change in this window was already
+landed and tested by its own commit before this pass began; this pass's own
+contribution is the independent re-verification above, not a fix.
+
+### Confirmed still open / still flagged, unchanged
+
+- **`minutes.view_executive` tier** — still a product/role decision, not
+  touched. **FLAGGED**, unchanged.
+- **MM2-3** (app-review) — still out of this rotation's scope. Not
+  re-derived.
+- **`reports_service.py`'s department-overview `open_meeting_items` count**
+  (MM-21's sibling gap, flagged for Feature 29/Reports & analytics) — not
+  this feature's file, not touched; still **FLAGGED** for that rotation slot.
+
+`docs/KNOWN_LIMITATIONS.md`'s MM-9, MM-17, MM-19, MM-20 and MM5-4 entries
+re-read against current code (all five files they describe are byte-identical
+to pass 14): all five still accurate. No edit needed.
+
+### Completion gate (pass 15)
+
+| Check                                                                                                                                        | Result                                                       |
+| --------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/` (7.4.1, CI's pin)                                                                                                 | clean (0 violations)                                          |
+| `black --check app/ tests/ alembic/` (26.10.1, CI's pin)                                                                                        | clean (3,541 files unchanged)                                  |
+| `isort --check-only app/ tests/ alembic/` (9.0.2, CI's pin)                                                                                      | clean                                                          |
+| `python3 scripts/validate_migrations.py --strict`                                                                                              | PASSED — 844 revisions, single head `e9cf8ab7e4e4`             |
+| `python3 scripts/check_route_permissions.py --strict` (repo root)                                                                               | 344 routes, 0 errors, 0 warnings                               |
+| `python3 scripts/generate_schema_docs.py --check`                                                                                               | `DATABASE_SCHEMA.md` up to date                                |
+| backend tests, scope (`-k "meeting or minutes or minute or quorum or attendance_dashboard or motion or action_item or attendance_waiver"`)      | 2,192 passed, 1 skipped (pre-existing, `py_vapid`), up from 2,144/1 at pass 14 |
+| `cd frontend && npm run typecheck`                                                                                                              | 0 errors                                                       |
+| `cd frontend && npm run lint`                                                                                                                   | 0 errors, 0 warnings (`--max-warnings 10`)                     |
+| `npx vitest run src/modules/minutes src/pages/ActionItemsPage.test.tsx src/pages/training/AttendanceWaiver*.tsx src/pages/training/SessionWaiverSettingsPanel.test.tsx` | 561 passed (70 files), up from 545/66 at pass 14 |
+
+No other source file under this feature's scope changed behavior this pass
+beyond what is traced above. Everything above was landed by other
+(non-rotation) work and independently re-verified here against all seven
+`CHECKLIST.md` dimensions for the meeting side specifically.
