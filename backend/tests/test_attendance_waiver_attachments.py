@@ -17,10 +17,12 @@ does, with the uploads volume pointed at a temporary directory. Pinned:
 * the table is registered with the storage sweep and the member's export.
 """
 
+import hashlib
 import io
 import json
 import os
 from datetime import datetime, timedelta
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -32,6 +34,7 @@ from sqlalchemy import select, text, update
 from app.api.dependencies import get_current_user, get_request_enabled_modules
 from app.api.v1.api import api_router
 from app.core.database import get_db
+from app.core.error_codes import CodedHTTPException, ErrorCode
 from app.core.security_middleware import verify_csrf_token
 from app.models.attendance_waiver import (
     AttendanceWaiverAttachment,
@@ -40,6 +43,7 @@ from app.models.attendance_waiver import (
 )
 from app.models.user import User
 from app.schemas.attendance_waiver import MAX_ATTACHMENT_BYTES
+from app.services import attendance_waiver_attachments as waiver_attachments
 from app.services import attendance_waiver_service as engine
 from app.services import file_storage_service
 from app.services.attendance_waiver_attachments import (
@@ -69,6 +73,10 @@ BASE = "/api/v1/training/waivers/requests"
 # Real headers, so libmagic decides the type as it would for a member's file.
 PDF = b"%PDF-1.4\n" + b"1 0 obj << /Type /Catalog >> endobj\n" * 20 + b"%%EOF\n"
 HEIC = b"\x00\x00\x00\x18ftypheic\x00\x00\x00\x00mif1heic" + b"\x00" * 200
+# A real photo, which decodes (see tests/test_heic_to_jpeg.py for how it was
+# made): HEIC above is a header only and is refused once it is converted.
+HEIC_FIXTURES = Path(__file__).parent / "fixtures" / "heic"
+PHOTO = (HEIC_FIXTURES / "oriented-gps.heic").read_bytes()
 
 
 def _image(fmt: str) -> bytes:
@@ -235,7 +243,7 @@ class TestSubmitting:
             as_user,
             dept.member,
             dept.drill,
-            [_pdf(), ("files", ("IMG_0001.HEIC", HEIC, "image/heic"))],
+            [_pdf(), ("files", ("IMG_0001.HEIC", PHOTO, "image/heic"))],
             reason="Back injury",
         )
         assert resp.status_code == 201, resp.text
@@ -244,7 +252,7 @@ class TestSubmitting:
             (a["ordinal"], a["filename"], a["mime_type"]) for a in body["attachments"]
         ] == [
             (1, "waiver-attachment-1.pdf", "application/pdf"),
-            (2, "waiver-attachment-2.heic", "image/heic"),
+            (2, "waiver-attachment-2.jpg", "image/jpeg"),
         ]
         assert body["can_attach"] is True
         on_disk = _files_on_disk(dept.uploads)
@@ -438,6 +446,146 @@ class TestAddingLater:
             resp = await client.post(f"{BASE}/{request_id}/attachments", files=[_pdf()])
         assert resp.status_code == 400
         assert len(_files_on_disk(dept.uploads)) == 1
+
+
+@pytest.mark.integration
+class TestHeicIsStoredAsJpeg:
+    """Owner decision 2026-11-26: a phone's HEIC photo is kept as a JPEG."""
+
+    async def test_a_photo_is_filed_as_a_jpeg_with_no_metadata(
+        self, as_user, dept, monkeypatch
+    ):
+        scanned: list = []
+
+        async def _record_scan(db, content, *, upload_kind, detected_mime, user):
+            scanned.append((detected_mime, hashlib.sha256(content).hexdigest()))
+
+        monkeypatch.setattr(file_storage_service, "reject_if_malicious", _record_scan)
+        resp = await _submit_with(
+            as_user,
+            dept.member,
+            dept.drill,
+            [("files", ("IMG_0001.HEIC", PHOTO, "image/heic"))],
+        )
+        assert resp.status_code == 201, resp.text
+        assert [
+            (a["filename"], a["mime_type"]) for a in resp.json()["attachments"]
+        ] == [("waiver-attachment-1.jpg", "image/jpeg")]
+        (path,) = _files_on_disk(dept.uploads)
+        assert path.endswith(".jpg")
+        # Read back through the store: the file on disk is encrypted at rest.
+        stored = await file_storage_service.read_bytes(path)
+        assert detect_mime_type(stored) == "image/jpeg"
+        image = Image.open(io.BytesIO(stored))
+        assert image.size == (16, 32)
+        assert len(image.getexif()) == 0
+        # The member's original is scanned before it is decoded; then the
+        # scan, the row and the disk all describe the converted file.
+        digest = hashlib.sha256(stored).hexdigest()
+        assert scanned == [
+            ("image/heic", hashlib.sha256(PHOTO).hexdigest()),
+            ("image/jpeg", digest),
+        ]
+        row = (
+            await _CURRENT["db"].execute(
+                select(AttendanceWaiverAttachment).where(
+                    AttendanceWaiverAttachment.request_id == resp.json()["id"]
+                )
+            )
+        ).scalar_one()
+        assert (row.mime_type, row.file_size, row.sha256) == (
+            "image/jpeg",
+            len(stored),
+            digest,
+        )
+
+    async def test_a_photo_added_later_is_converted_too(self, as_user, dept):
+        request_id = await _filed(as_user, dept)
+        async with as_user(dept.member) as client:
+            added = await client.post(
+                f"{BASE}/{request_id}/attachments",
+                files=[("files", ("IMG_0002.HEIC", PHOTO, "image/heic"))],
+            )
+        assert added.status_code == 200, added.text
+        assert [
+            (a["ordinal"], a["filename"], a["mime_type"])
+            for a in added.json()["attachments"]
+        ][-1] == (2, "waiver-attachment-2.jpg", "image/jpeg")
+        assert sum(p.endswith(".jpg") for p in _files_on_disk(dept.uploads)) == 1
+
+    async def test_an_unreadable_photo_is_refused_and_nothing_is_kept(
+        self, as_user, dept, db_session
+    ):
+        resp = await _submit_with(
+            as_user,
+            dept.member,
+            dept.drill,
+            [_pdf(), ("files", ("IMG_0003.HEIC", PHOTO[:400], "image/heic"))],
+        )
+        assert resp.status_code == 400, resp.text
+        assert "couldn't read this photo" in resp.json()["detail"]
+        assert _files_on_disk(dept.uploads) == []
+        assert await _request_count(db_session, dept.org) == 0
+
+    async def test_with_no_scanner_nothing_is_decoded(
+        self, as_user, dept, db_session, monkeypatch
+    ):
+        decoded: list = []
+
+        async def _unavailable(db, content, *, upload_kind, detected_mime, user):
+            raise CodedHTTPException(
+                status_code=503,
+                detail="Malware scanning is unavailable.",
+                error_code=ErrorCode.UPLD_SCAN_UNAVAILABLE,
+            )
+
+        async def _spy(content, max_bytes=None):
+            decoded.append(len(content))
+            return b""
+
+        monkeypatch.setattr(file_storage_service, "reject_if_malicious", _unavailable)
+        monkeypatch.setattr(waiver_attachments, "heic_to_jpeg", _spy)
+        resp = await _submit_with(
+            as_user,
+            dept.member,
+            dept.drill,
+            [("files", ("IMG_0004.HEIC", PHOTO, "image/heic"))],
+        )
+        assert resp.status_code == 503, resp.text
+        assert decoded == []
+        assert _files_on_disk(dept.uploads) == []
+        assert await _request_count(db_session, dept.org) == 0
+
+    @pytest.mark.parametrize("fixture", ["corrupt-segfault", "corrupt-infe-v4"])
+    async def test_a_photo_that_breaks_the_decoder_is_a_400(
+        self, as_user, dept, db_session, fixture
+    ):
+        broken = (HEIC_FIXTURES / f"{fixture}.heic").read_bytes()
+        resp = await _submit_with(
+            as_user,
+            dept.member,
+            dept.drill,
+            [_pdf(), ("files", ("IMG_0005.HEIC", broken, "image/heic"))],
+        )
+        assert resp.status_code == 400, resp.text
+        assert "couldn't read this photo" in resp.json()["detail"]
+        # The PDF stored first is removed with it, and nothing is filed.
+        assert _files_on_disk(dept.uploads) == []
+        assert await _request_count(db_session, dept.org) == 0
+        # And the server is still here to take the next request.
+        retry = await _submit_with(as_user, dept.member, dept.drill, [_pdf()])
+        assert retry.status_code == 201, retry.text
+
+    async def test_a_photo_with_broken_exif_is_filed_without_it(self, as_user, dept):
+        broken = (HEIC_FIXTURES / "corrupt-exif-header.heic").read_bytes()
+        resp = await _submit_with(
+            as_user,
+            dept.member,
+            dept.drill,
+            [("files", ("IMG_0006.HEIC", broken, "image/heic"))],
+        )
+        assert resp.status_code == 201, resp.text
+        assert [a["mime_type"] for a in resp.json()["attachments"]] == ["image/jpeg"]
 
 
 async def _download_audits(db_session, user_id):

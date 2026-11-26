@@ -1,5 +1,48 @@
 # Known Limitations & Open Decisions
 
+## Public Website — Owner Decisions and What the First Version Leaves Out (2026-11-26)
+
+An installation can now publish a website for its department's community
+([PUBLIC_WEBSITE.md](./PUBLIC_WEBSITE.md)). The owner decided its shape on
+2026-11-26:
+
+### Decided
+
+- **A separate public hostname, reached through a dedicated port.** The web
+  container serves the website on `PUBLIC_SITE_PORT` (3002; 7882 on Unraid)
+  and the operator points the public hostname at it. No hostname is configured
+  in the application.
+- **Server-rendered HTML**, so search engines and link previews read the
+  pages. The pages run no script.
+- **Fixed sections with switches**, not custom pages or a page builder.
+- **A few selectable themes.** Three ship: Classic, Modern and Heritage. They
+  differ in colour and type, not in layout.
+- **Built in stages.** The first change is the foundation and the Home, About
+  and Contact pages.
+
+### Accepted
+
+- **Events, Join us, News, History, minutes and donations are not on the
+  website yet.** Each is planned as its own change.
+- **Text is plain text.** Paragraphs only; no headings, links or emphasis.
+- **No canonical URL, sitemap or `og:url`.** The application is not told the
+  website's public address, so it cannot write one into a page.
+- **No preview inside the members' application.** The pages are served only on
+  the public website port, so an administrator checks them there.
+- **The bundled TLS proxy does not serve the website by itself.** A
+  host-installed nginx and the Compose `production` profile need the server
+  block in `infrastructure/nginx/public-site.conf.example` added by hand.
+  `setup-ssl.sh` does not request a certificate for a second hostname.
+- **Only where there is exactly one department,** as for the public minutes.
+- **The port is published by default** by the Compose files and the Unraid
+  template. It answers 404 until the website is switched on.
+
+### What would reopen this
+
+A department that wants formatted text or its own pages; an operator who needs
+the application to know the public address (for canonical links or a sitemap);
+or a decision to have `setup-ssl.sh` configure the second hostname.
+
 ## Found by the November 21 – 22 Documentation Pass — Awaiting an Owner Decision (2026-11-22)
 
 None of these is a regression, and none was changed by the documentation
@@ -1389,7 +1432,9 @@ Phase 7, publishing outward (2026-11-24 spec), ships with these:
   portal route does. Signed files and the widget answer 404 in every refused
   case.
 - **No public pages inside the app.** The department's own website shows the
-  records; only the widget is served by the app.
+  records; only the widget is served by the app. (Since 2026-11-26 an
+  installation can publish a website of its own, but its first version has no
+  History pages; see "Public Website" at the top of this file.)
 
 ## Department Store — Decisions for the Owner (2026-11-13)
 
@@ -11772,22 +11817,79 @@ request, kept 365 days) shipped with these gaps, each the narrower choice:
   the reader now treats any stored value as `off` (the next save stores
   `off`). If the meeting workflow ever takes documents, lift the refusal and
   the read coercion together.
-- **HEIC is stored as filed, not converted** _(owner approved conversion
-  2026-11-23; held for a licence ruling)_. A decider on Windows may need the
-  HEIF extension to open an iPhone photo, and the page cannot show one.
-  Conversion to JPEG at upload was built-ready but not shipped, because the
-  library's licence needs the owner's ruling first:
-  - `pillow-heif` 1.8.1 bundles libheif, libde265 and x265 in its wheels
-    (only glibc/libstdc++ from the system, so no apt packages and the image
-    would build), but its own `LICENSES_bundled.txt` says the binary wheels
-    are **GPLv2** as a whole, because of x265. This project is MIT and is
-    shipped as Docker images, which would then redistribute GPLv2 binaries.
-  - `pi-heif` 1.4.0, the decode-only build from the same repository
-    (`bigcat88/pillow_heif`), bundles only libheif and libde265 and is
-    **LGPLv3**; decoding is all conversion needs. HEVC decoding may also
-    carry patent questions.
-    **For the owner:** approve `pi-heif` (or `pillow-heif` despite GPLv2), or
-    keep HEIC as filed.
+- ~~**HEIC is stored as filed, not converted.**~~ ✅ **Owner decision
+  2026-11-26: converted to JPEG at upload with `pi-heif` 1.4.0.** A HEIC or
+  HEIF photo filed with a waiver request is decoded, turned upright, and
+  stored as a JPEG with no EXIF or XMP, so the location an iPhone records is
+  never kept (`app/utils/heic_to_jpeg.py`). The member's original is
+  malware-scanned before it is decoded, and the JPEG again as it is stored,
+  so the storage ledger and the attachment row describe the file kept; the
+  page shows it like any other. A photo that cannot be decoded is a 400
+  asking the member to save it as JPEG; it is never stored as filed, and
+  there is no fallback when the dependency is missing.
+  - **The decoder runs in a child process** (`heic_decode_worker.py`, under
+    `python -I`, with no application code and none of the server's
+    environment). An independent review found that a one-byte change to a
+    valid photo segfaults `pi_heif.open_heif`; in the server's process that
+    took the backend down for every user, and a thread does not prevent it.
+    Now a crash, an exception, a 10-second timeout or exhausted memory ends
+    the child and gives the member a 400. The child raises its own OOM score
+    so the kernel kills it before the server, caps its address space at
+    640 MiB, turns core dumps off (a dump would hold the photo in plaintext,
+    outside the encrypted store and retention) and runs in the temp
+    directory, not the application's. Whether to report the crash to the
+    pi-heif maintainers is with the owner.
+  - **One conversion at a time per backend process; a request waits at most
+    15 seconds for its turn** _(default taken)_, then gets a 503 _"Photos are
+    being converted for other uploads. Please try again in a moment."_ with
+    `Retry-After`. A crafted photo can keep the decoder busy for the whole
+    10-second timeout, and an unbounded queue behind three of them ran past
+    nginx's 60-second read timeout: the member saw a 504 while the request
+    was still filed. A request with several photos waits for each in turn.
+  - **A request waiting on a conversion keeps its database connection**
+    _(not changed)_. The upload reads the policy and the request before the
+    files are converted, so the session's transaction is open while the
+    child runs. Ending it early would mean committing mid-request in a
+    service whose callers own the transaction, and was not attempted; the
+    bounded wait and timeout limit how long a connection is held (25 seconds
+    per photo at most).
+  - **Native installs need `OOMPolicy=continue`** on the backend's systemd
+    unit. Without it systemd stops the whole service when the kernel kills
+    the decoder child, which is the outcome this design relies on;
+    `install.sh --traditional` writes it from 2026-11-26, and
+    `docs/UPGRADING.md` says how to add it to an existing unit. Docker
+    deployments are not affected.
+  - **Photos over 25 megapixels are refused** _(default taken)_, with "This
+    photo is too large to accept. Save a smaller copy as a JPEG and try
+    again." The cap is checked on the declared size before decoding. The
+    child's peak was measured at about 193 MB for an iPhone's default 24 MP
+    photo and 360 MB for its optional 48 MP one; the backend container is
+    limited to 768 MB (384 MB in `docker-compose.minimal.yml`) and the child
+    counts against it. So the default photo converts and a 48 MP one does
+    not. On the minimal compose file even a 24 MP photo may not fit beside
+    the server; if so the kernel kills the child, the member gets the
+    "couldn't read this photo" 400, and the server keeps running.
+  - **Why `pi-heif`:** it is the decode-only build of `pillow-heif` from the
+    same repository (`bigcat88/pillow_heif`) and bundles only libheif and
+    libde265, under the **LGPLv3** (the Python binding is BSD-3-Clause).
+    `pillow-heif`'s binary wheels include the x265 encoder and are **GPLv2**
+    as a whole, which this MIT project cannot ship in its images. The wheels
+    need no apt packages. The repository keeps no third-party licence
+    notice file, so the LGPLv3 notice for libheif and libde265 is the one
+    each wheel carries in its own `.dist-info`; no file was invented for it.
+  - **Accepted risk — HEVC patents.** Decoding HEVC may fall under patent
+    pools whose terms are separate from any copyright licence. The owner
+    accepted this with the decision; nothing in the code addresses it.
+  - **HEIC files stored before 2026-11-26 stay as filed** (default taken).
+    They keep their `.heic` name and type, still download, and still have no
+    view in the page. Converting them would rewrite filed evidence and its
+    recorded SHA-256; retention removes them on its usual schedule.
+  - **The JPEG can be larger than the HEIC was.** It is written at quality
+    85, and once more at 60 if that is over the 10 MB limit; a photo still
+    over is a 400.
+  - **JPEG and PNG waiver documents still keep their own EXIF**, GPS
+    included: only HEIC passes through the converter. That predates this
+    change and is with the owner separately.
 - ~~**There is no preview of a document in the page.**~~ ✅ Resolved
   2026-11-23 (owner decision): a JPEG or PNG opens in a dialog on the request
   page, and a PDF in a new tab under the browser's own viewer. Both are a
@@ -11798,7 +11900,8 @@ request, kept 365 days) shipped with these gaps, each the narrower choice:
   (`frame-src` falls back to `default-src 'self'`) nor objects
   (`object-src 'none'`). Showing one in the page needs either `frame-src
 blob:` in the backend middleware and every `nginx.conf` policy, or a PDF.js
-  dependency: both owner decisions. HEIC has no view.
+  dependency: both owner decisions. A HEIC filed before 2026-11-26, the only
+  kind still stored, has no view.
 
 ## Meetings — Business-Meeting Waiver Requests: Choices Made Without An Owner Ruling (2026-11-11)
 
