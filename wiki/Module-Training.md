@@ -1591,6 +1591,17 @@ switch and the officer's duty-email setting).
   10-second timeout, no core dumps, and the child runs in the temp
   directory. Native installs need `OOMPolicy=continue` on the backend unit.
   Files stored earlier stay as filed.
+- **JPEG and PNG stored without metadata** _(owner decision 2026-11-26)_.
+  `_as_stored` malware-scans the member's original JPEG or PNG, then
+  `strip_photo_metadata` (`app/utils/photo_metadata.py`) rewrites it from its
+  own segments or chunks: EXIF, XMP, IPTC, COM, thumbnails, MPF data and
+  anything after EOI or IEND go; ICC, APP14 Adobe and the PNG display chunks
+  stay, and an orientation other than 1 is written back as a minimal EXIF.
+  The scan data is copied byte for byte, so nothing is re-compressed.
+  `store_bytes` then checks and scans the stripped bytes. A file that cannot
+  be walked is a 400. Pure Python, no dependency. Files stored earlier, and
+  PDFs, stay as filed; other upload paths are not covered (see
+  `docs/KNOWN_LIMITATIONS.md`).
 
 ## Former members in pickers _(2026-11-19, #4380, #4432)_
 
