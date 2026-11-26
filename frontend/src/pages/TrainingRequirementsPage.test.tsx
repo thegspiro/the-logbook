@@ -329,6 +329,61 @@ describe('TrainingRequirementsPage', () => {
   });
 });
 
+describe('TrainingRequirementsPage when the list cannot be loaded', () => {
+  beforeEach(() => {
+    mockGetRequirements.mockReset();
+    mockGetRequirements.mockRejectedValue(new Error('Network error'));
+    mockGetCategories.mockReset();
+    mockGetCategories.mockResolvedValue([]);
+  });
+
+  it('says so with a retry instead of offering to create the first requirement', async () => {
+    renderWithRouter(<TrainingRequirementsPage />);
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Network error');
+    expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument();
+    expect(screen.queryByText('No Requirements Found')).not.toBeInTheDocument();
+  });
+});
+
+describe('TrainingRequirementsPage duplicate of a session-attendance requirement', () => {
+  const source = {
+    id: 'req-att',
+    name: 'Drill Attendance',
+    requirement_type: 'session_attendance',
+    source: 'department',
+    required_attendance_pct: 75,
+    allows_chief_override: true,
+    frequency: 'annual',
+    applies_to_all: true,
+    active: true,
+    due_date_type: 'calendar_period',
+    created_at: '2026-01-01T00:00:00Z',
+    updated_at: '2026-01-01T00:00:00Z',
+  };
+
+  beforeEach(() => {
+    mockGetRequirements.mockReset();
+    mockGetRequirements.mockResolvedValue([source]);
+    mockGetCategories.mockReset();
+    mockGetCategories.mockResolvedValue([]);
+    mockCreateRequirement.mockReset();
+    mockCreateRequirement.mockResolvedValue({ ...source, id: 'req-att-copy', name: 'Drill Attendance (Copy)' });
+  });
+
+  it('carries the attendance percentage and the chief override onto the copy', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<TrainingRequirementsPage />);
+
+    await user.click(await screen.findByRole('button', { name: 'Duplicate requirement' }));
+
+    await waitFor(() => expect(mockCreateRequirement).toHaveBeenCalledTimes(1));
+    expect(mockCreateRequirement).toHaveBeenCalledWith(
+      expect.objectContaining({ required_attendance_pct: 75, allows_chief_override: true })
+    );
+  });
+});
+
 describe('TrainingRequirementsPage duplicate', () => {
   // The create endpoint defaults allows_external_credit to false, shift_credited
   // to the type's choice and recency_days to "no window", so a copy that omits

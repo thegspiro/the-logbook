@@ -50,6 +50,9 @@ type FilterSource = 'all' | 'department' | 'state' | 'national';
  */
 const TrainingRequirementsPage: React.FC = () => {
   const [requirements, setRequirements] = useState<TrainingRequirement[]>([]);
+  // A failed load is not an empty department: the empty state invited
+  // re-creating requirements that already exist.
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [categories, setCategories] = useState<TrainingCategory[]>([]);
   const [registries, setRegistries] = useState<RegistryInfo[]>([]);
   const [loading, setLoading] = useState(true);
@@ -87,6 +90,7 @@ const TrainingRequirementsPage: React.FC = () => {
   const fetchData = async () => {
     try {
       setLoading(true);
+      setLoadError(null);
       const [reqs, cats, regs] = await Promise.all([
         trainingService.getRequirements({ active_only: false }),
         trainingService.getCategories(false),
@@ -95,8 +99,8 @@ const TrainingRequirementsPage: React.FC = () => {
       setRequirements(reqs);
       setCategories(cats);
       setRegistries(regs);
-    } catch (_error) {
-      toast.error('Failed to load training requirements');
+    } catch (err: unknown) {
+      setLoadError(getErrorMessage(err, 'Failed to load training requirements'));
     } finally {
       setLoading(false);
     }
@@ -170,6 +174,10 @@ const TrainingRequirementsPage: React.FC = () => {
         required_calls: requirement.required_calls,
         required_transports: requirement.required_transports,
         required_refusals: requirement.required_refusals,
+        // Required for a session-attendance requirement; without it every
+        // copy of one was refused.
+        required_attendance_pct: requirement.required_attendance_pct,
+        allows_chief_override: requirement.allows_chief_override,
         evaluation_excludes_lowest_rating: requirement.evaluation_excludes_lowest_rating,
         required_call_types: requirement.required_call_types,
         required_skills: requirement.required_skills,
@@ -201,6 +209,7 @@ const TrainingRequirementsPage: React.FC = () => {
       const created = await trainingService.createRequirement(newReq);
       setRequirements([...requirements, created]);
       toast.success('Requirement duplicated');
+      warnIfAmbiguous(created);
     } catch (_error) {
       toast.error('Failed to duplicate requirement');
     }
@@ -388,7 +397,14 @@ const TrainingRequirementsPage: React.FC = () => {
 
         {/* Requirements List */}
         <div className="space-y-4">
-          {filteredRequirements.length === 0 ? (
+          {loadError ? (
+            <div className="alert-danger flex flex-wrap items-center justify-between gap-3" role="alert">
+              <p className="text-theme-alert-danger-text text-sm">{loadError}</p>
+              <button type="button" className="btn-secondary text-sm" onClick={() => void fetchData()}>
+                Retry
+              </button>
+            </div>
+          ) : filteredRequirements.length === 0 ? (
             <div className="card p-12 text-center">
               <FileText className="text-theme-text-muted mx-auto mb-4 h-16 w-16" aria-hidden="true" />
               <h2 className="text-theme-text-primary mb-2 text-xl font-semibold">No Requirements Found</h2>
