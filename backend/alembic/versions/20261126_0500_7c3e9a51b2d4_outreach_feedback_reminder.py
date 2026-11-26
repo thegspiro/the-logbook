@@ -23,7 +23,7 @@ which requests were reminded, so an upgrade straight after it could remind a
 request completed in the last 14 days a second time.
 
 Revision ID: 7c3e9a51b2d4
-Revises: e9cf8ab7e4e4
+Revises: 7c3a91e5b2d4
 Create Date: 2026-11-26 05:00:00.000000
 """
 
@@ -34,7 +34,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "7c3e9a51b2d4"
-down_revision: Union[str, None] = "e9cf8ab7e4e4"
+down_revision: Union[str, None] = "7c3a91e5b2d4"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
