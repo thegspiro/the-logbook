@@ -1567,7 +1567,7 @@ async def run_action_item_reminders(db: AsyncSession) -> Dict[str, Any]:
 
     from app.models.meeting import ActionItemStatus, MeetingActionItem
     from app.models.minute import ActionItem as MinutesActionItem
-    from app.models.minute import MeetingMinutes, MinutesActionItemStatus
+    from app.models.minute import MeetingMinutes, MinutesActionItemStatus, MinutesStatus
     from app.services.meeting_action_item_reminder_service import (
         OwedReminder,
         send_meeting_action_item_emails,
@@ -1649,10 +1649,15 @@ async def run_action_item_reminders(db: AsyncSession) -> Dict[str, Any]:
         .join(Organization, Organization.id == MeetingMinutes.organization_id)
         .where(
             Organization.active.isnot(False),
+            # Approved minutes only: until then an item is not a commitment,
+            # and /action-items and the email reminders leave it out too.
+            # Overdue is still open, as the email reminders count it (MM6-14).
+            MeetingMinutes.status == MinutesStatus.APPROVED.value,
             MinutesActionItem.status.in_(
                 [
                     MinutesActionItemStatus.PENDING.value,
                     MinutesActionItemStatus.IN_PROGRESS.value,
+                    MinutesActionItemStatus.OVERDUE.value,
                 ]
             ),
             MinutesActionItem.due_date.isnot(None),
