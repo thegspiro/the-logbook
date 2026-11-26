@@ -81,6 +81,23 @@ test.describe('Checkbox beside the first line of its label', () => {
     }
   });
 
+  // A padded label (p-3 here) is outside the shared rule, which leaves labels
+  // with their own top padding alone; its row was centred between its title
+  // and hint at every width until the call site aligned it to the top.
+  for (const [name, viewport] of [
+    ['phone', PHONE],
+    ['laptop', LAPTOP],
+  ] as const) {
+    test(`a padded title-and-hint row: History's public website switches — ${name}`, async ({ page }) => {
+      await open(page, '/history/settings', viewport);
+      const label = page.locator('label', { hasText: 'Members who died in the line of duty' });
+      await label.scrollIntoViewIfNeeded();
+      const m = await measure(label);
+      expect(m.lines, 'the switch has no hint line').toBeGreaterThan(1);
+      expect(Math.abs(m.box - m.firstLine), `box ${m.box}, title ${m.firstLine}`).toBeLessThanOrEqual(2);
+    });
+  }
+
   for (const [name, viewport] of [
     ['phone', PHONE],
     ['laptop', LAPTOP],
