@@ -16,9 +16,10 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**Feature 03 (Public surface & webhooks), pass 18 — watchdog pickup** (the
-dedicated `/loop 30m /security-review` session remains unreachable). PR
-number recorded in a follow-up commit on this same branch.
+**PR [#4715](https://github.com/thegspiro/the-logbook/pull/4715) (branch
+`claude/security-review-public-surface-webhooks-p18`)**: Feature 03
+(Public surface & webhooks), pass 18 — watchdog pickup (the dedicated
+`/loop 30m /security-review` session remains unreachable).
 
 PR #4714 (Feature 02, Permissions & roles, pass 18) was confirmed merged
 before this iteration started, via a fresh `git fetch origin && git
