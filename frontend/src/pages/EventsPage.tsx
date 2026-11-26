@@ -865,11 +865,15 @@ export const EventsPage: React.FC = () => {
                 )}
                 {hasMoreActions && (
                   <div className="relative shrink-0" ref={moreMenuRef}>
+                    {/* p-2.5 makes the square 42px, Create Event's height on a
+                        desktop: in the box its menu hangs from, the trigger is
+                        out of reach of index.css's rule that levels an icon
+                        button with the text button beside it. */}
                     <button
                       ref={moreTriggerRef}
                       type="button"
                       onClick={() => setShowMoreMenu((prev) => !prev)}
-                      className="btn-secondary btn-auto btn-icon"
+                      className="btn-secondary btn-auto btn-icon p-2.5"
                       aria-label="More event actions"
                       aria-expanded={showMoreMenu}
                     >
