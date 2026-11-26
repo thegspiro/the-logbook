@@ -19,6 +19,7 @@ from typing import (
     Iterable,
     List,
     Optional,
+    Set,
     Tuple,
 )
 
@@ -606,6 +607,23 @@ def interviewer_title(positions: Iterable[Any]) -> Optional[str]:
         key=lambda p: (_TITLE_KIND_RANK.get(p.kind, 2), p.priority or 0),
     )
     return str(best.name)
+
+
+def _normalize_checklist_key(value: Any) -> str:
+    return unicodedata.normalize("NFKC", str(value or "")).strip().casefold()
+
+
+def _checklist_keys(item: Any) -> Set[str]:
+    """What a tick may name a checklist item by, normalized: its id or its label.
+
+    Items are stored as a bare label or as ``{"id", "label"}``. The screen
+    ticks by label; an API client may send the id.
+    """
+    if isinstance(item, dict):
+        values = [item.get("id"), item.get("label")]
+    else:
+        values = [item]
+    return {key for key in map(_normalize_checklist_key, values) if key}
 
 
 def _assert_movable(prospect: ProspectiveMember, action: str) -> None:
@@ -2344,10 +2362,22 @@ class MembershipPipelineService:
                 completed_items = self._effective_action_result(
                     prospect, step, action_result
                 ).get("completed_items", [])
-                if len(completed_items) < len(items):
+                # Matched, not counted: three copies of one tick, or ticks of
+                # items since renamed, passed a three-item checklist (MP2-16).
+                # Items are stored as labels or {"label": ...}; the screen
+                # sends the labels it ticked.
+                configured = [keys for keys in map(_checklist_keys, items) if keys]
+                ticked = {
+                    _normalize_checklist_key(tick)
+                    for tick in (
+                        completed_items if isinstance(completed_items, list) else []
+                    )
+                }
+                done = sum(1 for keys in configured if keys & ticked)
+                if done < len(configured):
                     raise ValueError(
-                        f"All {len(items)} checklist items must be "
-                        f"completed; only {len(completed_items)} done."
+                        f"All {len(configured)} checklist items must be "
+                        f"completed; only {done} done."
                     )
 
         elif step_type == PipelineStepType.MULTI_APPROVAL:
@@ -4267,6 +4297,9 @@ class MembershipPipelineService:
                 "success": False,
                 "message": "Prospect has already been transferred",
             }
+        # Rejected, withdrawn, on-hold and inactive applications are refused,
+        # as every other forward move refuses them (MP2-13).
+        _assert_movable(prospect, "converted to a member")
 
         return await self._do_transfer(
             prospect,
@@ -5371,6 +5404,11 @@ class MembershipPipelineService:
                 status_url = (
                     f"{frontend_url}/application-status/{prospect.status_token}"
                 )
+                # The link lapses after _STATUS_TOKEN_TTL_DAYS without a view;
+                # one being emailed now must open, as the status-page stage
+                # already ensures (MP2-17).
+                if config.get("include_status_tracker"):
+                    prospect.status_token_created_at = datetime.now(timezone.utc)
 
             # Resolved once so the HTML and plain-text bodies cannot name
             # different events.
@@ -9056,9 +9094,33 @@ class MembershipPipelineService:
         critical = [w for w in warnings if w["alert_level"] == "critical"]
         warned = [w for w in warnings if w["alert_level"] != "critical"]
 
-        already_marked = await self._prospects_with_action(
-            [w["prospect_id"] for w in critical], "marked_inactive_by_system"
+        # Marked before is not marked now: a coordinator may have reactivated
+        # the application since, and it must be marked again when it goes
+        # idle again (MP2-15). A mark counts only if it postdates the last
+        # reactivation.
+        critical_ids = [w["prospect_id"] for w in critical]
+        last_marked_at = await self._latest_action_times(
+            critical_ids, "marked_inactive_by_system"
         )
+        reactivated_at: Dict[str, Optional[datetime]] = {}
+        if critical_ids:
+            rows = await self.db.execute(
+                select(ProspectiveMember.id, ProspectiveMember.reactivated_at).where(
+                    ProspectiveMember.id.in_(critical_ids),
+                    ProspectiveMember.organization_id == organization_id,
+                )
+            )
+            for prospect_id, stamp in rows.all():
+                if stamp is not None and stamp.tzinfo is None:
+                    stamp = stamp.replace(tzinfo=timezone.utc)
+                reactivated_at[str(prospect_id)] = stamp
+        already_marked = set()
+        for pid, marked in last_marked_at.items():
+            reactivated = reactivated_at.get(pid)
+            # Strictly after: both are stored to the second, and a mark can
+            # only follow a reactivation by the whole inactivity timeout.
+            if reactivated is None or marked > reactivated:
+                already_marked.add(pid)
         last_warned_at = await self._latest_action_times(
             [w["prospect_id"] for w in warned], "inactivity_warning_sent"
         )
