@@ -45,7 +45,7 @@ import { addCalendarDays, formatShortDateTime, getTodayLocalDate, localToUTC } f
 import { getErrorMessage } from '../utils/errorHandling';
 import { errorTracker } from '../services/errorTracking';
 import { buildCsv, downloadCsv } from '../utils/csv';
-import { Breadcrumbs, SkeletonCardGrid, EmptyState, Pagination } from '../components/ux';
+import { SkeletonCardGrid, EmptyState, Pagination } from '../components/ux';
 import { EventsPageHeader } from '../components/events/EventsPageHeader';
 import { NfcTapButton } from '../components/nfc/NfcTapButton';
 import { useRegisterPullToRefresh } from '../hooks/useRegisterPullToRefresh';
@@ -799,14 +799,21 @@ export const EventsPage: React.FC = () => {
     setSelectedEvents(new Set());
   }, [typeFilter, searchQuery, showPastEvents, showMyEventsOnly, sortBy, nextThirtyDays]);
 
+  // Loading and error keep the strip and title, so the page does not lose its
+  // header until the list arrives. The actions wait for the list: their menu
+  // reads the templates and the selection the list owns.
+  const placeholderHeader = (
+    <EventsPageHeader
+      icon={Calendar}
+      title="Events"
+      subtitle="Department events, meetings, training sessions, and more"
+    />
+  );
+
   if (loading) {
     return (
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-        <Breadcrumbs />
-        <div className="mb-6">
-          <div className="bg-theme-surface-hover mb-2 h-8 w-32 animate-pulse rounded-sm" />
-          <div className="bg-theme-surface-hover h-4 w-64 animate-pulse rounded-sm" />
-        </div>
+        {placeholderHeader}
         <SkeletonCardGrid count={6} />
       </div>
     );
@@ -815,6 +822,7 @@ export const EventsPage: React.FC = () => {
   if (error) {
     return (
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+        {placeholderHeader}
         <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-4" role="alert" aria-live="assertive">
           <p className="text-red-700 dark:text-red-300">{error}</p>
           <button

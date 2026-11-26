@@ -290,3 +290,254 @@ test.describe('Report table sorts in card mode', () => {
     await expect(page.getByRole('dialog').getByRole('combobox', { name: 'Sort by' })).toBeHidden();
   });
 });
+
+// ── Medical supplies stock table ────────────────────────────────────────────
+const SUPPLIES = ['Gloves', 'Bandages', 'Tourniquets'].map((name, i) => ({
+  id: `supply-${i}`,
+  organization_id: 'org-1',
+  category_id: 'mcat-1',
+  name,
+  size: null,
+  unit_of_measure: 'each',
+  condition: 'good',
+  status: 'available',
+  tracking_type: 'pool',
+  quantity: 10 * (i + 1),
+  quantity_issued: 0,
+  reorder_point: 5,
+  is_lot_stocked: true,
+  lot_stock: 10 * (i + 1),
+  apparatus_stock: 0,
+  apparatus_uncounted: 0,
+  apparatus_count: 0,
+  is_low_stock: false,
+  next_expiration_date: '2026-12-15',
+  days_until_next_expiration: 40,
+  next_expiration_location: 'shelf',
+  next_expiration_where: 'EMS Supply Room',
+  storage_path: 'EMS Supply Room',
+  apparatus_places: [],
+  created_at: '2026-01-01T00:00:00Z',
+  updated_at: '2026-01-01T00:00:00Z',
+}));
+
+async function openMedicalSupplies(page: Page) {
+  await signIn(page, { permissions: [...TEST_USER.permissions, 'inventory.view_medical', 'inventory.manage_medical'] });
+  await page.route(
+    '**/api/v1/medical-supplies/summary**',
+    (route) =>
+      void route.fulfill(
+        json({
+          total_items: 3,
+          expiring_soon: 0,
+          expired: 0,
+          low_stock: 0,
+          expiring_within_days: 60,
+          uncounted_on_apparatus: 0,
+        })
+      )
+  );
+  await page.route(
+    '**/api/v1/medical-supplies/categories**',
+    (route) =>
+      void route.fulfill(
+        json([
+          {
+            id: 'mcat-1',
+            organization_id: 'org-1',
+            name: 'Basic Life Support',
+            item_type: 'medical',
+            is_active: true,
+            created_at: '2026-01-01T00:00:00Z',
+            updated_at: '2026-01-01T00:00:00Z',
+          },
+        ])
+      )
+  );
+  await page.route(
+    '**/api/v1/medical-supplies/items?**',
+    (route) => void route.fulfill(json({ items: SUPPLIES, total: SUPPLIES.length, skip: 0, limit: 50 }))
+  );
+  await page.goto('/medical-supplies?tab=stock');
+  await expect(header(page, 'Reorder at')).toBeAttached();
+}
+
+test.describe('Medical supplies stock table sorts in card mode', () => {
+  for (const viewport of [PHONE, TABLET]) {
+    test(`/medical-supplies — ${viewport.name}`, async ({ page }) => {
+      await page.setViewportSize(viewport);
+      await openMedicalSupplies(page);
+      await sortDescendingBy(page, 'On hand');
+      await expect(header(page, 'On hand')).toHaveAttribute('aria-sort', 'descending');
+    });
+  }
+
+  test(`/medical-supplies — ${DESKTOP.name} keeps sorting in the headers`, async ({ page }) => {
+    await page.setViewportSize(DESKTOP);
+    await openMedicalSupplies(page);
+    await expect(header(page, 'On hand')).toBeVisible();
+    await expect(sortBy(page)).toBeHidden();
+  });
+});
+
+// ── Impact planner member list ──────────────────────────────────────────────
+// A narrow tier (32rem): a tablet gives its card more than that, so only a
+// phone shows it as cards.
+const PLANNER_MEMBERS = ['Bianca Okafor', 'Aaron Lindqvist', 'Camila Reyes'].map((name, i) => ({
+  user_id: `member-${i}`,
+  full_name: name,
+  membership_number: `FF-${i}`,
+  rank: 'lieutenant',
+  station: 'Station 14',
+  status: 'active',
+  needed_size: 'xl',
+  has_size_on_file: true,
+  has_related_item: false,
+  needs_replacement: false,
+  over_allowance: false,
+  related_item_names: [],
+  email: `${name.split(' ')[0]?.toLowerCase() ?? 'member'}@example.org`,
+  phone: '(555) 867-5309',
+}));
+
+async function openImpactPlanner(page: Page) {
+  await signIn(page, { permissions: [...TEST_USER.permissions, 'inventory.check_manage'] });
+  await page.route(
+    '**/api/v1/inventory/impact-planner/options',
+    (route) =>
+      void route.fulfill(
+        json({
+          statuses: [{ value: 'active', label: 'Active' }],
+          membership_types: [],
+          ranks: [{ value: 'lieutenant', label: 'Lieutenant' }],
+          stations: [],
+          positions: [],
+          categories: [{ id: 'cat-1', name: 'Turnout Coats', item_type: 'uniform' }],
+          size_fields: [{ value: 'jacket', label: 'Jacket' }],
+        })
+      )
+  );
+  await page.route('**/api/v1/inventory/impact-planner/plans', (route) => void route.fulfill(json([])));
+  await page.route(
+    '**/api/v1/inventory/impact-planner',
+    (route) =>
+      void route.fulfill(
+        json({
+          total_members: 3,
+          members_with_related_item: 0,
+          members_needing_item: 3,
+          members_needing_replacement: 0,
+          members_missing_sizes: 0,
+          members_over_allowance: 0,
+          replacement_aware: false,
+          allowance_aware: false,
+          size_field: 'jacket',
+          size_breakdown: [{ size: 'xl', total: 3, needing: 3 }],
+          stock_checked: false,
+          cost_estimated: false,
+          members: PLANNER_MEMBERS,
+        })
+      )
+  );
+  await page.goto('/inventory/admin/impact-planner');
+  await page.getByRole('combobox', { name: 'Related category' }).selectOption('cat-1');
+  await page.getByRole('button', { name: /Analyze Impact/i }).click();
+}
+
+const plannerTable = (page: Page) => page.getByRole('table').filter({ has: header(page, 'Contact') });
+
+test.describe('Impact planner member list sorts in card mode', () => {
+  test(`/inventory/admin/impact-planner — ${PHONE.name}`, async ({ page }) => {
+    await page.setViewportSize(PHONE);
+    await openImpactPlanner(page);
+    const table = plannerTable(page);
+    await table.waitFor();
+    await sortDescendingBy(page, 'Member');
+    await expect(header(page, 'Member')).toHaveAttribute('aria-sort', 'descending');
+    await expectFirstRow(table, 'Member', /Camila Reyes/);
+  });
+
+  test(`/inventory/admin/impact-planner — ${DESKTOP.name} keeps sorting in the headers`, async ({ page }) => {
+    await page.setViewportSize(DESKTOP);
+    await openImpactPlanner(page);
+    await plannerTable(page).waitFor();
+    await expect(header(page, 'Member')).toBeVisible();
+    await expect(sortBy(page)).toBeHidden();
+  });
+});
+
+// ── Grant applications ──────────────────────────────────────────────────────
+// Sorted on the server, always by some column: the control asks the API for
+// the chosen column and order, and offers no "Default order".
+const GRANTS = ['Bravo', 'Alpha', 'Charlie'].map((name, i) => ({
+  id: `grant-${i}`,
+  organizationId: 'org-1',
+  opportunityId: null,
+  grantProgramName: `${name} Program`,
+  grantAgency: 'FEMA',
+  applicationStatus: 'submitted',
+  amountRequested: 1000 * (i + 1),
+  amountAwarded: null,
+  matchAmount: null,
+  matchSource: null,
+  applicationDeadline: '2026-12-31',
+  submittedDate: null,
+  awardDate: null,
+  grantStartDate: null,
+  grantEndDate: null,
+  projectDescription: null,
+  narrativeSummary: null,
+  budgetSummary: null,
+  keyContacts: null,
+  federalAwardId: null,
+  nfirsCompliant: null,
+  performancePeriodMonths: null,
+  reportingFrequency: null,
+  nextReportDue: null,
+  finalReportDue: null,
+  assignedTo: null,
+  priority: 'high',
+  linkedCampaignId: null,
+  notes: null,
+  createdBy: null,
+  createdAt: '2026-01-01T00:00:00Z',
+  updatedAt: '2026-01-01T00:00:00Z',
+}));
+
+async function openGrants(page: Page) {
+  await signIn(page, {
+    permissions: [...TEST_USER.permissions, 'fundraising.view', 'fundraising.manage', 'grants.view', 'grants.manage'],
+  });
+  await page.route('**/api/v1/grants/applications**', (route) => void route.fulfill(json(GRANTS)));
+  await page.goto('/grants/applications');
+  // The page opens on its pipeline view; the table is the other one.
+  await page.getByRole('button', { name: 'Table', exact: true }).click();
+  await expect(header(page, 'Amount Requested')).toBeAttached();
+}
+
+test.describe('Grant applications sort in card mode', () => {
+  for (const viewport of [PHONE, TABLET]) {
+    test(`/grants/applications — ${viewport.name}`, async ({ page }) => {
+      await page.setViewportSize(viewport);
+      await openGrants(page);
+      await expect(page.getByRole('option', { name: 'Default order' })).toHaveCount(0);
+      const sorted = page.waitForRequest((request) => {
+        const url = new URL(request.url());
+        return (
+          url.pathname === '/api/v1/grants/applications' &&
+          url.searchParams.get('sort') === 'amountRequested' &&
+          url.searchParams.get('order') === 'desc'
+        );
+      });
+      await sortDescendingBy(page, 'Amount Requested');
+      await sorted;
+    });
+  }
+
+  test(`/grants/applications — ${DESKTOP.name} keeps sorting in the headers`, async ({ page }) => {
+    await page.setViewportSize(DESKTOP);
+    await openGrants(page);
+    await expect(header(page, 'Amount Requested')).toBeVisible();
+    await expect(sortBy(page)).toBeHidden();
+  });
+});

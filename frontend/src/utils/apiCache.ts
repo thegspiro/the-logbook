@@ -350,6 +350,12 @@ const RELATED_PREFIXES: Readonly<Record<string, readonly string[]>> = {
   // Scheduling, postponing or cancelling a request creates, moves or cancels
   // its calendar event.
   '/event-requests': ['/events', '/dashboard'],
+  // A CRR activity moves Outreach Impact's CRR section and goals (read by the
+  // Overview too), and a log entry credits or removes Admin Hours.
+  '/crr': ['/dashboard', '/admin-hours'],
+  // Goals are shown on Outreach Impact and the Overview, both of which read
+  // them from the community-engagement report.
+  '/outreach-goals': ['/dashboard'],
 };
 
 /**

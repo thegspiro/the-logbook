@@ -25,7 +25,9 @@ from app.api.v1.endpoints.crr import (
     list_activities,
     update_activity,
     update_activity_type,
+    update_measure,
     update_settings,
+    update_tag,
 )
 from app.api.v1.endpoints.events import crr_recording_offered
 from app.models.admin_hours import (
@@ -42,7 +44,9 @@ from app.schemas.crr import (
     CrrActivityCreate,
     CrrActivityTypeUpdate,
     CrrActivityUpdate,
+    CrrMeasureUpdate,
     CrrSettingsUpdate,
+    CrrTagUpdate,
 )
 from app.services.crr_activity_service import CrrActivityService
 from app.services.scheduled_tasks import run_crr_resident_details_retention
@@ -175,6 +179,131 @@ class TestRecording:
             "Falls Church (city)",
         )
 
+    async def test_a_removed_member_cannot_be_credited(self, db_session, dept, grants):
+        _, (manager, removed, *_rest) = dept
+        removed.deleted_at = NOW
+        await db_session.flush()
+        catalogue = await _catalogue(db_session, manager)
+
+        with pytest.raises(HTTPException) as caught:
+            await _record(
+                db_session,
+                manager,
+                activity_type_id=_type(catalogue, "hands_only_cpr").id,
+                members={removed.id: 30},
+            )
+        assert caught.value.status_code == 400
+
+    async def test_a_retired_tag_cannot_be_put_on_a_new_activity(
+        self, db_session, dept, grants
+    ):
+        _, (manager, *_rest) = dept
+        catalogue = await _catalogue(db_session, manager)
+        drowning = next(t for t in catalogue.tags if t.code == "drowning")
+        await update_tag(
+            tag_id=drowning.id,
+            body=CrrTagUpdate(is_active=False),
+            db=db_session,
+            current_user=manager,
+        )
+
+        with pytest.raises(HTTPException) as caught:
+            await _record(
+                db_session,
+                manager,
+                activity_type_id=_type(catalogue, "home_safety_survey").id,
+                tag_ids=[drowning.id],
+            )
+        assert caught.value.status_code == 400
+
+    async def test_a_retired_tag_already_on_an_activity_may_stay_or_be_removed(
+        self, db_session, dept, grants
+    ):
+        _, (manager, *_rest) = dept
+        catalogue = await _catalogue(db_session, manager)
+        by_code = {t.code: t.id for t in catalogue.tags}
+        row = await _record(
+            db_session,
+            manager,
+            activity_type_id=_type(catalogue, "smoke_alarm_install").id,
+            tag_ids=[by_code["fire"], by_code["older_adults"]],
+        )
+        await update_tag(
+            tag_id=by_code["fire"],
+            body=CrrTagUpdate(is_active=False),
+            db=db_session,
+            current_user=manager,
+        )
+
+        kept = await update_activity(
+            activity_id=row.id,
+            body=CrrActivityUpdate(tag_ids=[by_code["fire"], by_code["older_adults"]]),
+            db=db_session,
+            current_user=manager,
+        )
+        assert sorted(t.id for t in kept.tags) == sorted(
+            [by_code["fire"], by_code["older_adults"]]
+        )
+        removed = await update_activity(
+            activity_id=row.id,
+            body=CrrActivityUpdate(tag_ids=[by_code["older_adults"]]),
+            db=db_session,
+            current_user=manager,
+        )
+        assert [t.id for t in removed.tags] == [by_code["older_adults"]]
+
+    async def test_changing_counts_keeps_a_retired_counts_tally(
+        self, db_session, dept, grants
+    ):
+        # The form offers only active counts, so a retired count is never in
+        # the payload; replacing the counts must not erase what it recorded.
+        _, (manager, *_rest) = dept
+        catalogue = await _catalogue(db_session, manager)
+        smoke = _type(catalogue, "smoke_alarm_install")
+        first, second = smoke.measures[0], smoke.measures[1]
+        row = await _record(
+            db_session,
+            manager,
+            activity_type_id=smoke.id,
+            counts={first.id: 3, second.id: 2},
+        )
+        await update_measure(
+            measure_id=second.id,
+            body=CrrMeasureUpdate(is_active=False),
+            db=db_session,
+            current_user=manager,
+        )
+
+        changed = await update_activity(
+            activity_id=row.id,
+            body=CrrActivityUpdate(counts={first.id: 5}),
+            db=db_session,
+            current_user=manager,
+        )
+
+        assert sorted((c.measure_id, c.quantity) for c in changed.counts) == sorted(
+            [(first.id, 5), (second.id, 2)]
+        )
+
+    async def test_a_new_zip_brings_its_own_place(self, db_session, dept, grants):
+        _, (manager, *_rest) = dept
+        catalogue = await _catalogue(db_session, manager)
+        row = await _record(
+            db_session,
+            manager,
+            activity_type_id=_type(catalogue, "hands_only_cpr").id,
+            zip_code="22046",
+        )
+
+        moved = await update_activity(
+            activity_id=row.id,
+            body=CrrActivityUpdate(zip_code="10001"),
+            db=db_session,
+            current_user=manager,
+        )
+
+        assert (moved.zip_code, moved.city, moved.state) == ("10001", "New York", "NY")
+
     async def test_a_count_from_another_type_is_refused(self, db_session, dept, grants):
         _, (manager, *_rest) = dept
         catalogue = await _catalogue(db_session, manager)
@@ -298,6 +427,52 @@ class TestResidentDetails:
         ).scalar_one()
         assert row.id in str(audit)
         assert "12 Oak St" not in str(audit)
+
+    async def test_recording_and_changing_details_is_audited(
+        self, db_session, dept, grants
+    ):
+        # The create and update responses carry the details back to a
+        # view_contact holder, so each is a disclosure like a read.
+        _, (recorder, *_rest) = dept
+        grants[str(recorder.id)] = {"crr.view_contact"}
+        catalogue = await _catalogue(db_session, recorder)
+
+        async def disclosures():
+            return [
+                str(data)
+                for data in (
+                    await db_session.execute(
+                        text(
+                            "SELECT event_data FROM audit_logs WHERE event_type = "
+                            "'crr.resident_details_viewed'"
+                        )
+                    )
+                ).scalars()
+            ]
+
+        before = len(await disclosures())
+        row = await _record(
+            db_session,
+            recorder,
+            activity_type_id=_type(catalogue, "home_safety_survey").id,
+            has_resident_details=True,
+            street_address="12 Oak St",
+        )
+        assert row.street_address == "12 Oak St"
+        after_create = await disclosures()
+        assert len(after_create) == before + 1
+        assert row.id in after_create[-1]
+
+        changed = await update_activity(
+            activity_id=row.id,
+            body=CrrActivityUpdate(street_address="1 Elm St"),
+            db=db_session,
+            current_user=recorder,
+        )
+        assert changed.street_address == "1 Elm St"
+        after_update = await disclosures()
+        assert len(after_update) == before + 2
+        assert all("Oak" not in d and "Elm" not in d for d in after_update)
 
     async def test_details_are_stored_encrypted(self, db_session, dept, grants):
         _, (recorder, *_rest) = dept
@@ -713,6 +888,102 @@ class TestRetention:
             )
         ).scalar_one()
         assert audited >= 1
+
+    async def test_notes_cannot_be_added_once_details_are_cleared(
+        self, db_session, dept, grants
+    ):
+        # A note written after the sweep would never be swept: free text is
+        # where resident details turn up, so it is refused like the details.
+        org, (recorder, *_rest) = dept
+        grants[str(recorder.id)] = {"crr.view_contact"}
+        old, _recent = await self._old_and_new(db_session, dept)
+        await CrrActivityService(db_session).clear_expired_resident_details(
+            org, now=NOW
+        )
+
+        with pytest.raises(HTTPException) as caught:
+            await update_activity(
+                activity_id=old.id,
+                body=CrrActivityUpdate(notes="Lives at 12 Oak St"),
+                db=db_session,
+                current_user=recorder,
+            )
+        assert caught.value.status_code == 400
+
+    async def test_a_cleared_activity_still_holding_text_is_cleared_again(
+        self, db_session, dept, grants
+    ):
+        org, _users = dept
+        old, _recent = await self._old_and_new(db_session, dept)
+        service = CrrActivityService(db_session)
+        await service.clear_expired_resident_details(org, now=NOW)
+        row = await db_session.get(CrrActivity, old.id)
+        first_stamp = row.resident_details_cleared_at
+        row.notes = "Written before the refusal existed"
+        await db_session.flush()
+
+        assert await service.clear_expired_resident_details(org, now=NOW) == 1
+
+        await db_session.refresh(row)
+        assert row.notes is None
+        assert row.resident_details_cleared_at == first_stamp
+
+    async def test_the_daily_tasks_audit_row_is_committed(
+        self, db_session, dept, grants
+    ):
+        # The scheduler never commits after a task returns, so anything the
+        # task leaves uncommitted is rolled back with its session.
+        org_id = str(dept[0].id)
+        await self._old_and_new(db_session, dept)
+
+        await run_crr_resident_details_retention(db_session)
+        await db_session.rollback()
+
+        audited = (
+            await db_session.execute(
+                text(
+                    "SELECT COUNT(*) FROM audit_logs WHERE event_type = "
+                    "'crr_resident_details_retention' AND event_data LIKE :org"
+                ),
+                {"org": f"%{org_id}%"},
+            )
+        ).scalar_one()
+        assert audited == 1
+
+    async def test_one_departments_failure_leaves_the_others_swept(
+        self, db_session, dept, grants, monkeypatch
+    ):
+        old, _recent = await self._old_and_new(db_session, dept)
+        other_org, (other_recorder, *_rest) = await _org(db_session, "Other")
+        other_old, _ = await self._old_and_new(
+            db_session, (other_org, [other_recorder])
+        )
+        real = CrrActivityService.clear_expired_resident_details
+        calls: list[str] = []
+
+        async def first_one_fails(self, organization, now=None):
+            calls.append(str(organization.id))
+            if len(calls) == 1:
+                raise RuntimeError("simulated failure")
+            return await real(self, organization, now)
+
+        monkeypatch.setattr(
+            CrrActivityService, "clear_expired_resident_details", first_one_fails
+        )
+
+        swept = {str(dept[0].id): old.id, str(other_org.id): other_old.id}
+
+        result = await run_crr_resident_details_retention(db_session)
+
+        assert result["organizations_failed"] == 1
+        failed_org = calls[0]
+        for org_id, activity_id in swept.items():
+            row = await db_session.get(CrrActivity, activity_id)
+            await db_session.refresh(row)
+            if org_id == failed_org:
+                assert row.street_address == "12 Oak St"
+            else:
+                assert row.street_address is None
 
     async def test_a_malformed_setting_means_the_default(
         self, db_session, dept, grants

@@ -81,6 +81,7 @@ from app.services.event_request_service import (
     automatic_task_states,
     configured_task_ids,
     effective_task_completions,
+    feedback_link,
     get_linked_calendar_event,
     get_live_staffing_shift,
     get_outreach_roles,
@@ -1998,13 +1999,20 @@ async def send_template_email(
         from app.services.email_service import EmailService
 
         email_service = EmailService(organization=org)
-        subject, body, text_body = render_request_template(template, event_request, org)
+        subject, body, text_body = render_request_template(
+            template,
+            event_request,
+            org,
+            feedback_url=await feedback_link(db, event_request, org),
+        )
         # Caller-supplied extras are applied after the shared context so a
         # coordinator can override a value for this one send.
         for key, value in (data.additional_context or {}).items():
             safe_value = "" if value is None else str(value)
             subject = subject.replace(f"{{{{{key}}}}}", safe_value)
             body = body.replace(f"{{{{{key}}}}}", _html.escape(safe_value))
+            if text_body:
+                text_body = text_body.replace(f"{{{{{key}}}}}", safe_value)
 
         await email_service.send_email(
             to_emails=[event_request.contact_email],

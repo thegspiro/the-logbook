@@ -646,6 +646,59 @@ class TestDeleteMinutes:
 # ============================================
 
 
+class TestStatusChangesLockTheRowFirst:
+    """MM6-12: submit, recall, reject and a content save read the status
+    without the row lock that approve and reopen take, so two of them racing
+    could each pass a status check the other was about to falsify — a save
+    landing in minutes already circulated to members, or a reject overwriting
+    an approval and leaving its stamps behind. Each now locks the row before
+    it reads the status (pitfall #27)."""
+
+    def _track(self, service, records, minutes):
+        events: list[str] = []
+
+        async def lock(*_args, **_kwargs):
+            events.append("lock")
+            return object()
+
+        async def read(*_args, **_kwargs):
+            events.append("read")
+            return minutes
+
+        records.lock_minutes = AsyncMock(side_effect=lock)
+        service.get_minutes = AsyncMock(side_effect=read)
+        return events
+
+    @pytest.mark.unit
+    async def test_submit(self, service, records, org_id, user_id):
+        minutes = _make_minutes(status=MinutesStatus.DRAFT.value)
+        events = self._track(service, records, minutes)
+        await service.submit_for_approval(minutes.id, org_id, user_id)
+        assert events[:2] == ["lock", "read"]
+
+    @pytest.mark.unit
+    async def test_recall(self, service, records, org_id):
+        minutes = _make_minutes(status=MinutesStatus.SUBMITTED.value)
+        events = self._track(service, records, minutes)
+        await service.recall_minutes(minutes.id, org_id)
+        assert events[:2] == ["lock", "read"]
+
+    @pytest.mark.unit
+    async def test_reject(self, service, records, org_id, user_id):
+        minutes = _make_minutes(status=MinutesStatus.SUBMITTED.value)
+        events = self._track(service, records, minutes)
+        await service.reject_minutes(minutes.id, org_id, user_id, "Wrong figures")
+        assert events[:2] == ["lock", "read"]
+
+    @pytest.mark.unit
+    async def test_a_content_save(self, service, records, mock_db, org_id):
+        minutes = _make_minutes(status=MinutesStatus.DRAFT.value)
+        events = self._track(service, records, minutes)
+        mock_db.scalar = AsyncMock(return_value=0)
+        await service.update_minutes(minutes.id, org_id, MinutesUpdate(title="New"))
+        assert events[:2] == ["lock", "read"]
+
+
 class TestSubmitForApproval:
 
     @pytest.mark.unit
@@ -723,6 +776,37 @@ class TestApproveMinutes:
         records.record_approval.assert_awaited_once_with(
             minutes, user_id, minutes.approved_at
         )
+
+    @pytest.mark.unit
+    async def test_only_open_items_are_emailed_on_approval(
+        self, service, org_id, user_id, monkeypatch
+    ):
+        """MM6-13: re-approving reopened minutes emailed every assignee about
+        every item again, finished and cancelled ones included. Approval tells
+        an assignee what they still have to do."""
+        sent = AsyncMock(return_value=0)
+        monkeypatch.setattr(
+            "app.services.minutes_notifications.notify_action_item_assignees", sent
+        )
+        items = [
+            MagicMock(status=status)
+            for status in (
+                "pending",
+                "in_progress",
+                "overdue",
+                "completed",
+                "cancelled",
+            )
+        ]
+        minutes = _make_minutes(
+            status=MinutesStatus.SUBMITTED.value, action_items=items
+        )
+        service.get_minutes = AsyncMock(return_value=minutes)
+
+        await service.approve_minutes(minutes.id, org_id, user_id)
+
+        emailed = sent.await_args.args[2]
+        assert [i.status for i in emailed] == ["pending", "in_progress", "overdue"]
 
     @pytest.mark.unit
     async def test_adoption_times_are_whole_seconds(

@@ -160,8 +160,8 @@ async def delete_activity_type(
     current_user: User = Depends(require_permission("events.manage")),
 ):
     """
-    Delete an activity type the department added. A built-in one is retired
-    instead.
+    Delete an activity type the department added. A built-in one is refused
+    (400): retire it instead.
 
     **Requires permission: events.manage**
     """
@@ -540,6 +540,8 @@ async def create_activity(
         event_id=body.event_id,
     )
     names = await service.names(org_id, [activity])
+    # The response carries the details back: a disclosure like any read.
+    await _audit_details_read(db, current_user, [activity])
     return _row(activity, names, current_user)
 
 
@@ -597,6 +599,7 @@ async def update_activity(
     except PermissionError as e:
         raise HTTPException(status_code=403, detail=str(e))
     names = await service.names(org_id, [activity])
+    await _audit_details_read(db, current_user, [activity])
     return _row(activity, names, current_user)
 
 

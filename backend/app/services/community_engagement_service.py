@@ -211,8 +211,9 @@ class CommunityEngagementService:
         ids = [str(e.id) for e in events]
 
         # A request can be re-pointed at an event another request already
-        # names; the most recent one is the requester whose expectation the
-        # event was scheduled against.
+        # names. The first one is the event's origin: the Overview and the
+        # event page read the same one (pitfall #29), so a report row and the
+        # calendar link name the same requester.
         request_for_event: dict[str, EventRequest] = {}
         request_rows = await self.db.execute(
             select(EventRequest)
@@ -223,7 +224,7 @@ class CommunityEngagementService:
             .order_by(EventRequest.created_at.asc())
         )
         for linked in request_rows.scalars().all():
-            request_for_event[str(linked.event_id)] = linked
+            request_for_event.setdefault(str(linked.event_id), linked)
 
         guest_rows = await self.db.execute(
             select(EventExternalAttendee.event_id, func.count())
