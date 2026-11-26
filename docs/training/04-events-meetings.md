@@ -255,14 +255,16 @@ feed listing every change, such as "John Smith changed from Maybe to Going at
 - **Export CSV** downloads it. _(2026-11-19)_ Its last column, **Source**,
   reads **Imported** for a check-in the Historical Data Import wrote and **The
   Logbook** for the rest.
-- **Send Reminders** sends a reminder to **Non-respondents only** (everyone
-  who has not answered) or **All members**.
+- **More → Remind Non-respondents** sends a reminder to everyone who has not
+  answered, and **More → Remind All Members** to the whole membership.
 
 ![Event attendance list with each member's RSVP and check-in state](./images/04-10-event-attendance.png)
 
 ### After an event has ended
 
-The event page drops actions that can no longer do anything:
+The event page drops actions that can no longer do anything. Someone who
+manages events finds both of these under **More**; a member, or an organizer
+who does not manage events, finds them beside the title:
 
 - **Add to Calendar** is hidden once the event has ended — its scheduled end
   has passed, or an officer recorded an actual end.
@@ -366,8 +368,10 @@ they leave. The usual way is a QR code shown at the door.
 ### For Officers (Setting Up Check-In)
 
 1. Open the event page.
-2. Select **View QR Code**. The button is not offered once check-in can no
-   longer succeed (see [After an event has ended](#after-an-event-has-ended)).
+2. Select **More**, then **View QR Code**. An organizer who does not manage
+   events has no More menu and finds **View QR Code** beside the title. It is
+   not offered once check-in can no longer succeed (see
+   [After an event has ended](#after-an-event-has-ended)).
 3. Show the code on a screen, or print it for the entrance.
 
 ![Event QR code display page for member self check-in, its check-in window open](./images/04-04-event-qr-code.png)

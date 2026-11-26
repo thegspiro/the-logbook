@@ -9,6 +9,7 @@ import hashlib
 import json
 import math
 from datetime import date, datetime, timedelta, timezone
+from types import SimpleNamespace
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Set, Tuple
 from uuid import NAMESPACE_URL, uuid5
 from zoneinfo import ZoneInfo
@@ -1538,8 +1539,9 @@ class EquipmentCheckService:
     # Check Submission — shared helpers
     # ------------------------------------------------------------------
 
-    @staticmethod
+    @classmethod
     def _resolve_expiration(
+        cls,
         item_data: Dict[str, Any],
         tmpl_item: Optional[CheckTemplateItem],
     ) -> Optional[date]:
@@ -1550,7 +1552,13 @@ class EquipmentCheckService:
         inventory receiving, correction, and swap workflows.
         """
         if tmpl_item is not None:
-            resolved = tmpl_item.expiration_date if tmpl_item.has_expiration else None
+            # The earliest date aboard, not the item's own column: a top-up
+            # swap writes the fresh lot's date there and leaves the expired
+            # lot on the truck, which the form and the failure-note rule both
+            # read (EC2-15).
+            resolved = (
+                cls._soonest_expiration(tmpl_item) if tmpl_item.has_expiration else None
+            )
             # A replacement the crew dated on this check is the unit now
             # aboard. Read from the key only validation writes
             # (_validate_and_normalize_observation), never from the submitted
@@ -1852,6 +1860,48 @@ class EquipmentCheckService:
             .all()
         )
         return {str(row) for row in rows}
+
+    @classmethod
+    def _failure_alert_items(
+        cls, items_data: List[Dict[str, Any]]
+    ) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+        """The failed lines of a check, split into critical and warning, for
+        the failure alert. Shared by the first submit and by finishing a check
+        saved part-way, so the two alert alike (EC2-16)."""
+        # Collect failed item details for notifications. Out-of-service items
+        # count toward failed_items/overall_status (see _compute_check_status),
+        # so they must appear in the alert too — a check failed entirely by
+        # out-of-service gear otherwise notified with an empty item list.
+        critical_items: List[Dict[str, Any]] = []
+        warning_items: List[Dict[str, Any]] = []
+        for item_data in items_data:
+            if item_data.get("status") not in ("fail", "out_of_service"):
+                continue
+            detail = {
+                "name": item_data.get("item_name", "Unknown"),
+                "compartment": item_data.get("compartment_name", ""),
+                "check_type": item_data.get("check_type"),
+                "out_of_service": item_data.get("status") == "out_of_service",
+            }
+            found = item_data.get("quantity_found")
+            # Par, not the pass floor: "found 5, expected 10" is what the
+            # officer restocks to. Pre-snapshot rows have only the old target.
+            expected = item_data.get("expected_quantity")
+            if expected is None:
+                expected = item_data.get("required_quantity")
+            crit = item_data.get("critical_minimum_quantity")
+            if found is not None and expected is not None:
+                detail["expected"] = expected
+                detail["found"] = found
+                if item_data.get("count_unit"):
+                    detail["unit"] = item_data["count_unit"]
+            if cls._is_below_critical_minimum(found, crit, expected):
+                detail["critical_minimum"] = crit
+                critical_items.append(detail)
+            else:
+                warning_items.append(detail)
+
+        return critical_items, warning_items
 
     async def _update_apparatus_deficiency(
         self,
@@ -2474,38 +2524,7 @@ class EquipmentCheckService:
             shift.apparatus_id, organization_id, overall_status
         )
 
-        # Collect failed item details for notifications. Out-of-service items
-        # count toward failed_items/overall_status (see _compute_check_status),
-        # so they must appear in the alert too — a check failed entirely by
-        # out-of-service gear otherwise notified with an empty item list.
-        critical_items: List[Dict[str, Any]] = []
-        warning_items: List[Dict[str, Any]] = []
-        for item_data in items_data:
-            if item_data.get("status") not in ("fail", "out_of_service"):
-                continue
-            detail = {
-                "name": item_data.get("item_name", "Unknown"),
-                "compartment": item_data.get("compartment_name", ""),
-                "check_type": item_data.get("check_type"),
-                "out_of_service": item_data.get("status") == "out_of_service",
-            }
-            found = item_data.get("quantity_found")
-            # Par, not the pass floor: "found 5, expected 10" is what the
-            # officer restocks to. Pre-snapshot rows have only the old target.
-            expected = item_data.get("expected_quantity")
-            if expected is None:
-                expected = item_data.get("required_quantity")
-            crit = item_data.get("critical_minimum_quantity")
-            if found is not None and expected is not None:
-                detail["expected"] = expected
-                detail["found"] = found
-                if item_data.get("count_unit"):
-                    detail["unit"] = item_data["count_unit"]
-            if self._is_below_critical_minimum(found, crit, expected):
-                detail["critical_minimum"] = crit
-                critical_items.append(detail)
-            else:
-                warning_items.append(detail)
+        critical_items, warning_items = self._failure_alert_items(items_data)
 
         # Send failure notifications
         if overall_status == "fail":
@@ -2538,6 +2557,17 @@ class EquipmentCheckService:
         template_id = data.get("template_id")
         if not template_id:
             raise ValueError("template_id is required")
+
+        # A retry after a lost response replays to the check already filed,
+        # before any template state is consulted — as submit_check does for a
+        # shift check (EC2-17, pitfall #36).
+        client_submission_id = data.get("client_submission_id")
+        if client_submission_id:
+            filed = await self._standalone_replay(
+                organization_id, client_submission_id, template_id
+            )
+            if filed is not None:
+                return filed
 
         result = await self.db.execute(
             select(EquipmentCheckTemplate).where(
@@ -2607,9 +2637,22 @@ class EquipmentCheckService:
             failed_items=failed,
             notes=data.get("notes"),
             signature_data=data.get("signature_data"),
+            client_submission_id=client_submission_id,
         )
         self.db.add(check)
-        await self.db.flush()
+        try:
+            await self.db.flush()
+        except IntegrityError:
+            # Two deliveries of one attempt raced past the lookup above; the
+            # unique key let one through, and this one replays to it.
+            await self.db.rollback()
+            if client_submission_id:
+                filed = await self._standalone_replay(
+                    organization_id, client_submission_id, template_id
+                )
+                if filed is not None:
+                    return filed
+            raise
 
         await self._create_check_items(
             check.id, items_data, template_items_map, organization_id, checked_by
@@ -2632,6 +2675,30 @@ class EquipmentCheckService:
             raise
         await self._reorder_after_counts(organization_id, checked_by)
         return await self.get_check(check.id, organization_id)
+
+    async def _standalone_replay(
+        self, organization_id: str, client_submission_id: str, template_id: str
+    ) -> Optional[ShiftEquipmentCheck]:
+        """The standalone check this submission key already filed, if any.
+
+        A key is minted per attempt, so a match is a replay of the same
+        submission. One that filed a different check is refused rather than
+        answered with someone else's record.
+        """
+        result = await self.db.execute(
+            select(ShiftEquipmentCheck).where(
+                ShiftEquipmentCheck.organization_id == organization_id,
+                ShiftEquipmentCheck.client_submission_id == client_submission_id,
+            )
+        )
+        filed = result.scalars().first()
+        if filed is None:
+            return None
+        if filed.shift_id is not None or filed.template_id != template_id:
+            raise EquipmentCheckConflictError(
+                "This client submission ID was already used for another check"
+            )
+        return await self.get_check(filed.id, organization_id)
 
     async def complete_incomplete_check(
         self,
@@ -2834,6 +2901,42 @@ class EquipmentCheckService:
             # key so a lost completion response can replay to this now-complete
             # record instead of conflicting with the draft's original key.
             check.client_submission_id = data["client_submission_id"]
+
+        # Finishing a check is where most failures are found, so it alerts and
+        # flags the apparatus exactly as a first submit does (EC2-16; keeps
+        # the two write paths consistent, per EC-10 above).
+        await self._update_apparatus_deficiency(
+            check.apparatus_id, organization_id, check.overall_status
+        )
+        if check.overall_status == "fail":
+            critical_items, warning_items = self._failure_alert_items(
+                [
+                    {
+                        "item_name": i.item_name,
+                        "compartment_name": i.compartment_name,
+                        "check_type": i.check_type,
+                        "status": i.status,
+                        "quantity_found": i.quantity_found,
+                        "expected_quantity": i.expected_quantity,
+                        "required_quantity": i.required_quantity,
+                        "critical_minimum_quantity": i.critical_minimum_quantity,
+                        "count_unit": i.count_unit,
+                    }
+                    for i in all_items
+                ]
+            )
+            await self._send_check_failure_notification(
+                organization_id=organization_id,
+                # The alert reads only the apparatus, which the check row
+                # carries, copied from its shift when the check was created.
+                shift=SimpleNamespace(apparatus_id=check.apparatus_id),
+                checked_by=checked_by,
+                template_id=check.template_id,
+                failed_count=failed,
+                total_count=total,
+                critical_items=critical_items,
+                warning_items=warning_items,
+            )
 
         await self.db.commit()
         await self._reorder_after_counts(organization_id, checked_by)
