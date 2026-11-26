@@ -2,7 +2,127 @@
 
 **Prefix:** `MSG2` · **Iteration:** B10 · **Reviewed:** 2026-08-06 (pass 1),
 2026-08-06 (pass 2), 2026-08-09 (pass 3), 2026-08-09 (pass 4), 2026-08-13
-(pass 5, owner-requested docs/screenshots verification)
+(pass 5, owner-requested docs/screenshots verification), 2026-11-26 (pass 6)
+
+---
+
+## Pass 6 (2026-11-26) — business logic since pass 5, and the screens: 5 fixed, 5 flagged
+
+### Scope, stated plainly
+
+Passes 1–4 were security; pass 5 checked the documentation and screenshots.
+This pass read the module's business logic, unreviewed across 44 commits since
+2026-08-13:
+
+- audience resolution and recipient rows;
+- scheduled publishing and expiry;
+- delivery and its retries;
+- acknowledgments.
+
+It also read the compose form, admin page, inbox, detail page, message history
+and the Dashboard's message card. The backend findings were reproduced first
+against the real database. Every fix has a test that failed on the unfixed
+code.
+
+**Not read:** web push, `message_history` beyond its list filters and test
+email, recipient rows on a hard user delete, the rest of the communications
+module (suggestions, templates, footers, officers, scheduled emails).
+
+### Frontend
+
+**MSG2-7 — MED — An expired message could not be edited at all — ✅ FIXED**
+
+- Every edit re-sent the stored expiry, and the server validates the expiry whenever the key is present.
+- So a published message past its expiry refused every save, even a typo fix: "The expiry time must be in the future".
+- An edit now sends the expiry and schedule only when changed, and still sends null when one is cleared (pitfall #1).
+
+**MSG2-8 — MED — The edit form offered to schedule a message already published — ✅ FIXED**
+
+- The server refuses it. The field is no longer shown on a published message.
+
+**MSG2-9 — MED — The Dashboard's "clear persistent message" took it down for everyone, on one tap, and was offered to members the endpoint refuses — ✅ FIXED**
+
+- The X calls `PATCH is_active=false`, which removes the message from every member's inbox, and the compose form cannot reactivate it.
+- It was offered on `settings.manage`, which the endpoint refuses (403).
+- It is now offered on `notifications.manage` and asks first, naming that it clears the message for every member.
+- Whether "clear" should instead mean "hide from my dashboard" is MSG2-14.
+
+### Backend
+
+**MSG2-10 — MED — Every edit of a published message re-resolved its audience — ✅ FIXED**
+
+- The edit form sends every targeting field on every save, and `update_message` treated their presence as an audience change.
+- So a typo fix re-resolved the audience against today's roster:
+  - members who had joined since were added and emailed;
+  - members who had dropped out lost an unread row.
+- The audience is now compared as stored, before and after.
+
+**MSG2-11 — MED — A scheduled message that failed to publish went live for nobody, and was never retried — ✅ FIXED**
+
+- The publish task cleared `scheduled_at` for the whole batch and committed, then wrote recipients per message.
+- A failure in between left the message active with no schedule and no recipients. The inbox, unread count and acknowledgment report read recipient rows, so nobody saw it, and the next run did not select it.
+- The claim and the recipient rows are now written together in a savepoint per message, and delivery runs after the commit.
+- The docstring's claim that a failed delivery still leaves the message in members' inboxes was true only of delivery, and now says so.
+
+### Flagged
+
+- **MSG2-12 (HIGH-MED, engineering) — Retry rows whose channel no longer applies stay `retrying` forever, and each pass uses up the department's email limit.**
+  - Examples of a channel that no longer applies: SMS after Twilio is disabled, consent is withdrawn or the phone is removed; email after the address is removed.
+  - Each 5-minute pass re-enters `deliver()`, which records an email rate-limit hit before it skips the member. One stuck row costs 12 of the 30 hourly email slots.
+  - Three stuck urgent messages keep the department over its limit permanently, so every new message's email, the channel of record (pitfall #18), is held back.
+  - The fix is local but touches the retry and recovery tasks and the limiter call, and needs its own tests. It is recorded in `docs/KNOWN_LIMITATIONS.md` so it is not lost.
+- **MSG2-13 (MED) — Targeting by Leave or Inactive reaches nobody, and Retired almost nobody.**
+  - The picker offers them and the post succeeds, but the audience is limited to active accounts.
+  - Decide whether to remove them from the picker or reach those members; refusing a zero-member audience is a safe follow-up.
+- **MSG2-14 (MED) — Is a published audience frozen or live?**
+  - Rows are written at publish and revisited only by an audience edit. So members who leave stay in the acknowledgment report as owing an acknowledgment, and newcomers never get older standing notices.
+  - A related question is whether the Dashboard's clear should be per-member.
+- **MSG2-15 (LOW) — The author is counted in the audience and as owing an acknowledgment, but is never sent the message.**
+- **MSG2-16 (LOW) — Acknowledgments survive an edit of the body.**
+  - Turning on "require acknowledgment" after publishing puts members who already read it back to pending, with no notice to them.
+
+### Open (not flagged)
+
+- **LOW — Editing a scheduled message to a past time waits up to 15 minutes for the next run.** Creating one with a past time publishes now.
+- **LOW — Documentation drift in `docs/COMMUNICATIONS_MODULE.md`:**
+  - targeting is described via `_is_targeted`, though the inbox reads recipient rows;
+  - read and acknowledgment evidence is described in `department_message_reads`;
+  - the retry and recovery tasks are undocumented.
+  - Separately, a scheduled-task comment still says the history cleanup keeps 90 days.
+- **LOW — Frontend:**
+  - The acknowledgment report can show the previous message's data, and is not refreshed after an audience edit.
+  - Unread inbox rows have no text or screen-reader cue.
+  - Message History search fires per keystroke with no stale guard, and its placeholder implies partial recipient matches.
+  - History controls lack accessible names, and its Type column is dropped in card mode (pitfall #39).
+  - Delete can fire twice.
+  - The detail page has no stale guard, and shows "Acknowledged on" without a date until reload.
+  - The admin list shows no expiry.
+  - One failing picker list loses both.
+
+### Mechanical checks
+
+- **Route gating:** 15 routes.
+  - `messages.py` (13): 8 `notifications.manage`; 5 inbox routes scoped to the member by sign-in.
+  - `message_history.py` (2): `settings.manage` or `organization.update_settings`.
+- **SMS:** goes only through `resolve_sms_recipients` with `SmsAlert.URGENT_DEPARTMENT_MESSAGE` (pitfall #18).
+- **Status filters:** no `== UserStatus.ACTIVE` gates.
+
+### Completion gate (pass 6)
+
+| Check                                         | Result                                                 |
+| --------------------------------------------- | ------------------------------------------------------ |
+| messaging, department-message, scheduled-task | ✅ **510 passed**, 1 skipped (optional `pywebpush`)    |
+| new tests                                     | ✅ 2 backend (real database), 4 frontend; failed first |
+| `flake8` / `black` / `isort` (changed files)  | ✅ clean                                               |
+| mypy ratchet                                  | ✅ 0 errors, matching the baseline                     |
+| communications and Dashboard frontend tests   | ✅ 149 passed (compose form 16, Dashboard 133)         |
+| `npm run typecheck` / `npm run lint`          | ✅ 0 errors / 0 warnings                               |
+
+One existing test changed:
+`test_one_message_failure_does_not_lose_the_rest_of_the_batch` asserted the
+failed message's `scheduled_at` was cleared, which is the defect, and mocked a
+session with no savepoints. It now provides a savepoint and asserts what still
+holds. The real-database test beside it passes unchanged.
 
 ---
 

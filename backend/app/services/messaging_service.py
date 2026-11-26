@@ -135,6 +135,17 @@ async def release_role_from_messages(
     return changed
 
 
+def _stored_audience(message: DepartmentMessage) -> tuple:
+    """A message's audience as stored, in a form two snapshots compare on."""
+    target_type = getattr(message, "target_type", None)
+    return (
+        getattr(target_type, "value", target_type),
+        tuple(sorted(getattr(message, "target_roles", None) or [])),
+        tuple(sorted(getattr(message, "target_statuses", None) or [])),
+        tuple(sorted(getattr(message, "target_member_ids", None) or [])),
+    )
+
+
 class MessagingService:
     """Service for department internal messaging"""
 
@@ -403,6 +414,7 @@ class MessagingService:
             reject_null_for_required(
                 message, {k: v for k, v in updates.items() if k in allowed_fields}
             )
+            audience_before = _stored_audience(message)
             for key, value in updates.items():
                 if key in allowed_fields:
                     if key == "priority":
@@ -411,7 +423,12 @@ class MessagingService:
                         value = MessageTargetType(value)
                     setattr(message, key, value)
 
-            audience_changed = bool(audience_fields.intersection(updates))
+            # The stored audience, compared — not the keys present. The edit
+            # form sends every targeting field on every save, so a typo fix on
+            # a published message re-resolved its audience against today's
+            # roster: newcomers were added and emailed, departed members lost
+            # an unread row (MSG2-10).
+            audience_changed = _stored_audience(message) != audience_before
             published_by_update = was_pending and message.scheduled_at is None
             newly_targeted: Set[str] = set()
             if published_by_update:

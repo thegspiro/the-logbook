@@ -894,10 +894,10 @@ class TestPublishScheduledMessages:
         deliver.assert_not_awaited()
 
     async def test_one_message_failure_does_not_lose_the_rest_of_the_batch(self):
-        """The claim step clears scheduled_at for the whole batch up front,
-        so a message that fails mid-loop must not propagate and orphan
-        every message still left in `due` — the due-query would never
-        select them again (same shape as CRON2-31-1/5/6's session-poisoning
+        """A message that fails mid-loop must not propagate and orphan every
+        message still left in `due`. (Each message is now claimed in its own
+        savepoint, MSG2-11, so a failure leaves only that message scheduled
+        for the next run) (same shape as CRON2-31-1/5/6's session-poisoning
         class: a claim/dedup marker must not be stamped independent of
         whether the action it guards actually happened for every item)."""
         from app.services.scheduled_tasks import run_publish_scheduled_messages
@@ -920,6 +920,11 @@ class TestPublishScheduledMessages:
         db.commit = AsyncMock()
         db.rollback = AsyncMock()
         db.refresh = AsyncMock()
+        # Each message is claimed in a savepoint of its own (MSG2-11).
+        savepoint = MagicMock()
+        savepoint.__aenter__ = AsyncMock(return_value=None)
+        savepoint.__aexit__ = AsyncMock(return_value=False)
+        db.begin_nested = MagicMock(return_value=savepoint)
         result_set = MagicMock()
         result_set.scalars.return_value.all.return_value = [bad, good]
         db.execute = AsyncMock(return_value=result_set)
@@ -933,17 +938,17 @@ class TestPublishScheduledMessages:
 
         assert result["published"] == 1
         assert result["failed"] == 1
-        # Both messages were claimed (scheduled_at cleared) in the batch
-        # step; only the surviving message was actually delivered — proving
-        # `good` was not skipped even though `bad` (processed first) raised.
-        assert bad.scheduled_at is None
+        # Only the surviving message is delivered — `good` was not skipped
+        # even though `bad` (processed first) raised. (Against a real
+        # session, `bad`'s savepoint rollback leaves it scheduled for the
+        # next run; test_messaging_publish_failure_integration proves that,
+        # which a mock cannot.)
         assert good.scheduled_at is None
         deliver.assert_awaited_once_with(good)
-        db.rollback.assert_awaited_once()
-        # The rollback after `bad` failed expires every persistent object in
-        # the session, so `good` (fetched in the same original batch) must
-        # be refreshed before its attributes are read again.
-        db.refresh.assert_awaited_once_with(good)
+        # The rolled-back savepoint expires every persistent object in the
+        # session, so `good` must be refreshed before its attributes are read
+        # again.
+        db.refresh.assert_awaited_with(good)
 
 
 @pytest.mark.integration
