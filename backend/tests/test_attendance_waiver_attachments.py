@@ -54,6 +54,7 @@ from app.services.attendance_waiver_attachments import (
 from app.services.data_export_service import DataExportService
 from app.services.upload_relocation import collect_references
 from app.utils.mime_validation import detect_mime_type
+from app.utils.photo_metadata import strip_photo_metadata
 from tests.waiver_request_support import (
     assign,
     load,
@@ -77,6 +78,9 @@ HEIC = b"\x00\x00\x00\x18ftypheic\x00\x00\x00\x00mif1heic" + b"\x00" * 200
 # made): HEIC above is a header only and is refused once it is converted.
 HEIC_FIXTURES = Path(__file__).parent / "fixtures" / "heic"
 PHOTO = (HEIC_FIXTURES / "oriented-gps.heic").read_bytes()
+# JPEGs and PNGs carrying GPS and every other kind of metadata (see
+# tests/test_photo_metadata.py for what each holds).
+METADATA_FIXTURES = Path(__file__).parent / "fixtures" / "photo-metadata"
 
 
 def _image(fmt: str) -> bytes:
@@ -586,6 +590,126 @@ class TestHeicIsStoredAsJpeg:
         )
         assert resp.status_code == 201, resp.text
         assert [a["mime_type"] for a in resp.json()["attachments"]] == ["image/jpeg"]
+
+
+@pytest.mark.integration
+class TestJpegAndPngAreStoredWithoutMetadata:
+    """Owner decision 2026-11-26: a JPEG or PNG is stored without its
+    location or other metadata, and without being re-compressed."""
+
+    @pytest.mark.parametrize(
+        ("name", "mime"),
+        [
+            ("everything.jpg", "image/jpeg"),
+            ("progressive.jpg", "image/jpeg"),
+            ("cmyk-adobe.jpg", "image/jpeg"),
+            ("everything.png", "image/png"),
+        ],
+    )
+    async def test_the_photo_is_filed_without_its_metadata(
+        self, as_user, dept, monkeypatch, name, mime
+    ):
+        original = (METADATA_FIXTURES / name).read_bytes()
+        scanned: list = []
+
+        async def _record_scan(db, content, *, upload_kind, detected_mime, user):
+            scanned.append((detected_mime, hashlib.sha256(content).hexdigest()))
+
+        monkeypatch.setattr(file_storage_service, "reject_if_malicious", _record_scan)
+        resp = await _submit_with(
+            as_user, dept.member, dept.drill, [("files", (name, original, mime))]
+        )
+        assert resp.status_code == 201, resp.text
+        assert [a["mime_type"] for a in resp.json()["attachments"]] == [mime]
+        (path,) = _files_on_disk(dept.uploads)
+        stored = await file_storage_service.read_bytes(path)
+        assert stored == strip_photo_metadata(original, mime)
+        assert b"GPS" in original
+        assert b"GPS" not in stored
+        before = Image.open(io.BytesIO(original))
+        after = Image.open(io.BytesIO(stored))
+        assert after.tobytes() == before.tobytes()
+        assert dict(after.getexif()) == {0x0112: 6}
+        # The member's original is scanned first, then the file kept; the
+        # row describes the file kept.
+        digest = hashlib.sha256(stored).hexdigest()
+        assert scanned == [(mime, hashlib.sha256(original).hexdigest()), (mime, digest)]
+        row = (
+            await _CURRENT["db"].execute(
+                select(AttendanceWaiverAttachment).where(
+                    AttendanceWaiverAttachment.request_id == resp.json()["id"]
+                )
+            )
+        ).scalar_one()
+        assert (row.mime_type, row.file_size, row.sha256) == (mime, len(stored), digest)
+
+    async def test_a_photo_added_later_is_stripped_too(self, as_user, dept):
+        original = (METADATA_FIXTURES / "everything.jpg").read_bytes()
+        request_id = await _filed(as_user, dept)
+        async with as_user(dept.member) as client:
+            added = await client.post(
+                f"{BASE}/{request_id}/attachments",
+                files=[("files", ("IMG_0007.jpg", original, "image/jpeg"))],
+            )
+        assert added.status_code == 200, added.text
+        (path,) = [p for p in _files_on_disk(dept.uploads) if p.endswith(".jpg")]
+        stored = await file_storage_service.read_bytes(path)
+        assert stored == strip_photo_metadata(original, "image/jpeg")
+
+    @pytest.mark.parametrize(
+        ("name", "content", "mime"),
+        [
+            # libmagic calls both of these a JPEG and a PNG; neither can be
+            # walked to its end.
+            ("IMG_0008.jpg", JPEG[:-2], "image/jpeg"),
+            ("IMG_0009.png", PNG[:30] + b"\x00" + PNG[31:], "image/png"),
+        ],
+        ids=["jpeg-without-eoi", "png-with-a-bad-crc"],
+    )
+    async def test_an_unreadable_photo_is_refused_and_nothing_is_kept(
+        self, as_user, dept, db_session, name, content, mime
+    ):
+        assert detect_mime_type(content) == mime
+        resp = await _submit_with(
+            as_user,
+            dept.member,
+            dept.drill,
+            [_pdf(), ("files", (name, content, mime))],
+        )
+        assert resp.status_code == 400, resp.text
+        assert "couldn't read this photo" in resp.json()["detail"]
+        assert _files_on_disk(dept.uploads) == []
+        assert await _request_count(db_session, dept.org) == 0
+
+    async def test_with_no_scanner_nothing_is_stripped_or_kept(
+        self, as_user, dept, db_session, monkeypatch
+    ):
+        stripped: list = []
+
+        async def _unavailable(db, content, *, upload_kind, detected_mime, user):
+            raise CodedHTTPException(
+                status_code=503,
+                detail="Malware scanning is unavailable.",
+                error_code=ErrorCode.UPLD_SCAN_UNAVAILABLE,
+            )
+
+        def _spy(content, mime_type):
+            stripped.append(len(content))
+            return content
+
+        monkeypatch.setattr(file_storage_service, "reject_if_malicious", _unavailable)
+        monkeypatch.setattr(waiver_attachments, "strip_photo_metadata", _spy)
+        original = (METADATA_FIXTURES / "everything.png").read_bytes()
+        resp = await _submit_with(
+            as_user,
+            dept.member,
+            dept.drill,
+            [("files", ("IMG_0010.png", original, "image/png"))],
+        )
+        assert resp.status_code == 503, resp.text
+        assert stripped == []
+        assert _files_on_disk(dept.uploads) == []
+        assert await _request_count(db_session, dept.org) == 0
 
 
 async def _download_audits(db_session, user_id):
