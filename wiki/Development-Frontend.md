@@ -197,7 +197,16 @@ modules/<module>/
   `SortableHeader`s, so a sortable reflow table also renders `CardSortControl`
   (`components/ux/`) inside its container, before the table, with the same sort
   state, handler and tier. CSS (`.rwd-card-sort` in `index.css`) shows it
-  exactly while the headers are hidden _(2026-11-24)_
+  exactly while the headers are hidden _(2026-11-24)_. A table sorted on the
+  server with a default column passes `allowDefault={false}`, so the control
+  offers no "Default order" it cannot honour (grant applications).
+  `e2e/card-sort-control.spec.ts` holds every table with the control: medical
+  supplies, the impact planner and grant applications joined it on
+  2026-11-26 (#4724). Inventory items still has only its own `md:hidden`
+  select, which leaves its xwide tables unsortable as cards on a tablet
+  (needs a layout decision). `expectContentStaysInCard` in `e2e/tableFit.ts`
+  is the spill check on its own, for specs that measure their table
+  themselves (#4725)
 - **Buttons side by side** — use the `btn-*` utilities rather than a hand-built
   button: the filled ones carry a transparent 1px border with a mouse, so they
   match `btn-secondary`'s height. Make a button that holds only an icon a

@@ -3,6 +3,7 @@
 **[🏠 Home](Home)**
 
 **Recent changes**
+[· November 2026](Recent-Changes-2026-11)
 [· October 2026](Recent-Changes-2026-10)
 [· September 2026](Recent-Changes-2026-09)
 [· August 2026](Recent-Changes-2026-08)
@@ -44,6 +45,7 @@
 - [Events](Module-Events)
 - [Communications](Module-Communications)
 - [Public Programs](Public-Programs)
+- [Public Website](Public-Website)
 - [Scheduling](Module-Scheduling)
 - [Shift History Import — user guide](Scheduling-History-Import)
 - [Admin Hours](Module-Admin-Hours)

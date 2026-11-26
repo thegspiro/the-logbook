@@ -995,11 +995,11 @@ export default function ComplianceRequirementsConfigPage() {
                       {selectablePositions.map((position: AvailablePosition) => (
                         <label
                           key={position.id}
-                          className="hover:bg-theme-surface-hover mobile-touch-target flex items-center justify-start gap-2 rounded p-1"
+                          className="hover:bg-theme-surface-hover mobile-touch-target flex items-start justify-start gap-2 rounded px-1 py-3"
                         >
                           <input
                             type="checkbox"
-                            className={checkboxClass}
+                            className={`${checkboxClass} mt-0.5`}
                             checked={profilePositionIds.includes(position.id)}
                             onChange={() => toggleRequirement(position.id, profilePositionIds, setProfilePositionIds)}
                           />
@@ -1063,16 +1063,16 @@ export default function ComplianceRequirementsConfigPage() {
                       {requirements.map((req: AvailableRequirement) => (
                         <label
                           key={req.id}
-                          className="hover:bg-theme-surface-hover mobile-touch-target flex items-center justify-start gap-2 rounded p-1"
+                          className="hover:bg-theme-surface-hover mobile-touch-target flex items-start justify-start gap-2 rounded px-1 py-3"
                         >
                           <input
                             type="checkbox"
-                            className={checkboxClass}
+                            className={`${checkboxClass} mt-0.5`}
                             checked={profileRequiredReqs.includes(req.id)}
                             onChange={() => toggleRequired(req.id)}
                           />
                           <span className="text-theme-text-primary text-sm">{req.name}</span>
-                          <span className="text-theme-text-secondary text-xs">
+                          <span className="text-theme-text-secondary mt-0.5 text-xs">
                             ({req.requirement_type}
                             {req.source ? ` · ${req.source}` : ''})
                           </span>
@@ -1096,11 +1096,11 @@ export default function ComplianceRequirementsConfigPage() {
                         .map((req: AvailableRequirement) => (
                           <label
                             key={req.id}
-                            className="hover:bg-theme-surface-hover mobile-touch-target flex items-center justify-start gap-2 rounded p-1"
+                            className="hover:bg-theme-surface-hover mobile-touch-target flex items-start justify-start gap-2 rounded px-1 py-3"
                           >
                             <input
                               type="checkbox"
-                              className={checkboxClass}
+                              className={`${checkboxClass} mt-0.5`}
                               checked={profileOptionalReqs.includes(req.id)}
                               onChange={() => toggleRequirement(req.id, profileOptionalReqs, setProfileOptionalReqs)}
                             />

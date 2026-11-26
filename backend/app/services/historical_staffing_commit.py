@@ -73,6 +73,9 @@ _TITLE_MAX = 200
 # How many sign-ups and hours entries that pair with nothing the preview names;
 # the counts are always whole.
 _MATCH_EXAMPLES = 25
+LEFTOVERS_SIGNUPS = "signups"
+LEFTOVERS_HOURS = "hours"
+LEFTOVER_KINDS = (LEFTOVERS_SIGNUPS, LEFTOVERS_HOURS)
 _LOCATION_MAX = 300
 
 
@@ -169,14 +172,12 @@ class HistoricalStaffingCommitService:
             "result": (record.results or {}).get("staffing"),
         }
 
-    async def _hours_match_view(
-        self,
-        record: HistoricalImport,
-        plan: plan_rules.Plan,
+    @staticmethod
+    def _preview_member_of(
         resolutions: Mapping[str, shift_engine.MemberResolution],
-    ) -> Dict[str, Any]:
-        """How the roster pairs with the hours already imported, and the first
-        of each side that pairs with nothing, for the reviewer to check."""
+    ) -> Any:
+        """Who a seat names before the commit: a member the commit would
+        create has no hours yet, so pairs with nothing."""
 
         def member_of(seat: plan_rules.PlannedSeat) -> Optional[str]:
             if seat.assigned_user_id:
@@ -184,10 +185,23 @@ class HistoricalStaffingCommitService:
             identity = shift_engine.identity_from_values(seat.seat.member)
             resolution = resolutions.get(identity.key)
             ref = resolution.ref if resolution is not None else None
-            # A member the commit would create has no hours yet.
             return ref if ref and not ref.startswith("new:") else None
 
+        return member_of
+
+    async def _hours_match_view(
+        self,
+        record: HistoricalImport,
+        plan: plan_rules.Plan,
+        resolutions: Mapping[str, shift_engine.MemberResolution],
+    ) -> Dict[str, Any]:
+        """How the roster pairs with the hours already imported, and the first
+        of each side that pairs with nothing, for the reviewer to check. The
+        full lists are :meth:`leftovers_view`."""
+        member_of = self._preview_member_of(resolutions)
         pairing, event_of = await self._pair_with_hours(record, plan, member_of)
+        decisions = mapping_rules.Decisions.from_stored(record.staffing_settings)
+        reviewed = set(decisions.reviewed)
         directory = {
             m.id: m.display_name
             for m in await self.imports.shift_imports.member_directory(
@@ -225,11 +239,220 @@ class HistoricalStaffingCommitService:
         ]
         return {
             "matched": len(pairing.matched),
+            "paired_by_reviewer": len(pairing.pinned),
             "signups_without_hours": len(pairing.unmatched_signups),
             "hours_without_signup": len(pairing.unmatched_hours),
+            "signups_reviewed": sum(
+                1
+                for key in pairing.unmatched_signups
+                if mapping_rules.SIGNUP_LEFTOVER + key in reviewed
+            ),
+            "hours_reviewed": sum(
+                1
+                for e in pairing.unmatched_hours
+                if mapping_rules.HOURS_LEFTOVER + e.attendance_id in reviewed
+            ),
             "signups_without_hours_examples": missing,
             "hours_without_signup_examples": unclaimed,
         }
+
+    async def leftovers_view(
+        self,
+        organization_id: str,
+        import_id: str,
+        *,
+        kind: str,
+        member_id: Optional[str] = None,
+        date_from: Optional[date] = None,
+        date_to: Optional[date] = None,
+        show_resolved: bool = False,
+        offset: int = 0,
+        limit: int = 50,
+    ) -> Dict[str, Any]:
+        """Every seat that pairs with no hours (``kind="signups"``), or every
+        hours entry on the roster's days that pairs with no seat
+        (``kind="hours"``), oldest first (owner decisions, 2026-11-26).
+
+        A seat lists the same member's unpaired hours within a day of it, to
+        pair by hand. ``show_resolved`` adds what the reviewer has already
+        dealt with: seats they paired, and leftovers marked reviewed.
+        """
+        if kind not in LEFTOVER_KINDS:
+            raise ValueError("Choose seats or hours.")
+        record = await self.imports.get(organization_id, import_id)
+        plan, _, _ = await self._plan(record)
+        resolutions = await self._resolve_members(record, plan)
+        member_of = self._preview_member_of(resolutions)
+        pairing, event_of = await self._pair_with_hours(record, plan, member_of)
+        decisions = mapping_rules.Decisions.from_stored(record.staffing_settings)
+        reviewed = set(decisions.reviewed)
+        directory = {
+            m.id: m.display_name
+            for m in await self.imports.shift_imports.member_directory(
+                record.organization_id, include_removed=True
+            )
+        }
+
+        def _in_range(day: Optional[date]) -> bool:
+            if day is None:
+                return date_from is None and date_to is None
+            return (date_from is None or day >= date_from) and (
+                date_to is None or day <= date_to
+            )
+
+        def _entry(e: hours_match.HoursEntry) -> Dict[str, Any]:
+            return {
+                "attendance_id": e.attendance_id,
+                "date": e.day,
+                "start": e.start,
+                "end": e.end,
+            }
+
+        rows: List[Dict[str, Any]] = []
+        if kind == LEFTOVERS_SIGNUPS:
+            seats = {
+                plan_rules.seat_ledger_id(seat.seat): seat
+                for planned in plan.events
+                for seat in planned.seats
+            }
+            open_hours: Dict[str, List[hours_match.HoursEntry]] = {}
+            for e in pairing.unmatched_hours:
+                open_hours.setdefault(e.user_id, []).append(e)
+            keys = list(pairing.unmatched_signups)
+            if show_resolved:
+                keys += sorted(pairing.pinned)
+            for key in keys:
+                planned = event_of[key]
+                day = planned.event.day
+                user_id = member_of(seats[key]) or ""
+                state = (
+                    "paired"
+                    if key in pairing.pinned
+                    else (
+                        "reviewed"
+                        if mapping_rules.SIGNUP_LEFTOVER + key in reviewed
+                        else "open"
+                    )
+                )
+                if (state != "open" and not show_resolved) or not _in_range(day):
+                    continue
+                if member_id and user_id != member_id:
+                    continue
+                candidates = [
+                    _entry(e)
+                    for e in open_hours.get(user_id, [])
+                    if day is not None
+                    and e.day is not None
+                    and abs((e.day - day).days) <= 1
+                ]
+                paired = pairing.matched.get(key) if state == "paired" else None
+                rows.append(
+                    {
+                        "key": key,
+                        "state": state,
+                        "date": day,
+                        "activity": html.unescape(planned.event.activity),
+                        "title": seats[key].seat.title,
+                        "member_id": user_id,
+                        "member": directory.get(user_id, ""),
+                        "paired_with": _entry(paired) if paired else None,
+                        "candidates": candidates,
+                    }
+                )
+        else:
+            for e in pairing.unmatched_hours:
+                state = (
+                    "reviewed"
+                    if mapping_rules.HOURS_LEFTOVER + e.attendance_id in reviewed
+                    else "open"
+                )
+                if (state != "open" and not show_resolved) or not _in_range(e.day):
+                    continue
+                if member_id and e.user_id != member_id:
+                    continue
+                rows.append(
+                    {
+                        "key": e.attendance_id,
+                        "state": state,
+                        **_entry(e),
+                        "member_id": e.user_id,
+                        "member": directory.get(e.user_id, ""),
+                    }
+                )
+        rows.sort(key=lambda r: (r["date"] or date.min, r["member"], r["key"]))
+        members = sorted(
+            {(r["member_id"], r["member"]) for r in rows if r["member_id"]},
+            key=lambda m: (m[1].casefold(), m[0]),
+        )
+        return {
+            "kind": kind,
+            "items": rows[offset : offset + limit],
+            "total": len(rows),
+            "members": [{"id": mid, "name": name} for mid, name in members],
+        }
+
+    async def update_leftovers(
+        self,
+        organization_id: str,
+        import_id: str,
+        pairs: Mapping[str, Optional[str]],
+        reviewed: Mapping[str, bool],
+    ) -> None:
+        """Pair seats with hours entries by hand, unpair them (``None``), and
+        mark leftovers reviewed or not.
+
+        A pair must join a seat and an hours entry of the same member, both
+        still on the roster's side of the pairing: seating someone on another
+        member's hours would put them on a shift they did not work. Pairing a
+        seat clears any reviewed mark on it and on the entry it took.
+        """
+        record = await self.imports.get(organization_id, import_id, for_update=True)
+        plan, _, _ = await self._plan(record)
+        resolutions = await self._resolve_members(record, plan)
+        member_of = self._preview_member_of(resolutions)
+        signups, entries, days, _ = await self._pairing_inputs(record, plan, member_of)
+        decisions = mapping_rules.Decisions.from_stored(record.staffing_settings)
+        signup_by_key = {s.key: s for s in signups}
+        entry_by_id = {e.attendance_id: e for e in entries}
+        marks = set(decisions.reviewed)
+
+        for key, attendance_id in pairs.items():
+            signup = signup_by_key.get(key)
+            if signup is None:
+                raise ValueError("That seat is not on this roster.")
+            if attendance_id is None:
+                decisions.hours_pairs.pop(key, None)
+                continue
+            entry = entry_by_id.get(str(attendance_id))
+            if entry is None or entry.day not in days:
+                raise ValueError("That hours entry is not on this roster's days.")
+            if entry.user_id != signup.user_id:
+                raise ValueError("A seat pairs only with its own member's hours.")
+            # One entry backs one seat: a second pin on it moves it here.
+            for other, taken in list(decisions.hours_pairs.items()):
+                if taken == entry.attendance_id and other != key:
+                    decisions.hours_pairs.pop(other)
+            decisions.hours_pairs[key] = entry.attendance_id
+            marks.discard(mapping_rules.SIGNUP_LEFTOVER + key)
+            marks.discard(mapping_rules.HOURS_LEFTOVER + entry.attendance_id)
+
+        for mark, value in reviewed.items():
+            if mark.startswith(mapping_rules.SIGNUP_LEFTOVER):
+                known = mark[len(mapping_rules.SIGNUP_LEFTOVER) :] in signup_by_key
+            elif mark.startswith(mapping_rules.HOURS_LEFTOVER):
+                known = mark[len(mapping_rules.HOURS_LEFTOVER) :] in entry_by_id
+            else:
+                raise ValueError("A leftover is named signup:<seat> or hours:<entry>.")
+            if value and not known:
+                raise ValueError("That leftover is not on this roster.")
+            if value:
+                marks.add(mark)
+            else:
+                marks.discard(mark)
+
+        decisions.reviewed = sorted(marks)
+        record.staffing_settings = decisions.to_stored()
+        await self.db.commit()
 
     # ------------------------------------------------------------------
     # Reviewer's choices
@@ -467,14 +690,20 @@ class HistoricalStaffingCommitService:
             )
         return entries
 
-    async def _pair_with_hours(
+    async def _pairing_inputs(
         self,
         record: HistoricalImport,
         plan: plan_rules.Plan,
         member_of: Any,
-    ) -> Tuple[hours_match.HoursMatch, Dict[str, plan_rules.PlannedEvent]]:
-        """Pair every dated seat whose member is known with that member's
-        hours. Returns the pairing and each sign-up's event, by seat key."""
+    ) -> Tuple[
+        List[hours_match.SignUp],
+        List[hours_match.HoursEntry],
+        set[date],
+        Dict[str, plan_rules.PlannedEvent],
+    ]:
+        """Both sides of the pairing: every dated seat whose member is known,
+        that member's hours around the roster's span, the days the roster
+        covers, and each sign-up's event by seat key."""
         tz = ZoneInfo(record.timezone)
         signups: List[hours_match.SignUp] = []
         event_of: Dict[str, plan_rules.PlannedEvent] = {}
@@ -494,7 +723,7 @@ class HistoricalStaffingCommitService:
                 signups.append(hours_match.SignUp(key, user_id, start, end))
                 event_of[key] = planned
         if not spans:
-            return hours_match.match([], []), event_of
+            return signups, [], days, event_of
         # A day either side: an hours entry clocked in before the roster's
         # start, or an overnight that ran past its last day, still counts.
         window_start = min(s for s, _ in spans) - timedelta(days=1)
@@ -502,7 +731,22 @@ class HistoricalStaffingCommitService:
         entries = await self._hours_entries(
             record.organization_id, window_start, window_end
         )
-        pairing = hours_match.match(signups, entries)
+        return signups, entries, days, event_of
+
+    async def _pair_with_hours(
+        self,
+        record: HistoricalImport,
+        plan: plan_rules.Plan,
+        member_of: Any,
+    ) -> Tuple[hours_match.HoursMatch, Dict[str, plan_rules.PlannedEvent]]:
+        """Pair every dated seat whose member is known with that member's
+        hours, the reviewer's own pairs first. Returns the pairing and each
+        sign-up's event, by seat key."""
+        signups, entries, days, event_of = await self._pairing_inputs(
+            record, plan, member_of
+        )
+        decisions = mapping_rules.Decisions.from_stored(record.staffing_settings)
+        pairing = hours_match.match(signups, entries, decisions.hours_pairs)
         # Only a day the roster covers can be missing a sign-up; the window's
         # margin would otherwise count the days either side of it.
         pairing.unmatched_hours = [e for e in pairing.unmatched_hours if e.day in days]
