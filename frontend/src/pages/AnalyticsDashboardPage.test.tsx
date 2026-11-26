@@ -1,10 +1,12 @@
-import { act, render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MemoryRouter } from 'react-router';
+import { MemoryRouter, Route, Routes } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import AnalyticsDashboardPage from './AnalyticsDashboardPage';
 import { analyticsService } from '../services/analytics';
+import { eventService } from '../services/api';
+import type { Event } from '../types/event';
 
 vi.mock('../services/analytics', () => ({
   analyticsService: {
@@ -89,6 +91,49 @@ describe('AnalyticsDashboardPage', () => {
 
       expect(analyticsService.getOverallMetrics).toHaveBeenCalledTimes(2);
       expect(screen.getByText('42')).toBeInTheDocument();
+    });
+  });
+
+  describe('scoped to one event', () => {
+    const renderForEvent = () =>
+      render(
+        <MemoryRouter initialEntries={['/events/evt-1/analytics']}>
+          <Routes>
+            <Route path="/events/:id/analytics" element={<AnalyticsDashboardPage />} />
+          </Routes>
+        </MemoryRouter>
+      );
+
+    beforeEach(() => {
+      vi.mocked(analyticsService.getEventMetrics).mockReset();
+      vi.spyOn(eventService, 'getEvent').mockResolvedValue({ id: 'evt-1', title: 'Monthly Drill' } as Event);
+    });
+
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it('names the event in the trail rather than a placeholder', async () => {
+      vi.mocked(analyticsService.getEventMetrics).mockResolvedValue(metrics);
+      renderForEvent();
+
+      const trail = await screen.findByRole('navigation', { name: 'Breadcrumb' });
+      expect(await within(trail).findByRole('link', { name: 'Monthly Drill' })).toHaveAttribute(
+        'href',
+        '/events/evt-1'
+      );
+      expect(eventService.getEvent).toHaveBeenCalledWith('evt-1');
+    });
+
+    it('keeps the Events strip and trail when the figures cannot be loaded', async () => {
+      vi.mocked(analyticsService.getEventMetrics).mockRejectedValue(new Error('offline'));
+      renderForEvent();
+
+      expect(await screen.findByRole('button', { name: 'Retry' })).toBeInTheDocument();
+      expect(screen.getByRole('navigation', { name: 'Events sections' })).toBeInTheDocument();
+      expect(screen.getByRole('heading', { level: 1, name: 'QR Code Analytics' })).toBeInTheDocument();
+      // Nothing to export without figures.
+      expect(screen.queryByRole('button', { name: 'Export Data' })).not.toBeInTheDocument();
     });
   });
 });
