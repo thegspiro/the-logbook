@@ -16,10 +16,10 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR (branch `claude/security-review-elections-ballots-p18`)**: Feature 06
+**PR [#4730](https://github.com/thegspiro/the-logbook/pull/4730) (branch
+`claude/security-review-elections-ballots-p18`)**: Feature 06
 (Elections & ballots), pass 18 — watchdog pickup (the dedicated
-`/loop 30m /security-review` session remains unreachable). PR number
-recorded in a follow-up commit once opened.
+`/loop 30m /security-review` session remains unreachable).
 
 PR #4723 (Feature 05, Finance & approvals, pass 18) was confirmed merged
 (`730913d71`) before this iteration started, via a fresh `git fetch origin
