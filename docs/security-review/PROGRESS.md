@@ -16,6 +16,48 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR pending — branch `claude/security-review-storefront-payments-p18`**:
+Feature 04 (Storefront & payments), pass 18 — watchdog pickup (the
+dedicated `/loop 30m /security-review` session remains unreachable). This
+note will be updated with the PR number in a follow-up commit on this same
+branch once it is opened.
+
+PR #4715 (Feature 03, Public surface & webhooks, pass 18) was confirmed
+merged (`424fa044e`) before this iteration started, via a fresh `git fetch
+origin && git checkout main && git pull --ff-only` (3 commits
+fast-forwarded) rather than trusting a stale local checkout, and a fresh
+`list_pull_requests` (state=open) returned 0 results. The baseline commit
+was re-derived from scratch with `git log --all --oneline --grep
+"security(storefront" -i` against the fresh pull rather than trusted from a
+stale note: `76ad28398` ("0 fixed, 0 new findings (pass 17)") was still the
+newest hit, confirmed an ancestor of `main`, and confirmed a complete
+baseline (no same-pass follow-up fix commit directly after it — pass 17
+closed with 0 open findings). Rows 00–03 were `✅` and row 04 (Storefront &
+payments) was confirmed the next `⬜` row on the freshly-pulled `main`.
+
+`git diff --stat 76ad28398..424fa044e` across the feature's three declared
+scope files (`storefront.py`, `storefront_service.py`,
+`storefront_payments.py`) is empty, and a broader path sweep for any
+`storefront`/`stripe`/`payment` file found only the prior pass's own
+docs-only write-up commit — a true zero-delta window. Fresh AST
+re-enumeration still finds **49** routes, all auth-gated; independently
+re-read and confirmed unchanged: PayPal webhook signature verification
+before any work, the `StorePaymentEvent` `UniqueConstraint(organization_id,
+provider, external_id)` idempotency guard (Pitfall #36), no client-supplied
+price field on `StoreOrderItemInput`, capacity/row locking
+(`with_for_update()`, 6 sites), 5 `assert_different_person` separation-of-
+duties call sites, `SafeCsvChunks` on the order export, and
+`escape=LIKE_ESCAPE_CHAR` on every `.ilike()`/`.like()` call. **0 fixed, 0
+new findings.** Full write-up:
+`docs/security-review/SF-04-storefront-payments.md`'s **Pass 18** section.
+
+Row 04 → ✅ (pending this PR's merge); next is Feature 05 (Finance &
+approvals) — re-check `list_pull_requests` fresh rather than trusting this
+note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 03, Public surface & webhooks, pass 18, PR #4715, merged), preserved for history</summary>
+
 **PR [#4715](https://github.com/thegspiro/the-logbook/pull/4715) (branch
 `claude/security-review-public-surface-webhooks-p18`)**: Feature 03
 (Public surface & webhooks), pass 18 — watchdog pickup (the dedicated
@@ -72,6 +114,8 @@ section.
 Row 03 → ✅ (pending this PR's merge); next is Feature 04 (Storefront &
 payments) — re-check `list_pull_requests` fresh rather than trusting this
 note.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 02, Permissions & roles, pass 18, PR #4714, merged), preserved for history</summary>
@@ -29131,7 +29175,7 @@ commit" rule.
 | 01  | Auth & session lifecycle  | AUTH   | `endpoints/auth.py`, `auth_service.py`, `mfa_service.py`, `oauth_service.py`                                                                                                                                                                                                          | ✅     |
 | 02  | Permissions & roles       | PERM   | `dependencies.py`, `core/permissions.py`, `roles.py`, `operational_ranks.py`, `officers.py`, `org_chart.py`                                                                                                                                                                           | ✅     |
 | 03  | Public surface & webhooks | PUB    | `api/public/*` (71 unauth routes, added pass 18: a new public History website, `history.py`, 20 routes), `paypal_webhook.py`, `integrations_webhook.py`, `salesforce_webhook.py`, `zeffy_webhook.py`, `shift_evaluations.py` (added pass 16)                                          | ✅     |
-| 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                                                                                                                                                                    | ⬜     |
+| 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                                                                                                                                                                    | ✅     |
 | 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`, `endpoints/quickbooks_online.py` (8 routes; corrected from `services/quickbooks_online.py`, pass 16), `services/quickbooks_online_client.py`, `services/quickbooks_sync_service.py` (both added pass 16) | ⬜     |
 | 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (76 routes, token-scoped voting), `election_service.py`, `services/voter_rules.py` (added pass 16), `services/election_attendance_service.py` (added pass 16), `services/election_defaults.py` (added pass 16)                                               | ⬜     |
 | 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`, `leave_requests.py` (20 routes, added pass 17; Chief routing, approver cover, escalation, calendar/export added pass 17)                                                                                      | ⬜     |
@@ -56121,4 +56165,66 @@ errors/warnings.
 
 Row 03 → ✅ (pending this PR's merge). Next is Feature 04 (Storefront &
 payments) — re-check `list_pull_requests` fresh rather than trusting this
+note.
+
+### 2026-11-26 — Feature 04 (Storefront & payments, pass 18): watchdog pickup, true zero delta, 0 fixed, 0 new findings
+
+Watchdog pickup (the dedicated `/loop 30m /security-review` session remains
+unreachable). PR #4715 (Feature 03, Public surface & webhooks, pass 18) was
+confirmed merged (`424fa044e`) via a fresh `git fetch origin && git
+checkout main && git pull --ff-only` and a fresh `list_pull_requests`
+(state=open) returned 0 results. Row 04 (Storefront & payments) was
+confirmed the next `⬜` row on the freshly-pulled `main`.
+
+Baseline re-derived from scratch with `git log --all --oneline --grep
+"security(storefront" -i`: `76ad28398` ("0 fixed, 0 new findings (pass
+17)") was the newest hit, confirmed an ancestor of `main` and confirmed a
+complete baseline — no same-pass follow-up fix commit sits after it (pass
+17 closed with 0 findings open, unlike Feature 03's PUB-15 pass-17/18
+pair, so there was nothing for a follow-up to have fixed).
+
+`git diff --stat 76ad28398..424fa044e` across all three declared scope
+files is empty; a broader sweep for any `storefront`/`stripe`/`payment`
+path touched in that range found only the prior pass's own
+`PROGRESS.md`/findings-file write-up commit (`7140b4cf8`) — a true
+zero-delta window, matching what `SEC-00-cross-cutting-baseline.md`'s own
+Pass 19 cross-cutting sweep already reported for this same window across
+the whole codebase, cross-checked rather than merely cited.
+
+Fresh, independent re-verification rather than trusting the file's prior
+counts: AST walk of `storefront.py` finds **49** routes, unchanged, all
+auth-gated (0 bare); `check_route_permissions.py --strict` finds **344**
+total application routes, 0 errors/warnings (matching `SEC-00` pass 19's
+whole-app count, confirming no route changed anywhere in this window, not
+only in storefront). Read directly rather than cited: PayPal webhook
+signature verification happens before any DB work or duplicate check in
+`app/api/public/paypal_webhook.py` (this feature's payment processor is
+PayPal, not Stripe — 0 hits for `stripe` across the three scope files);
+`StorePaymentEvent.__table_args__` carries a real DB-level
+`UniqueConstraint(organization_id, provider, external_id)` backing the
+service-layer idempotency check (Pitfall #36 satisfied at the database,
+not just in application logic); `StoreOrderItemInput` still carries no
+price field; capacity/row locking (`with_for_update()`, 6 sites),
+`assert_different_person` (5 sites), `SafeCsvChunks` on the order export,
+and `escape=LIKE_ESCAPE_CHAR` on every `.ilike()`/`.like()` call are all
+unchanged from pass 17.
+
+**0 fixed, 0 new findings.** SF-1–SF-11, SF8-04-1/2/3 and SF14-04-1
+re-verified by name against pass 17's text (all FIXED, all unchanged by an
+empty diff). Full write-up: `docs/security-review/SF-04-storefront-payments.md`'s
+**Pass 18** section.
+
+**Completion gate:** `flake8`/`black --check`/`isort --check-only` (CI's
+pins — `flake8==7.4.1`, `black==26.10.1`, `isort==9.0.2` — via
+`/usr/local/bin/python3.13`, confirmed already installed at those exact
+versions) on `app/ tests/ alembic/` — all clean.
+`validate_migrations.py --strict` — single head `e9cf8ab7e4e4`, 844
+revisions. `check_route_permissions.py --strict` — 344 routes, 0
+errors/warnings. Scoped backend pytest (`-k "storefront or stripe or
+payment or webhook_replay"`) — 999 passed, 1 pre-existing environment-only
+skip (`pywebpush`). `npm run typecheck` — 0 errors. `npm run lint` — 0
+errors/warnings.
+
+Row 04 → ✅ (pending this PR's merge). Next is Feature 05 (Finance &
+approvals) — re-check `list_pull_requests` fresh rather than trusting this
 note.
