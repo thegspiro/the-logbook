@@ -1,6 +1,228 @@
 # Security Review — Public Surface & Webhooks
 
-**Prefix:** `PUB` · **Iteration:** 03 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-01 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-05 (pass 7), 2026-10-12 (pass 8), 2026-10-14 (pass 9, watchdog pickup), 2026-10-18 (pass 10, watchdog pickup), 2026-10-22 (pass 11, watchdog pickup), 2026-10-25 (pass 12), 2026-10-28 (pass 13, watchdog pickup), 2026-10-31 (pass 14, watchdog pickup), 2026-11-04 (pass 15, watchdog pickup), 2026-11-16 (pass 16, watchdog pickup), 2026-11-24 (pass 17, watchdog pickup) · **PR:** #1806 (pass 1), pass 9 (PR #3215), pass 10 (PR #3399), pass 11 (PR #3558), pass 13 (PR #3804), pass 15 (PR #4022), pass 16 (PR #4349), pass 17 (this PR)
+**Prefix:** `PUB` · **Iteration:** 03 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-01 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-05 (pass 7), 2026-10-12 (pass 8), 2026-10-14 (pass 9, watchdog pickup), 2026-10-18 (pass 10, watchdog pickup), 2026-10-22 (pass 11, watchdog pickup), 2026-10-25 (pass 12), 2026-10-28 (pass 13, watchdog pickup), 2026-10-31 (pass 14, watchdog pickup), 2026-11-04 (pass 15, watchdog pickup), 2026-11-16 (pass 16, watchdog pickup), 2026-11-24 (pass 17, watchdog pickup), 2026-11-26 (pass 18, watchdog pickup) · **PR:** #1806 (pass 1), pass 9 (PR #3215), pass 10 (PR #3399), pass 11 (PR #3558), pass 13 (PR #3804), pass 15 (PR #4022), pass 16 (PR #4349), pass 17 (PR #4644), pass 18 (this PR)
+
+---
+
+## Pass 18 (2026-11-26, watchdog pickup) — a new public History website (20 routes, two routers) reviewed fresh; every other route-bearing file and webhook collaborator re-confirmed byte-identical; 0 fixed, 0 new findings
+
+Watchdog pickup — the dedicated `/loop 30m /security-review` session remains
+unreachable. Step 0: a fresh `git fetch origin && git checkout main && git
+pull --ff-only` fast-forwarded 3 commits to `4cffe21fc` (merge of PR #4714,
+Feature 02, Permissions & roles, pass 18); `list_pull_requests` (state
+`open`) returned 0 results. Rows 00–02 of the rotation table read `✅`; row
+03 (this feature) was confirmed the next `⬜` row by reading the table
+directly on the freshly-pulled `main`, not trusted forward from the
+briefing.
+
+**Baseline re-derived, not trusted forward:** `git log --all --oneline
+--grep "security(public" -i` against the fresh pull still finds `1cad5f8f6`
+("security(public-webhooks): 1 fixed, 0 new flagged", PUB-15's fix) as the
+newest hit, merged as `3d8e0f194` via PR #4644 (pass 17 + its own
+self-correction, one PR). `git merge-base --is-ancestor 3d8e0f194 HEAD`
+confirms it is still an ancestor of `main`, and a broader scan of `git log
+3d8e0f194..HEAD --oneline` against every path this feature's row names
+turned up no fix landed under an unrelated-sounding message — the only
+commits touching anything in scope are the two History-feature commits
+below.
+
+### Scope re-derived fresh
+
+`git ls-tree 3d8e0f194 backend/app/api/public/` vs. `git ls-tree HEAD
+backend/app/api/public/`: 19 files at baseline, 20 now — exactly one new
+file, `history.py`. An AST walk of every `@router.<verb>`/`@open_router.<verb>`
+decorator across all 18 route-bearing files under `app/api/public/`
+(`__init__.py`/`responses.py` excluded, neither defines a route),
+cross-checked against `grep -c '^@router\.\|^@open_router\.'` (both
+agreeing), finds **71 routes** — up from 51 at pass 17, all 20 new ones in
+`history.py`. `git diff 3d8e0f194..HEAD --stat` against every other
+route-bearing file plus every webhook/collaborator file this feature's own
+`PROGRESS.md` row and prior passes name (`public_portal_security.py`,
+`webhook_service.py`, `webhook_replay.py`, `shift_evaluations.py` (both the
+public and v1 endpoint files), `shift_evaluation_link_service.py`,
+`zeffy_sync_service.py`, and every `integration_services/*.py` file this
+feature's webhooks call into) returns **empty** — byte-identical to pass
+17's already-fully-reviewed state. The only diff anywhere in scope is three
+new files: `app/api/public/history.py` (641 L),
+`app/services/history_public_service.py` (1148 L), and
+`app/services/history_public_links.py` (149 L).
+
+### The new public History website — reviewed fresh, independently of SEC-00's own pass-19 read
+
+`SEC-00-cross-cutting-baseline.md`'s **Pass 19** section already read this
+same surface in full (as a genuinely new, unrouted module found during its
+own cross-cutting delta) and found it sound. This feature's own row is its
+proper home — `api/public/*` is this feature's declared scope — so it was
+read again here in full, independently, rather than taken on SEC-00's word.
+The two reads agree; nothing SEC-00 missed was found, and nothing here
+required a second finding.
+
+**What it is:** `/api/public/v1/history`, two routers mounted once each in
+`main.py` (confirmed by import alias, `public_history_router` /
+`public_history_open_router`, not by filename substring — no duplicate, no
+orphan). `router` (17 routes) is the portal API: every route takes
+`Depends(authenticate_api_key)`, so `organization_id` is resolved from the
+authenticated `PublicPortalAPIKey` row, never from a client-supplied value —
+XC-3 holds by construction. `open_router` (3 routes — `/files/{token}`,
+`/widget/{token}/today`, `/widget/{token}/embed-policy`) is what a browser
+fetches with no key at all: a photo/document/article file by a signed link,
+and the "Today in history" widget by its own secret link and its embed
+policy.
+
+**Checked against `CHECKLIST.md`'s seven dimensions, weighted toward rate
+limiting, signature verification, existence non-disclosure and org-scoping
+— this is a genuinely unauthenticated, internet-reachable surface:**
+
+- **Existence non-disclosure (§5).** `_records()` raises the same
+  `_not_found()` (404, `"Not found"`) whether the portal config row is
+  missing, the portal is administratively disabled
+  (`check_portal_enabled`), the History module is off for the org
+  (`_history_on`), or the one part of History asked for (`kind`) is
+  switched off in `HistoryPublicSettings` — confirmed by reading all four
+  branches directly rather than trusting the docstring's claim. `_found()`
+  raises the identical 404 for a record id that does not exist. A website
+  operator probing the API cannot distinguish "wrong token", "this org
+  turned off photos", and "no such photo" — all three are the same
+  response. `open_router`'s `get_public_file`/`get_widget_today` fail to
+  the same 404 for a malformed token, an expired one, a forged signature,
+  or a withdrawn record, via `links.verify()` returning `None` on every one
+  of those paths uniformly (confirmed by reading `verify()`: malformed
+  structure, bad `hmac.compare_digest`, bad JSON, wrong types, a variant
+  the kind may not name, and an expired timestamp all return the same
+  `None`, with no distinguishing exception or log visible to the caller).
+- **Rate limiting before expensive work (§6, Attack Protection table).**
+  The keyed routes inherit `authenticate_api_key`'s own ordering
+  (`validate_ip_rate_limit` before the bcrypt-verifying key lookup,
+  unchanged pre-existing code, confirmed byte-identical to pass 17) — no
+  new bypass introduced by adding a 19th caller of that dependency. The
+  keyless routes carry their own `Depends(_rate_limit_files)` /
+  `Depends(_rate_limit_widget)` on the route decorator itself (evaluated
+  before the handler body runs, so before any DB query or PDF render) —
+  confirmed present on all 3 keyless routes by reading each decorator
+  directly, matching pass 17's finding that only `mcp_oauth.py`'s metadata
+  routes and `portal.py`'s health check need none.
+- **Webhook/signature verification — not applicable here** (this surface
+  signs, rather than verifies, inbound requests), but the signing side was
+  checked with the same rigor this feature applies to the three webhook
+  receivers' verification: `history_public_links.sign`/`verify` is
+  HMAC-SHA256 under a key purpose-derived from `SECRET_KEY`
+  (`hmac.new(SECRET_KEY, b"history-public-files/v1", sha256)`, not the raw
+  app secret), verified with `hmac.compare_digest` (constant-time, not
+  `==`), with a `MAX_TOKEN_LENGTH` (512) checked before any decoding and
+  the claimed `variant` checked against an explicit per-`kind` allowlist
+  (`VARIANTS`) both at sign time and at verify time. The widget's own
+  secret (`make_widget_token`) is a 256-bit `secrets.token_urlsafe(32)`
+  stored only as its `sha256` hash (`settings_for_widget` looks up by hash,
+  never compares the plaintext) — the same pattern this codebase already
+  uses for other secret-link lookups.
+- **TOCTOU — a withdrawn record's link stops working at once.** The
+  module's own docstring states this as its rule; confirmed true by reading
+  `file_allowed`/`_public_article`/`get_widget_today` directly rather than
+  trusting the comment. Every one of these re-queries
+  `publication_level == PUBLIC` and `public_snapshot is not None` **at
+  serve time**, on every request a signed link or widget token reaches —
+  nothing is cached from when the link was issued. A photo reached through
+  an article additionally re-checks that the article is still public and
+  still shows that photo (`_article_media`), so revoking an article's
+  clearance also revokes every photo link issued through it, not only the
+  article's own link.
+- **Org-scoping (§3, XC-3).** Every by-id/by-token query in
+  `history_public_service.py` filters `organization_id` (confirmed: every
+  `select(...)` in the file either takes `organization_id` as a parameter
+  filtered into the `WHERE` clause, or is reached only through a
+  `PublicRecords`/`FileClaim`/`HistoryPublicSettings` row whose own
+  `organization_id` was already resolved from the API key or the verified
+  token — never from a raw client-supplied id with no such filter). The
+  keyless routes' `organization_id` comes from the HMAC-verified claim
+  (`FileClaim.organization_id`, `HistoryPublicSettings.organization_id`
+  resolved by the widget token's hash) rather than any client-supplied
+  parameter, so a forged or mismatched organization id cannot be smuggled
+  in without also forging the signature.
+- **Data exposure (§5).** Every view function (`media_view`,
+  `document_view`, `event_view`, `apparatus_view`, `person_view`,
+  `article_view`, …) builds its response by naming fields one at a time
+  out of `item.public_snapshot` (via `_pick()`), never by serializing the
+  live ORM row — a field added to a record's live model later is not
+  published to the website by accident, only a field someone explicitly
+  adds to the snapshot and to the matching `_*_FIELDS` tuple is. The one
+  pre-existing, already-documented gap in this area —
+  `docs/KNOWN_LIMITATIONS.md`'s "An article can go public with photos the
+  public copy leaves out" (found by the Nov 24–25 documentation pass,
+  unrelated to this review) — is a display gap, not a leak: its own text
+  confirms "nothing leaks, because the public snapshot drops those
+  photos," which this pass's own read of `media_summary`/`article_view`
+  confirms independently (a photo not in the snapshot has no
+  `thumbnail_url`/`image_url` emitted at all). No audit logging exists on
+  this surface at all — it is read-only, no `log_audit_event` call
+  appears anywhere in `history.py` or its two backing service files
+  (confirmed by `grep`), so PUB-15's class of defect (an audit event
+  written with no `organization_id=` keyword) cannot recur here; the
+  standing guard test, `test_public_audit_organization_scoping.py`, globs
+  every `*.py` under `app/api/public/` including the new file and stays
+  green with nothing to flag.
+- **Header/export safety.** `_article_pdf`'s `Content-Disposition` names
+  `article.id` (a server-generated UUID, never user text) and
+  `_stored_file`'s filename names `claim.record_id`, which only ever holds
+  a value `sign()` embedded from a real DB id — neither is reachable by an
+  attacker-chosen string. `get_widget_embed_policy` re-derives
+  `frame-ancestors` from the organization's own stored website list on
+  every request (`department_embed_origins`, the same helper Forms' embed
+  origins already use, previously reviewed) rather than caching a stale
+  allow-list, and defaults to `'none'` — with a 200, so the page still
+  renders unframed — when the widget would not otherwise answer; it also
+  sets `Cache-Control: no-store` on that response so a disabled widget's
+  policy is never served stale from a shared cache.
+- **Schema & migration integrity (§7).** `HistoryArticle` and
+  `HistoryPublicSettings` (the two new models this surface reads) each
+  have a real Alembic migration (`8d4ee6cc92ca`, `46accab49bc1`, merged
+  under `e9cf8ab7e4e4`) — not left to `create_all`. `SET NULL` FKs on both
+  are `nullable=True` (re-confirmed by
+  `test_database_schema.py::TestForeignKeyIntegrity::test_set_null_fks_are_nullable`,
+  part of this pass's own guard-suite run below). The Alembic chain's fork
+  that pass 17 escalated (`5c2e8a417d90`/`9c41e7b2d5a3`) is **resolved**:
+  `validate_migrations.py --strict` now reports a single head
+  (`e9cf8ab7e4e4`, 844 revisions) — confirmed directly, not assumed from
+  the merge having an open PR last pass.
+
+**No finding.** The new surface is read-only, resolves its tenant from a
+signed credential rather than client input on every route, fails closed to
+an identical 404 on every disabled/missing/forged case, rate-limits before
+any expensive work on both its keyed and keyless halves, and signs its
+file/widget links the way this codebase's other secret-link mechanisms
+already do. This independent read agrees with SEC-00 pass 19's own —
+neither found anything the other missed.
+
+### Re-verified still current (pass 17's findings, and earlier)
+
+PUB-1 through PUB-15 remain fixed, unaffected by this pass's only in-scope
+diff (the three new History files, read above). PUB-3 (INFO,
+`ApprovalChain`'s tables remain `create_all`-only, by design) is unchanged
+and still accurate — confirmed no migration or model touch to those tables
+this pass. No item was left OPEN or FLAGGED by pass 17, so there was
+nothing standing to re-verify by name beyond the migration fork above,
+which is now resolved rather than merely re-confirmed unchanged.
+
+### Completion gate (pass 18)
+
+| Check                                                                                                                                                                                                                                 | Result                                                          |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/` (7.4.1, matches CI's pin)                                                                                                                                                                               | ✅ 0 violations                                                 |
+| `black --check app/ tests/ alembic/` (26.10.1, matches CI's pin)                                                                                                                                                                      | ✅ 3541 files unchanged                                         |
+| `isort --check-only app/ tests/ alembic/` (9.0.2, matches CI's pin)                                                                                                                                                                   | ✅ clean                                                        |
+| `python3 scripts/validate_migrations.py --strict`                                                                                                                                                                                     | ✅ single head `e9cf8ab7e4e4`, 844 revisions                    |
+| `python3 scripts/check_route_permissions.py --strict` (frontend-page registry; public API routes are a separate, intentional-no-auth allowlist this script does not gate — unaffected)                                                | ✅ 344 routes, 0 errors, 0 warnings                             |
+| scoped pytest (`-k "public or webhook or paypal or salesforce or zeffy or shift_evaluation or history_public or audit_organization_scoping" -m "not integration and not slow and not docker"`)                                        | ✅ 558 passed, 1 skipped (`py_vapid`/`pywebpush`, pre-existing) |
+| standing guard suites (org-scoping ratchet, capacity locking, CSV sweep, LIKE escaping, `create_all`-table tolerance, baseline member grants, logging escaping, log-call-shape sweep, public-audit-org-scoping, account-status gates) | ✅ 204 passed                                                   |
+| `cd frontend && npm run typecheck`                                                                                                                                                                                                    | ✅ 0 errors                                                     |
+| `cd frontend && npm run lint`                                                                                                                                                                                                         | ✅ 0 errors, 0 warnings                                         |
+
+**0 fixed, 0 new findings.** The one real delta (a new public History
+website, 20 routes) was read in full and found sound, independently
+confirming SEC-00 pass 19's own read; every other route and webhook
+collaborator in this feature's scope is byte-identical to pass 17's
+already-fully-reviewed state; the migration fork pass 17 escalated has
+since resolved. Rotation row 03 → ✅ (pending this PR's merge); next is
+Feature 04 (Storefront & payments).
 
 ---
 
