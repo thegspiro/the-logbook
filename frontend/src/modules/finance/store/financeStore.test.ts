@@ -812,7 +812,9 @@ describe('financeStore', () => {
     it('should handle error', async () => {
       mockPRSubmit.mockRejectedValue(new Error('Cannot submit'));
 
-      await getState().submitPurchaseRequest('pr1');
+      // Rethrown so the page does not report "submitted for approval"
+      // beside the refusal (app-review FIN6-F1).
+      await expect(getState().submitPurchaseRequest('pr1')).rejects.toThrow('Cannot submit');
 
       expect(getState().isLoading).toBe(false);
       expect(getState().error).toBe('Cannot submit');
@@ -939,7 +941,9 @@ describe('financeStore', () => {
     it('should handle error', async () => {
       mockERSubmit.mockRejectedValue(new Error('Cannot submit'));
 
-      await getState().submitExpenseReport('er1');
+      // Rethrown so the page does not report "submitted for approval"
+      // beside the refusal (app-review FIN6-F1).
+      await expect(getState().submitExpenseReport('er1')).rejects.toThrow('Cannot submit');
 
       expect(getState().isLoading).toBe(false);
       expect(getState().error).toBe('Cannot submit');
@@ -1066,7 +1070,9 @@ describe('financeStore', () => {
     it('should handle error', async () => {
       mockCRSubmit.mockRejectedValue(new Error('Not allowed'));
 
-      await getState().submitCheckRequest('cr1');
+      // Rethrown so the page does not report "submitted for approval"
+      // beside the refusal (app-review FIN6-F1).
+      await expect(getState().submitCheckRequest('cr1')).rejects.toThrow('Not allowed');
 
       expect(getState().isLoading).toBe(false);
       expect(getState().error).toBe('Not allowed');

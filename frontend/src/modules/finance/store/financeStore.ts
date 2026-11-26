@@ -422,6 +422,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
       }));
     } catch (err) {
       set({ error: handleStoreError(err, 'Failed to submit purchase request'), isLoading: false });
+      throw err;
     }
   },
 
@@ -472,6 +473,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
       }));
     } catch (err) {
       set({ error: handleStoreError(err, 'Failed to submit expense report'), isLoading: false });
+      throw err;
     }
   },
 
@@ -522,6 +524,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
       }));
     } catch (err) {
       set({ error: handleStoreError(err, 'Failed to submit check request'), isLoading: false });
+      throw err;
     }
   },
 
