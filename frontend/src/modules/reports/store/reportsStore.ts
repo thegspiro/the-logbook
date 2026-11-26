@@ -18,54 +18,45 @@ import type {
 } from '../types';
 import { asArray } from '../../../utils/asArray';
 import { getErrorMessage } from '../../../utils/errorHandling';
-import { toLocalDateString } from '../../../utils/dateFormatting';
+import { addCalendarDays, getTodayLocalDate } from '../../../utils/dateFormatting';
 
 // ============================================================================
 // Date preset helpers
 // ============================================================================
 
+// Built from the department's calendar date as plain Y-M-D arithmetic. A
+// browser Date carried the browser's own day: a laptop on UTC with a New York
+// department sent "this quarter" as Sep 30 – Dec 30, and "this year" turned
+// over at the browser's New Year, not the department's.
+const pad2 = (n: number): string => String(n).padStart(2, '0');
+const lastDayOfMonth = (year: number, month: number): number => new Date(Date.UTC(year, month, 0)).getUTCDate();
+const quarterRange = (year: number, quarter: number): { start: string; end: string } => {
+  const firstMonth = quarter * 3 + 1;
+  const lastMonth = firstMonth + 2;
+  return {
+    start: `${year}-${pad2(firstMonth)}-01`,
+    end: `${year}-${pad2(lastMonth)}-${pad2(lastDayOfMonth(year, lastMonth))}`,
+  };
+};
+
 export function getPresetDates(preset: DatePreset, tz?: string): { start: string; end: string } {
-  const now = new Date();
+  const today = getTodayLocalDate(tz);
+  const year = Number(today.slice(0, 4));
+  const month = Number(today.slice(5, 7));
   switch (preset) {
     case 'this-year':
-      return {
-        start: `${now.getFullYear()}-01-01`,
-        end: `${now.getFullYear()}-12-31`,
-      };
+      return { start: `${year}-01-01`, end: `${year}-12-31` };
     case 'last-year':
-      return {
-        start: `${now.getFullYear() - 1}-01-01`,
-        end: `${now.getFullYear() - 1}-12-31`,
-      };
-    case 'last-90': {
-      const ago = new Date(now);
-      ago.setDate(ago.getDate() - 90);
-      return { start: toLocalDateString(ago, tz), end: toLocalDateString(now, tz) };
-    }
-    case 'last-30': {
-      const ago = new Date(now);
-      ago.setDate(ago.getDate() - 30);
-      return { start: toLocalDateString(ago, tz), end: toLocalDateString(now, tz) };
-    }
-    case 'this-quarter': {
-      const q = Math.floor(now.getMonth() / 3);
-      const qStart = new Date(now.getFullYear(), q * 3, 1);
-      const qEnd = new Date(now.getFullYear(), q * 3 + 3, 0);
-      return {
-        start: toLocalDateString(qStart, tz),
-        end: toLocalDateString(qEnd, tz),
-      };
-    }
+      return { start: `${year - 1}-01-01`, end: `${year - 1}-12-31` };
+    case 'last-90':
+      return { start: addCalendarDays(today, -90), end: today };
+    case 'last-30':
+      return { start: addCalendarDays(today, -30), end: today };
+    case 'this-quarter':
+      return quarterRange(year, Math.floor((month - 1) / 3));
     case 'last-quarter': {
-      const q = Math.floor(now.getMonth() / 3) - 1;
-      const yr = q < 0 ? now.getFullYear() - 1 : now.getFullYear();
-      const qIdx = q < 0 ? 3 : q;
-      const qStart = new Date(yr, qIdx * 3, 1);
-      const qEnd = new Date(yr, qIdx * 3 + 3, 0);
-      return {
-        start: toLocalDateString(qStart, tz),
-        end: toLocalDateString(qEnd, tz),
-      };
+      const q = Math.floor((month - 1) / 3) - 1;
+      return q < 0 ? quarterRange(year - 1, 3) : quarterRange(year, q);
     }
     default:
       return { start: '', end: '' };
@@ -104,6 +95,8 @@ interface ReportsState {
   // Saved reports
   savedReports: SavedReportConfig[];
   savedReportsLoading: boolean;
+  /** Why the saved-reports list failed to load; null once it loads. */
+  savedReportsError: string | null;
 
   // Comparison mode
   comparisonData: ReportData | null;
@@ -153,6 +146,7 @@ export const useReportsStore = create<ReportsState>((set, get) => ({
   selectedCategory: 'all',
   savedReports: [],
   savedReportsLoading: false,
+  savedReportsError: null,
   comparisonData: null,
   comparisonPeriod: null,
   error: null,
@@ -228,15 +222,13 @@ export const useReportsStore = create<ReportsState>((set, get) => ({
   },
 
   fetchSavedReports: async () => {
-    set({ savedReportsLoading: true });
+    set({ savedReportsLoading: true, savedReportsError: null });
     try {
       const data = await savedReportsService.list();
       set({ savedReports: data, savedReportsLoading: false });
     } catch (err: unknown) {
-      set({
-        savedReportsLoading: false,
-        error: getErrorMessage(err, 'Failed to load saved reports'),
-      });
+      const message = getErrorMessage(err, 'Failed to load saved reports');
+      set({ savedReportsLoading: false, error: message, savedReportsError: message });
     }
   },
 

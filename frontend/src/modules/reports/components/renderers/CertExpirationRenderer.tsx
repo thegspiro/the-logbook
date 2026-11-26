@@ -40,16 +40,19 @@ export const CertExpirationRenderer: React.FC<Props> = ({ data }) => {
       key: 'days_until_expiry',
       header: 'Days Left',
       align: 'right' as const,
-      render: (v: unknown) => {
+      // Coloured by the server's own status, so the number and the badge
+      // beside it never disagree: the server's "expiring soon" window is the
+      // department's setting (90 days by default), not a fixed 30.
+      render: (v: unknown, row: Record<string, unknown>) => {
         if (v == null) return '-';
-        const days = Number(v);
+        const status = toStr(row.expiry_status, '');
         const color =
-          days < 0
+          status === 'expired'
             ? 'text-red-700 dark:text-red-400 font-semibold'
-            : days <= 30
+            : status === 'expiring_soon'
               ? 'text-yellow-700 dark:text-yellow-400 font-semibold'
               : 'text-theme-text-secondary';
-        return <span className={color}>{days}</span>;
+        return <span className={color}>{Number(v)}</span>;
       },
     },
     {
