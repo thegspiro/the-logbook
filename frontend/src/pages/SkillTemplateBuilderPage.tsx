@@ -1475,7 +1475,7 @@ export const SkillTemplateBuilderPage: React.FC = () => {
                         {positions.map((position) => (
                           <label
                             key={position.id}
-                            className="hover:bg-theme-surface-hover mobile-touch-target flex cursor-pointer items-center gap-2 rounded-md px-2 py-1"
+                            className="hover:bg-theme-surface-hover mobile-touch-target flex cursor-pointer items-start gap-2 rounded-md px-2 py-3"
                           >
                             <input
                               type="checkbox"
@@ -1487,7 +1487,7 @@ export const SkillTemplateBuilderPage: React.FC = () => {
                                     : current.filter((slug) => slug !== position.slug)
                                 )
                               }
-                              className="border-theme-surface-border focus:ring-theme-focus-ring rounded-sm text-blue-600"
+                              className="border-theme-surface-border focus:ring-theme-focus-ring mt-1 rounded-sm text-blue-600"
                             />
                             <span className="text-theme-text-primary text-sm">{position.name}</span>
                           </label>
