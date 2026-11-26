@@ -16,6 +16,65 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**Feature 03 (Public surface & webhooks), pass 18 — watchdog pickup** (the
+dedicated `/loop 30m /security-review` session remains unreachable). PR
+number recorded in a follow-up commit on this same branch.
+
+PR #4714 (Feature 02, Permissions & roles, pass 18) was confirmed merged
+before this iteration started, via a fresh `git fetch origin && git
+checkout main && git pull --ff-only` (3 commits fast-forwarded to
+`4cffe21fc`) rather than trusting a stale local checkout, and a fresh
+`list_pull_requests` (state=open) returned 0 results. The baseline commit
+was re-derived from scratch with `git log --all --oneline --grep
+"security(public" -i` against the fresh pull rather than trusted from a
+stale note: `1cad5f8f6` ("security(public-webhooks): 1 fixed, 0 new
+flagged", PUB-15's self-correction fix), merged as `3d8e0f194` via PR
+#4644 (pass 17 and its own fix, one PR), was still the newest hit and
+confirmed an ancestor of `main`. Rows 00–02 were `✅` and row 03 (Public
+surface & webhooks) was confirmed the next `⬜` row on the freshly-pulled
+`main`.
+
+Baseline `3d8e0f194` (pass 17's final merged state). **71 routes** across
+all 18 route-bearing files under `app/api/public/` (up from 51 at pass 17)
+— an AST walk of every `@router.<verb>`/`@open_router.<verb>` decorator,
+cross-checked against a `grep -c` count, both agreeing. `git diff
+3d8e0f194..HEAD --stat` against every other route-bearing file and every
+webhook/collaborator file this feature's own scope names (the three
+webhook receivers, `public_portal_security.py`, `webhook_service.py`,
+`webhook_replay.py`, `shift_evaluations.py` and its link service, the
+Zeffy/PayPal/Salesforce integration services) returns empty — all
+byte-identical to pass 17's already-fully-reviewed state. The real delta
+is exactly one new surface: a public History website (`history.py`, 641
+L, 20 routes across two routers; backed by two new service files,
+`history_public_service.py` and `history_public_links.py`) — the same
+new, genuinely unauthenticated module `SEC-00-cross-cutting-baseline.md`'s
+own **Pass 19** section had already flagged as belonging to this
+feature's scope and had already read once itself. Read fresh and in full
+here, independently of that prior read: every route resolves
+`organization_id` from an authenticated API key or an HMAC-verified
+token, never from client input (XC-3 holds by construction); a disabled
+module, disabled portal, or disabled part of History all answer the same
+404 as a nonexistent record (existence non-disclosure); the keyless
+file/widget routes rate-limit before any DB work; file and widget links
+are HMAC-SHA256/SHA-256-hashed secrets re-checked against the live record
+on every request (closing the TOCTOU the module's own docstring commits
+to); and no `log_audit_event` call exists anywhere on this read-only
+surface, so PUB-15's defect class cannot recur here — confirmed by `grep`
+and by the standing `test_public_audit_organization_scoping.py` guard
+sweep, which globs the new file automatically and stayed green. The
+Alembic chain fork pass 17 escalated (`5c2e8a417d90`/`9c41e7b2d5a3`) is
+now resolved — `validate_migrations.py --strict` reports a single head.
+**0 fixed, 0 new findings.** Full write-up:
+`docs/security-review/PUB-03-public-surface-webhooks.md`'s **Pass 18**
+section.
+
+Row 03 → ✅ (pending this PR's merge); next is Feature 04 (Storefront &
+payments) — re-check `list_pull_requests` fresh rather than trusting this
+note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 02, Permissions & roles, pass 18, PR #4714, merged), preserved for history</summary>
+
 **PR [#4714](https://github.com/thegspiro/the-logbook/pull/4714) (branch
 `claude/security-review-permissions-roles-p18`)**: Feature 02 (Permissions &
 roles), pass 18 — watchdog pickup (the dedicated `/loop 30m
@@ -59,6 +118,8 @@ this feature's own rank/role grant-ceiling surface, confirmed by grep.
 Row 02 → ✅ (pending this PR's merge); next is Feature 03 (Public surface &
 webhooks) — re-check `list_pull_requests` fresh rather than trusting this
 note.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 01, Auth & session lifecycle, pass 18, PR #4713, merged), preserved for history</summary>
@@ -29068,7 +29129,7 @@ commit" rule.
 | 00  | Cross-cutting baseline    | SEC    | whole-codebase sweeps; see `SEC-00-cross-cutting-baseline.md`                                                                                                                                                                                                                         | ✅     |
 | 01  | Auth & session lifecycle  | AUTH   | `endpoints/auth.py`, `auth_service.py`, `mfa_service.py`, `oauth_service.py`                                                                                                                                                                                                          | ✅     |
 | 02  | Permissions & roles       | PERM   | `dependencies.py`, `core/permissions.py`, `roles.py`, `operational_ranks.py`, `officers.py`, `org_chart.py`                                                                                                                                                                           | ✅     |
-| 03  | Public surface & webhooks | PUB    | `api/public/*` (51 unauth routes, added pass 16), `paypal_webhook.py`, `integrations_webhook.py`, `salesforce_webhook.py`, `zeffy_webhook.py`, `shift_evaluations.py` (added pass 16)                                                                                                 | ⬜     |
+| 03  | Public surface & webhooks | PUB    | `api/public/*` (71 unauth routes, added pass 18: a new public History website, `history.py`, 20 routes), `paypal_webhook.py`, `integrations_webhook.py`, `salesforce_webhook.py`, `zeffy_webhook.py`, `shift_evaluations.py` (added pass 16)                                          | ✅     |
 | 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                                                                                                                                                                    | ⬜     |
 | 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`, `endpoints/quickbooks_online.py` (8 routes; corrected from `services/quickbooks_online.py`, pass 16), `services/quickbooks_online_client.py`, `services/quickbooks_sync_service.py` (both added pass 16) | ⬜     |
 | 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (76 routes, token-scoped voting), `election_service.py`, `services/voter_rules.py` (added pass 16), `services/election_attendance_service.py` (added pass 16), `services/election_defaults.py` (added pass 16)                                               | ⬜     |
@@ -56007,3 +56068,56 @@ vitest run` on the feature's 7 relevant frontend test files — 106 passed
 Row 32 → ✅ (pending this PR's merge). Next is Feature 33 (Core
 infrastructure) — re-check `list_pull_requests` fresh rather than trusting
 this note.
+
+### 2026-11-26 — Feature 02 (Permissions & roles, pass 18) merged (PR #4714); Feature 03 (Public surface & webhooks, pass 18): watchdog pickup, a new public History website (20 routes) reviewed fresh, everything else byte-identical, 0 fixed, 0 new findings
+
+Watchdog pickup. Baseline `3d8e0f194` (pass 17's final merged state, PUB-15's
+fix included) re-derived fresh via `git log --all --oneline --grep
+"security(public" -i` and confirmed an ancestor of a freshly pulled `main`
+(`4cffe21fc`). Routes re-enumerated by AST: **71**, up from 51 at pass 17 —
+every one of the 20 new routes is `app/api/public/history.py`, a public
+History website (`/api/public/v1/history`) mounted as two routers, backed
+by two new service files. Every other route-bearing file and every
+webhook/collaborator file this feature tracks is byte-identical to pass
+17's already-fully-reviewed state (`git diff 3d8e0f194..HEAD --stat`
+against all of them returns empty).
+
+The new surface was read in full, independently of
+`SEC-00-cross-cutting-baseline.md`'s own **Pass 19** section (which had
+already flagged it as this feature's proper home and read it once):
+`organization_id` resolves from an authenticated API key or an
+HMAC-verified signed token on every route, never client input (XC-3);
+every disabled/missing/forged case answers the identical 404 (existence
+non-disclosure); the keyless file and widget routes rate-limit before any
+database work; signed file links and the widget's secret use HMAC-SHA256/
+SHA-256-hash patterns this codebase already uses elsewhere, re-checked
+against the live record on every request (closing the TOCTOU the module's
+docstring commits to); and the surface is read-only with no
+`log_audit_event` call anywhere in it, so PUB-15's defect class (an audit
+row written with no `organization_id=` keyword) cannot recur here — the
+standing `test_public_audit_organization_scoping.py` guard sweep globs the
+new file automatically and stayed green. The two new models
+(`HistoryArticle`/`HistoryPublicSettings`) carry real migrations, not
+`create_all`-only. The Alembic chain fork pass 17 escalated
+(`5c2e8a417d90`/`9c41e7b2d5a3`) is now resolved to a single head.
+
+**0 fixed, 0 new findings.** Full write-up:
+`docs/security-review/PUB-03-public-surface-webhooks.md`'s **Pass 18**
+section.
+
+**Completion gate:** `flake8`/`black --check`/`isort --check-only` (CI's
+pins, `python3.13`) on `app/ tests/ alembic/` — clean. `validate_migrations.py
+--strict` — single head `e9cf8ab7e4e4`, 844 revisions.
+`check_route_permissions.py --strict` — 344 routes, 0 errors/warnings.
+Scoped backend pytest (`-k "public or webhook or paypal or salesforce or
+zeffy or shift_evaluation or history_public or audit_organization_scoping"`)
+— 558 passed, 1 pre-existing skip (`py_vapid`). Standing guard suites
+(org-scoping ratchet, capacity locking, CSV sweep, LIKE escaping,
+`create_all`-table tolerance, baseline member grants, logging escaping,
+log-call-shape sweep, public-audit-org-scoping, account-status gates) —
+204 passed. `npm run typecheck` — 0 errors. `npm run lint` — 0
+errors/warnings.
+
+Row 03 → ✅ (pending this PR's merge). Next is Feature 04 (Storefront &
+payments) — re-check `list_pull_requests` fresh rather than trusting this
+note.
