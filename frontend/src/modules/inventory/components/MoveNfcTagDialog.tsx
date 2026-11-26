@@ -184,11 +184,11 @@ export const MoveNfcTagDialog: React.FC<MoveNfcTagDialogProps> = ({ tag, onClose
             <ul className="divide-theme-surface-border max-h-72 divide-y overflow-y-auto">
               {targets.map((target) => (
                 <li key={target.id}>
-                  <label className="touch:min-h-11 flex cursor-pointer items-center gap-3 py-2">
+                  <label className="touch:min-h-11 touch:py-3 flex cursor-pointer items-start gap-3 py-2">
                     <input
                       type="radio"
                       name={`${idBase}-target`}
-                      className="form-checkbox"
+                      className="form-checkbox mt-0.5"
                       value={target.id}
                       checked={chosen === target.id}
                       disabled={target.id === here}

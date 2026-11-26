@@ -1153,7 +1153,7 @@ export const VendorsPage: React.FC = () => {
               className="btn-secondary btn-md"
               aria-label="Refresh vendors"
             >
-              <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+              <RefreshCw className={`h-5 w-5 ${loading ? 'animate-spin' : ''}`} aria-hidden="true" />
             </button>
             {canManage && (
               <button
