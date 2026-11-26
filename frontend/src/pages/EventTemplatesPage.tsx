@@ -12,7 +12,7 @@ import { FileText, Plus, Pencil, Archive, ToggleLeft, ToggleRight, Clock } from 
 import { eventService } from '../services/api';
 import type { EventTemplate, EventTemplateCreate } from '../types/event';
 import { getEventTypeLabel } from '../utils/eventHelpers';
-import { Breadcrumbs, EmptyState, ConfirmDialog } from '../components/ux';
+import { EmptyState, ConfirmDialog } from '../components/ux';
 import { EventsPageHeader } from '../components/events/EventsPageHeader';
 import { EventTemplateForm } from '../components/EventTemplateForm';
 
@@ -114,14 +114,27 @@ export const EventTemplatesPage: React.FC = () => {
     }
   };
 
+  // A section of Events, so no trail: the strip marks where the viewer is, as
+  // on the section's siblings. Drawn in every state, so the strip does not
+  // disappear while templates load or when they cannot.
+  const header = (
+    <EventsPageHeader
+      icon={FileText}
+      title="Event Templates"
+      subtitle="Save common event settings to reuse when you create an event."
+      actions={
+        <button onClick={handleCreate} className="btn-primary inline-flex items-center gap-2">
+          <Plus className="h-5 w-5" aria-hidden="true" />
+          New Template
+        </button>
+      }
+    />
+  );
+
   if (loading) {
     return (
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-        <Breadcrumbs underHub="/events/admin" />
-        <div className="mb-6">
-          <div className="bg-theme-surface-hover mb-2 h-8 w-48 animate-pulse rounded-sm" />
-          <div className="bg-theme-surface-hover h-4 w-80 animate-pulse rounded-sm" />
-        </div>
+        {header}
         <div className="space-y-4">
           {[1, 2, 3].map((i) => (
             <div key={i} className="card p-6">
@@ -137,11 +150,11 @@ export const EventTemplatesPage: React.FC = () => {
   if (error) {
     return (
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-        {/* The trail belongs in every branch, and most of all in this one: a
+        {/* The header belongs in every branch, and most of all in this one: a
             page that cannot load its content is where a route away from it
             matters. Finance lost its trails the mirror-image way — rendered
             while loading and gone once the record arrived. */}
-        <Breadcrumbs underHub="/events/admin" />
+        {header}
 
         <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-4" role="alert" aria-live="assertive">
           <p className="text-red-700 dark:text-red-300">{error}</p>
@@ -161,18 +174,7 @@ export const EventTemplatesPage: React.FC = () => {
   return (
     <div className="min-h-screen">
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-        <EventsPageHeader
-          icon={FileText}
-          title="Event Templates"
-          subtitle="Save common event settings to reuse when you create an event."
-          underHub="/events/admin"
-          actions={
-            <button onClick={handleCreate} className="btn-primary inline-flex items-center gap-2">
-              <Plus className="h-5 w-5" aria-hidden="true" />
-              New Template
-            </button>
-          }
-        />
+        {header}
 
         {/* Template List */}
         {templates.length === 0 ? (

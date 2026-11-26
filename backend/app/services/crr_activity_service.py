@@ -285,9 +285,18 @@ class CrrActivityService:
 
     @staticmethod
     def _counts(
-        activity_type: CrrActivityType, counts: dict[str, int]
+        activity_type: CrrActivityType,
+        counts: dict[str, int],
+        already_counted: frozenset[str] = frozenset(),
     ) -> dict[str, int]:
-        allowed = {m.id: m for m in activity_type.measures if m.is_active}
+        """Counts against the type's active measures, or against a retired one
+        the activity already carries: retiring a count stops new tallies, it
+        does not make an existing one uneditable."""
+        allowed = {
+            m.id: m
+            for m in activity_type.measures
+            if m.is_active or m.id in already_counted
+        }
         for measure_id, quantity in counts.items():
             if measure_id not in allowed:
                 raise ValueError("A count does not belong to this activity type")
@@ -295,21 +304,31 @@ class CrrActivityService:
                 raise ValueError("A count cannot be negative")
         return {mid: q for mid, q in counts.items()}
 
-    async def _tags(self, org_id: str, tag_ids: list[str]) -> list[str]:
+    async def _tags(
+        self,
+        org_id: str,
+        tag_ids: list[str],
+        already_tagged: frozenset[str] = frozenset(),
+    ) -> list[str]:
+        """The department's own tags (pitfall #14c). A retired tag is refused
+        unless the activity already carries it (owner decision, 2026-11-26):
+        it may stay, or be removed, but is not newly added."""
         wanted = list(dict.fromkeys(str(t) for t in tag_ids))
         if not wanted:
             return []
-        found = set(
+        found = dict(
             (
                 await self.db.execute(
-                    select(CrrTag.id).where(
+                    select(CrrTag.id, CrrTag.is_active).where(
                         CrrTag.organization_id == org_id, CrrTag.id.in_(wanted)
                     )
                 )
-            ).scalars()
+            ).all()
         )
-        if found != set(wanted):
+        if set(found) != set(wanted):
             raise ValueError("One or more tags were not found")
+        if any(not found[t] and t not in already_tagged for t in wanted):
+            raise ValueError("A retired tag cannot be added")
         return wanted
 
     async def _members(self, org_id: str, members: dict[str, int]) -> dict[str, int]:
@@ -322,6 +341,7 @@ class CrrActivityService:
                         User.organization_id == org_id,
                         User.id.in_(list(members)),
                         User.status.in_(ACTIVE_ACCOUNT_STATUSES),
+                        User.deleted_at.is_(None),
                     )
                 )
             ).scalars()
@@ -512,10 +532,24 @@ class CrrActivityService:
             raise LookupError("Activity type not found")
 
         if "counts" in data and data["counts"] is not None:
-            counts = self._counts(activity_type, data["counts"])
+            existing = set(
+                (
+                    await self.db.execute(
+                        select(CrrActivityCount.measure_id).where(
+                            CrrActivityCount.activity_id == activity.id
+                        )
+                    )
+                ).scalars()
+            )
+            counts = self._counts(activity_type, data["counts"], frozenset(existing))
+            # Replaces the active counts and any sent; a retired count the
+            # payload leaves out keeps its tally, because the form cannot
+            # offer it and so its absence is not a request to erase it.
+            active = {m.id for m in activity_type.measures if m.is_active}
             await self.db.execute(
                 delete(CrrActivityCount).where(
-                    CrrActivityCount.activity_id == activity.id
+                    CrrActivityCount.activity_id == activity.id,
+                    CrrActivityCount.measure_id.in_(active | set(counts)),
                 )
             )
             for measure_id, quantity in counts.items():
@@ -528,7 +562,16 @@ class CrrActivityService:
                     )
                 )
         if "tag_ids" in data and data["tag_ids"] is not None:
-            tag_ids = await self._tags(org_id, data["tag_ids"])
+            current = set(
+                (
+                    await self.db.execute(
+                        select(CrrActivityTag.tag_id).where(
+                            CrrActivityTag.activity_id == activity.id
+                        )
+                    )
+                ).scalars()
+            )
+            tag_ids = await self._tags(org_id, data["tag_ids"], frozenset(current))
             await self.db.execute(
                 delete(CrrActivityTag).where(CrrActivityTag.activity_id == activity.id)
             )
@@ -539,10 +582,13 @@ class CrrActivityService:
                     )
                 )
         if {"zip_code", "city", "state"} & set(data):
+            # A new ZIP brings its own city and state unless they are sent
+            # too; the old ones described the old ZIP.
+            new_zip = "zip_code" in data
             location = self._location(
                 data.get("zip_code", activity.zip_code),
-                data.get("city", activity.city),
-                data.get("state", activity.state),
+                data.get("city", None if new_zip else activity.city),
+                data.get("state", None if new_zip else activity.state),
             )
             for field, value in location.items():
                 setattr(activity, field, value)

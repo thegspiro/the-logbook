@@ -44,7 +44,7 @@ from its open list.
 | B3  | inventory                  | INV2   | ✅     |
 | B4  | facilities                 | FAC2   | ✅     |
 | B5  | elections                  | ELEC2  | ✅     |
-| B6  | meetings & minutes         | MM2    | ⬜     |
+| B6  | meetings & minutes         | MM2    | ✅     |
 | B7  | equipment-check            | EC2    | ⬜     |
 | B8  | documents                  | DOC2   | ⬜     |
 | B9  | membership pipeline        | MP2    | ⬜     |
@@ -3737,6 +3737,38 @@ secrets redacted for non-admins. See
   Nine LOW items are recorded as open. Gate clean; 1,070 backend and 260
   frontend election tests pass. See elections.md → Pass 7. Next: B6 meetings &
   minutes.
+
+- **B6 meetings & minutes ✅ (pass 6).** Read the module for business-logic
+  correctness (lifecycle, quorum, motions, action items, reminders, meeting
+  approval) and the frontend pass 5 left unopened. **17 fixes**, each test red
+  first.
+  - Frontend:
+    - MM6-1: waivers showed an id and no reason.
+    - MM6-2: meeting controls were gated on `minutes.manage` instead of
+      `meetings.manage`.
+    - MM6-3: every change unmounted the detail page and lost open drafts.
+    - MM6-4: the last record's error and state carried over.
+    - MM6-5: overdue items read Pending.
+    - MM6-6: reject could be sent twice.
+    - MM6-7, MM6-8: search and dashboard races.
+  - Backend:
+    - MM6-9: three section rewrites skipped `edit_version`.
+    - MM6-10: count quorum truncated.
+    - MM6-11: totals could contradict the roll call.
+    - MM6-12: status changes were unlocked.
+    - MM6-13: re-approval emailed finished items.
+    - MM6-14: bells covered drafts and skipped overdue items.
+    - MM6-15: a PATCH could un-approve a meeting and open the delete guard.
+    - MM6-16: the reopen reason was logged.
+    - MM6-17: reopened meeting items kept `completed_at`.
+
+  **5 flagged** to KNOWN_LIMITATIONS: MM6-18 (items added to approved minutes),
+  MM6-19 (approved meeting attendance), MM6-20 (quorum settled when), MM6-21
+  (carried items hidden), MM6-22 (repeatable reminders). A KNOWN_LIMITATIONS
+  passage that said `add_action_item` refuses approved minutes was corrected.
+  Thirteen LOW items are recorded as open. Gate clean; 1,736 backend and 539
+  frontend tests pass. See meetings-minutes.md → Pass 6. Next: B7
+  equipment-check.
 
 - **B11 notifications ✅ (pass 6).** Read the enforced senders' own delivery
   logic (cert alerts, event reminders, screening, push) and the bell, inbox,

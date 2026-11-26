@@ -561,6 +561,51 @@ class TestApplyingAnOutlineKeepsTheAgenda:
         assert "agenda-a" in keys
 
 
+class TestSectionRewritesBumpTheEditVersion:
+    """MM6-9: syncing the agenda and applying an outline rewrite ``sections``
+    without bumping ``edit_version``, so an editor who loaded the record before
+    either could still save with the old version, and their save wrote back the
+    sections those changes had just replaced (MM5-4's guard, bypassed)."""
+
+    async def test_an_agenda_sync_moves_the_version_on(self, world, clerk):
+        meeting = await _meeting(world, clerk, [_item("a", "One")])
+        minutes = await _draft(world, clerk, meeting["id"])
+        async with _meetings_client(world.db, clerk) as c:
+            await c.patch(
+                f"/meetings/{meeting['id']}",
+                json={"agenda_items": [_item("a", "One"), _item("d", "Four")]},
+            )
+            resp = await c.post(
+                f"/minutes/{minutes['id']}/agenda-sync", json={"accept": ["add:d"]}
+            )
+            assert resp.status_code == 200, resp.text
+            stale = await c.put(
+                f"/minutes/{minutes['id']}",
+                json={"title": "Stale", "expected_version": minutes["edit_version"]},
+            )
+
+        assert resp.json()["edit_version"] == minutes["edit_version"] + 1
+        assert stale.status_code == 409
+
+    async def test_applying_an_outline_moves_the_version_on(self, world, clerk):
+        meeting = await _meeting(world, clerk, [_item("a", "Old business")])
+        minutes = await _draft(world, clerk, meeting["id"])
+        async with _meetings_client(world.db, clerk) as c:
+            outline_id = (await c.get("/minutes/templates")).json()[0]["id"]
+            resp = await c.post(
+                f"/minutes/{minutes['id']}/apply-outline",
+                json={"template_id": outline_id},
+            )
+            assert resp.status_code == 200, resp.text
+            stale = await c.put(
+                f"/minutes/{minutes['id']}",
+                json={"title": "Stale", "expected_version": minutes["edit_version"]},
+            )
+
+        assert resp.json()["edit_version"] == minutes["edit_version"] + 1
+        assert stale.status_code == 409
+
+
 MANAGER_WITH_LIBRARY = [
     "meetings.view",
     "meetings.manage",

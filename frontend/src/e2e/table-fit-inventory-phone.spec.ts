@@ -122,6 +122,8 @@ test.describe('Variant group stock matrix scrolls with a cue and a pinned Size c
       const sizeCell = table.getByRole('rowheader').first();
       expect(await sizeCell.evaluate((el) => getComputedStyle(el).position)).toBe('sticky');
 
+      // No expectContentStaysInCard: the table's card resolves to its parent,
+      // the ScrollCueRow scroller, which is narrower than the grid on purpose.
       const { overflows } = await table.evaluate((el) => {
         const scroller = el.parentElement;
         return { overflows: scroller ? scroller.scrollWidth > scroller.clientWidth + 2 : false };
