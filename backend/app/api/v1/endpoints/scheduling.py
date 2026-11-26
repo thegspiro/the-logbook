@@ -89,6 +89,7 @@ from app.schemas.scheduling import (
     SchedulingWidgetPreferences,
     SchedulingWidgetPreferencesResponse,
     SchedulingWidgetSummary,
+    SeatHoursResponse,
     ShiftAssignmentCreate,
     ShiftAssignmentResponse,
     ShiftAssignmentUpdate,
@@ -3707,6 +3708,39 @@ async def get_member_hours_history(
     return await service.get_my_hours_history(
         str(user_id), current_user.organization_id, year
     )
+
+
+@router.get("/seat-hours", response_model=SeatHoursResponse)
+async def get_seat_hours(
+    position: str = Query(..., min_length=1, max_length=100),
+    start_date: date | None = Query(None),
+    end_date: date | None = Query(None),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("scheduling.report")),
+):
+    """
+    Every member's credited department shifts in one seat over a period:
+    hours, shifts and calls, most hours first. Backs the member roster's
+    Time in seat filter, and reads the same figures as Reports, Hours by
+    Position.
+
+    Either date may be left open for an open-ended period.
+
+    **Requires permission: scheduling.report**
+    """
+    if start_date and end_date and start_date > end_date:
+        raise HTTPException(
+            status_code=400, detail="The start date is after the end date"
+        )
+    members = await SchedulingService(db).get_seat_hours(
+        current_user.organization_id, position, start_date, end_date
+    )
+    return {
+        "position": position,
+        "start_date": start_date,
+        "end_date": end_date,
+        "members": members,
+    }
 
 
 async def _resolve_shift_history_year(db: AsyncSession, organization_id, year):

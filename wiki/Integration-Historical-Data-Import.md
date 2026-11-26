@@ -86,6 +86,16 @@ overlap takes it.
   an hours entry with no seat keeps its hours and calls, with no position from
   the roster. The roster step shows how many pair, and the first of each that
   does not, before you write it.
+- **Review every leftover** _(2026-11-26)_. Under the counts, **Review every
+  unpaired seat and hours entry** lists all of them, not just the first few,
+  filtered by member and date. A seat with no hours offers the same member's
+  unpaired hours within a day of it: **Pair with their hours** pairs them by
+  hand, whatever their times say, and writing the roster then seats the member
+  on those hours as an automatic pair would. A seat pairs only with its own
+  member's hours. **Mark reviewed** accepts a seat or an hours entry as
+  unpaired, so it stops counting as outstanding; **Show paired and reviewed**
+  brings those back to unpair or reopen. Nothing is written until the roster
+  is, and the choices are kept with the import, so a second write honours them.
 
 ## Where the imported hours show up
 
