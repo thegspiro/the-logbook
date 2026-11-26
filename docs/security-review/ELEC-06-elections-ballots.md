@@ -1,6 +1,6 @@
 # Security Review 06 — Elections & Ballots
 
-**Prefix:** `ELEC` · **Iteration:** 06 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-05 (pass 7), 2026-10-12 (pass 8), 2026-10-14 (pass 9), 2026-10-18 (pass 10), 2026-10-22 (pass 11), 2026-10-25 (pass 12), 2026-10-28 (pass 13), 2026-11-01 (pass 14), 2026-11-05 (pass 15), 2026-11-19 (pass 16), 2026-11-24 (pass 17) · **PR:** [#1810](https://github.com/thegspiro/the-logbook/pull/1810) (pass 1), [#1948](https://github.com/thegspiro/the-logbook/pull/1948) (pass 2), [#2162](https://github.com/thegspiro/the-logbook/pull/2162) (pass 3, rounds 1-6, merged before round 7's fix was ready — see [#2173](https://github.com/thegspiro/the-logbook/pull/2173)), [#2173](https://github.com/thegspiro/the-logbook/pull/2173) (pass 3, round 7), [#2400](https://github.com/thegspiro/the-logbook/pull/2400) (pass 4), [#2546](https://github.com/thegspiro/the-logbook/pull/2546) (pass 5), [#2600](https://github.com/thegspiro/the-logbook/pull/2600) (pass 6 — corrected here from the "(this PR)" placeholder pass 6's own write-up left unresolved after merge), [#2947](https://github.com/thegspiro/the-logbook/pull/2947) (pass 7), [#3142](https://github.com/thegspiro/the-logbook/pull/3142) (pass 8), [#3248](https://github.com/thegspiro/the-logbook/pull/3248) (pass 9), pass 10 ([#3404](https://github.com/thegspiro/the-logbook/pull/3404)), pass 11 ([#3564](https://github.com/thegspiro/the-logbook/pull/3564)), pass 12 ([#3691](https://github.com/thegspiro/the-logbook/pull/3691)), pass 13 ([#3809](https://github.com/thegspiro/the-logbook/pull/3809)), pass 14 ([#3904](https://github.com/thegspiro/the-logbook/pull/3904)), pass 15 ([#4052](https://github.com/thegspiro/the-logbook/pull/4052)), pass 16 ([#4435](https://github.com/thegspiro/the-logbook/pull/4435)), pass 17 (this PR)
+**Prefix:** `ELEC` · **Iteration:** 06 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-05 (pass 7), 2026-10-12 (pass 8), 2026-10-14 (pass 9), 2026-10-18 (pass 10), 2026-10-22 (pass 11), 2026-10-25 (pass 12), 2026-10-28 (pass 13), 2026-11-01 (pass 14), 2026-11-05 (pass 15), 2026-11-19 (pass 16), 2026-11-24 (pass 17), 2026-11-26 (pass 18) · **PR:** [#1810](https://github.com/thegspiro/the-logbook/pull/1810) (pass 1), [#1948](https://github.com/thegspiro/the-logbook/pull/1948) (pass 2), [#2162](https://github.com/thegspiro/the-logbook/pull/2162) (pass 3, rounds 1-6, merged before round 7's fix was ready — see [#2173](https://github.com/thegspiro/the-logbook/pull/2173)), [#2173](https://github.com/thegspiro/the-logbook/pull/2173) (pass 3, round 7), [#2400](https://github.com/thegspiro/the-logbook/pull/2400) (pass 4), [#2546](https://github.com/thegspiro/the-logbook/pull/2546) (pass 5), [#2600](https://github.com/thegspiro/the-logbook/pull/2600) (pass 6 — corrected here from the "(this PR)" placeholder pass 6's own write-up left unresolved after merge), [#2947](https://github.com/thegspiro/the-logbook/pull/2947) (pass 7), [#3142](https://github.com/thegspiro/the-logbook/pull/3142) (pass 8), [#3248](https://github.com/thegspiro/the-logbook/pull/3248) (pass 9), pass 10 ([#3404](https://github.com/thegspiro/the-logbook/pull/3404)), pass 11 ([#3564](https://github.com/thegspiro/the-logbook/pull/3564)), pass 12 ([#3691](https://github.com/thegspiro/the-logbook/pull/3691)), pass 13 ([#3809](https://github.com/thegspiro/the-logbook/pull/3809)), pass 14 ([#3904](https://github.com/thegspiro/the-logbook/pull/3904)), pass 15 ([#4052](https://github.com/thegspiro/the-logbook/pull/4052)), pass 16 ([#4435](https://github.com/thegspiro/the-logbook/pull/4435)), pass 17 ([#4659](https://github.com/thegspiro/the-logbook/pull/4659)), pass 18 (this PR)
 
 ---
 
@@ -109,6 +109,327 @@ eligibility`'s "already voted in this election" applies only to a ballot
   Paper-tally sessions per election are naturally few; no cap and no
   pagination. Revisit if an election ever carries more than a few dozen
   batches. Recorded in `docs/KNOWN_LIMITATIONS.md`.
+
+## Pass 18 (2026-11-26) — watchdog pickup, real delta: an app-review tally-correctness fix (ELEC2-10..17, not security-review's own) re-verified clean, plus two cosmetic/test-only frontend touches; 0 fixed, 0 new findings
+
+**Scoping.** Step 0/1 re-verified fresh rather than trusted from the prior
+note: `git fetch origin && git checkout main && git pull --ff-only` brought
+3 commits forward to `730913d71` (merge of PR #4723, Feature 05/Finance &
+approvals pass 18); a fresh `list_pull_requests` (state=open) returned 11
+results, none with a head starting `claude/security-review-`, so nothing
+blocks this pass. Row 06 (Elections & ballots) was confirmed the next `⬜`
+row in `PROGRESS.md`'s table directly, not trusted from a stale note.
+
+**Baseline re-derivation.** `git log --all --oneline --grep "security(elections"
+-i` against the freshly-pulled `main` found `af9bbe4dd` ("Security review:
+Elections & ballots (pass 17) — 0 fixes, 0 new findings (#4659)") as the
+newest hit — confirmed an ancestor of `main`
+(`git merge-base --is-ancestor af9bbe4dd main`). Checked for the two-commit
+shape another feature showed (a review commit plus a same-pass
+self-correction): `af9bbe4dd` is itself the squash-merge of PR #4659's two
+commits (the pass-17 write-up and its own PROGRESS.md PR-number record),
+already combined into one commit by GitHub's squash merge — confirmed by
+reading `git show --stat af9bbe4dd`'s body, which lists both original
+commit messages. `git log af9bbe4dd..main --oneline --
+docs/security-review/ELEC-06-elections-ballots.md` is empty: no further
+edit to this file landed between pass 17's merge and this pass starting.
+`af9bbe4dd` is the full, current baseline.
+
+**Delta.** `git diff --numstat af9bbe4dd..HEAD` against this feature's
+declared scope (`elections.py`, `election_service.py`, `schemas/election.py`,
+`models/election.py`, `voter_rules.py`, `election_attendance_service.py`,
+`election_defaults.py`, `minutes_election_filing.py`, and the frontend
+`modules/elections`/`pages/Election*`/`components/election-detail/*`/
+`services/electionService.ts` tree) found every declared backend file
+**byte-identical** except `election_service.py` (+86/-80), and four
+frontend files touched (`ElectionDetailRoute.tsx`,
+`ElectionDetailPage.tsx`, plus two new test files, one of them a remount
+test). A broader `git diff --name-only af9bbe4dd..HEAD` filtered for
+`election|ballot|voter|vote|candidate` added two more:
+`backend/tests/test_election_tally_correctness.py` (new, 301 lines) and
+two already-`docs/`-prefixed hits (`docs/app-review/elections.md`,
+training/YouTube-script docs — prose, out of scope per CLAUDE.md's
+"Match the Verification to the Change").
+
+**The `election_service.py`/frontend delta is app-review's, not a prior
+security-review pass's, and is a correctness fix — re-verified clean
+against this checklist rather than accepted on the strength of its own
+commit message.** `git log af9bbe4dd..HEAD --oneline --
+backend/app/services/election_service.py` resolves to one commit,
+`23e88c525` ("fix(elections): app-review B5 pass 7 — count follows the
+module's rules; 8 fixed, 5 flagged"), confirmed already merged into `main`
+(an ancestor of today's `HEAD`, `730913d71`) before this iteration started
+— not new work landing mid-review. It fixes four tally bugs, all tracked
+under app-review's own `ELEC2-` numbering (a different namespace from this
+file's `ELEC-` ids, by design — app-review and security-review are
+separate rotations):
+
+- **ELEC2-10** — a one-seat `majority`/`supermajority`/`threshold` race
+  marked every candidate clearing the bar a winner, instead of capping at
+  one seat. Now routed through the existing `_declare_seat_winners` (the
+  W50-11 multi-seat mechanism this file already reviewed) with `seats=1`.
+- **ELEC2-11** — an Approve/Deny item on a `ranked_choice` election was
+  counted by instant runoff instead of plurality/threshold. A motion is
+  never ranked regardless of the election's own method; `is_approval_item`
+  now short-circuits the `ranked_choice` branch for it.
+- **ELEC2-12** — `_remap_merged_votes` (write-in merge) dropped
+  `paper_ballot_id` from its `SimpleNamespace` copy, splitting a ranked
+  paper sheet carrying a merged write-in into one ballot per row. Fixed by
+  carrying the field through; the function is now its own `@staticmethod`
+  with a docstring stating why a lightweight copy (not the ORM row) is
+  used — the vote's signature embeds `candidate_id`, so re-pointing the
+  real row would break `verify_vote_integrity`'s chain, exactly the
+  tamper-evidence property this review has checked every pass.
+- **ELEC2-13** — `_sync_membership_package_statuses` re-counted Approve vs
+  Deny itself from a raw `Vote` query instead of reading
+  `get_election_results`' own `is_winner` — redundant with, and able to
+  disagree with, the one already-reviewed tally path (the exact "a screen
+  re-derives what another already decided" anti-pattern CLAUDE.md Pitfall
+  #29 names). Now calls `get_election_results` and reads `results_by_position`
+  directly.
+
+None of the four touches vote secrecy, auth, tenant scoping, or the public
+token surface — each is the counting/aggregation step downstream of an
+already-authenticated, already-org-scoped read, and `_remap_merged_votes`'s
+copies are never returned to a client (consumed only inside the same
+results computation, confirmed by reading every call site — one, inside
+`get_election_results`). The commit message states each fix's test failed
+first (CLAUDE.md Pitfall #37); `test_election_tally_correctness.py` is
+`pytest.mark.unit`-marked with the database fully mocked (`SimpleNamespace`
+fixtures, `AsyncMock`), satisfying Pitfall #30b. Five further decisions
+(ELEC2-18..22 — an instant-runoff elimination tie rule, the paper-only
+denominator, runoff triggering, ranked-choice result display, and
+ballot-builder autosave timing) were flagged rather than fixed and are
+recorded in `docs/KNOWN_LIMITATIONS.md` — each is a bylaw/UX decision, not
+a security question, and none is duplicated into this ledger for that
+reason (cross-referenced below instead, per this file's own
+cross-referencing convention for ELEC-43/44/45/46).
+
+**The four frontend touches are each the UI half of one of the same four
+fixes, read in full, not just by diff summary:**
+
+- `ElectionDetailRoute.tsx` adds `key={electionId}` to `<ElectionDetailPage
+/>` (ELEC2-14) so navigating between elections (a runoff in the chain, a
+  clone) remounts the page instead of carrying over the previous
+  election's integrity result, forensics report, paper-batch list and
+  pending-void state in component state — a same-org, same-feature UI
+  state leak between two elections the viewer is already authorized to
+  see, not a cross-tenant one, but still the right fix: a stale integrity
+  verdict rendered against the wrong election is a vote-integrity display
+  bug.
+- `ElectionDetailPage.tsx` adds one `await fetchElection()` after a
+  successful vote void (ELEC2-16), so the revised-results banner (the
+  W50-9 results-revision marker this file reviewed at the Owner Decisions
+  section) actually appears — a display-correctness fix, not a new write
+  path; `soft_delete_vote`'s own permission gate
+  (`elections.manage`) and its revision-stamping are unchanged.
+- `PaperBallotBatchesPanel.tsx`'s `canVoid` drops its `electionOpen` half
+  (ELEC2-15): the backend's `void_manual_ballots` endpoint
+  (`elections.py`) was never gated on election status — confirmed by
+  re-reading the endpoint, whose only gate is
+  `require_permission("elections.manage")` — so this only removes a
+  frontend-only restriction the backend already didn't enforce, matching
+  the Owner Decisions section's 2026-10-05 "corrections kept and marked"
+  decision for post-close votes. Not a new capability; a UI affordance
+  catching up to an existing, intentional backend one.
+- `LiveTurnoutPanel.tsx`'s quorum check (ELEC2-17) now compares raw
+  `voters`/`eligible` counts the way `get_election_results` itself decides
+  quorum, instead of a rounded `turnout` percentage that could land either
+  side of the bar the unrounded figure does — a display-only fix (the
+  badge shown to an `elections.manage`-permission viewer); it does not
+  touch anything that gates whether a vote is accepted.
+
+**Re-enumeration (AST, not inherited from pass 17's count).** `elections.py`:
+**76 routes — unchanged from pass 17.** Every route still carries a
+`Depends(...)` (verified by AST walk: 0 route functions without `Depends(`
+appearing in their body). Auth-dependency breakdown re-derived fresh by
+reading every route's dependency parameters directly, confirming the same
+five intentionally-public, token-scoped routes as every prior pass and no
+new ones: `POST /ballot/lookup` (`lookup_ballot_by_token`), `POST
+/ballot/vote` (`cast_vote_with_token`), `POST /ballot/vote/bulk`
+(`submit_ballot_with_token`), `POST /{election_id}/verify-receipt`
+(`verify_vote_receipt_post`), and the deprecated `GET
+/{election_id}/verify-receipt` (`verify_vote_receipt`) — none of the five
+is new or changed this window (confirmed: the touched routes, `open_election`'s
+callers aside, were not among them; `void_manual_ballots` is
+`elections.manage`-gated, not public).
+
+## Re-verified against the token-scoped voting surface (dimension 1, extra weight per this pass's brief)
+
+Read `lookup_ballot_by_token`/`get_ballot_by_token`,
+`cast_vote_with_token`/`cast_vote_with_token` (service),
+`submit_ballot_with_token`, and `verify_vote_receipt`/`verify_vote_receipt_post`
+in full. All five are byte-identical to pass 17 and earlier; nothing in
+this window's diff touches them. Re-confirmed directly rather than
+inherited:
+
+- **Token validated before expensive work.** `get_ballot_by_token` hashes
+  the presented token (`_hash_voting_token`, SHA-256) and does one indexed
+  `select(VotingToken).where(VotingToken.token == ...)` lookup before any
+  election/candidate query, ballot-filtering logic, or write. The rate
+  limiters (`_ballot_read_rate_limit` — 10/min/IP, `_ballot_vote_rate_limit`
+  — 5/min/IP) are FastAPI `Depends(...)` parameters, resolved before the
+  handler body runs at all, and are themselves `async def` functions that
+  `await check_rate_limit(...)` — the exact async/sync distinction ELEC-41
+  (a prior pass's fix, re-confirmed unchanged in the comment above
+  `_ballot_read_rate_limit`) exists to guard against a silently-inert
+  limiter.
+- **Fails closed on malformed, expired, superseded, or already-used
+  tokens**, each with its own named branch in `get_ballot_by_token`: no
+  matching row → `"Invalid voting token"`; `superseded_at` set (a
+  reminder/rollback retired this link) → `SUPERSEDED_TOKEN_MESSAGE` /
+  `BALLOT_CHANGED_TOKEN_MESSAGE` / `REOPENED_TOKEN_MESSAGE` depending on
+  which W50-27/reopen case applies; past `expires_at` →
+  `"Voting token has expired"`; `used` →
+  `"This ballot has already been fully submitted"`. The submission path
+  (`_lock_token_ballot_for_submission`) re-checks every one of these under
+  a `with_for_update()` lock on both the `Election` and `VotingToken` rows
+  (plus `populate_existing=True`, needed because the identity map already
+  holds the unlocked objects from the optimistic `get_ballot_by_token`
+  read — the exact `calculate_quorum`-style staleness trap this file's own
+  comment calls out), closing the TOCTOU between an optimistic lookup and
+  the locked write rather than trusting the first check alone.
+- **No existence-disclosure leak between "wrong token" and "no such
+  ballot."** There is no route that answers "does election X exist" or
+  "is this a valid-looking token" without a token in hand; a client with
+  no token at all cannot reach any branch of `get_ballot_by_token` except
+  by presenting _some_ string, which – if it does not hash to a stored
+  `VotingToken.token` — always returns the single `"Invalid voting token"`
+  message, whether the string was a guess, a typo, or a real token for a
+  different, non-existent, or already-closed election.(An election that
+  exists but was deleted, or a token for a deleted election, both resolve
+  through the same "election not found" branch after the token itself was
+  already confirmed to exist and be unexpired/unused — so an attacker
+  learns nothing about _election_ existence without first holding a token
+  that passes every other check, which is the credential, not a guessable
+  id.) `verify_vote_receipt`/`verify_vote_receipt_post` likewise answer a
+  uniform "receipt not found" for both a malformed receipt and a
+  correctly-shaped one for a vote that does not exist, confirmed by
+  reading `_verify_receipt`'s single shared implementation.
+
+## Re-verified: vote secrecy (dimension 5, extra weight per this pass's brief)
+
+- `VoteResponse` (the schema `cast_vote_with_token` returns) sets
+  `voter_id=None` unconditionally in the endpoint
+  (`backend/app/api/v1/endpoints/elections.py`'s `cast_vote_with_token`
+  handler, confirmed by reading the construction site directly: `voter_id
+=None,  # Never reveal voter ID for anonymous voting`) — the response
+  never carries voter identity regardless of the election's own
+  `anonymous_voting` flag, so the receipt the voter keeps cannot itself be
+  used to prove how they voted to a third party who intercepts it.
+- `CandidateResult`/`PositionResults` (the schemas `get_election_results`
+  returns, read by the officer-facing Results tab, the certified PDF and
+  the report email) carry only `vote_count`/`percentage`/`is_winner`/
+  `is_tied` per candidate — no voter id, voter hash, or per-ballot
+  breakdown anywhere in either schema (`backend/app/schemas/election.py`,
+  read in full around both class definitions). `_remap_merged_votes`'s
+  `SimpleNamespace` copies (which do carry `voter_hash`/`voter_id`, needed
+  for the dedup/limit counting logic) are consumed entirely inside
+  `get_election_results` and never serialized into any response — grepped
+  every call site of `_remap_merged_votes` (one) and confirmed the
+  function's return value flows only into the same method's local
+  counting loop.
+- `ELEC-43`'s resolution (proxy-vote attributability on an anonymous
+  election — owner decision 2026-10-08, acknowledgement-based disclosure)
+  re-confirmed unchanged: `cast_proxy_vote`'s audit calls and the `Vote`
+  row's `proxy_delegating_user_id`/`proxy_voter_id` columns are outside
+  every hunk this window's diff touches.
+
+## Re-verified: tally correctness and tamper-evidence (dimension checklist item, extra weight per this pass's brief)
+
+- The four app-review fixes above are each a counting-logic correction
+  downstream of an already-signed, already-chained `Vote` row; none alters
+  `_sign_vote`, the hash chain, or how a vote is written. `verify_vote_integrity`
+  (the forensics/chain-verification endpoint) and its backing
+  `_verify_chain`/`_sign_vote` machinery are outside every hunk this
+  window's diff touches — confirmed by `git diff af9bbe4dd..HEAD --
+backend/app/services/election_service.py` showing no overlap between the
+  changed line ranges (3709-3744, 4046-4160, 7680-7735 roughly) and the
+  signing/chain functions, which live elsewhere in the file.
+- A recount/correction path (`soft_delete_vote`, `void_manual_ballot_batch`,
+  `merge_write_in_candidates`) still cannot silently alter a certified
+  result: W50-9's resolution (re-confirmed unchanged, outside this window's
+  diff) appends a `results_revisions` entry on a `CLOSED` election rather
+  than re-pointing or re-signing any vote, and the certified PDF/Results
+  tab print each as "Revised \<when> by \<who>." `ElectionDetailPage.tsx`'s
+  one-line fix (ELEC2-16, above) makes that banner actually refresh after
+  a void — strengthening, not weakening, the correction's visibility.
+
+## Re-verified: voter eligibility rules (dimension checklist item)
+
+- `voter_rules.py`, `election_attendance_service.py` and
+  `election_defaults.py` are byte-identical to pass 16/17 (empty diffs,
+  confirmed directly).
+- Re-checked CLAUDE.md Pitfall #32 by name: `election_attendance_service.py`
+  filters attendance-eligible members with
+  `User.status.in_(ACTIVE_ACCOUNT_STATUSES)` (imported from
+  `app.models.user`), not a literal `== ACTIVE` comparison. The broader
+  eligible-voter count (`_count_eligible_voters`,
+  `election_service.py`) and the ballot-eligibility gate both filter on
+  `User.is_active`, a `hybrid_property` on the `User` model whose SQL
+  expression is `status.in_(ACTIVE_ACCOUNT_STATUSES) AND deleted_at IS
+NULL` (read directly in `backend/app/models/user.py`) — so a
+  probationary member is counted as an eligible voter and included in the
+  turnout denominator, exactly as Pitfall #32 requires, not silently
+  dropped by an `== ACTIVE` check. This is distinct from, and does not
+  conflict with, the separate `member_status`/`member_class` tiering
+  (REGULAR/LIFE/PROBATIONARY _membership_ tier, not account _status_) that
+  `voter_rules.py` and the `_universal_gate` eligibility machinery use to
+  decide which membership tiers may vote at all — a different, intentional
+  axis the owner's per-type voter-eligibility-rules feature (pass 14/16)
+  already governs.
+
+## Standing findings re-confirmed unchanged by direct re-read
+
+ELEC-12 (fixed, cap untouched), ELEC-14 (fixed, untouched), ELEC-16
+(accepted as is, `list_manual_ballot_batches` still unbounded, untouched),
+ELEC-40 (FLAGGED, P1 — `_dedup_position_key`/`_dedup_scoped_item_aliases`
+outside every hunk this window's diff touches, same 12 call sites as pass
+7), ELEC-43 (resolved by owner decision, untouched), ELEC-48 (resolved
+2026-11-05 — synchronous send endpoints retired; re-confirmed absent from
+this pass's fresh AST route enumeration above, which lists only the
+job-queue `start_ballot_send_job_endpoint`/`start_reminder_send_job_endpoint`),
+ELEC-49 (CLOSED per pass 16, untouched), ELEC-50/ELEC-51 (fixed, guard
+tests unchanged). No standing item changed disposition this pass.
+
+No finding was opened this pass. The real backend delta
+(`election_service.py`, 1 commit, already merged by app-review's own
+rotation before this iteration started) and its four matching frontend
+fixes were each read in full against the checklist's seven dimensions,
+with the extra weight this pass's brief calls for on the token-scoped
+voting surface, vote secrecy, voter eligibility and tally
+tamper-evidence — none introduces a security regression; all four are
+correctness fixes strictly downstream of the already-reviewed
+authentication, authorization, org-scoping and signing/chain layers.
+
+## Schema & migration notes (pass 18)
+
+No migration in this feature's scope this pass. `validate_migrations.py
+--strict` re-run: single head `e9cf8ab7e4e4`, no fork, 844 revisions (up
+from 835 at pass 17 — growth from the rest of the codebase, not from this
+feature).
+
+## Completion gate (pass 18)
+
+- `cd backend && /usr/local/bin/python3.13 -m flake8 app/ tests/ alembic/` (7.4.1, CI's pin) — clean
+- `cd backend && /usr/local/bin/python3.13 -m black --check app/ tests/ alembic/` (26.10.1, CI's pin) — clean, 3541 files unchanged
+- `cd backend && /usr/local/bin/python3.13 -m isort --check-only app/ tests/ alembic/` (9.0.2, CI's pin) — clean
+- `cd backend && /usr/local/bin/python3.13 scripts/validate_migrations.py --strict` — 844 revisions, single head `e9cf8ab7e4e4`
+- `python3 scripts/check_route_permissions.py --strict` (repo root) — 344 routes, 0 errors, 0 warnings (matches SEC-00 pass 19's figure)
+- `docs/DATABASE_SCHEMA.md` vs generator — already current (no model change this window)
+- `cd backend && /usr/local/bin/python3.13 -m pytest tests/ -q -k "election or ballot or voter or vote" -m "not integration and not slow and not docker"` — 772 passed, 1 skipped (pre-existing, `py_vapid`)
+- `cd frontend && npm run typecheck` — 0 errors
+- `cd frontend && npm run lint` — clean (`--max-warnings 10`)
+- AST route enumeration of `elections.py`: 76 routes (unchanged), all carrying `Depends(...)`; the five intentionally-public token-scoped routes re-identified by name, same as every prior pass.
+
+**0 fixed, 0 new findings (pass 18).** Nothing in this feature's own scope
+changed since pass 17 beyond a correctness fix already reviewed, merged
+and tested by the app-review rotation; this pass's value is the
+re-verification (fresh baseline derivation, fresh route enumeration, and a
+full re-read of the token surface, vote-secrecy and tally paths) rather
+than new code.
+
+---
 
 ## Pass 17 (2026-11-24) — watchdog pickup, real delta: report numbers and a formal letterhead identity line on the certified-results and pre-meeting-package PDFs; 0 fixed, 0 new findings
 

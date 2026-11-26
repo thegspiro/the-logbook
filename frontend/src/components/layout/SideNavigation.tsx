@@ -646,6 +646,12 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
                       icon: Globe,
                       permission: 'settings.manage',
                     },
+                    {
+                      label: 'Public Website',
+                      path: '/admin/public-website',
+                      icon: Globe,
+                      permission: 'settings.manage',
+                    },
                   ]
                 : []),
               {
