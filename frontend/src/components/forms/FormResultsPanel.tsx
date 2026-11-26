@@ -10,7 +10,7 @@
  * Usage:
  *   <FormResultsPanel formId="uuid" />
  */
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { RefreshCw, AlertCircle, BarChart3, Hash, Type, Calendar, FileText, Download, Users } from 'lucide-react';
 import { formsService } from '../../services/api';
 import type { FormField, FormSubmission } from '../../services/api';
@@ -64,17 +64,25 @@ const FormResultsPanel = ({ formId }: FormResultsPanelProps) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // The panel stays mounted while the officer switches forms, and a form with
+  // many submissions takes several pages to load: a response for the form
+  // just left must not paint its charts under the new form's heading.
+  const latestRequest = useRef(0);
+
   useEffect(() => {
     void loadData();
   }, [formId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const loadData = async () => {
+    const request = ++latestRequest.current;
+    const isCurrent = () => request === latestRequest.current;
     try {
       setLoading(true);
       setError(null);
 
       // Load form definition and all submissions
       const formDef = await formsService.getForm(formId);
+      if (!isCurrent()) return;
       setFields(formDef.fields);
 
       // Paginate through all submissions
@@ -85,15 +93,17 @@ const FormResultsPanel = ({ formId }: FormResultsPanelProps) => {
 
       while (skip < total) {
         const page = await formsService.getSubmissions(formId, { skip, limit: pageSize });
+        if (!isCurrent()) return;
         allSubs.push(...page.submissions);
         total = page.total;
         skip += pageSize;
       }
       setSubmissions(allSubs);
     } catch {
+      if (!isCurrent()) return;
       setError('Failed to load results.');
     } finally {
-      setLoading(false);
+      if (isCurrent()) setLoading(false);
     }
   };
 
@@ -178,9 +188,10 @@ const FormResultsPanel = ({ formId }: FormResultsPanelProps) => {
             };
           }
         } else if (TEXT_TYPES.has(field.field_type)) {
-          // Show up to 5 most recent unique answers
+          // Submissions arrive newest first, so the first five unique answers
+          // are the most recent ones.
           const unique = [...new Set(values)];
-          summary.recentAnswers = unique.slice(-5).reverse();
+          summary.recentAnswers = unique.slice(0, 5);
         }
 
         return summary;
