@@ -2014,7 +2014,9 @@ on the base reflow only). It shows exactly while the headers are hidden, by
 the `.rwd-card-sort` rules in `index.css`, which repeat the reflow's own
 thresholds and must move with them. A table hidden on a phone beside its own
 card list puts an untiered one above that list too, as the member roster does.
-`card-sort-control.spec.ts` holds the four tables that have it.
+`card-sort-control.spec.ts` holds every table that has it. A table sorted on
+the server with a default column passes `allowDefault={false}`, as grant
+applications does, so the control offers no "Default order" it cannot honour.
 
 **Screen readers:** in card mode the `<thead>` is `display: none` on purpose,
 because header rows hold sort buttons and select-all checkboxes that a visually

@@ -87,17 +87,35 @@ const EventQRCodePage: React.FC = () => {
     setPrintTarget(null);
   }, [printTarget]);
 
+  // Every state draws the header, so the strip and the way back to the event
+  // do not vanish while the code loads or when it cannot. The event's name
+  // comes with the code; until then the crumb says "Event".
+  const header = (
+    <div className="print:hidden">
+      <EventsPageHeader
+        icon={QrCode}
+        title="Event Check-In QR Code"
+        breadcrumbLabel="QR Code"
+        parentCrumbs={eventId ? [{ label: qrData?.event_name || 'Event', path: `/events/${eventId}` }] : undefined}
+      />
+    </div>
+  );
+
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center">
-        <div className="text-theme-text-secondary">Loading QR code...</div>
+      <div className="mx-auto min-h-screen max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+        {header}
+        <div className="text-theme-text-secondary py-16 text-center" role="status">
+          Loading QR code...
+        </div>
       </div>
     );
   }
 
   if (error && !qrData) {
     return (
-      <div className="mx-auto max-w-2xl p-6">
+      <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+        {header}
         <div className="mb-4 rounded-lg border border-red-500/30 bg-red-500/10 p-4">
           <p className="text-red-700 dark:text-red-400">{error}</p>
         </div>
@@ -113,7 +131,8 @@ const EventQRCodePage: React.FC = () => {
 
   if (!qrData) {
     return (
-      <div className="mx-auto max-w-2xl p-6">
+      <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+        {header}
         <div className="mb-4 rounded-lg border border-yellow-500/30 bg-yellow-500/10 p-4">
           <p className="text-yellow-700 dark:text-yellow-300">No QR code data available</p>
         </div>
@@ -133,14 +152,7 @@ const EventQRCodePage: React.FC = () => {
     <div className="mx-auto min-h-screen max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
       {/* Not on the printout: the sheet is the code and the event it admits
           to, taped up at the door, not a page of the app. */}
-      <div className="print:hidden">
-        <EventsPageHeader
-          icon={QrCode}
-          title="Event Check-In QR Code"
-          breadcrumbLabel="QR Code"
-          parentCrumbs={eventId ? [{ label: qrData.event_name, path: `/events/${eventId}` }] : undefined}
-        />
-      </div>
+      {header}
       {/* The code keeps its width under the full-width strip. */}
       <div className="mx-auto max-w-4xl">
         {/* Event Info */}

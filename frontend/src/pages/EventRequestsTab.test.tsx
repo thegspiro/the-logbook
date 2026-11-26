@@ -363,7 +363,7 @@ describe('EventRequestsTab triage list', () => {
     await user.click(await screen.findByRole('button', { name: /^Oakville Elementary/ }));
 
     const page = await screen.findByRole('article', { name: 'Oakville Elementary' });
-    expect(within(page).getByRole('heading', { level: 1, name: 'Oakville Elementary' })).toBeInTheDocument();
+    expect(within(page).getByRole('heading', { level: 2, name: 'Oakville Elementary' })).toBeInTheDocument();
     expect(within(page).getByRole('button', { name: 'Take it' })).toBeInTheDocument();
     expect(within(page).getByText('Assign a coordinator')).toBeInTheDocument();
     // The board is gone, not hidden behind a panel.
@@ -382,11 +382,34 @@ describe('EventRequestsTab triage list', () => {
     expect(listRequests).not.toHaveBeenCalled();
   });
 
+  it('draws the Events Administration header above a request, without the hub around it', async () => {
+    renderBoard('/events/admin/requests/work-1');
+
+    await screen.findByRole('article', { name: 'Maple Street HOA' });
+    // The page's one <h1> is the admin header; the request is named beneath it.
+    expect(screen.getAllByRole('heading', { level: 1 }).map((h) => h.textContent)).toEqual(['Events Administration']);
+
+    const trail = screen.getByRole('navigation', { name: 'Breadcrumb' });
+    expect(within(trail).getByRole('link', { name: 'Outreach Requests' })).toHaveAttribute(
+      'href',
+      '/events/admin?tab=requests'
+    );
+    expect(await within(trail).findByText('Maple Street HOA')).toHaveAttribute('aria-current', 'page');
+
+    expect(screen.getByRole('navigation', { name: 'Events sections' })).toBeInTheDocument();
+    const outreach = screen.getByRole('navigation', { name: 'Community Outreach pages' });
+    expect(within(outreach).getByRole('link', { name: 'Outreach Requests' })).toHaveAttribute('aria-current', 'page');
+    expect(within(outreach).getByRole('link', { name: 'Overview' })).toHaveAttribute(
+      'href',
+      '/events/admin?tab=overview'
+    );
+  });
+
   it('says so when the request cannot be loaded', async () => {
     getRequest.mockRejectedValue(new Error('Not found'));
     renderBoard('/events/admin/requests/gone');
 
-    expect(await screen.findByRole('heading', { level: 1, name: 'Request not available' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { level: 2, name: 'Request not available' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'All requests' })).toBeInTheDocument();
   });
 

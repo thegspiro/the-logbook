@@ -33,6 +33,12 @@ interface CardSortControlProps {
   onSort: (field: string, direction: SortDirection) => void;
   /** The table's container tier; omit for a table on the base reflow only. */
   tier?: 'narrow' | 'wide' | 'xwide' | '2xwide';
+  /**
+   * Offer "Default order". False for a table that is always sorted by some
+   * column, such as one sorted on the server with a default column, where
+   * clearing the sort has no meaning.
+   */
+  allowDefault?: boolean;
   className?: string;
 }
 
@@ -42,6 +48,7 @@ export const CardSortControl: React.FC<CardSortControlProps> = ({
   currentDirection,
   onSort,
   tier,
+  allowDefault = true,
   className = '',
 }) => {
   const selectId = useId();
@@ -71,7 +78,7 @@ export const CardSortControl: React.FC<CardSortControlProps> = ({
           Sort by
         </label>
         <select id={selectId} className="form-input" value={active ? currentSort : ''} onChange={handleField}>
-          <option value="">Default order</option>
+          {allowDefault && <option value="">Default order</option>}
           {options.map((option) => (
             <option key={option.field} value={option.field}>
               {option.label}

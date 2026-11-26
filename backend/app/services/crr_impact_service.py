@@ -20,7 +20,7 @@ from typing import Any, Optional
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import load_only, selectinload
 
 from app.models.crr import CrrActivity, CrrActivityMeasure, CrrActivityType, CrrTag
 from app.services.zip_lookup import lookup_zip, zip_coordinates
@@ -88,6 +88,16 @@ class CrrImpactService:
         query = (
             select(CrrActivity)
             .options(
+                # The report never reads a resident's details, so they are not
+                # loaded, and so never decrypted.
+                load_only(
+                    CrrActivity.id,
+                    CrrActivity.activity_type_id,
+                    CrrActivity.occurred_at,
+                    CrrActivity.zip_code,
+                    CrrActivity.city,
+                    CrrActivity.state,
+                ),
                 selectinload(CrrActivity.counts),
                 selectinload(CrrActivity.tag_links),
             )

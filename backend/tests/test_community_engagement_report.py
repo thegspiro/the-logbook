@@ -462,6 +462,64 @@ class TestDashboardCardAgrees:
 
         assert pulse["public_events"] == report.current.events_held == 2
 
+    async def test_the_all_time_totals_count_the_same_events(self, db_session, dept):
+        # The all-time figures beside the report read the shared outreach rule
+        # too: a request scheduled onto a drill makes the drill outreach.
+        org, members = dept
+        drill = await _event(
+            db_session,
+            org,
+            "Linked drill",
+            _ago(days=3),
+            event_type=EventType.TRAINING,
+        )
+        await _request(db_session, org, drill)
+        await _event(db_session, org, "Public", _ago(days=2))
+        coming = await _event(
+            db_session,
+            org,
+            "Linked visit",
+            datetime.now(timezone.utc) + timedelta(days=5),
+            event_type=EventType.TRAINING,
+        )
+        await _request(db_session, org, coming)
+        await _event(
+            db_session, org, "Plain drill", _ago(days=1), event_type=EventType.TRAINING
+        )
+
+        report = await _report(db_session, members[0])
+
+        assert report.total_public_events == 3
+        assert report.upcoming_public_events == 1
+        assert report.upcoming_events == report.upcoming_public_events
+
+    async def test_an_event_with_two_requests_reads_as_its_first(
+        self, db_session, dept
+    ):
+        # The Overview links an event to its first request; the report must
+        # describe the same one.
+        org, members = dept
+        event = await _event(db_session, org, "Fair", _ago(days=2))
+        first = await _request(
+            db_session,
+            org,
+            event,
+            organization_name="First Org",
+            created_at=_ago(days=20),
+        )
+        await _request(
+            db_session,
+            org,
+            event,
+            organization_name="Second Org",
+            created_at=_ago(days=10),
+        )
+
+        report = await _report(db_session, members[0])
+
+        [row] = [r for r in report.recent_events if r.title == "Fair"]
+        assert row.request_id == str(first.id)
+
 
 class TestGuestHeadcount:
     async def test_a_headcount_is_the_actual_figure_in_place_of_sign_ins(

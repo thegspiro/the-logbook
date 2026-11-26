@@ -12,6 +12,7 @@ import uuid
 from datetime import datetime, timedelta, timezone
 
 import pytest
+from sqlalchemy import inspect as sa_inspect
 
 from app.api.v1.endpoints import crr as crr_endpoints
 from app.api.v1.endpoints.crr import (
@@ -346,6 +347,37 @@ class TestScopeAndPrivacy:
             "Ask for Pat",
         ):
             assert secret not in text
+
+    async def test_resident_details_are_not_even_loaded(self, db_session, dept):
+        # Not merely left out of the report: never read or decrypted.
+        org, user = dept
+        types = await _types(db_session, user)
+        await _record(
+            db_session,
+            user,
+            types["home_safety_survey"],
+            NOW - timedelta(days=1),
+            has_resident_details=True,
+            street_address="12 Oak St",
+            notes="Ask for Pat",
+        )
+        db_session.expunge_all()
+
+        rows = await CrrImpactService(db_session)._activities(
+            str(org.id), None, NOW + timedelta(days=1)
+        )
+
+        assert rows
+        for row in rows:
+            unloaded = sa_inspect(row).unloaded
+            for field in (
+                "street_address",
+                "resident_name",
+                "resident_phone",
+                "resident_email",
+                "notes",
+            ):
+                assert field in unloaded
 
 
 class TestOnOutreachImpact:
