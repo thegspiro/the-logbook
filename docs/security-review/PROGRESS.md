@@ -16,8 +16,8 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**Branch `claude/security-review-finance-approvals-p18`** (PR not yet
-recorded — see the note at the bottom of this section): Feature 05
+**PR [#4723](https://github.com/thegspiro/the-logbook/pull/4723) (branch
+`claude/security-review-finance-approvals-p18`)**: Feature 05
 (Finance & approvals), pass 18 — watchdog pickup (the dedicated
 `/loop 30m /security-review` session remains unreachable).
 
