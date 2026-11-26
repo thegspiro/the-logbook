@@ -131,6 +131,16 @@ def test_the_waiver_attachment_entry_points_route_through_the_scanning_service()
         assert "self._store(" in inspect.getsource(entry)
 
 
+def test_a_waiver_heic_is_scanned_before_it_is_decoded():
+    """libheif parses the member's bytes; the original is scanned first, and
+    the converted JPEG again when it is stored."""
+    service = attendance_waiver_attachments.AttendanceWaiverAttachmentService
+    source = inspect.getsource(service._as_stored)
+    assert source.index("self.storage.check(") < source.index("heic_to_jpeg(")
+    store = inspect.getsource(service._store)
+    assert store.index("self._as_stored(") < store.index(".store_bytes(")
+
+
 def test_the_history_media_entry_point_routes_through_the_scanning_service():
     """The history media entry above is trusted only while this holds."""
     source = inspect.getsource(HistoryMediaService.store_media_upload)
