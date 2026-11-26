@@ -17,9 +17,9 @@ history shows the position beside the hours and the calls.
 Pure functions only; the commit service loads both sides and writes.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
-from typing import Dict, Iterable, List, Optional, Sequence, Tuple
+from typing import Dict, Iterable, List, Mapping, Optional, Sequence, Set, Tuple
 
 from app.utils.positions import CANONICAL_POSITIONS, canonical_position
 
@@ -59,6 +59,8 @@ class HoursMatch:
     unmatched_signups: List[str]
     #: Hours entries no sign-up was paired with.
     unmatched_hours: List[HoursEntry]
+    #: Sign-up keys paired by a reviewer rather than by overlap.
+    pinned: Set[str] = field(default_factory=set)
 
 
 def overlap(a_start: datetime, a_end: datetime, b_start: datetime, b_end: datetime):
@@ -66,20 +68,50 @@ def overlap(a_start: datetime, a_end: datetime, b_start: datetime, b_end: dateti
     return max(timedelta(0), min(a_end, b_end) - max(a_start, b_start))
 
 
-def match(signups: Sequence[SignUp], entries: Sequence[HoursEntry]) -> HoursMatch:
+def match(
+    signups: Sequence[SignUp],
+    entries: Sequence[HoursEntry],
+    pinned: Optional[Mapping[str, str]] = None,
+) -> HoursMatch:
     """Pair sign-ups with hours entries, largest overlaps first.
 
     Greedy on the overlap rather than sign-up by sign-up, so the result does
     not depend on the order the roster lists its seats in. Ties fall to the
     earlier sign-up and entry, by time and then key, so a re-run pairs the
     same way.
+
+    ``pinned`` is a reviewer's pairing, sign-up key to attendance id, applied
+    before any overlap is weighed and whatever the overlap is. A pin is kept
+    only while both sides still exist and belong to the same member: a pin
+    naming a sign-up or entry that is gone, or another member's hours, pairs
+    nothing, and both sides fall to the overlap rule as if it were not there.
     """
+    by_attendance = {entry.attendance_id: entry for entry in entries}
+    matched: Dict[str, HoursEntry] = {}
+    taken: set[str] = set()
+    kept: Set[str] = set()
+    for signup in signups:
+        attendance_id = (pinned or {}).get(signup.key)
+        entry = by_attendance.get(attendance_id) if attendance_id else None
+        if (
+            entry is None
+            or entry.user_id != signup.user_id
+            or entry.attendance_id in taken
+        ):
+            continue
+        matched[signup.key] = entry
+        taken.add(entry.attendance_id)
+        kept.add(signup.key)
+
     by_user: Dict[str, List[HoursEntry]] = {}
     for entry in entries:
-        by_user.setdefault(entry.user_id, []).append(entry)
+        if entry.attendance_id not in taken:
+            by_user.setdefault(entry.user_id, []).append(entry)
 
     candidates: List[Tuple[timedelta, SignUp, HoursEntry]] = []
     for signup in signups:
+        if signup.key in matched:
+            continue
         for entry in by_user.get(signup.user_id, ()):
             shared = overlap(signup.start, signup.end, entry.start, entry.end)
             if shared >= MIN_OVERLAP:
@@ -94,8 +126,6 @@ def match(signups: Sequence[SignUp], entries: Sequence[HoursEntry]) -> HoursMatc
         )
     )
 
-    matched: Dict[str, HoursEntry] = {}
-    taken: set[str] = set()
     for _, signup, entry in candidates:
         if signup.key in matched or entry.attendance_id in taken:
             continue
@@ -109,6 +139,7 @@ def match(signups: Sequence[SignUp], entries: Sequence[HoursEntry]) -> HoursMatc
             (e for e in entries if e.attendance_id not in taken),
             key=lambda e: (e.start, e.attendance_id),
         ),
+        pinned=kept,
     )
 
 

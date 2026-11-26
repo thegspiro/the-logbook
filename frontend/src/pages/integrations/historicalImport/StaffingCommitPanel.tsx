@@ -30,6 +30,7 @@ import { HistoricalUndoStep } from '../../../modules/integrations/types/historic
 import { formatDate, formatNumber, formatTime } from '../../../utils/dateFormatting';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import MembersToDecide from './MembersToDecide';
+import StaffingLeftovers from './StaffingLeftovers';
 import StepUndo from './StepUndo';
 
 const PAGE_SIZE = 25;
@@ -197,6 +198,22 @@ const StaffingCommitPanel: React.FC<StaffingCommitPanelProps> = ({ importId }) =
 
       <HoursMatchSummary match={preview.hours_match} tz={tz} />
 
+      {(preview.hours_match.signups_without_hours > 0 ||
+        preview.hours_match.hours_without_signup > 0 ||
+        (preview.hours_match.paired_by_reviewer ?? 0) > 0) && (
+        <Collapsible title="Review every unpaired seat and hours entry">
+          <StaffingLeftovers
+            importId={importId}
+            tz={tz}
+            onChanged={() =>
+              void run(async () => {
+                setPreview(await historicalImportService.getStaffingCommit(importId));
+              }, 'Could not re-read the roster')
+            }
+          />
+        </Collapsible>
+      )}
+
       {skipped.length > 0 && (
         <div className="text-theme-text-secondary text-sm">
           <p>Left out:</p>
@@ -307,11 +324,18 @@ const HoursMatchSummary: React.FC<HoursMatchSummaryProps> = ({ match, tz }) => (
       crew seat.
     </p>
     <ul className="text-theme-text-secondary list-disc space-y-1 pl-5 text-sm">
-      <li>{formatNumber(match.matched)} seats paired with hours.</li>
-      <li>{formatNumber(match.signups_without_hours)} seats with no hours entry: written as scheduled seats.</li>
+      <li>
+        {formatNumber(match.matched)} seats paired with hours
+        {(match.paired_by_reviewer ?? 0) > 0 ? `, ${formatNumber(match.paired_by_reviewer ?? 0)} of them by you` : ''}.
+      </li>
+      <li>
+        {formatNumber(match.signups_without_hours)} seats with no hours entry: written as scheduled seats
+        {(match.signups_reviewed ?? 0) > 0 ? ` (${formatNumber(match.signups_reviewed ?? 0)} reviewed)` : ''}.
+      </li>
       <li>
         {formatNumber(match.hours_without_signup)} hours entries on the roster&apos;s days with no seat: they keep their
-        hours and calls, with no position from the roster.
+        hours and calls, with no position from the roster
+        {(match.hours_reviewed ?? 0) > 0 ? ` (${formatNumber(match.hours_reviewed ?? 0)} reviewed)` : ''}.
       </li>
     </ul>
     {match.signups_without_hours_examples.length > 0 && (

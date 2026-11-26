@@ -587,10 +587,10 @@ const RecordCrewTrainingPage: React.FC = () => {
               <ul className="border-theme-surface-border max-h-80 divide-y overflow-y-auto rounded-lg border">
                 {filteredMembers.map((member) => (
                   <li key={member.id}>
-                    <label className="hover:bg-theme-surface-hover touch:min-h-11 flex cursor-pointer items-center gap-3 px-3 py-2">
+                    <label className="hover:bg-theme-surface-hover touch:min-h-11 touch:py-3 flex cursor-pointer items-start gap-3 px-3 py-2">
                       <input
                         type="checkbox"
-                        className="form-checkbox"
+                        className="form-checkbox mt-0.5"
                         checked={present.has(member.id)}
                         onChange={() => toggleMember(member.id)}
                       />
