@@ -1043,6 +1043,8 @@ input:is(.form-checkbox, [class~='h-4']) {
    row's height, and takes the 42px of a standard button as its width:
    aspect-ratio does not derive a width from a stretched height in either
    engine.
+   A menu trigger sits one level down, in the `relative` box its popover is
+   positioned against: that box stretches instead, and the button fills it.
    Rows of icons alone, small-button rows, and column layouts (where stretching
    widens instead) are left as they were. Phones and touch screens are already
    44px for both. */
@@ -1053,6 +1055,18 @@ input:is(.form-checkbox, [class~='h-4']) {
     > :is(.btn-icon, .btn-icon-sm) {
     align-self: stretch;
     min-width: 42px;
+  }
+
+  :not(.flex-col):has(
+      > :is(.btn-primary, .btn-secondary, .btn-success, .btn-info, .btn-warning):not(.btn-icon, .btn-icon-sm, .btn-sm)
+    )
+    > .relative:has(> :is(.btn-icon, .btn-icon-sm)) {
+    align-self: stretch;
+
+    & > :is(.btn-icon, .btn-icon-sm) {
+      height: 100%;
+      min-width: 42px;
+    }
   }
 }
 
