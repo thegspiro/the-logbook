@@ -141,7 +141,7 @@ Nothing blocks a restart. Migration `7c3e9a51b2d4` adds the
 `outreach_feedback_reminder` email template type to
 `email_templates.template_type` and `scheduled_emails.template_type`, and the
 nullable column `event_requests.feedback_reminder_sent_at`. Existing requests
-stay NULL. It builds on `7c3a91e5b2d4`. A downgrade drops the column and
+stay NULL. It builds on `103bffdb9528`. A downgrade drops the column and
 deletes rows of the new template type.
 
 - **A new daily task, `outreach_feedback_reminders` (10:10).** It emails an
