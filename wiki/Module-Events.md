@@ -352,7 +352,9 @@ Leave Waitlist once the event has ended or its deadline has passed.
 `EventService.create_or_update_rsvp`; an unparseable date counts as open, so
 the server makes the call.
 
-On the detail page, **Add to Calendar** is hidden once the event has ended
+On the detail page, **Add to Calendar** (under **More** for someone holding
+`events.manage`, beside the title otherwise, as is **View QR Code**) is hidden
+once the event has ended
 (scheduled end passed or `actual_end_time` set). **View QR Code** is hidden
 once self check-in cannot succeed — window closed, cancelled, or finalized. The
 close time is `check_in_closes_at` on the event detail response, computed by

@@ -40,12 +40,10 @@ import { useEventNotifications } from '../hooks/useEventNotifications';
 import { useOverrideAttendance } from '../hooks/useOverrideAttendance';
 import { EventType as EventTypeEnum, RSVPStatus as RSVPStatusEnum } from '../constants/enums';
 import {
-  Bell,
   BookOpen,
   Calendar,
   CalendarPlus,
   CheckCircle,
-  ChevronDown,
   ClipboardCheck,
   Clock,
   EllipsisVertical,
@@ -285,7 +283,6 @@ export const EventDetailPage: React.FC = () => {
   // card refetches what the backend now holds.
   const [trainingRefreshKey, setTrainingRefreshKey] = useState(0);
   const actionsMenuRef = useRef<HTMLDivElement>(null);
-  const reminderMenuRef = useRef<HTMLDivElement>(null);
 
   const { checkPermission, user: currentUser } = useAuthStore();
   const tz = useTimezone();
@@ -342,20 +339,15 @@ export const EventDetailPage: React.FC = () => {
     },
   });
 
-  // Close actions menu and reminder menu on click outside
-  const closeReminderMenu = notifications.setShowReminderMenu;
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (actionsMenuRef.current && !actionsMenuRef.current.contains(e.target as Node)) {
         setShowActionsMenu(false);
       }
-      if (reminderMenuRef.current && !reminderMenuRef.current.contains(e.target as Node)) {
-        closeReminderMenu(false);
-      }
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [closeReminderMenu]);
+  }, []);
 
   useEffect(() => {
     if (eventId) {
@@ -1095,6 +1087,17 @@ export const EventDetailPage: React.FC = () => {
       Edit
     </button>
   );
+  // An events manager's header carries what the event's phase calls for and
+  // the More menu holds the rest: seven buttons wrapped onto three rows and
+  // left nothing reading as the next step. Check In joins the header once
+  // check-in has opened (and stays after it closes, for adding a member who
+  // was missed), and Edit gives its place to End Event while the event runs.
+  const checkInMembersInHeader = checkInOpen || checkInClosed || hasStarted;
+  const editInHeader = !(isOngoing && !isAttendanceFinalized);
+  const canSendReminders = !event.is_cancelled && !isAttendanceFinalized;
+  const menuItemClass =
+    'text-theme-text-secondary hover:bg-theme-surface-hover w-full px-4 py-2.5 text-left text-sm disabled:opacity-50';
+  const menuGroupClass = 'text-theme-text-muted px-4 pt-2 pb-1 text-xs font-semibold';
   const closeOutButtons = (
     <>
       {/* End Event button — visible when event is in progress */}
@@ -1238,7 +1241,7 @@ export const EventDetailPage: React.FC = () => {
             event.is_cancelled ? undefined : (
               // Capped so the actions wrap onto a second row rather than
               // squeezing the event's name into a narrow column beside them.
-              <div className="flex flex-wrap gap-2 sm:max-w-xl sm:justify-end sm:gap-3">
+              <div className="relative flex flex-wrap gap-2 sm:max-w-xl sm:justify-end sm:gap-3">
                 {/* Primary actions — always visible */}
                 {event.is_draft && canManage && (
                   <button
@@ -1294,7 +1297,10 @@ export const EventDetailPage: React.FC = () => {
                     {rsvpCountdown.text}
                   </span>
                 )}
-                {showCheckInQrCode && (
+                {/* Those without the More menu keep these two in the header:
+                    a member has nowhere else to find the calendar file, nor
+                    an organizer without events.manage the display code. */}
+                {!canManage && showCheckInQrCode && (
                   <button
                     onClick={() => void navigate(`/events/${eventId}/qr-code`)}
                     className="btn-secondary inline-flex items-center border-blue-300 text-sm font-medium text-blue-700 shadow-xs hover:bg-blue-500/20 dark:text-blue-400"
@@ -1303,7 +1309,7 @@ export const EventDetailPage: React.FC = () => {
                     View QR Code
                   </button>
                 )}
-                {!isEventOver && (
+                {!canManage && !isEventOver && (
                   <button
                     onClick={() => downloadICSFile(event)}
                     className="btn-secondary inline-flex items-center gap-1.5 text-sm"
@@ -1353,46 +1359,17 @@ export const EventDetailPage: React.FC = () => {
 
                 {canManage && (
                   <>
-                    {editEventButton}
-                    {checkInMembersButton}
-
-                    {/* Send Reminders dropdown */}
-                    {!event.is_cancelled && !isAttendanceFinalized && (
-                      <div className="relative" ref={reminderMenuRef}>
-                        <button
-                          onClick={() => notifications.setShowReminderMenu(!notifications.showReminderMenu)}
-                          disabled={notifications.sendingReminders}
-                          className="btn-secondary text-theme-text-secondary inline-flex items-center text-sm font-medium shadow-xs"
-                        >
-                          <Bell className="mr-2 h-4 w-4" />
-                          {notifications.sendingReminders ? 'Sending...' : 'Send Reminders'}
-                          <ChevronDown className="ml-1 h-4 w-4" />
-                        </button>
-                        {notifications.showReminderMenu && (
-                          <div className="popover-panel absolute right-0 z-20 mt-2 w-56">
-                            <div className="py-1">
-                              <button
-                                onClick={() => void notifications.handleSendReminders('non_respondents')}
-                                className="text-theme-text-secondary hover:bg-theme-surface-hover w-full px-4 py-2.5 text-left text-sm"
-                              >
-                                Non-respondents only
-                              </button>
-                              <button
-                                onClick={() => void notifications.handleSendReminders('all')}
-                                className="text-theme-text-secondary hover:bg-theme-surface-hover w-full px-4 py-2.5 text-left text-sm"
-                              >
-                                All members
-                              </button>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    )}
+                    {editInHeader && editEventButton}
+                    {checkInMembersInHeader && checkInMembersButton}
 
                     {closeOutButtons}
 
                     {/* "More" dropdown for secondary actions */}
-                    <div className="relative" ref={actionsMenuRef}>
+                    {/* Anchored to the button from sm up. On a phone the button
+                        can sit anywhere along a wrapped row, where a menu hung
+                        from its right edge ran off the left of the screen, so
+                        there it spans the row of actions instead. */}
+                    <div className="sm:relative" ref={actionsMenuRef}>
                       <button
                         onClick={() => setShowActionsMenu(!showActionsMenu)}
                         className="btn-secondary text-theme-text-secondary inline-flex items-center text-sm font-medium shadow-xs"
@@ -1401,8 +1378,83 @@ export const EventDetailPage: React.FC = () => {
                         <span className="ml-1">More</span>
                       </button>
                       {showActionsMenu && (
-                        <div className="popover-panel absolute right-0 z-20 mt-2 w-56">
+                        <div className="popover-panel absolute top-full right-0 left-0 z-20 mt-2 sm:left-auto sm:w-64">
                           <div className="py-1">
+                            {(showCheckInQrCode || !isEventOver || canSendReminders) && (
+                              <>
+                                <p className={menuGroupClass}>Share</p>
+                                {showCheckInQrCode && (
+                                  <button
+                                    onClick={() => {
+                                      setShowActionsMenu(false);
+                                      void navigate(`/events/${eventId}/qr-code`);
+                                    }}
+                                    className={menuItemClass}
+                                  >
+                                    View QR Code
+                                  </button>
+                                )}
+                                {!isEventOver && (
+                                  <button
+                                    onClick={() => {
+                                      setShowActionsMenu(false);
+                                      downloadICSFile(event);
+                                    }}
+                                    className={menuItemClass}
+                                  >
+                                    Add to Calendar
+                                  </button>
+                                )}
+                                {canSendReminders && (
+                                  <>
+                                    <button
+                                      onClick={() => {
+                                        setShowActionsMenu(false);
+                                        void notifications.handleSendReminders('non_respondents');
+                                      }}
+                                      disabled={notifications.sendingReminders}
+                                      className={menuItemClass}
+                                    >
+                                      Remind Non-respondents
+                                    </button>
+                                    <button
+                                      onClick={() => {
+                                        setShowActionsMenu(false);
+                                        void notifications.handleSendReminders('all');
+                                      }}
+                                      disabled={notifications.sendingReminders}
+                                      className={menuItemClass}
+                                    >
+                                      Remind All Members
+                                    </button>
+                                  </>
+                                )}
+                                <div className="border-theme-surface-border my-1 border-t" />
+                              </>
+                            )}
+                            <p className={menuGroupClass}>Manage</p>
+                            {!editInHeader && (
+                              <button
+                                onClick={() => {
+                                  setShowActionsMenu(false);
+                                  void navigate(`/events/${eventId}/edit`);
+                                }}
+                                className={menuItemClass}
+                              >
+                                Edit Event
+                              </button>
+                            )}
+                            {!checkInMembersInHeader && canManageAttendance && !isAttendanceFinalized && (
+                              <button
+                                onClick={() => {
+                                  setShowActionsMenu(false);
+                                  openCheckInModal();
+                                }}
+                                className={menuItemClass}
+                              >
+                                Check In Members
+                              </button>
+                            )}
                             <button
                               onClick={() => {
                                 setShowActionsMenu(false);
@@ -1469,6 +1521,7 @@ export const EventDetailPage: React.FC = () => {
                             {!isAttendanceFinalized && (
                               <>
                                 <div className="border-theme-surface-border my-1 border-t" />
+                                <p className={menuGroupClass}>Change status</p>
                                 {!event.is_cancelled && (
                                   <button
                                     onClick={() => {
