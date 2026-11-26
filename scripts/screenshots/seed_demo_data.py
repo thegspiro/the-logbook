@@ -15221,6 +15221,61 @@ class Seeder:
         },
     ]
 
+    # The request whose requester answers the feedback form, and what they say.
+    # A rating of 3 so the starter form's "What could we do better?" (shown at
+    # 3 or less) appears, and guide 04's picture shows both written answers.
+    FEEDBACK_REQUESTER = "Lena Brooks"
+    FEEDBACK_ANSWERS = {
+        "How did the visit go?": "3",
+        "What went well?": (
+            "Every child got to sit in the engine and try on a helmet, and the "
+            "crew was patient with a lot of questions."
+        ),
+        "What could we do better?": (
+            "The hose demonstration was hard to hear from the back. A "
+            "microphone, or a smaller group, would help."
+        ),
+    }
+
+    def seed_outreach_feedback(self) -> None:
+        """A feedback form, and one completed request's answers to it.
+
+        Guide 04 pictures the Feedback From Requesters setting with the starter
+        form chosen, and a completed request's page with the requester's
+        answers. Done the way a department and a requester do it: the starter
+        form through the Events setting's own endpoint, then the answers
+        through the public status page's, with the request's status token.
+        Safe to re-run: the starter endpoint returns the form it already made,
+        and a request that already has feedback is left alone.
+        """
+        self.api.post("/events/settings/feedback-forms/starter", {})
+        request = next(
+            (
+                r
+                for r in items(self.api.get("/event-requests"), "requests")
+                if pick(r, "contact_name") == self.FEEDBACK_REQUESTER
+                and pick(r, "status") == "completed"
+            ),
+            None,
+        )
+        request_id = pick(request, "id") if request else None
+        if not request_id:
+            return
+        if self.api.get(f"/event-requests/{request_id}/feedback"):
+            return
+        detail = self.api.get(f"/event-requests/{request_id}") or {}
+        token = pick(detail, "status_token")
+        if not token:
+            return
+        form = self.api.get(f"/event-requests/status/{token}/feedback") or {}
+        answers = {
+            str(pick(field, "id")): self.FEEDBACK_ANSWERS[pick(field, "label")]
+            for field in (pick(form, "fields") or [])
+            if pick(field, "label") in self.FEEDBACK_ANSWERS
+        }
+        if answers:
+            self.api.post(f"/event-requests/status/{token}/feedback", {"data": answers})
+
     def seed_outreach_history(self) -> None:
         """Past outreach events with real reach, for Outreach Impact.
 
@@ -22972,6 +23027,7 @@ class Seeder:
         self.step("event request", self.seed_event_request)
         self.step("event request pipeline", self.seed_event_request_pipeline)
         self.step("outreach history", self.seed_outreach_history)
+        self.step("outreach feedback", self.seed_outreach_feedback)
         self.step("backlog 04 type role preset", self.seed_backlog_04_type_role_preset)
         self.step(
             "backlog 04 volunteer staffing", self.seed_backlog_04_volunteer_staffing
