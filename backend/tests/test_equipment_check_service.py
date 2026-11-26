@@ -925,6 +925,9 @@ class TestAuthoritativeCheckTiming:
             checked_by="user-1",
             overall_status="incomplete",
             template_id="tmpl-1",
+            # No apparatus: finishing a check now also updates the apparatus's
+            # deficiency flag (EC2-16), which this timing test is not about.
+            apparatus_id=None,
             check_timing="start_of_shift",
             items=[item],
         )
@@ -968,6 +971,91 @@ class TestAuthoritativeCheckTiming:
         assert check.check_timing == "end_of_shift"
         assert check.overall_status == "pass"
         assert check.client_submission_id == "completion-1"
+
+    async def test_finishing_a_check_as_failed_alerts_and_flags_the_truck(
+        self, service, mock_db
+    ):
+        """EC2-16: the first submit alerts officers and flags the apparatus on a
+        failure; finishing a check saved part-way did neither, so any check
+        that was ever saved as a draft never alerted. The form resubmits a
+        resumed check through this path."""
+        item = MagicMock(
+            template_item_id="item-1",
+            item_name="SCBA",
+            compartment_name="Cab",
+            check_type="pass_fail",
+            status="not_checked",
+            is_expired=False,
+            required_quantity=None,
+            expected_quantity=None,
+            critical_minimum_quantity=None,
+            count_unit=None,
+            quantity_found=None,
+            level_reading=None,
+            notes=None,
+            serial_found=None,
+            lot_found=None,
+            expiration_found=None,
+            expiration_date=None,
+        )
+        check = MagicMock(
+            id="check-1",
+            checked_by="user-1",
+            overall_status="incomplete",
+            template_id=None,
+            apparatus_id="app-1",
+            check_timing="start_of_shift",
+            items=[item],
+        )
+        check_result = MagicMock()
+        check_result.scalars.return_value.first.return_value = check
+        mock_db.execute.side_effect = [check_result]
+        notify = AsyncMock()
+        flag = AsyncMock()
+
+        with (
+            patch.object(
+                service,
+                "_load_checkable_template_items",
+                AsyncMock(
+                    return_value={
+                        "item-1": MagicMock(
+                            check_type="pass_fail",
+                            required_quantity=None,
+                            expected_quantity=None,
+                            critical_minimum_quantity=None,
+                            has_expiration=False,
+                            expiration_date=None,
+                            deployed_lots=[],
+                        )
+                    }
+                ),
+            ),
+            patch.object(service, "get_check", AsyncMock(return_value=check)),
+            patch.object(service, "_resolve_expiration", return_value=None),
+            patch.object(service, "_send_check_failure_notification", notify),
+            patch.object(service, "_update_apparatus_deficiency", flag),
+        ):
+            await service.complete_incomplete_check(
+                "check-1",
+                "org-1",
+                "user-1",
+                {
+                    "items": [
+                        {
+                            "template_item_id": "item-1",
+                            "status": "fail",
+                            "notes": "Cylinder cracked",
+                        }
+                    ]
+                },
+            )
+
+        assert check.overall_status == "fail"
+        flag.assert_awaited_once_with("app-1", "org-1", "fail")
+        notify.assert_awaited_once()
+        assert notify.await_args.kwargs["failed_count"] == 1
+        assert len(notify.await_args.kwargs["warning_items"]) == 1
 
 
 class TestShiftCheckCompletionStatus:
@@ -1821,3 +1909,103 @@ class TestIsBelowCriticalMinimum:
             )
             is expected
         )
+
+
+class TestExpiryReadsTheEarliestLotAboard:
+    """EC2-15: a top-up swap writes the fresh lot's date onto the item and
+    leaves the expired lot aboard. The server's expiry check read only the
+    item's date, so a check (a direct call, or yesterday's offline check synced
+    today) filed an expired pen as passing and stored is_expired=False — while
+    the form and the failure-note rule read the earliest lot."""
+
+    @pytest.mark.unit
+    def test_an_expired_lot_still_aboard_fails_the_line(self):
+        today = date(2026, 11, 26)
+        expired = SimpleNamespace(
+            quantity=1, expiration_date=date(2026, 11, 23), lot_number="OLD"
+        )
+        fresh = SimpleNamespace(
+            quantity=2, expiration_date=date(2027, 6, 1), lot_number="NEW"
+        )
+        template_item = SimpleNamespace(
+            has_expiration=True,
+            expiration_date=date(2027, 6, 1),
+            deployed_lots=[fresh, expired],
+        )
+        item = {"template_item_id": "ti-1", "status": "pass"}
+
+        _, _, failed, overall = EquipmentCheckService._compute_check_status(
+            [item], {"ti-1": template_item}, today=today
+        )
+
+        assert item["status"] == "fail"
+        assert item["is_expired"] is True
+        assert item["expiration_date"] == date(2026, 11, 23)
+        assert (failed, overall) == (1, "fail")
+
+
+class TestStandaloneCheckReplay:
+    """EC2-17: the form sends client_submission_id with an unscheduled check,
+    but the schema had no such field (Pydantic dropped it) and the service no
+    replay, so a retry after a lost response filed a second check. Shift
+    checks have replayed on this key since the constraint was added."""
+
+    @pytest.mark.unit
+    def test_the_schema_keeps_the_key(self):
+        from app.schemas.equipment_check import StandaloneEquipmentCheckCreate
+
+        data = StandaloneEquipmentCheckCreate(
+            template_id="tmpl-1",
+            items=[
+                {
+                    "template_item_id": "ti-1",
+                    "compartment_name": "Cab",
+                    "item_name": "SCBA",
+                    "status": "pass",
+                }
+            ],
+            client_submission_id="attempt-1",
+        ).model_dump(exclude_unset=True)
+
+        assert data["client_submission_id"] == "attempt-1"
+
+    @pytest.mark.unit
+    async def test_a_retry_returns_the_check_already_filed(self, service, mock_db):
+        filed = SimpleNamespace(id="check-1", shift_id=None, template_id="tmpl-1")
+        found = MagicMock()
+        found.scalars.return_value.first.return_value = filed
+        mock_db.execute.side_effect = [found]
+
+        with patch.object(service, "get_check", AsyncMock(return_value=filed)):
+            result = await service.submit_standalone_check(
+                "org-1",
+                "user-1",
+                {
+                    "template_id": "tmpl-1",
+                    "client_submission_id": "attempt-1",
+                    "items": [{"template_item_id": "ti-1", "status": "pass"}],
+                },
+            )
+
+        assert result is filed
+        mock_db.add.assert_not_called()
+
+    @pytest.mark.unit
+    async def test_a_key_used_for_another_check_is_refused(self, service, mock_db):
+        from app.services.equipment_check_service import EquipmentCheckConflictError
+
+        other = SimpleNamespace(id="check-9", shift_id="shift-1", template_id="tmpl-1")
+        found = MagicMock()
+        found.scalars.return_value.first.return_value = other
+        mock_db.execute.side_effect = [found]
+
+        with pytest.raises(EquipmentCheckConflictError):
+            await service.submit_standalone_check(
+                "org-1",
+                "user-1",
+                {
+                    "template_id": "tmpl-1",
+                    "client_submission_id": "attempt-1",
+                    "items": [{"template_item_id": "ti-1", "status": "pass"}],
+                },
+            )
