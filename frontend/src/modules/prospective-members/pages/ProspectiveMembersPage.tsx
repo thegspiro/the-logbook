@@ -212,6 +212,23 @@ export const ProspectiveMembersPage: React.FC = () => {
   const seesAll = useAuthStore((st) => st.checkPermission)('prospective_members.view_all');
   const [showPurgeConfirm, setShowPurgeConfirm] = useState(false);
   const [selectedApplicants, setSelectedApplicants] = useState<Set<string>>(new Set());
+  // A selection is of rows on screen. Switching pipeline, filtering, paging or
+  // acting on one applicant from the drawer replaces the rows, and a bulk
+  // action must not reach applicants no longer shown (MP2-10).
+  useEffect(() => {
+    const shown = new Set(applicants.map((a) => a.id));
+    setSelectedApplicants((prev) => {
+      const kept = [...prev].filter((id) => shown.has(id));
+      return kept.length === prev.size ? prev : new Set(kept);
+    });
+  }, [applicants]);
+  useEffect(() => {
+    const shown = new Set(inactiveApplicants.map((a) => a.id));
+    setSelectedInactive((prev) => {
+      const kept = [...prev].filter((id) => shown.has(id));
+      return kept.length === prev.size ? prev : new Set(kept);
+    });
+  }, [inactiveApplicants]);
   const [isBulkAdvancing, setIsBulkAdvancing] = useState(false);
   const [isBulkHolding, setIsBulkHolding] = useState(false);
   const [isBulkRejecting, setIsBulkRejecting] = useState(false);

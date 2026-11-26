@@ -207,6 +207,32 @@ describe('ProspectiveMembersPage table-view bulk actions', () => {
   });
 });
 
+// MP2-10: the selection survived a pipeline switch, a filter or a page change,
+// so the bar counted applicants no longer on screen and a bulk Reject or Hold
+// sent their ids — applicants from the pipeline viewed before.
+describe('ProspectiveMembersPage selection follows the rows shown', () => {
+  const shownBefore = storeState.applicants;
+  afterEach(() => {
+    storeState.applicants = shownBefore;
+  });
+
+  it('drops selected applicants who are no longer on screen', async () => {
+    mockBulkSetStatus.mockReset();
+    mockBulkSetStatus.mockResolvedValue(heldResult(['a2']));
+    const user = userEvent.setup();
+    const view = renderWithRouter(<ProspectiveMembersPage />);
+    await selectBoth(user);
+    expect(screen.getByText('2 selected')).toBeInTheDocument();
+
+    storeState.applicants = [row('a2', 'Sam', 'Ortega'), row('a3', 'Jo', 'Lane')];
+    view.rerender(<ProspectiveMembersPage />);
+
+    expect(await screen.findByText('1 selected')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /Hold Selected/ }));
+    await waitFor(() => expect(mockBulkSetStatus).toHaveBeenCalledWith(['a2'], 'on_hold'));
+  });
+});
+
 describe('ProspectiveMembersPage — purging inactive applications', () => {
   // The Inactive tab's Purge once toasted the size of the selection whatever
   // the server did -- and the server matched a different status, so it deleted

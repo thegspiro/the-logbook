@@ -137,3 +137,41 @@ describe('election package in the store', () => {
     expect(store().error).toBe('This applicant is rejected');
   });
 });
+
+// MP2-11: switching applicants could leave one applicant's package in another's
+// drawer — a slower response for the first landing last, or a failed fetch for
+// the second leaving the first's in place. Its notes then seeded the form, and
+// Save Draft sent them to the second applicant's package.
+describe('fetchElectionPackage across applicants', () => {
+  const pkg = (id: string, prospect: string) => ({ id, prospect_id: prospect }) as unknown as ElectionPackage;
+
+  beforeEach(() => {
+    mocks.getElectionPackage.mockReset();
+    useProspectiveMembersStore.setState({ currentElectionPackage: null });
+  });
+
+  it("keeps the newer applicant's package when the older answer arrives last", async () => {
+    let releaseA: (value: unknown) => void = () => undefined;
+    mocks.getElectionPackage
+      .mockImplementationOnce(() => new Promise((resolve) => (releaseA = resolve)))
+      .mockResolvedValueOnce(pkg('pkg-b', 'app-b'));
+
+    const first = store().fetchElectionPackage('app-a');
+    await store().fetchElectionPackage('app-b');
+    releaseA(pkg('pkg-a', 'app-a'));
+    await first;
+
+    expect(store().currentElectionPackage?.id).toBe('pkg-b');
+  });
+
+  it("does not leave the previous applicant's package when the next fetch fails", async () => {
+    mocks.getElectionPackage
+      .mockResolvedValueOnce(pkg('pkg-a', 'app-a'))
+      .mockRejectedValueOnce(new Error('Request failed with status code 500'));
+
+    await store().fetchElectionPackage('app-a');
+    await store().fetchElectionPackage('app-b');
+
+    expect(store().currentElectionPackage).toBeNull();
+  });
+});
