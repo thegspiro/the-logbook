@@ -17,10 +17,12 @@ does, with the uploads volume pointed at a temporary directory. Pinned:
 * the table is registered with the storage sweep and the member's export.
 """
 
+import hashlib
 import io
 import json
 import os
 from datetime import datetime, timedelta
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -69,6 +71,9 @@ BASE = "/api/v1/training/waivers/requests"
 # Real headers, so libmagic decides the type as it would for a member's file.
 PDF = b"%PDF-1.4\n" + b"1 0 obj << /Type /Catalog >> endobj\n" * 20 + b"%%EOF\n"
 HEIC = b"\x00\x00\x00\x18ftypheic\x00\x00\x00\x00mif1heic" + b"\x00" * 200
+# A real photo, which decodes (see tests/test_heic_to_jpeg.py for how it was
+# made): HEIC above is a header only and is refused once it is converted.
+PHOTO = (Path(__file__).parent / "fixtures" / "heic" / "oriented-gps.heic").read_bytes()
 
 
 def _image(fmt: str) -> bytes:
@@ -438,6 +443,82 @@ class TestAddingLater:
             resp = await client.post(f"{BASE}/{request_id}/attachments", files=[_pdf()])
         assert resp.status_code == 400
         assert len(_files_on_disk(dept.uploads)) == 1
+
+
+@pytest.mark.integration
+class TestHeicIsStoredAsJpeg:
+    """Owner decision 2026-11-26: a phone's HEIC photo is kept as a JPEG."""
+
+    async def test_a_photo_is_filed_as_a_jpeg_with_no_metadata(
+        self, as_user, dept, monkeypatch
+    ):
+        scanned: list = []
+
+        async def _record_scan(db, content, *, upload_kind, detected_mime, user):
+            scanned.append((detected_mime, hashlib.sha256(content).hexdigest()))
+
+        monkeypatch.setattr(file_storage_service, "reject_if_malicious", _record_scan)
+        resp = await _submit_with(
+            as_user,
+            dept.member,
+            dept.drill,
+            [("files", ("IMG_0001.HEIC", PHOTO, "image/heic"))],
+        )
+        assert resp.status_code == 201, resp.text
+        assert [
+            (a["filename"], a["mime_type"]) for a in resp.json()["attachments"]
+        ] == [("waiver-attachment-1.jpg", "image/jpeg")]
+        (path,) = _files_on_disk(dept.uploads)
+        assert path.endswith(".jpg")
+        with open(path, "rb") as fh:
+            stored = fh.read()
+        assert detect_mime_type(stored) == "image/jpeg"
+        image = Image.open(io.BytesIO(stored))
+        assert image.size == (16, 32)
+        assert len(image.getexif()) == 0
+        # The scan, the row and the disk all describe the converted file.
+        digest = hashlib.sha256(stored).hexdigest()
+        assert scanned == [("image/jpeg", digest)]
+        row = (
+            await _CURRENT["db"].execute(
+                select(AttendanceWaiverAttachment).where(
+                    AttendanceWaiverAttachment.request_id == resp.json()["id"]
+                )
+            )
+        ).scalar_one()
+        assert (row.mime_type, row.file_size, row.sha256) == (
+            "image/jpeg",
+            len(stored),
+            digest,
+        )
+
+    async def test_a_photo_added_later_is_converted_too(self, as_user, dept):
+        request_id = await _filed(as_user, dept)
+        async with as_user(dept.member) as client:
+            added = await client.post(
+                f"{BASE}/{request_id}/attachments",
+                files=[("files", ("IMG_0002.HEIC", PHOTO, "image/heic"))],
+            )
+        assert added.status_code == 200, added.text
+        assert [
+            (a["ordinal"], a["filename"], a["mime_type"])
+            for a in added.json()["attachments"]
+        ][-1] == (2, "waiver-attachment-2.jpg", "image/jpeg")
+        assert sum(p.endswith(".jpg") for p in _files_on_disk(dept.uploads)) == 1
+
+    async def test_an_unreadable_photo_is_refused_and_nothing_is_kept(
+        self, as_user, dept, db_session
+    ):
+        resp = await _submit_with(
+            as_user,
+            dept.member,
+            dept.drill,
+            [_pdf(), ("files", ("IMG_0003.HEIC", PHOTO[:400], "image/heic"))],
+        )
+        assert resp.status_code == 400, resp.text
+        assert "couldn't read this photo" in resp.json()["detail"]
+        assert _files_on_disk(dept.uploads) == []
+        assert await _request_count(db_session, dept.org) == 0
 
 
 async def _download_audits(db_session, user_id):
