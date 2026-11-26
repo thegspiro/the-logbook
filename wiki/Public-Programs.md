@@ -150,7 +150,10 @@ well?**, and **What could we do better?** shown at a rating of 3 or less), and
 choose the **Rating question**. Each requester answers once. Answers appear on
 the request under **Requester feedback**, and **Outreach Impact** shows the
 average rating and how many responded. A template you attached to the
-Completed trigger yourself is sent as written, without the link.
+Completed trigger yourself carries the link only if you put
+`{{feedback_link}}` or `{{feedback_url}}` in it _(2026-11-26; before, it could
+not carry the link at all)_ — see
+[Email Template Library](#email-template-library).
 _(2026-11-24)_ Each answer emails the request's coordinator (or the
 **Default Coordinator**, or failing both every member who manages events) and
 puts a notice in their bell; a rating of 3 or less out of 5 starts the subject
@@ -380,10 +383,15 @@ Below are ready-to-use email templates. Copy these into **Events Admin > Setting
 > school or group typed on the request, blank if none — not your department, so
 > the templates below sign off with a literal `[Your Department]` for you to
 > replace. `{{organization_logo_img}}` is also accepted but renders nothing,
-> because the email header already carries the logo. Variables are filled in
-> the subject and the HTML body only; a template's plain-text body is sent as
-> written. Nothing else is filled in — an unknown variable reaches the
-> requester literally. In particular there is **no status-link variable**, and
+> because the email header already carries the logo. For a **Completed**
+> request, `{{feedback_link}}` adds a sentence inviting feedback with the link,
+> and `{{feedback_url}}` the bare link _(2026-11-26)_; both stay empty unless a
+> feedback form is set under **Handling** and the requester has not answered
+> yet, so a template can carry them always. Variables are filled in the
+> subject, the HTML body and, since 2026-11-26, the plain-text body too (before,
+> the plain-text part reached the requester with its placeholders unreplaced,
+> and an officer's per-send additions skipped it). Nothing else is filled in —
+> an unknown variable reaches the requester literally. In particular there is **no status-link variable**, and
 > no email sends the requester their status page. To give them one, press
 > **Copy status link** on the request (Events Admin > Community Outreach > Outreach Requests) and paste the address
 > into your message yourself.
@@ -549,8 +557,8 @@ Here are some follow-up resources:
 If you'd like to schedule another program in the future, you can submit
 a new request at: [your public form URL]
 
-We'd also appreciate any feedback! Reply to this email with your thoughts
-— it helps us improve our community programs.
+We'd also appreciate any feedback — it helps us improve our community
+programs. {{feedback_link}}
 
 Thank you for your commitment to safety!
 

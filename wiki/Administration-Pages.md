@@ -235,3 +235,17 @@ unchanged.
   label to two lines (see [Inventory](Module-Inventory)).
 - **Print ID Cards** is reached from the Members list: select members, then
   **Print ID Cards** ([Member ID cards](Member-ID-Cards)).
+
+## A module's section strip above the admin header _(2026-11-26)_
+
+`AdminHubFrame` takes a `sectionNav` node and `AdminPageHeader` a
+`belowTrail` node, drawn between the trail and the title. Events
+Administration passes `EventsSectionStrip` (the Events sections from
+`components/layout/eventsNavigation.ts`), so a manager is one tap from
+**Events**, **Attendance Requests**, **Event Templates**, **Attendance
+Trends** and **CRR Activities** without leaving the hub (#4721).
+`SectionStrip` in `components/layout/SectionPageHeader.tsx` is the strip on
+its own; its `activePath` marks a row the URL cannot, as on the outreach
+request page, whose **Community Outreach** row of `?tab=` links into the hub
+marks **Outreach Requests**. Every Events page now draws its header while
+loading and after a failed load, not just the trail.
