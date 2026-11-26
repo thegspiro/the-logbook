@@ -1392,8 +1392,11 @@ and **Homes**), and the **Risks** and **Priority populations** tags. Every
 department starts with the same built-in types, seeded the first time its
 catalogue is read. Built-in types, counts and tags can be renamed, described,
 retired and restored but not deleted; types a department added can be
-deleted. Each type can name the **Admin Hours category** a member's logged
-time is credited to (otherwise the department's Public Education mapping).
+deleted until an activity is recorded against one, then only retired. A
+retired tag stays on a type or activity that carries it until removed, but is
+not newly added. Each type can name the **Admin Hours category** a member's
+logged time is credited to (otherwise the department's Public Education
+mapping); if that category is deactivated, nothing is credited.
 **Resident details → Keep for (months)** (24 by default) sets how long a
 resident's address, name, phone, email and the activity's notes are kept.
 **Juvenile firesetter intervention** is shown as **Coming soon**.

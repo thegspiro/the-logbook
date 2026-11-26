@@ -1840,7 +1840,12 @@ export const EventDetailPage: React.FC = () => {
 
             {/* Community risk reduction done at this outreach event. */}
             {event.can_record_crr && (
-              <EventCrrActivitiesCard eventId={event.id} eventTitle={event.title} timezone={tz} />
+              <EventCrrActivitiesCard
+                eventId={event.id}
+                eventTitle={event.title}
+                eventStartsAt={event.start_datetime}
+                timezone={tz}
+              />
             )}
 
             {/* The headcount for an outreach event nobody signed in at.

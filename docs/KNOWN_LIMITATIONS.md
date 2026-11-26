@@ -2218,6 +2218,25 @@ Boundaries drawn without a ruling:
 - **Retired types, counts and tags still appear** when they have activity in
   the period.
 
+**Review fixes (2026-11-26).** Owner decisions of 2026-11-26, from a review of
+the programme:
+
+- **A retired tag** already on an activity or a type may stay or be removed,
+  and the catalogue shows it marked _(retired)_ so it can be; it cannot be
+  newly added. Choosing a type on the activity form takes only its active
+  default tags.
+- **A new goal needs an active count.** A goal set before its count was
+  retired keeps counting.
+- **An activity recorded from an event** defaults to the event's start time.
+
+Fixed without a ruling: changing an activity's counts keeps a retired count's
+tally; a changed ZIP brings its own city and state; a deleted member cannot be
+credited; a type with recorded activities is refused deletion with a sentence,
+as is a goal saved twice at once; when two requests are linked to one event,
+Outreach Impact, the Overview and the event page all name the first; Outreach
+Impact's all-time totals use the shared outreach rule; and Outreach Impact and
+the Overview refresh after a CRR or goal save.
+
 **Phase 4 — yearly goals (built 2026-11-24).** Events Settings → Outreach
 Goals sets a target for a calendar year, for any Outreach Impact headline
 figure (events held, people reached, member hours) or any CRR count. Outreach

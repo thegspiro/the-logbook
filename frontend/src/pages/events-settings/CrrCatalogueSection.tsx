@@ -187,7 +187,10 @@ const CrrCatalogueSection: React.FC = () => {
     );
   }
 
-  const activeTags = (kind: CrrTagKind) => catalogue.tags.filter((t) => t.kind === kind && t.is_active);
+  // A retired tag is shown only where a type still carries it, so it can be
+  // removed; it is never offered to add (owner decision, 2026-11-26).
+  const typeTags = (kind: CrrTagKind, activityType: CrrActivityType) =>
+    catalogue.tags.filter((t) => t.kind === kind && (t.is_active || activityType.tag_ids.includes(t.id)));
 
   return (
     <div className="space-y-8">
@@ -393,7 +396,7 @@ const CrrCatalogueSection: React.FC = () => {
                       {group.title}
                     </legend>
                     <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1">
-                      {activeTags(group.kind).map((tag) => (
+                      {typeTags(group.kind, activityType).map((tag) => (
                         <label
                           key={tag.id}
                           className="text-theme-text-secondary touch:min-h-11 inline-flex items-center gap-2 text-sm"
@@ -405,7 +408,7 @@ const CrrCatalogueSection: React.FC = () => {
                             disabled={busy}
                             onChange={(e) => void toggleTypeTag(activityType, tag.id, e.target.checked)}
                           />
-                          {tag.label}
+                          {tag.is_active ? tag.label : `${tag.label} (retired)`}
                         </label>
                       ))}
                     </div>
@@ -436,6 +439,16 @@ const CrrCatalogueSection: React.FC = () => {
                   }
                 >
                   <option value="">The Public Education mapping</option>
+                  {/* Only active categories are listed. A type left pointing at
+                      one since deactivated credits nothing (the backend does
+                      not fall back to the mapping), so it must not read as the
+                      mapping either. */}
+                  {activityType.admin_hours_category_id &&
+                    !catalogue.admin_hours_categories.some((c) => c.id === activityType.admin_hours_category_id) && (
+                      <option value={activityType.admin_hours_category_id}>
+                        A deactivated category (credits nothing)
+                      </option>
+                    )}
                   {catalogue.admin_hours_categories.map((category) => (
                     <option key={category.id} value={category.id}>
                       {category.name}

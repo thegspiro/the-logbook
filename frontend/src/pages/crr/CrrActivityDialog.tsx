@@ -9,7 +9,7 @@
  * so beside them.
  */
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
 import { Plus, Trash2 } from 'lucide-react';
 import { Modal } from '../../components/Modal';
@@ -35,6 +35,8 @@ interface CrrActivityDialogProps {
   /** Recording at an outreach event: no members, its attendance credits them. */
   eventId?: string | undefined;
   eventTitle?: string | undefined;
+  /** The event's start (UTC ISO), the form's default time when recording at one. */
+  eventStartsAt?: string | undefined;
 }
 
 const CrrActivityDialog: React.FC<CrrActivityDialogProps> = ({
@@ -46,8 +48,15 @@ const CrrActivityDialog: React.FC<CrrActivityDialogProps> = ({
   currentUserId,
   eventId,
   eventTitle,
+  eventStartsAt,
 }) => {
-  const [values, setValues] = useState<CrrActivityFormValues>(() => initialValues(options, timezone, currentUserId));
+  const startAt = useCallback(
+    () => (eventStartsAt && !Number.isNaN(Date.parse(eventStartsAt)) ? new Date(eventStartsAt) : new Date()),
+    [eventStartsAt]
+  );
+  const [values, setValues] = useState<CrrActivityFormValues>(() =>
+    initialValues(options, timezone, currentUserId, startAt())
+  );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -55,10 +64,10 @@ const CrrActivityDialog: React.FC<CrrActivityDialogProps> = ({
   // into the next.
   useEffect(() => {
     if (isOpen) {
-      setValues(initialValues(options, timezone, currentUserId));
+      setValues(initialValues(options, timezone, currentUserId, startAt()));
       setError(null);
     }
-  }, [isOpen, options, timezone, currentUserId]);
+  }, [isOpen, options, timezone, currentUserId, startAt]);
 
   const activityType = useMemo(
     () => options.activity_types.find((t) => t.id === values.activityTypeId),
@@ -147,7 +156,8 @@ const CrrActivityDialog: React.FC<CrrActivityDialogProps> = ({
                 setValues((current) =>
                   withType(
                     current,
-                    options.activity_types.find((t) => t.id === e.target.value)
+                    options.activity_types.find((t) => t.id === e.target.value),
+                    options.tags
                   )
                 )
               }
