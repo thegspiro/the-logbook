@@ -306,8 +306,8 @@ const CrrActivityDialog: React.FC<CrrActivityDialogProps> = ({
             Add resident details
           </label>
           <p id="crr-details-hint" className="text-theme-text-muted text-xs">
-            Encrypted. Only the Community Outreach Manager and above can see them, and they are cleared after{' '}
-            {options.retention_months} months. The ZIP code is kept.
+            Encrypted. Only the Community Outreach Manager, the chiefs, the president and system administrators can see
+            them, and they are cleared after {options.retention_months} months. The ZIP code is kept.
           </p>
           {values.hasResidentDetails && (
             <div className="mt-3 grid gap-3 sm:grid-cols-2">

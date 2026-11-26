@@ -142,7 +142,8 @@ const ActivityCard: React.FC<{
         <p className="text-theme-text-muted mt-3 text-sm">Resident details were cleared after the retention period.</p>
       ) : activity.has_resident_details ? (
         <p className="text-theme-text-muted mt-3 text-sm">
-          Resident details recorded. The Community Outreach Manager and above can see them.
+          Resident details recorded. The Community Outreach Manager, the chiefs, the president and system administrators
+          can see them.
         </p>
       ) : null}
     </li>

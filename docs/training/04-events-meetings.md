@@ -3472,8 +3472,9 @@ because its records concern minors.
 ### CRR Activities
 
 **Who can do this:** members of the Community Outreach Team and anyone who can
-manage events. Only the Community Outreach Manager, the chiefs and the
-president see a resident's details.
+manage events. Only the Community Outreach Manager, the chiefs, the president
+and system administrators (anyone holding every permission) see a resident's
+details.
 
 **Events → CRR Activities** (also **Manage Events → Community Outreach → CRR
 Activities**) lists the community risk reduction work your department has
