@@ -1844,6 +1844,7 @@ the click.
 | `/admin/audit-log`       | `AuditLogPage`        | `audit.view`                   |
 | `/admin/security-alerts` | `SecurityAlertsPage`  | `audit.view`                   |
 | `/admin/public-portal`   | Public Portal Admin   | `settings.manage`              |
+| `/admin/public-website`  | Public Website        | `settings.manage`              |
 | `/account`               | User Account Settings | Any authenticated user         |
 
 > **Organization Settings** includes the **records-retention schedule**

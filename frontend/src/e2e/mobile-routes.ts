@@ -1733,6 +1733,13 @@ export const ALL_ROUTES: RouteCheck[] = [
     expectText: 'Historical Data Import',
   },
   { path: '/admin/public-portal', maxSmallTargets: 0, maxTinyText: 0, permissions: ['settings.manage'] },
+  {
+    path: '/admin/public-website',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['settings.manage'],
+    expectText: 'Public Website',
+  },
   //: The onboarding wizard is 22 routes and none was measured. It is also the
   //: one flow reached before any session exists — a chief standing in the
   //: apparatus bay with a phone, setting the department up — so it is the last

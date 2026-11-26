@@ -403,21 +403,29 @@ const ComplianceTab: React.FC<TabProps> = ({ startDate, endDate, tz, dateControl
                       Deficiency
                     </span>
                   )}
-                  {a.lastStatus && (
-                    <span
-                      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs ${
-                        a.lastStatus === 'pass'
-                          ? 'bg-green-500/10 text-green-900 dark:text-green-300'
-                          : 'bg-red-500/10 text-red-900 dark:text-red-300'
-                      }`}
-                    >
-                      {a.lastStatus === 'pass' ? (
-                        <CheckCircle className="h-3 w-3" aria-hidden="true" />
-                      ) : (
-                        <XCircle className="h-3 w-3" aria-hidden="true" />
-                      )}
-                      {a.lastStatus === 'pass' ? 'Pass' : 'Fail'}
+                  {/* The backend reports an unfinished check as incomplete; it
+                      is neither a pass nor a failure (EC2-12). */}
+                  {a.lastStatus === 'incomplete' ? (
+                    <span className="bg-theme-surface-secondary text-theme-text-primary inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs">
+                      Incomplete
                     </span>
+                  ) : (
+                    a.lastStatus && (
+                      <span
+                        className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs ${
+                          a.lastStatus === 'pass'
+                            ? 'bg-green-500/10 text-green-900 dark:text-green-300'
+                            : 'bg-red-500/10 text-red-900 dark:text-red-300'
+                        }`}
+                      >
+                        {a.lastStatus === 'pass' ? (
+                          <CheckCircle className="h-3 w-3" aria-hidden="true" />
+                        ) : (
+                          <XCircle className="h-3 w-3" aria-hidden="true" />
+                        )}
+                        {a.lastStatus === 'pass' ? 'Pass' : 'Fail'}
+                      </span>
+                    )
                   )}
                 </div>
                 <p className="text-theme-text-secondary mt-0.5 flex flex-wrap gap-x-2 text-xs">
