@@ -16,6 +16,58 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR (branch `claude/security-review-elections-ballots-p18`)**: Feature 06
+(Elections & ballots), pass 18 — watchdog pickup (the dedicated
+`/loop 30m /security-review` session remains unreachable). PR number
+recorded in a follow-up commit once opened.
+
+PR #4723 (Feature 05, Finance & approvals, pass 18) was confirmed merged
+(`730913d71`) before this iteration started, via a fresh `git fetch origin
+&& git checkout main && git pull --ff-only` (3 commits fast-forwarded)
+rather than trusting a stale local checkout, and a fresh
+`list_pull_requests` (state=open) returned 11 results, none with a head
+starting `claude/security-review-` — all unrelated feature work (app-review,
+outreach, CRR, card-sort, etc.), so nothing blocks this pass. The baseline
+commit was re-derived from scratch with `git log --all --oneline --grep
+"security(elections" -i` against the fresh pull rather than trusted from a
+stale note: `af9bbe4dd` ("Security review: Elections & ballots (pass 17) —
+0 fixes, 0 new findings (#4659)") was still the newest hit, confirmed an
+ancestor of `main`, and confirmed a complete baseline — it is itself the
+squash-merge of PR #4659's two commits (the pass-17 write-up and its own
+PROGRESS.md PR-number record), already combined into one commit, and `git
+log af9bbe4dd..main -- docs/security-review/ELEC-06-elections-ballots.md`
+is empty, so no same-pass follow-up fix landed afterward. Rows 00–05 were
+`✅` and row 06 (Elections & ballots) was confirmed the next `⬜` row on the
+freshly-pulled `main`.
+
+`git diff --numstat af9bbe4dd..HEAD` across this feature's declared scope
+found every backend file byte-identical except `election_service.py`
+(+86/-80) — which turned out to be **app-review's** tally-correctness fix
+(`23e88c525`, "app-review B5 pass 7"; ELEC2-10..17), already merged into
+`main` before this iteration started, not new work landing mid-review —
+plus four small frontend touches, each the UI half of one of the same
+fixes. Re-verified in full against this checklist's seven dimensions with
+extra weight on the token-scoped voting surface, vote secrecy, voter
+eligibility (Pitfall #32 — confirmed `User.is_active`/
+`ACTIVE_ACCOUNT_STATUSES` throughout, never a literal `== ACTIVE`) and
+tally tamper-evidence: none of it touches auth, org-scoping, the signing/
+chain machinery, or vote secrecy — all four are counting/display
+corrections strictly downstream of the already-reviewed layers. AST
+re-enumeration: still **76 routes** in `elections.py`, 0 without
+`Depends(...)`, same five intentionally-public token-scoped routes as
+every prior pass. Standing items re-confirmed unchanged: ELEC-12, ELEC-14,
+ELEC-16 (accepted as is), ELEC-40 (FLAGGED, P1), ELEC-43 (resolved),
+ELEC-48 (resolved 2026-11-05), ELEC-49 (CLOSED pass 16), ELEC-50/ELEC-51
+(fixed). **0 fixed, 0 new findings.** Full write-up:
+`docs/security-review/ELEC-06-elections-ballots.md`'s **Pass 18** section.
+
+Row 06 → ✅ (pending this PR's merge); next is Feature 07 (Users &
+organizations) — re-check `list_pull_requests` fresh rather than trusting
+this note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 05, Finance & approvals, pass 18, PR #4723, merged), preserved for history</summary>
+
 **PR [#4723](https://github.com/thegspiro/the-logbook/pull/4723) (branch
 `claude/security-review-finance-approvals-p18`)**: Feature 05
 (Finance & approvals), pass 18 — watchdog pickup (the dedicated
@@ -69,6 +121,8 @@ re-confirmed unchanged and still correctly dispositioned in
 Row 05 → ✅ (pending this PR's merge); next is Feature 06 (Elections &
 ballots) — re-check `list_pull_requests` fresh rather than trusting this
 note.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 04, Storefront & payments, pass 18, PR #4716, merged), preserved for history</summary>
@@ -29235,7 +29289,7 @@ commit" rule.
 | 03  | Public surface & webhooks | PUB    | `api/public/*` (71 unauth routes, added pass 18: a new public History website, `history.py`, 20 routes), `paypal_webhook.py`, `integrations_webhook.py`, `salesforce_webhook.py`, `zeffy_webhook.py`, `shift_evaluations.py` (added pass 16)                                          | ✅     |
 | 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                                                                                                                                                                    | ✅     |
 | 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`, `endpoints/quickbooks_online.py` (8 routes; corrected from `services/quickbooks_online.py`, pass 16), `services/quickbooks_online_client.py`, `services/quickbooks_sync_service.py` (both added pass 16) | ✅     |
-| 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (76 routes, token-scoped voting), `election_service.py`, `services/voter_rules.py` (added pass 16), `services/election_attendance_service.py` (added pass 16), `services/election_defaults.py` (added pass 16)                                               | ⬜     |
+| 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (76 routes, token-scoped voting), `election_service.py`, `services/voter_rules.py` (added pass 16), `services/election_attendance_service.py` (added pass 16), `services/election_defaults.py` (added pass 16)                                               | ✅     |
 | 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`, `leave_requests.py` (20 routes, added pass 17; Chief routing, approver cover, escalation, calendar/export added pass 17)                                                                                      | ⬜     |
 | 08  | Membership pipeline       | MP     | `membership_pipeline.py` (64 routes), `membership_pipeline_service.py`, `models/membership_pipeline.py` (`identity_edited_by_applicant_at`, added pass 18)                                                                                                                            | ⬜     |
 | 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`, `screening_reminder_service.py` (added pass 16)                                                                                                                                                                               | ⬜     |
