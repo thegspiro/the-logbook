@@ -1,9 +1,130 @@
 # Security Review — Auth & Session Lifecycle
 
-**Prefix:** `AUTH` · **Iteration:** 01 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-01 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-05 (pass 7), 2026-10-12 (pass 8, watchdog pickup), 2026-10-14 (pass 9, watchdog pickup), 2026-10-18 (pass 10, watchdog pickup), 2026-10-22 (pass 11, watchdog pickup), 2026-10-25 (pass 12, watchdog pickup), 2026-10-28 (pass 13), 2026-10-31 (pass 14, watchdog pickup), 2026-11-04 (pass 15, watchdog pickup), 2026-11-15 (pass 16, watchdog pickup), 2026-11-23 (pass 17, watchdog pickup) · **PR:** #1804 (pass 1), #1929 (pass 2), #2133 (pass 3), #2389 (pass 4), #2536 (pass 5), #2593 (pass 6), #2924 (pass 7 — the header's own "this PR" placeholder was never filled in after merge; corrected here the way pass 7 corrected pass 6's), #3096 (pass 8, corrected here the same way), #3210 (pass 9, corrected here the same way), #3397 (pass 10, corrected here the same way), #3556 (pass 11, corrected here the same way), #3684 (pass 12, corrected here the same way), #3802 (pass 13, corrected here the same way), #3870 (pass 14), #4021 (pass 15, corrected here the same way), #4332 (pass 16, corrected here the same way), pass 17 (this PR)
+**Prefix:** `AUTH` · **Iteration:** 01 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-01 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-05 (pass 7), 2026-10-12 (pass 8, watchdog pickup), 2026-10-14 (pass 9, watchdog pickup), 2026-10-18 (pass 10, watchdog pickup), 2026-10-22 (pass 11, watchdog pickup), 2026-10-25 (pass 12, watchdog pickup), 2026-10-28 (pass 13), 2026-10-31 (pass 14, watchdog pickup), 2026-11-04 (pass 15, watchdog pickup), 2026-11-15 (pass 16, watchdog pickup), 2026-11-23 (pass 17, watchdog pickup), 2026-11-26 (pass 18, watchdog pickup) · **PR:** #1804 (pass 1), #1929 (pass 2), #2133 (pass 3), #2389 (pass 4), #2536 (pass 5), #2593 (pass 6), #2924 (pass 7 — the header's own "this PR" placeholder was never filled in after merge; corrected here the way pass 7 corrected pass 6's), #3096 (pass 8, corrected here the same way), #3210 (pass 9, corrected here the same way), #3397 (pass 10, corrected here the same way), #3556 (pass 11, corrected here the same way), #3684 (pass 12, corrected here the same way), #3802 (pass 13, corrected here the same way), #3870 (pass 14), #4021 (pass 15, corrected here the same way), #4332 (pass 16, corrected here the same way), #4625 (pass 17, corrected here the same way), pass 18 (this PR)
 
 Passes are recorded in this one file rather than a new `AUTH<n>-01-*.md` per
 lap, matching what passes 2 and 3 already did here. Newest pass first.
+
+---
+
+## Pass 18 (2026-11-26, watchdog pickup) — 0 fixed, 0 new findings; 17 of 18 tracked files byte-identical, the 18th a pure cache-invalidation refactor
+
+Watchdog pickup — the dedicated `/loop 30m /security-review` session remains
+unreachable, so this iteration was picked up directly. Step 0: the local
+checkout started 5 commits behind `origin/main` (still at PR #4707's merge,
+the Onboarding pass); `git checkout main && git pull --ff-only` brought it to
+`91e5bba50` (PR #4712's merge) before anything else was read, per this lap's
+own warning about trusting a stale checkout. A fresh `list_pull_requests`
+(state=open) returned zero results. The rotation table showed row 00
+(Cross-cutting baseline) `✅` and row 01 (this feature) as the next `⬜` row,
+confirming PR #4712 (Feature 00, Cross-cutting baseline, pass 19) had both
+closed the prior lap and reset the table for this new one, matching this
+pass's own briefed starting state. `git log --all --oneline --grep
+"security(auth" -i` confirmed `135330443` (PR #4625, pass 17) is still the
+latest merged Auth pass — no out-of-band commit had landed since.
+
+**Baseline:** `135330443` (PR #4625's merge, pass 17). **Head:** current
+`main`. 551 commits between baseline and head (302 non-merge), 276 backend
+`.py` files and 380 frontend files touched repo-wide — another full
+rotation lap elsewhere in the tree, same shape as pass 17's own "near-total"
+deltas. Diffed each of this feature's 18 tracked files individually (not
+`--stat`, not a count): **17 are byte-identical** to pass 17 — `auth.py`,
+`auth_service.py`, `mfa_service.py`, `oauth_service.py`, `dependencies.py`,
+`passkey_service.py`, `models/passkey.py`, `core/security.py`,
+`schemas/auth.py`, `consent_service.py`, `suspicious_ip.py`,
+`authService.ts`, `authStore.ts`, `utils/passkeys.ts`,
+`PasskeySettingsCard.tsx`, `StepUpContext.tsx`, `utils/stepUp.ts`. The 18th,
+`apiClient.ts`, has a 24-line diff. A further sweep of the full diff for any
+brand-new auth/mfa/oauth/passkey/webauthn/stepup/lockout/session-named file
+(`git diff --diff-filter=A --name-only` against that keyword set) found
+nothing.
+
+### Route inventory — re-enumerated by AST, not assumed unchanged
+
+**Still 38 routes** — both `grep -c '^@router\.' auth.py` and an independent
+AST walk (counting `FunctionDef`/`AsyncFunctionDef` nodes decorated with
+`@router.get/post/put/patch/delete`) agree at 38, identical to pass 17 and
+consistent with the file being byte-identical.
+
+### The one real delta — `apiClient.ts`'s mutation-cache invalidation now delegates to a shared helper, with no change in effect for this feature
+
+```diff
+-  invalidateByPrefix,
+-  getResourcePrefix,
++  invalidateAfterMutation,
+...
+-      const prefix = getResourcePrefix(response.config.url);
+-      invalidateByPrefix(prefix);
++      invalidateAfterMutation(response.config.url);
+```
+
+Read `invalidateAfterMutation` at its definition (`frontend/src/utils/apiCache.ts`,
+not one of this feature's own tracked files — it belongs to Feature 34,
+Frontend shared, and carries that feature's own review history): it calls
+exactly the same `getResourcePrefix` + `invalidateByPrefix` pair this call
+site used to call directly, then additionally invalidates any prefixes
+listed in a new `RELATED_PREFIXES` map for cross-resource writes (e.g. a
+`/scheduling` mutation also invalidating `/events` and `/dashboard`). Neither
+entry in `RELATED_PREFIXES` names an auth-adjacent prefix, and `/auth/` is
+unconditionally excluded from caching in the first place
+(`UNCACHEABLE_PREFIXES` in the same file, unchanged, confirmed by reading it
+directly) — so this call site's behavior for every route this feature owns
+is identical before and after the refactor; the only effect is a second,
+unrelated resource also being invalidated on an unrelated mutation. No
+finding: a pure consolidation onto an already-reviewed shared helper, not a
+weakening.
+
+### Standing items — reconfirmed, none newly open
+
+- **AUTH-23** (step-up has no account-tied lockout) — remains **✅ Resolved**
+  per `docs/KNOWN_LIMITATIONS.md` (owner decision 2026-11-01; built
+  2026-11-03). Re-confirmed the implementation is still wired and unchanged:
+  `auth.py:78` still imports `reserve_stepup_attempt`/`clear_stepup_failures`
+  from `app/core/stepup_throttle.py`, and that file still reads
+  `settings.STEPUP_MAX_FAILED_ATTEMPTS` — both inside the byte-identical
+  `auth.py`, so nothing could have regressed this pass.
+- **AUTH-15, AUTH-17, AUTH-21, AUTH-22** — all remain closed (fixed at pass 8
+  or pass 10, per the standing-items log every pass since has carried
+  forward); nothing in this pass's zero-delta touches any of them.
+- **AUTH-4** (informational, unbounded roster query, accepted as a scale
+  assumption app-wide) — remains accepted and unchanged; the file it
+  concerns is byte-identical.
+- **CLAUDE.md "Attack Protection" fail-open/fail-closed directions**
+  (breached-password fails open, CAPTCHA fails closed) — both are governed
+  by `core/security.py`/`core/suspicious_ip.py`, both confirmed
+  byte-identical to pass 17 above, so neither direction could have moved
+  this pass.
+- **Alembic chain** — single head, `e9cf8ab7e4e4` (844 revisions), confirmed
+  directly via `validate_migrations.py --strict`. No fork, unlike the
+  pre-existing one pass 16 flagged and pass 17 recorded as resolved.
+
+**0 fixed, 0 new findings.**
+
+### Completion gate (pass 18)
+
+| Check                                                                                         | Result                                                                                  |
+| --------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/` (7.4.1)                                                         | ✅ 0 violations                                                                         |
+| `black --check app/ tests/ alembic/` (26.10.1)                                                | ✅ clean, 3541 files unchanged                                                          |
+| `isort --check-only app/ tests/ alembic/` (9.0.2)                                             | ✅ clean                                                                                |
+| `python3 scripts/validate_migrations.py --strict`                                             | ✅ single head `e9cf8ab7e4e4` (844 revisions)                                           |
+| `python3 scripts/check_route_permissions.py --strict` (repo root)                             | ✅ 344 routes, 0 errors, 0 warnings                                                     |
+| Scoped backend tests (`-k "auth or mfa or oauth or webauthn or passkey or session or login"`) | ✅ 1235 passed, 1 pre-existing environment-only skip (`py_vapid`/pywebpush), 0 failures |
+| `cd frontend && npm run typecheck`                                                            | ✅ 0 errors                                                                             |
+| `cd frontend && npm run lint`                                                                 | ✅ 0 errors, 0 warnings                                                                 |
+
+Backend linters were already installed at CI's exact pinned versions
+(`flake8==7.4.1 black==26.10.1 isort==9.0.2`, confirmed against
+`.github/workflows/ci.yml`'s Backend Lint job) under
+`/usr/local/bin/python3.13` — the bare `python3` on this sandbox resolves to
+3.11.18 with no linters installed, so every backend command in this pass
+used the explicit 3.13 interpreter.
+
+No guard test added this pass: the one real delta already carries Feature
+34's own review and test coverage for `apiCache.ts`, and nothing in this
+feature's own 18 tracked files changed in a way that needs a new guard.
+
+Rotation row 01 moves to `✅` (pending this PR's merge).
 
 ---
 
