@@ -139,6 +139,10 @@ const FinanceDashboardPage: React.FC = () => {
   // /finance/approvals is gated on finance.approve, which finance.view does not
   // imply; linking a viewer without it there would only open Access Denied.
   const canApprove = useAuthStore((s) => s.checkPermission('finance.approve'));
+  // Settings and QuickBooks are finance.manage routes, Approval Chains a
+  // finance.configure_approvals one; a viewer tapping them met Access Denied.
+  const canManage = useAuthStore((s) => s.checkPermission('finance.manage'));
+  const canConfigureApprovals = useAuthStore((s) => s.checkPermission('finance.configure_approvals'));
 
   useEffect(() => {
     void fetchDashboard();
@@ -302,24 +306,30 @@ const FinanceDashboardPage: React.FC = () => {
             title="Dues"
             description="Track member dues and payments"
           />
-          <QuickLinkCard
-            to="/finance/settings"
-            icon={<Settings className="h-5 w-5" />}
-            title="Settings"
-            description="Fiscal years and budget categories"
-          />
-          <QuickLinkCard
-            to="/finance/settings/approval-chains"
-            icon={<ShieldCheck className="h-5 w-5" />}
-            title="Approval Chains"
-            description="Set who approves each type of request"
-          />
-          <QuickLinkCard
-            to="/finance/settings/quickbooks"
-            icon={<FileSpreadsheet className="h-5 w-5" />}
-            title="QuickBooks Export"
-            description="Map budget categories to QuickBooks accounts"
-          />
+          {canManage && (
+            <QuickLinkCard
+              to="/finance/settings"
+              icon={<Settings className="h-5 w-5" />}
+              title="Settings"
+              description="Fiscal years and budget categories"
+            />
+          )}
+          {canConfigureApprovals && (
+            <QuickLinkCard
+              to="/finance/settings/approval-chains"
+              icon={<ShieldCheck className="h-5 w-5" />}
+              title="Approval Chains"
+              description="Set who approves each type of request"
+            />
+          )}
+          {canManage && (
+            <QuickLinkCard
+              to="/finance/settings/quickbooks"
+              icon={<FileSpreadsheet className="h-5 w-5" />}
+              title="QuickBooks Export"
+              description="Map budget categories to QuickBooks accounts"
+            />
+          )}
         </div>
       </div>
     </div>

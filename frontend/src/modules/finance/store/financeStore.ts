@@ -38,6 +38,7 @@ import type {
   PurchaseRequest,
 } from '../types';
 import { handleStoreError } from '../../../utils/storeHelpers';
+import { useAuthStore } from '../../../stores/authStore';
 
 /** A chain's steps in the order the backend walks them (see get_approval_records). */
 function orderedSteps(chains: ApprovalChain[], chainId: string): ApprovalChainStep[] {
@@ -150,8 +151,25 @@ interface FinanceState {
   fetchDashboard: () => Promise<void>;
 }
 
-export const useFinanceStore = create<FinanceState>((set, get) => ({
-  // Initial state
+/**
+ * The record each detail page asked for last, so an answer for one opened
+ * before it cannot land over it.
+ */
+const latestDetailId = { purchase: '', expense: '', check: '' };
+
+/**
+ * One counter per list. Two quick taps on a status tab, dues schedule or
+ * fiscal year otherwise left the tab naming one filter over the other's rows
+ * or totals, whichever answer arrived last (app-review FIN6-F6).
+ */
+const listTickets: Record<string, number> = {};
+const takeListTicket = (key: string): number => {
+  listTickets[key] = (listTickets[key] ?? 0) + 1;
+  return listTickets[key];
+};
+const isLatestList = (key: string, ticket: number): boolean => listTickets[key] === ticket;
+
+const emptyFinanceState = () => ({
   fiscalYears: [],
   budgetCategories: [],
   budgets: [],
@@ -170,6 +188,10 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
   dashboard: null,
   isLoading: false,
   error: null,
+});
+
+export const useFinanceStore = create<FinanceState>((set, get) => ({
+  ...emptyFinanceState(),
 
   // Fiscal Year Actions
   fetchFiscalYears: async () => {
@@ -220,12 +242,16 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
   },
 
   fetchBudgets: async (params) => {
+    const ticket = takeListTicket('budgets');
     set({ isLoading: true, error: null });
     try {
       const budgets = await budgetService.list(params);
+      if (!isLatestList('budgets', ticket)) return;
       set({ budgets, isLoading: false });
     } catch (err) {
-      set({ error: handleStoreError(err, 'Failed to load budgets'), isLoading: false });
+      if (!isLatestList('budgets', ticket)) return;
+      // Emptied, not kept: the rows on screen belonged to the previous filter.
+      set({ budgets: [], error: handleStoreError(err, 'Failed to load budgets'), isLoading: false });
     }
   },
 
@@ -377,21 +403,34 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
 
   // Purchase Request Actions
   fetchPurchaseRequests: async (params) => {
+    const ticket = takeListTicket('purchaseRequests');
     set({ isLoading: true, error: null });
     try {
       const purchaseRequests = await purchaseRequestService.list(params);
+      if (!isLatestList('purchaseRequests', ticket)) return;
       set({ purchaseRequests, isLoading: false });
     } catch (err) {
-      set({ error: handleStoreError(err, 'Failed to load purchase requests'), isLoading: false });
+      if (!isLatestList('purchaseRequests', ticket)) return;
+      // Emptied, not kept: the rows on screen belonged to the previous filter.
+      set({ purchaseRequests: [], error: handleStoreError(err, 'Failed to load purchase requests'), isLoading: false });
     }
   },
 
   fetchPurchaseRequest: async (id) => {
-    set({ isLoading: true, error: null });
+    // Another record's copy is dropped at once: its buttons acted on this
+    // id while showing that one's number and amount (app-review FIN6-F2).
+    latestDetailId.purchase = id;
+    set((state) => ({
+      isLoading: true,
+      error: null,
+      selectedPurchaseRequest: state.selectedPurchaseRequest?.id === id ? state.selectedPurchaseRequest : null,
+    }));
     try {
       const selectedPurchaseRequest = await purchaseRequestService.get(id);
+      if (latestDetailId.purchase !== id) return;
       set({ selectedPurchaseRequest, isLoading: false });
     } catch (err) {
+      if (latestDetailId.purchase !== id) return;
       set({ error: handleStoreError(err, 'Failed to load purchase request'), isLoading: false });
     }
   },
@@ -428,21 +467,34 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
 
   // Expense Report Actions
   fetchExpenseReports: async (params) => {
+    const ticket = takeListTicket('expenseReports');
     set({ isLoading: true, error: null });
     try {
       const expenseReports = await expenseReportService.list(params);
+      if (!isLatestList('expenseReports', ticket)) return;
       set({ expenseReports, isLoading: false });
     } catch (err) {
-      set({ error: handleStoreError(err, 'Failed to load expense reports'), isLoading: false });
+      if (!isLatestList('expenseReports', ticket)) return;
+      // Emptied, not kept: the rows on screen belonged to the previous filter.
+      set({ expenseReports: [], error: handleStoreError(err, 'Failed to load expense reports'), isLoading: false });
     }
   },
 
   fetchExpenseReport: async (id) => {
-    set({ isLoading: true, error: null });
+    // Another record's copy is dropped at once: its buttons acted on this
+    // id while showing that one's number and amount (app-review FIN6-F2).
+    latestDetailId.expense = id;
+    set((state) => ({
+      isLoading: true,
+      error: null,
+      selectedExpenseReport: state.selectedExpenseReport?.id === id ? state.selectedExpenseReport : null,
+    }));
     try {
       const selectedExpenseReport = await expenseReportService.get(id);
+      if (latestDetailId.expense !== id) return;
       set({ selectedExpenseReport, isLoading: false });
     } catch (err) {
+      if (latestDetailId.expense !== id) return;
       set({ error: handleStoreError(err, 'Failed to load expense report'), isLoading: false });
     }
   },
@@ -479,21 +531,34 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
 
   // Check Request Actions
   fetchCheckRequests: async (params) => {
+    const ticket = takeListTicket('checkRequests');
     set({ isLoading: true, error: null });
     try {
       const checkRequests = await checkRequestService.list(params);
+      if (!isLatestList('checkRequests', ticket)) return;
       set({ checkRequests, isLoading: false });
     } catch (err) {
-      set({ error: handleStoreError(err, 'Failed to load check requests'), isLoading: false });
+      if (!isLatestList('checkRequests', ticket)) return;
+      // Emptied, not kept: the rows on screen belonged to the previous filter.
+      set({ checkRequests: [], error: handleStoreError(err, 'Failed to load check requests'), isLoading: false });
     }
   },
 
   fetchCheckRequest: async (id) => {
-    set({ isLoading: true, error: null });
+    // Another record's copy is dropped at once: its buttons acted on this
+    // id while showing that one's number and amount (app-review FIN6-F2).
+    latestDetailId.check = id;
+    set((state) => ({
+      isLoading: true,
+      error: null,
+      selectedCheckRequest: state.selectedCheckRequest?.id === id ? state.selectedCheckRequest : null,
+    }));
     try {
       const selectedCheckRequest = await checkRequestService.get(id);
+      if (latestDetailId.check !== id) return;
       set({ selectedCheckRequest, isLoading: false });
     } catch (err) {
+      if (latestDetailId.check !== id) return;
       set({ error: handleStoreError(err, 'Failed to load check request'), isLoading: false });
     }
   },
@@ -540,21 +605,28 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
   },
 
   fetchMemberDues: async (params) => {
+    const ticket = takeListTicket('memberDues');
     set({ isLoading: true, error: null });
     try {
       const memberDues = await duesService.listMemberDues(params);
+      if (!isLatestList('memberDues', ticket)) return;
       set({ memberDues, isLoading: false });
     } catch (err) {
-      set({ error: handleStoreError(err, 'Failed to load member dues'), isLoading: false });
+      if (!isLatestList('memberDues', ticket)) return;
+      // Emptied, not kept: the rows on screen belonged to the previous filter.
+      set({ memberDues: [], error: handleStoreError(err, 'Failed to load member dues'), isLoading: false });
     }
   },
 
   fetchDuesSummary: async (scheduleId) => {
+    const ticket = takeListTicket('duesSummary');
     try {
       const duesSummary = await duesService.getSummary(scheduleId);
+      if (!isLatestList('duesSummary', ticket)) return;
       set({ duesSummary });
     } catch (err) {
-      set({ error: handleStoreError(err, 'Failed to load dues summary'), isLoading: false });
+      if (!isLatestList('duesSummary', ticket)) return;
+      set({ duesSummary: null, error: handleStoreError(err, 'Failed to load dues summary'), isLoading: false });
     }
   },
 
@@ -569,3 +641,18 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     }
   },
 }));
+
+// The store is memory-only and outlives a sign-out. On a shared station the
+// next member saw the treasurer's every-member dues list (and dashboard, and
+// cached requests) until their own narrower fetch landed, or for good if it
+// failed (app-review FIN6-F3). Subscribed here rather than reset from the
+// auth store, which is in the first load: importing this module there would
+// pull the finance services into every page's initial download.
+useAuthStore.subscribe((state, previous) => {
+  if (state.user?.id === previous.user?.id) return;
+  latestDetailId.purchase = '';
+  latestDetailId.expense = '';
+  latestDetailId.check = '';
+  for (const key of Object.keys(listTickets)) takeListTicket(key);
+  useFinanceStore.setState(emptyFinanceState());
+});

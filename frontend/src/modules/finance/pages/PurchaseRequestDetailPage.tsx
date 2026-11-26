@@ -253,46 +253,51 @@ const PurchaseRequestDetailPage: React.FC = () => {
       }
     });
 
-  const handleMarkOrdered = async () => {
-    if (!id) return;
-    try {
-      await purchaseRequestService.markOrdered(id);
-      toast.success('Marked as ordered');
-      void fetchPurchaseRequest(id);
-    } catch {
-      toast.error('Failed to mark as ordered');
-    }
-  };
-
-  const handleMarkReceived = async () => {
-    if (!id) return;
-    try {
-      await purchaseRequestService.markReceived(id);
-      toast.success('Marked as received');
-      void fetchPurchaseRequest(id);
-    } catch {
-      toast.error('Failed to mark as received');
-    }
-  };
-
-  const handleCancel = async () => {
-    if (!id) return;
-    const confirmed = await confirm({
-      title: 'Cancel this purchase request?',
-      message:
-        'The request is closed for good: any approval still outstanding is withdrawn, emailed approval links stop working, and any budget held for it is released. It cannot be reopened.',
-      confirmLabel: 'Cancel request',
-      cancelLabel: 'Keep it',
+  // Guarded: a second tap sent the request twice and answered the success
+  // toast with an error (app-review FIN6-F9).
+  const handleMarkOrdered = () =>
+    run(async () => {
+      if (!id) return;
+      try {
+        await purchaseRequestService.markOrdered(id);
+        toast.success('Marked as ordered');
+        void fetchPurchaseRequest(id);
+      } catch {
+        toast.error('Failed to mark as ordered');
+      }
     });
-    if (!confirmed) return;
-    try {
-      await purchaseRequestService.cancel(id);
-      toast.success('Purchase request cancelled');
-      void fetchPurchaseRequest(id);
-    } catch (err: unknown) {
-      toast.error(getErrorMessage(err, 'Failed to cancel purchase request'));
-    }
-  };
+
+  const handleMarkReceived = () =>
+    run(async () => {
+      if (!id) return;
+      try {
+        await purchaseRequestService.markReceived(id);
+        toast.success('Marked as received');
+        void fetchPurchaseRequest(id);
+      } catch {
+        toast.error('Failed to mark as received');
+      }
+    });
+
+  const handleCancel = () =>
+    run(async () => {
+      if (!id) return;
+      const confirmed = await confirm({
+        title: 'Cancel this purchase request?',
+        message:
+          'The request is closed for good: any approval still outstanding is withdrawn, emailed approval links stop working, and any budget held for it is released. It cannot be reopened.',
+        confirmLabel: 'Cancel request',
+        cancelLabel: 'Keep it',
+      });
+      if (!confirmed) return;
+      try {
+        await purchaseRequestService.cancel(id);
+        toast.success('Purchase request cancelled');
+        void fetchPurchaseRequest(id);
+      } catch (err: unknown) {
+        toast.error(getErrorMessage(err, 'Failed to cancel purchase request'));
+      }
+    });
 
   if (isLoading && !pr) {
     return (
@@ -321,11 +326,26 @@ const PurchaseRequestDetailPage: React.FC = () => {
           <ArrowLeft className="h-4 w-4" />
           Back to Purchase Requests
         </Link>
-        <EmptyState
-          icon={ClipboardList}
-          title="Purchase request not found"
-          description="The purchase request you are looking for does not exist or has been removed."
-        />
+        {error ? (
+          <div className="alert-danger flex flex-wrap items-center justify-between gap-3" role="alert">
+            <span>{error}</span>
+            <button
+              type="button"
+              onClick={() => {
+                if (id) void fetchPurchaseRequest(id);
+              }}
+              className="btn-secondary"
+            >
+              Retry
+            </button>
+          </div>
+        ) : (
+          <EmptyState
+            icon={ClipboardList}
+            title="Purchase request not found"
+            description="The purchase request you are looking for does not exist or has been removed."
+          />
+        )}
       </div>
     );
   }

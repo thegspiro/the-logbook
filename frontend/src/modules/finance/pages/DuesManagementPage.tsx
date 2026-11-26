@@ -366,7 +366,7 @@ const DuesManagementPage: React.FC = () => {
       </div>
 
       {/* Member Dues Table */}
-      {memberDues.length === 0 ? (
+      {memberDues.length === 0 && error ? null : memberDues.length === 0 ? (
         <EmptyState
           icon={Calendar}
           title="No dues records found"
