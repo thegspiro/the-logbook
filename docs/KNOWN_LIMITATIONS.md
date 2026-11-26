@@ -2174,13 +2174,22 @@ Boundaries drawn without a ruling:
 - **Notes are treated as resident details.** They are encrypted, shown only
   with `crr.view_contact`, and cleared with the details, because free text is
   where a resident's name or condition turns up.
-- **Clearing is a daily task** (03:55 UTC). It clears address, name, phone,
+- **Clearing is a daily task** (03:55 UTC when run from cron; every 24 hours
+  from startup under the built-in scheduler). It clears address, name, phone,
   email and notes on activities older than the period, keeps ZIP, city, state,
   county and counts, and stamps the activity so the page says the details were
-  cleared. An activity that never held details is left unstamped. Details cannot
-  be added back to a cleared activity.
-- **Reading resident details is audited** (`crr.resident_details_viewed`, with
-  activity ids and no content), once per list or detail response that shows any.
+  cleared. An activity that never held details is left unstamped. Neither
+  details nor notes can be added back to a cleared activity; one that holds
+  text again anyway (written before that refusal, 2026-11-26) is cleared again
+  on the next run and keeps its first stamp. Each department's clearing and its
+  `crr_resident_details_retention` audit row commit together, and a failure in
+  one department does not stop the others.
+- **Disclosing resident details is audited** (`crr.resident_details_viewed`,
+  with activity ids and no content), once per list, detail, record or change
+  response that shows any to a `crr.view_contact` holder.
+- **Outreach Impact never loads resident details.** Its query reads only an
+  activity's type, time, place, counts and tags, so the encrypted columns are
+  not read or decrypted.
 - **The event card shows to `crr.record` or `events.manage`** on an outreach
   event that is not cancelled — the same rule a save is checked against.
 - **A member credited 0 minutes is recorded as taking part** but credits no
