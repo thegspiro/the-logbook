@@ -2623,6 +2623,35 @@ describe('Dashboard', () => {
       });
     });
 
+    // MSG2-9: the X on a persistent message deactivates it for every member
+    // (PATCH is_active=false), and it was offered on settings.manage alone,
+    // which the endpoint refuses — and fired on one tap.
+    it('offers clearing a persistent message only to a notifications manager', async () => {
+      mockCheckPermission.mockImplementation((permission: string) => permission === 'settings.manage');
+      mockGetInbox.mockResolvedValue([makeMessage({ id: 'msg-2', title: 'Spotter required', is_persistent: true })]);
+
+      renderWithRouter(<Dashboard />);
+
+      const feed = await screen.findByRole('region', { name: 'My Updates' });
+      await within(feed).findByText('Spotter required');
+      expect(within(feed).queryByRole('button', { name: /Clear persistent message/ })).not.toBeInTheDocument();
+    });
+
+    it('asks before clearing a persistent message for everyone', async () => {
+      mockCheckPermission.mockImplementation((permission: string) => permission === 'notifications.manage');
+      mockGetInbox.mockResolvedValue([makeMessage({ id: 'msg-2', title: 'Spotter required', is_persistent: true })]);
+      const user = userEvent.setup();
+
+      renderWithRouter(<Dashboard />);
+
+      const feed = await screen.findByRole('region', { name: 'My Updates' });
+      await user.click(await within(feed).findByRole('button', { name: /Clear persistent message/ }));
+      const dialog = await screen.findByRole('dialog', { name: 'Clear this message for everyone?' });
+      expect(dialog).toHaveTextContent(/every member/);
+      await user.click(within(dialog).getByRole('button', { name: 'Keep it' }));
+      expect(within(feed).getByText('Spotter required')).toBeInTheDocument();
+    });
+
     it('renders pending messages, with the badge on persistent ones', async () => {
       mockGetInbox.mockResolvedValue([
         makeMessage(),

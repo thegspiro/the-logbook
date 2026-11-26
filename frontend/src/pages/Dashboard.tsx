@@ -96,6 +96,7 @@ import type { EventListItem } from '../types/event';
 import { dashboardService } from '../services/api';
 import { positionLabel } from '../modules/scheduling/utils/positionLabels';
 import { useNotificationCountStore } from '../hooks/useNotificationCount';
+import { useConfirm } from '../contexts/ConfirmContext';
 import {
   describeStack,
   groupNotificationsIntoStacks,
@@ -257,6 +258,7 @@ const TIMELINE_ACCENT: Record<TimelineKind, string> = {
 
 const Dashboard: React.FC = () => {
   const navigate = useNavigate();
+  const { confirm } = useConfirm();
   const tz = useTimezone();
   const { isModuleOn, isLoading: modulesLoading } = useEnabledModules();
   const signupWindow = useSignupWindow({ enabled: !modulesLoading && isModuleOn('scheduling') });
@@ -293,8 +295,10 @@ const Dashboard: React.FC = () => {
   const canViewChiefOperations = canViewChiefDashboard(checkPermission);
   const canViewOrganization = canViewLegacyAdmin || canViewChiefOperations || canViewAssets;
   // Clearing a department-wide persistent message is a notifications action;
-  // holding a fleet or facility grant is not authority to retract one.
-  const canManageMessages = canViewLegacyAdmin || checkPermission('notifications.manage');
+  // holding a fleet or facility grant is not authority to retract one, and
+  // neither is settings.manage: PATCH /messages requires notifications.manage
+  // alone, so offering it on settings.manage only produced a 403 (MSG2-9).
+  const canManageMessages = checkPermission('notifications.manage');
   const canManageAdminHours = checkPermission('admin_hours.manage');
   const canViewScheduling = checkPermission('scheduling.manage');
   // Readiness is a verdict on responding, which an administrative member does
@@ -788,7 +792,18 @@ const Dashboard: React.FC = () => {
     }
   };
 
-  const clearPersistentMessage = async (msgId: string) => {
+  // Clearing deactivates the message for every member, not just this feed,
+  // and the compose form cannot reactivate it — so it is asked first (MSG2-9).
+  const clearPersistentMessage = async (msgId: string, title: string) => {
+    if (
+      !(await confirm({
+        title: 'Clear this message for everyone?',
+        message: `"${title}" will be taken down for every member, not just from your dashboard.`,
+        confirmLabel: 'Clear for everyone',
+        cancelLabel: 'Keep it',
+      }))
+    )
+      return;
     try {
       await messagesService.updateMessage(msgId, { is_active: false });
       setDeptMessages((prev) => prev.filter((m) => m.id !== msgId));
@@ -2352,7 +2367,7 @@ const Dashboard: React.FC = () => {
                             )}
                             {msg?.is_persistent && canManageMessages && (
                               <button
-                                onClick={() => void clearPersistentMessage(msg.id)}
+                                onClick={() => void clearPersistentMessage(msg.id, entry.title)}
                                 className="text-theme-text-muted -mr-1 shrink-0 rounded p-2 transition-colors hover:bg-red-500/10 hover:text-red-700 dark:hover:text-red-400"
                                 title="Clear persistent message"
                                 aria-label={`Clear persistent message: ${entry.title}`}
