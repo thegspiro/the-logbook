@@ -9,6 +9,10 @@ Default Email Templates — Community Outreach
   form on a completed request's status page, to the request's coordinator, or
   failing that the default coordinator, or failing both every member who
   manages events. One per response; see ``outreach_feedback_notice_service``.
+- **Requester Feedback Reminder** — to a requester who has not answered the
+  feedback form, three days after their request was completed, once. Goes to
+  a member of the public, so it carries the public footer; see
+  ``outreach_feedback_reminder_service``.
 
 The Outreach Impact report counts an event's audience from that
 headcount, so a count that never gets entered leaves the event on the
@@ -99,6 +103,40 @@ Read the feedback: {{request_url}}
 
 {{footer_text}}"""
 
+FEEDBACK_REMINDER_SUBJECT = "How did the {{outreach_type}} go?"
+
+FEEDBACK_REMINDER_HTML = build_shell(
+    "We Would Like Your Feedback",
+    """        <p>Hello {{requester_name}},</p>
+        <p>Thank you again for inviting {{organization_name}}. If you have a
+        couple of minutes, we would like to hear how it went.</p>
+"""
+    + facts([[fact("Request", "{{request_title}}"), fact("Visit", "{{visit_date}}")]])
+    + """        <p>Your answers go straight to the department and help us plan the
+        next visit. This is the only reminder we will send.</p>
+"""
+    + action("{{feedback_url}}", "Share Your Feedback"),
+    accent=ACCENT_BLUE,
+    chip="Request update",
+)
+
+FEEDBACK_REMINDER_TEXT = """We Would Like Your Feedback
+
+Hello {{requester_name}},
+
+Thank you again for inviting {{organization_name}}. If you have a couple of
+minutes, we would like to hear how it went.
+
+Request: {{request_title}}
+Visit: {{visit_date}}
+
+Your answers go straight to the department and help us plan the next visit.
+This is the only reminder we will send.
+
+Share your feedback: {{feedback_url}}
+
+{{footer_text}}"""
+
 # ----------------------------------------------------------------------
 # Editor catalogue and samples
 # ----------------------------------------------------------------------
@@ -132,6 +170,19 @@ TEMPLATE_VARIABLES: Dict[str, List[Dict[str, str]]] = {
         },
         {"name": "request_url", "description": "Link to the request page"},
     ],
+    _T.OUTREACH_FEEDBACK_REMINDER.value: [
+        {"name": "requester_name", "description": "The requester it is sent to"},
+        {
+            "name": "request_title",
+            "description": "The requesting organization, or the requester",
+        },
+        {"name": "outreach_type", "description": "What was requested"},
+        {"name": "visit_date", "description": "The day of the visit"},
+        {
+            "name": "feedback_url",
+            "description": "The requester's status page, where the feedback form is",
+        },
+    ],
 }
 
 SAMPLE_CONTEXT: Dict[str, Dict[str, str]] = {
@@ -151,6 +202,13 @@ SAMPLE_CONTEXT: Dict[str, Dict[str, str]] = {
         "low_rating_prefix": "Low rating: ",
         "request_url": "https://example.org/events/admin/requests/sample",
     },
+    _T.OUTREACH_FEEDBACK_REMINDER.value: {
+        "requester_name": "Priya Natarajan",
+        "request_title": "Willow Creek Preschool",
+        "outreach_type": "Station Tour",
+        "visit_date": "October 12, 2026",
+        "feedback_url": "https://example.org/event-request/status/sample",
+    },
 }
 
 # The test send greets the admin it goes to.
@@ -161,10 +219,11 @@ TEST_RECIPIENT_FIELDS: Dict[str, Dict[str, str]] = {
 
 # Days from today a test send places a date at: the headcount reminder's event
 # yesterday, as the real reminder does, and the feedback's visit a few days
-# back, about when a requester answers.
+# back, about when a requester answers or is reminded to.
 SAMPLE_DAYS: Dict[str, Dict[str, int]] = {
     _T.GUEST_HEADCOUNT_REMINDER.value: {"event_date": -1},
     _T.OUTREACH_FEEDBACK_RECEIVED.value: {"visit_date": -3},
+    _T.OUTREACH_FEEDBACK_REMINDER.value: {"visit_date": -4},
 }
 
 DEFAULT_TEMPLATE_DEFS: List[Dict[str, Any]] = [
@@ -190,6 +249,18 @@ DEFAULT_TEMPLATE_DEFS: List[Dict[str, Any]] = [
             "Sent when a requester answers the feedback form on a completed "
             "outreach request, to its coordinator, or failing that the default "
             "coordinator, or failing both every member who manages events."
+        ),
+    },
+    {
+        "type": _T.OUTREACH_FEEDBACK_REMINDER,
+        "name": "Requester Feedback Reminder",
+        "subject": FEEDBACK_REMINDER_SUBJECT,
+        "html": FEEDBACK_REMINDER_HTML,
+        "text": FEEDBACK_REMINDER_TEXT,
+        "footer": "public",
+        "description": (
+            "Sent once to an outreach requester who has not answered the "
+            "feedback form, three days after their request was completed."
         ),
     },
 ]

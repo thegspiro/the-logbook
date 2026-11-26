@@ -1213,7 +1213,13 @@ opt-out applies. `GET /member-audience/options` and `POST
   hold it): a bell (`outreach_feedback`) written in the submit's transaction,
   and after the commit the **Requester Feedback Received** email
   (`outreach_feedback_received`, "Event officer duties"), subject prefixed
-  "Low rating: " at 3 or less out of 5. A failed email never fails the submit.
+  "Low rating: " at 3 or less out of 5. A failed email never fails the submit. _(2026-11-26)_
+  The daily `outreach_feedback_reminders` task (10:10) emails a requester
+  once, through the **Requester Feedback Reminder** template
+  (`outreach_feedback_reminder`, public footer), three days after the
+  request's move to Completed and within 14 days of it, while a form is set and
+  no feedback has arrived; `event_requests.feedback_reminder_sent_at` is
+  stamped after each send (send, then stamp).
 
 ---
 
