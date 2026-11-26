@@ -30,7 +30,21 @@ Left open:
   images inside it with EXIF of their own). Nothing strips it.
 - **A JPEG-LS file, or a JPEG using a reserved marker, is refused.** Neither
   appears in a photo a phone or scanner writes, and an unknown segment can
-  carry anything, so the walker refuses rather than guesses.
+  carry anything, so the walker refuses rather than guesses. JPEG-LS is
+  refused every time: it stuffs bits rather than bytes, so whether its scan
+  could be walked would depend on its pixels.
+- **A JPEG with more than 4,096 markers, or a PNG with more than 16,384
+  chunks, is refused** _(default taken, after an independent review)_. A
+  10 MB file built from millions of empty segments or chunks took seconds
+  of CPU and hundreds of MB to walk. A camera's JPEG holds a few dozen
+  markers, and even a 10 MB file of ICC and extended-XMP segments stays
+  under 500. libpng writes 10 MB of image data as about 1,300 IDAT chunks.
+  Such a file gets the same "couldn't read this photo" 400. The caps are
+  `MAX_JPEG_SEGMENTS` and `MAX_PNG_CHUNKS` in `app/utils/photo_metadata.py`.
+  The walk also runs on a worker thread, crosses the compressed data with
+  compiled regular expressions rather than byte by byte, and builds its
+  output once from views of the upload, so it holds about one copy of the
+  file.
 - **Other upload paths still store a member's JPEG or PNG byte for byte,
   EXIF and GPS included.** Open for an owner decision: should these strip it
   too? Inventoried 2026-11-26; none was changed:

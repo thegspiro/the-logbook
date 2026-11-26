@@ -1599,7 +1599,11 @@ switch and the officer's duty-email setting).
   stay, and an orientation other than 1 is written back as a minimal EXIF.
   The scan data is copied byte for byte, so nothing is re-compressed.
   `store_bytes` then checks and scans the stripped bytes. A file that cannot
-  be walked is a 400. Pure Python, no dependency. Files stored earlier, and
+  be walked is a 400, and so is JPEG-LS, a JPEG of more than 4,096 markers
+  or a PNG of more than 16,384 chunks. The strip runs through
+  `asyncio.to_thread`, crosses scans and fill bytes with compiled regular
+  expressions, and joins its output once from views of the upload. Pure
+  Python, no dependency. Files stored earlier, and
   PDFs, stay as filed; other upload paths are not covered (see
   `docs/KNOWN_LIMITATIONS.md`).
 
