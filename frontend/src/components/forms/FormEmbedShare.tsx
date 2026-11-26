@@ -49,13 +49,13 @@ export const FormEmbedShare: React.FC<FormEmbedShareProps> = ({ form, onToggleEm
 
   return (
     <div className="space-y-3">
-      <label htmlFor="share-allow-embed" className="card-secondary mobile-touch-row cursor-pointer gap-3 p-4">
+      <label htmlFor="share-allow-embed" className="card-secondary flex min-h-11 cursor-pointer items-start gap-3 p-4">
         <input
           type="checkbox"
           id="share-allow-embed"
           checked={form.allow_embed}
           onChange={() => onToggleEmbed(form)}
-          className="form-checkbox shrink-0"
+          className="form-checkbox mt-0.5 shrink-0"
         />
         <span className="text-sm">
           <span className="text-theme-text-primary block font-medium">Allow embedding on your website</span>
