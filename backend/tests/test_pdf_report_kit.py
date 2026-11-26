@@ -172,3 +172,16 @@ def test_equipment_check_detail_header_repeats_and_notes_are_whole():
     assert note in " ".join(pages)
     for text in pages:
         assert "Item Type Status Count Notes" in text
+
+
+def test_equipment_check_detail_prints_an_incomplete_check_as_incomplete():
+    """EC2-14: anything but "pass" printed as FAIL, so a check filed part-way
+    with nothing wrong read as a failed truck on paper while the screen said
+    incomplete."""
+    pdf = equipment_check_pdf.generate_check_detail_pdf(
+        {"overall_status": "incomplete", "items": [], "total_items": 4},
+        organization=ORG,
+    )
+    text = " ".join(_pages(pdf))
+    assert "Result: INCOMPLETE" in text
+    assert "FAIL" not in text

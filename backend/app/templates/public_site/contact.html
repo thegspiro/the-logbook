@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}Contact | {{ name }}{% endblock %}
+{% block content %}
+<div class="wrap page">
+  <h1>Contact {{ name }}</h1>
+  {% if contact.any %}
+  {% include "_contact_details.html" %}
+  {% else %}
+  <p class="muted">Contact details will be posted here soon.</p>
+  {% endif %}
+</div>
+{% endblock %}
