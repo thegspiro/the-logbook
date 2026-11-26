@@ -15023,10 +15023,10 @@ class Seeder:
 
         Each request goes in through the public endpoint and is then moved the
         way a coordinator moves it, through the same endpoints the tab calls:
-        assigned, checklist steps ticked, scheduled, signups opened,
-        postponed. Safe to re-run: a request is found by its contact name and
-        only advanced while it is still new, so a second run neither
-        duplicates it nor pushes it a step further.
+        assigned (which ticks the checklist steps that follow state),
+        scheduled, signups opened, postponed. Safe to re-run: a request is
+        found by its contact name and only advanced while it is still new, so
+        a second run neither duplicates it nor pushes it a step further.
         """
         org_id = pick(self.api.get("/auth/me"), "organization_id")
         existing = {
@@ -15045,18 +15045,18 @@ class Seeder:
             )
             return str(pick(created, "request_id")), True
 
+        def start_work(request_id: str) -> None:
+            # Moving to In progress is what ticks Review Request now, and it is
+            # what scheduling and postponing require.
+            self.api.patch(
+                f"/event-requests/{request_id}/status", {"status": "in_progress"}
+            )
+
         def assign(request_id: str, username: str) -> None:
             user_id = self._user_id(username)
             if user_id:
                 self.api.patch(
                     f"/event-requests/{request_id}/assign", {"assigned_to": user_id}
-                )
-
-        def tick(request_id: str, *task_ids: str) -> None:
-            for task_id in task_ids:
-                self.api.patch(
-                    f"/event-requests/{request_id}/tasks",
-                    {"task_id": task_id, "completed": True},
                 )
 
         # In progress: a coordinator, one checklist step of three done, and a
@@ -15078,11 +15078,13 @@ class Seeder:
             }
         )
         if fresh:
+            # Assigning ticks the Assign Coordinator step by itself: it, Review
+            # Request and Confirm Date follow the request's state, and the
+            # tasks endpoint refuses a hand tick on them (AUTOMATIC_TASK_HINTS).
+            # Ticking them here failed the whole step on its first request, so
+            # neither request below was ever created.
             assign(block_party, "okittredge")
-            # Assigning is itself a checklist step, so a coordinator ticks it
-            # on assigning; leaving it open put "Next: Assign Coordinator" on
-            # a request that plainly had one.
-            tick(block_party, "review_request", "assign_coordinator")
+            start_work(block_party)
 
         # Scheduled, a few days out, with a signup sheet nobody has joined yet,
         # so the row reads "0 of 3 signed up" and its next step asks for
@@ -15103,7 +15105,7 @@ class Seeder:
         )
         if fresh:
             assign(scouts, "smarchetti")
-            tick(scouts, "review_request", "assign_coordinator", "confirm_date")
+            start_work(scouts)
             start = now + timedelta(days=5)
             self.api.patch(
                 f"/event-requests/{scouts}/schedule",
@@ -15138,7 +15140,7 @@ class Seeder:
         )
         if fresh:
             assign(library, "okittredge")
-            tick(library, "review_request", "assign_coordinator")
+            start_work(library)
             self.api.patch(
                 f"/event-requests/{library}/postpone",
                 {"reason": "The library is closed for renovation until spring."},

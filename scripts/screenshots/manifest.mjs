@@ -14997,6 +14997,8 @@ export const SHOTS = [
     // The starter form, which the seeder makes the department's feedback form
     // (seed_outreach_feedback), with its rating question chosen.
     id: "04-114-feedback-form-setting",
+    allowEmptyState:
+      '"No rating" is an option of the Rating question select, chosen or not.',
     doc: "04-events-meetings.md",
     line: 3805,
     anchor:
