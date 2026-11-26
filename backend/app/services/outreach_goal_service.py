@@ -9,8 +9,8 @@ computed, never stored, from the same rows those screens count:
   totals over the year so far (pitfall #29), so a goal agrees with the figure
   Outreach Impact shows beside it.
 
-Pace is the target scaled by how much of the year has gone, so in March a goal
-of 200 is on pace at about 50. A past year's goal is simply met or missed.
+Pace is the target scaled by how much of the year has gone, so by the end of
+March a goal of 200 is on pace at about 50. A past year's goal is simply met or missed.
 """
 
 from datetime import date, datetime, time, timezone

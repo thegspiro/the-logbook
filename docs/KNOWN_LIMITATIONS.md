@@ -2135,7 +2135,7 @@ without a ruling:
 
 ### CRR Activity Tracking — Owner Decisions (2026-11-22)
 
-Answers to the Phase 3 plan's questions, as they will be built:
+Answers to the Phase 3 plan's questions, as built:
 
 | Question                                  | Decision                                                                                                                                                                                                    |
 | ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -2161,8 +2161,8 @@ nothing stored.
 activity" card on an outreach event's page, and a link from the Outreach
 Overview. Two new permissions: `crr.record`, granted to the Community Outreach
 Team position and alongside every seeded `events.manage`, and
-`crr.view_contact`, granted to the Public Outreach position, the chief ranks
-and the president. The migration grants both to stored positions (pitfall #23).
+`crr.view_contact`, granted to the Community Outreach Manager position
+(`public_outreach`), the chief ranks and the president. The migration grants both to stored positions (pitfall #23).
 Boundaries drawn without a ruling:
 
 - **The screen records and deletes; it does not edit.** An activity's type,

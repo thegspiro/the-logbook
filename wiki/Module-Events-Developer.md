@@ -27,9 +27,10 @@ events module. What the module does and how departments use it is on
 | `/events/admin/community/print`     | Printable Outreach Impact summary (`?period=`)                                                                              | `events.manage`  |
 
 The Events Admin Hub (`EVENTS_ADMIN_TABS` / `EVENTS_ADMIN_AREAS` in
-`pages/eventsAdminTabs.ts`) groups nine pages under four areas: **Events**
+`pages/eventsAdminTabs.ts`) groups ten pages under four areas: **Events**
 (**Create Event**, **Past Events**), **Community Outreach** (**Overview**,
-**Outreach Requests**, **Outreach Impact**, **Apparatus Events**),
+**Outreach Requests**, **CRR Activities**, **Outreach Impact**, **Apparatus
+Events**),
 **Check-ins** (**QR Code Analytics**, **Card Check-ins**) and **Settings**.
 The tab ids did not change with the 2026-11-21 renames (`?tab=requests`,
 `?tab=community`). An area card opens on its first destination, so
@@ -176,8 +177,8 @@ null.
 ```
 GET    /crr/catalogue                            # Activity types, counts and tags; seeds the defaults on first read (manage)
 POST   /crr/activity-types                       # Add a type, with its counts (manage)
-PATCH  /crr/activity-types/{id}                  # Rename, describe, reorder, retire, restore (manage)
-DELETE /crr/activity-types/{id}                  # A type the department added; a built-in one is refused (manage)
+PATCH  /crr/activity-types/{id}                  # Rename, describe, reorder, retire, restore, Admin Hours category (manage)
+DELETE /crr/activity-types/{id}                  # A type the department added, with no activities; otherwise refused (manage)
 PUT    /crr/activity-types/{id}/tags             # Replace a type's default tags (manage)
 POST   /crr/activity-types/{id}/measures         # Add a count (manage)
 PATCH  /crr/measures/{id}                        # Rename, retire, restore a count (manage)
