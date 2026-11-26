@@ -388,6 +388,8 @@ marked `[DEPARTMENT: ...]` wherever a department decision is required.
     - Exposing selected department data to a public-facing website
     - Security model for bridging internal systems and the public internet
 
+30a. **[PUBLIC_WEBSITE.md](./PUBLIC_WEBSITE.md)** - The website a department publishes for its own community, rendered by its installation - The public website port, the settings screen, and pointing a public hostname at it
+
 31. **[DEPARTMENT_OFFICERS.md](./DEPARTMENT_OFFICERS.md)**
     - Department office holders and email signatures
     - Outgoing email signed by the officeholder rather than whoever triggered the send

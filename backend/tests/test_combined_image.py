@@ -32,6 +32,9 @@ ENTRYPOINT = COMBINED_DIR / "entrypoint.sh"
 FRONTEND_NGINX = ROOT_DIR / "frontend" / "nginx.conf"
 BACKEND_DOCKERFILE = ROOT_DIR / "backend" / "Dockerfile"
 
+#: The container port of the department's public website (frontend/nginx.conf).
+PUBLIC_SITE_CONTAINER_PORT = "8080"
+
 SHA_PINNED = re.compile(r"^[\w.-]+/[\w.-]+@[0-9a-f]{40}$")
 
 
@@ -294,16 +297,20 @@ class TestCombinedDockerfile:
         ]
         assert len(web_ui) == 1
         target = web_ui[0].get("Target")
-        assert _final_stage_instructions(DOCKERFILE, "EXPOSE") == [target]
+        # The web interface first, then the public website's own listener.
+        assert _final_stage_instructions(DOCKERFILE, "EXPOSE") == [
+            target,
+            PUBLIC_SITE_CONTAINER_PORT,
+        ]
         assert f"[PORT:{web_ui[0].get('Default')}]" in _template().findtext("WebUI")
 
-    def test_template_maps_no_port_but_the_web_interface(self):
+    def test_template_maps_the_web_interface_and_the_public_website_only(self):
         """The API listens on loopback only; a mapping to 3001 would publish
         nothing and invite somebody to go looking for it."""
         ports = [
             c.get("Target") for c in _template_configs() if c.get("Type") == "Port"
         ]
-        assert ports == ["3000"]
+        assert ports == ["3000", PUBLIC_SITE_CONTAINER_PORT]
 
     def test_healthcheck_goes_through_nginx_to_the_api(self):
         healthcheck = " ".join(_final_stage_instructions(DOCKERFILE, "HEALTHCHECK"))
@@ -327,9 +334,14 @@ class TestNginxRewrite:
     If that file grows an upstream the substitutions do not match, the build
     greps catch it -- these say why before a build is attempted."""
 
-    def test_frontend_conf_listens_on_exactly_one_port_80(self):
+    def test_frontend_conf_listens_on_port_80_and_the_public_website_port(self):
+        """The image rewrites ``listen 80;`` alone, so the public website's
+        listener stays on the port the template maps."""
         listens = re.findall(r"^\s*listen\s+[^;]+;", _read(FRONTEND_NGINX), re.M)
-        assert [line.strip() for line in listens] == ["listen 80;"]
+        assert [line.strip() for line in listens] == [
+            "listen 80;",
+            f"listen {PUBLIC_SITE_CONTAINER_PORT};",
+        ]
 
     def test_every_upstream_is_the_one_the_rewrite_replaces(self):
         upstreams = set(

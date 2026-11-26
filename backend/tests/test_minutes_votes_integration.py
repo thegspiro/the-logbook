@@ -173,6 +173,35 @@ class TestRollCall:
         assert resp.json()["roll_call"] is None
         assert resp.json()["votes_for"] == 2
 
+    async def test_totals_sent_alone_replace_the_roll_call(self, world):
+        """MM6-11: totals sent without a roll call were written beside the old
+        roll call, so the record read 2 yes / 0 no on the roll and 0 / 3 in the
+        totals. The two can never disagree: totals on their own are a vote
+        taken by count (the page's count mode sends exactly this), so the roll
+        call they replace is cleared."""
+        minutes = await _minutes(world)
+        motion = (
+            await _motion(
+                world,
+                minutes["id"],
+                roll_call=[
+                    {"name": "Pat Chief", "vote": "yes"},
+                    {"name": "Lee Treasurer", "vote": "yes"},
+                ],
+            )
+        ).json()
+
+        async with _client(world.db, world.secretary) as c:
+            resp = await c.put(
+                f"/minutes/{minutes['id']}/motions/{motion['id']}",
+                json={"votes_for": 0, "votes_against": 3},
+            )
+
+        assert resp.status_code == 200, resp.text
+        body = resp.json()
+        assert body["roll_call"] is None
+        assert (body["votes_for"], body["votes_against"]) == (0, 3)
+
     async def test_a_roll_call_is_checked_against_the_roll_as_it_stands(self, world):
         minutes = await _minutes(world)
         async with _client(world.db, world.secretary) as c:

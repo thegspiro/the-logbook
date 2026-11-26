@@ -113,7 +113,7 @@ const ACTION_STATUS_BADGES: Record<string, string> = {
   overdue: 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400',
 };
 
-export const MinutesDetailPage: React.FC = () => {
+const MinutesDetail: React.FC = () => {
   const { confirm } = useConfirm();
   const { minutesId } = useParams<{ minutesId: string }>();
   const navigate = useNavigate();
@@ -130,6 +130,7 @@ export const MinutesDetailPage: React.FC = () => {
   const { busy: submitBusy, run: runSubmit } = useSubmitGuard();
   const { busy: motionBusy, run: runMotion } = useSubmitGuard();
   const { busy: actionItemBusy, run: runActionItem } = useSubmitGuard();
+  const { busy: rejectBusy, run: runReject } = useSubmitGuard();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -243,6 +244,19 @@ export const MinutesDetailPage: React.FC = () => {
     if (!minutesId) return;
     setMinutes(await minutesService.getMinutes(minutesId));
   }, [minutesId]);
+
+  // After a change on this page: reload in place, never through the full-page
+  // spinner, which unmounts every panel and loses what is open in them — a
+  // motion half-typed in another section, decisions in the suggestions panel,
+  // the scroll position (MM6-3). The change itself has already succeeded, so a
+  // failed reload is reported as that, not as the change failing.
+  const reloadAfterChange = useCallback(async () => {
+    try {
+      await refreshMinutes();
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Saved, but the minutes could not be reloaded'));
+    }
+  }, [refreshMinutes]);
 
   // Fetch linked event details when minutes load
   useEffect(() => {
@@ -480,7 +494,7 @@ export const MinutesDetailPage: React.FC = () => {
     try {
       setPublishing(true);
       const result = await minutesService.publishMinutes(minutesId);
-      await fetchMinutes();
+      await reloadAfterChange();
       await loadPublishingStatus();
       toast.success(
         result.public_posted ? 'Minutes published to Documents and posted publicly' : 'Minutes published to Documents'
@@ -587,18 +601,19 @@ export const MinutesDetailPage: React.FC = () => {
     }
   };
 
-  const handleReject = async () => {
-    if (!minutesId || rejectReason.trim().length < 10) return;
-    try {
-      const updated = await minutesService.reject(minutesId, rejectReason.trim());
-      setMinutes(updated);
-      setShowRejectModal(false);
-      setRejectReason('');
-      toast.success('Minutes returned for changes');
-    } catch (err: unknown) {
-      toast.error(getErrorMessage(err, 'Failed to reject minutes'));
-    }
-  };
+  const handleReject = () =>
+    runReject(async () => {
+      if (!minutesId || rejectReason.trim().length < 10) return;
+      try {
+        const updated = await minutesService.reject(minutesId, rejectReason.trim());
+        setMinutes(updated);
+        setShowRejectModal(false);
+        setRejectReason('');
+        toast.success('Minutes returned for changes');
+      } catch (err: unknown) {
+        toast.error(getErrorMessage(err, 'Failed to reject minutes'));
+      }
+    });
 
   const handleReopen = async (reason: string) => {
     if (!minutesId) return;
@@ -634,7 +649,7 @@ export const MinutesDetailPage: React.FC = () => {
           status: 'passed',
         });
         setVoteDraft(emptyVoteDraft());
-        void fetchMinutes();
+        void reloadAfterChange();
         toast.success('Motion added');
       } catch (err: unknown) {
         toast.error(getErrorMessage(err, 'Failed to add motion'));
@@ -645,7 +660,7 @@ export const MinutesDetailPage: React.FC = () => {
     if (!minutesId) return;
     try {
       await minutesService.updateMotion(minutesId, motionId, { status });
-      await fetchMinutes();
+      await reloadAfterChange();
       toast.success(`Result changed to ${status}`);
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to change the result'));
@@ -665,7 +680,7 @@ export const MinutesDetailPage: React.FC = () => {
       return;
     try {
       await minutesService.deleteMotion(minutesId, motionId);
-      void fetchMinutes();
+      void reloadAfterChange();
       toast.success('Motion deleted');
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to delete motion'));
@@ -688,7 +703,7 @@ export const MinutesDetailPage: React.FC = () => {
         });
         setShowActionForm(false);
         setActionForm({ description: '', assignee_id: '', due_date: undefined, priority: 'medium' });
-        void fetchMinutes();
+        void reloadAfterChange();
         toast.success('Action item added');
       } catch (err: unknown) {
         toast.error(getErrorMessage(err, 'Failed to add action item'));
@@ -699,7 +714,7 @@ export const MinutesDetailPage: React.FC = () => {
     if (!minutesId) return;
     try {
       await minutesService.updateActionItem(minutesId, itemId, { status: newStatus });
-      void fetchMinutes();
+      void reloadAfterChange();
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to update action item status'));
     }
@@ -718,7 +733,7 @@ export const MinutesDetailPage: React.FC = () => {
       return;
     try {
       await minutesService.deleteActionItem(minutesId, itemId);
-      void fetchMinutes();
+      void reloadAfterChange();
       toast.success('Action item deleted');
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to delete action item'));
@@ -1094,7 +1109,7 @@ export const MinutesDetailPage: React.FC = () => {
           suggestions={suggestions.suggestions}
           loaded={suggestions.loaded}
           reload={suggestions.reload}
-          onMinutesChanged={fetchMinutes}
+          onMinutesChanged={reloadAfterChange}
         />
 
         {/* Meeting Info */}
@@ -1430,7 +1445,7 @@ export const MinutesDetailPage: React.FC = () => {
                       motions={minutes.motions}
                       attendees={minutes.attendees ?? []}
                       canRecord={Boolean(canManage && isEditable)}
-                      onRecorded={fetchMinutes}
+                      onRecorded={reloadAfterChange}
                     />
 
                     {canSuggest && suggestingSection === section.key && (
@@ -1813,6 +1828,9 @@ export const MinutesDetailPage: React.FC = () => {
                           aria-label={`Update status for: ${item.description.substring(0, 30)}`}
                           className="form-input-sm text-xs"
                         >
+                          {/* Set by the overdue sweep, not chosen here: without it an overdue
+                              item read as Pending and Pending was no change (MM6-5). */}
+                          {item.status === 'overdue' && <option value="overdue">Overdue</option>}
                           <option value="pending">Pending</option>
                           <option value="in_progress">In Progress</option>
                           <option value="completed">Completed</option>
@@ -1883,7 +1901,7 @@ export const MinutesDetailPage: React.FC = () => {
           minutesId={minutes.id}
           onClose={() => setShowAgendaSync(false)}
           onApplied={async () => {
-            await fetchMinutes();
+            await reloadAfterChange();
             toast.success('Agenda synced. Nothing you had written was changed.');
           }}
         />
@@ -2026,7 +2044,7 @@ export const MinutesDetailPage: React.FC = () => {
                     onClick={() => {
                       void handleReject();
                     }}
-                    disabled={rejectReason.trim().length < 10}
+                    disabled={rejectBusy || rejectReason.trim().length < 10}
                     className="btn-primary rounded-md"
                   >
                     Reject
@@ -2039,6 +2057,17 @@ export const MinutesDetailPage: React.FC = () => {
       </div>
     </div>
   );
+};
+
+/**
+ * Keyed by the record, so moving to other minutes — a carried-forward item's
+ * source, the minutes a motion cites, back after a load that failed — is a new
+ * page: the last record's error, importable ballots, open editor and pending
+ * reject reason must not carry over (MM6-4).
+ */
+export const MinutesDetailPage: React.FC = () => {
+  const { minutesId } = useParams<{ minutesId: string }>();
+  return <MinutesDetail key={minutesId} />;
 };
 
 export default MinutesDetailPage;

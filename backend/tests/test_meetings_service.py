@@ -351,6 +351,33 @@ class TestUpdateMeeting:
         assert meeting.notes is None
         db.commit.assert_not_awaited()
 
+    async def test_patch_cannot_move_an_approved_meeting_out_of_approved(self):
+        """MM6-15: the mirror of MM-9. PATCH {"status": "draft"} un-approved a
+        meeting and kept its approval stamps, and an approved meeting's
+        attendance is the settled record: the delete guard then let it, and
+        the membership-tier credit with it, be deleted."""
+        from datetime import datetime, timezone
+
+        from app.models.meeting import Meeting
+
+        meeting = Meeting(
+            id="m1",
+            organization_id="org-1",
+            title="T",
+            status=MeetingStatus.APPROVED,
+            approved_by="u-1",
+            approved_at=datetime(2026, 10, 1, tzinfo=timezone.utc),
+        )
+        db = _db([_one(meeting)])
+
+        result, err = await MeetingsService(db).update_meeting(
+            "m1", "org-1", {"status": "draft"}
+        )
+        assert result is None
+        assert "approved" in err.lower()
+        assert meeting.status == MeetingStatus.APPROVED
+        db.commit.assert_not_awaited()
+
     async def test_patch_can_submit_for_approval(self):
         from app.models.meeting import Meeting
 
@@ -440,6 +467,24 @@ class TestUpdateActionItem:
         assert err is None
         assert out.completed_at is not None
         assert out.status == ActionItemStatus.COMPLETED.value
+
+    async def test_reopening_clears_completed_at(self):
+        """MM6-17: reopening a completed meeting action item kept its
+        completion time, so the item read as open and completed at once. The
+        minutes action items already clear it."""
+        from datetime import datetime, timezone
+
+        item = SimpleNamespace(
+            id="i1",
+            status=ActionItemStatus.COMPLETED,
+            completed_at=datetime(2026, 10, 1, tzinfo=timezone.utc),
+        )
+        db = _db([_one(item)])
+        out, err = await MeetingsService(db).update_action_item(
+            "i1", "org-1", {"status": ActionItemStatus.OPEN.value}
+        )
+        assert err is None
+        assert out.completed_at is None
 
     async def test_non_status_update_does_not_stamp(self):
         item = SimpleNamespace(

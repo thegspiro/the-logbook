@@ -11,7 +11,7 @@ Downgrade drops the column; which requirements were limited to a seat is lost
 on the way down, and those requirements count every shift again.
 
 Revision ID: 103bffdb9528
-Revises: e9cf8ab7e4e4
+Revises: 7c3a91e5b2d4
 Create Date: 2026-11-26 06:05:00
 
 """
@@ -23,7 +23,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "103bffdb9528"
-down_revision: Union[str, None] = "e9cf8ab7e4e4"
+down_revision: Union[str, None] = "7c3a91e5b2d4"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

@@ -26,7 +26,7 @@ from app.core.database import get_db
 from app.core.security_middleware import get_client_ip
 from app.models.admin_hours import AdminHoursEntry, AdminHoursEntryStatus
 from app.models.apparatus import Apparatus
-from app.models.event import Event, EventExternalAttendee, EventRSVP, EventType
+from app.models.event import Event, EventExternalAttendee, EventRSVP
 from app.models.facilities import (
     Facility,
     FacilityComplianceChecklist,
@@ -65,7 +65,11 @@ from app.schemas.dashboard_pulse import (
 from app.schemas.outreach_goal import OutreachGoalProgress
 from app.services.apparatus_service import ApparatusService
 from app.services.community_engagement_service import CommunityEngagementService
-from app.services.dashboard_widget_service import PERIOD_LABELS, DashboardWidgetService
+from app.services.dashboard_widget_service import (
+    PERIOD_LABELS,
+    DashboardWidgetService,
+    outreach_event_clause,
+)
 from app.services.facilities_service import (
     FACILITY_MAINTENANCE_DUE_DAYS,
     FacilitiesService,
@@ -2054,72 +2058,44 @@ async def get_community_engagement(
     Aggregates public event data and attendee counts.
     """
     org_id = current_user.organization_id
-    public_types = [
-        EventType.PUBLIC_EDUCATION.value,
-        EventType.FUNDRAISER.value,
-        EventType.CEREMONY.value,
-        EventType.SOCIAL.value,
-    ]
+    # The shared outreach rule (pitfall #29): the period report beside these
+    # all-time figures, the dashboard pulse card and the Overview all read it,
+    # so a request scheduled onto a drill counts here as it does there. It
+    # also excludes cancelled events, which the attendee tallies must too.
+    outreach = outreach_event_clause(str(org_id))
+    outreach_ids = select(Event.id).where(outreach)
 
-    # Total public events (all time)
-    result = await db.execute(
-        select(func.count(Event.id)).where(
-            Event.organization_id == org_id,
-            Event.event_type.in_(public_types),
-            Event.is_cancelled.is_(False),
-        )
-    )
-    total_public = result.scalar() or 0
+    total_public = (
+        await db.execute(select(func.count(Event.id)).where(outreach))
+    ).scalar() or 0
 
-    # Total member attendees at public events (checked in)
-    result = await db.execute(
-        select(func.count(EventRSVP.id)).where(
-            EventRSVP.organization_id == org_id,
-            EventRSVP.checked_in.is_(True),
-            EventRSVP.event_id.in_(
-                select(Event.id).where(
-                    Event.organization_id == org_id,
-                    Event.event_type.in_(public_types),
-                    # `total_public_events` excludes cancelled events, so an
-                    # attendee tally that counted them described a different
-                    # population than the event count sitting beside it — a
-                    # department that cancelled a fundraiser after check-in
-                    # read more attendees than it had events to hold them.
-                    Event.is_cancelled.is_(False),
-                )
-            ),
+    # Checked-in members and guests at those same events.
+    total_member_attendees = (
+        await db.execute(
+            select(func.count(EventRSVP.id)).where(
+                EventRSVP.organization_id == org_id,
+                EventRSVP.checked_in.is_(True),
+                EventRSVP.event_id.in_(outreach_ids),
+            )
         )
-    )
-    total_member_attendees = result.scalar() or 0
+    ).scalar() or 0
+    total_external = (
+        await db.execute(
+            select(func.count(EventExternalAttendee.id)).where(
+                EventExternalAttendee.organization_id == org_id,
+                EventExternalAttendee.checked_in.is_(True),
+                EventExternalAttendee.event_id.in_(outreach_ids),
+            )
+        )
+    ).scalar() or 0
 
-    # Total external attendees at public events (checked in) — scoped the
-    # same way total_member_attendees is above, so the two figures in this
-    # "community engagement" response describe the same event population.
-    result = await db.execute(
-        select(func.count(EventExternalAttendee.id)).where(
-            EventExternalAttendee.organization_id == org_id,
-            EventExternalAttendee.checked_in.is_(True),
-            EventExternalAttendee.event_id.in_(
-                select(Event.id).where(
-                    Event.organization_id == org_id,
-                    Event.event_type.in_(public_types),
-                    Event.is_cancelled.is_(False),
-                )
-            ),
+    upcoming_public = (
+        await db.execute(
+            select(func.count(Event.id)).where(
+                outreach, Event.start_datetime >= datetime.now(timezone.utc)
+            )
         )
-    )
-    total_external = result.scalar() or 0
-
-    # Upcoming public events
-    result = await db.execute(
-        select(func.count(Event.id)).where(
-            Event.organization_id == org_id,
-            Event.event_type.in_(public_types),
-            Event.start_datetime >= datetime.now(timezone.utc),
-            Event.is_cancelled.is_(False),
-        )
-    )
-    upcoming_public = result.scalar() or 0
+    ).scalar() or 0
 
     report = await CommunityEngagementService(db).report(str(org_id), period)
     return CommunityEngagement(

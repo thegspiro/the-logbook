@@ -67,6 +67,24 @@ describe('EventsAdminHub', () => {
     expect(await screen.findByText('create body')).toBeInTheDocument();
   });
 
+  it('keeps the Events strip above the admin header, so the sections stay one tap away', async () => {
+    renderAt('/events/admin?tab=requests');
+
+    const sections = screen.getByRole('navigation', { name: 'Events sections' });
+    expect(within(sections).getByRole('link', { name: 'Events' })).toHaveAttribute('href', '/events');
+    expect(within(sections).getByRole('link', { name: 'Attendance Requests' })).toHaveAttribute(
+      'href',
+      '/events/attendance-requests'
+    );
+    // Above the title, below the trail — the order the officer-only settings
+    // screens inside a section group already use.
+    const heading = screen.getByRole('heading', { level: 1, name: 'Events Administration' });
+    expect(sections.compareDocumentPosition(heading) & Node.DOCUMENT_POSITION_FOLLOWING).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING
+    );
+    expect(await screen.findByText('requests body')).toBeInTheDocument();
+  });
+
   it('resolves an existing ?tab= link to its area', async () => {
     renderAt('/events/admin?tab=card_checkins');
 

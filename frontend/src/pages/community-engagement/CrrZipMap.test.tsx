@@ -97,6 +97,15 @@ describe('CrrZipMap', () => {
     expect(screen.getByRole('status')).toHaveTextContent('could not load from OpenStreetMap');
   });
 
+  it('drops the notice once the tiles load after all', () => {
+    render(<CrrZipMap zips={[zip({})]} />);
+
+    act(() => leaflet.handlers.tileerror?.());
+    act(() => leaflet.handlers.load?.());
+
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+  });
+
   it('removes the map when it closes', () => {
     const { unmount } = render(<CrrZipMap zips={[zip({})]} />);
     unmount();

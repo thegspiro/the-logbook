@@ -7,6 +7,22 @@ import type { MeetingRecord, MeetingAttendee, MeetingActionItem, MeetingsSummary
 import { asArray } from '../utils/asArray';
 
 /**
+ * One row of `GET /meetings/{id}/attendance-waivers`, as
+ * `AttendanceDashboardService.list_waivers` builds it (a plain dict, so
+ * snake_case). Typed because the untyped response let the screen read
+ * `user_name` / `reason`, which the endpoint never sends (MM6-1).
+ */
+export interface MeetingAttendanceWaiver {
+  attendee_id: string;
+  user_id: string;
+  member_name: string;
+  waiver_reason: string | null;
+  granted_by: string | null;
+  granted_by_name: string | null;
+  granted_at: string | null;
+}
+
+/**
  * One member's row of `GET /meetings/attendance/dashboard` (snake_case, as
  * the endpoint returns a plain dict). Every figure is the backend's — the
  * same calculation the ballot eligibility check uses — so the screen shows
@@ -138,8 +154,8 @@ export const meetingsService = {
     return response.data;
   },
 
-  async getAttendanceWaivers(meetingId: string): Promise<Array<Record<string, unknown>>> {
-    const response = await api.get<Array<Record<string, unknown>>>(`/meetings/${meetingId}/attendance-waivers`);
+  async getAttendanceWaivers(meetingId: string): Promise<MeetingAttendanceWaiver[]> {
+    const response = await api.get<MeetingAttendanceWaiver[]>(`/meetings/${meetingId}/attendance-waivers`);
     return response.data;
   },
 

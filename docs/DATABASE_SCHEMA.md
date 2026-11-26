@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**432 tables · 6628 columns · 1431 foreign keys**
+**433 tables · 6645 columns · 1433 foreign keys**
 
 ---
 
@@ -736,6 +736,14 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`public_portal_api_keys`](#public_portal_api_keys) | `PublicPortalAPIKey` | 12 | API keys for accessing the public portal. |
 | [`public_portal_config`](#public_portal_config) | `PublicPortalConfig` | 9 | Configuration for the public portal module. |
 | [`public_portal_data_whitelist`](#public_portal_data_whitelist) | `PublicPortalDataWhitelist` | 8 | Whitelist of data fields that can be exposed via the public portal. |
+
+### Public_Site
+
+<sub>`app/models/public_site.py`</sub>
+
+| Table | Model | Columns | Purpose |
+|---|---|---|---|
+| [`public_site_settings`](#public_site_settings) | `PublicSiteSettings` | 17 | What a department's public website shows, one row per department. |
 
 ### Qualification
 
@@ -10789,6 +10797,38 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 - `idx_whitelist_enabled` (`is_enabled`)
 - UNIQUE `idx_whitelist_unique` (`organization_id`, `data_category`, `field_name`)
 
+## Public_Site
+
+### `public_site_settings`
+
+**PublicSiteSettings** · `app/models/public_site.py`
+
+> What a department's public website shows, one row per department. Everything starts off: the site answers 404 until ``enabled`` is set, and each page and each contact detail has its own switch. The contact details themselves are not stored here. They are the department's own record (``Organization.phone``, ``email`` and address), so the website cannot drift from what the rest of the application holds. All text is plain text. The templates escape it and split it into paragraphs; no markup an administrator types reaches a public page.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, UQ |  | → `organizations.id` ON DELETE CASCADE |
+| `enabled` | BOOL | no |  | `0` |  |
+| `theme` | VARCHAR(20) | no |  | `classic` |  |
+| `tagline` | VARCHAR(200) | yes |  |  |  |
+| `welcome_text` | TEXT | yes |  |  |  |
+| `about_text` | TEXT | yes |  |  |  |
+| `emergency_notice` | VARCHAR(200) | yes |  |  |  |
+| `show_about` | BOOL | no |  | `0` |  |
+| `show_contact` | BOOL | no |  | `0` |  |
+| `show_phone` | BOOL | no |  | `0` |  |
+| `show_email` | BOOL | no |  | `0` |  |
+| `show_address` | BOOL | no |  | `0` |  |
+| `show_member_login` | BOOL | no |  | `0` |  |
+| `updated_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `created_at` | DATETIME | no |  | `now()` |  |
+| `updated_at` | DATETIME | no |  | `now()` |  |
+
+**Constraints**
+
+- UNIQUE `uq_public_site_settings_organization_id` (`organization_id`)
+
 ## Qualification
 
 ### `member_qualifications`
@@ -14463,7 +14503,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 Every foreign key in the schema, grouped by the table it points at — the map of which id lives where.
 
-### → `users` (510 references)
+### → `users` (511 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -14847,6 +14887,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `prospective_members` | `referred_by` | SET NULL | yes |
 | `prospective_members` | `transferred_user_id` | SET NULL | yes |
 | `public_portal_api_keys` | `created_by` | SET NULL | yes |
+| `public_site_settings` | `updated_by` | SET NULL | yes |
 | `purchase_requests` | `approved_by` | SET NULL | yes |
 | `purchase_requests` | `first_approved_by` | SET NULL | yes |
 | `purchase_requests` | `requested_by` | RESTRICT | no |
@@ -14978,7 +15019,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `xapi_statements` | `user_id` | SET NULL | yes |
 | `zeffy_campaign_links` | `created_by` | SET NULL | yes |
 
-### → `organizations` (345 references)
+### → `organizations` (346 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -15240,6 +15281,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `public_portal_api_keys` | `organization_id` | CASCADE | no |
 | `public_portal_config` | `organization_id` | CASCADE | no |
 | `public_portal_data_whitelist` | `organization_id` | CASCADE | no |
+| `public_site_settings` | `organization_id` | CASCADE | no |
 | `purchase_requests` | `organization_id` | CASCADE | no |
 | `push_subscriptions` | `organization_id` | CASCADE | no |
 | `quickbooks_connections` | `organization_id` | CASCADE | no |

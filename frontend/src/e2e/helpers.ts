@@ -4652,6 +4652,36 @@ const routes = ({
       widget_websites: empty ? [] : ['https://www.example-fd.org'],
     }),
   ],
+  // The department's own public website: published, with the About page on
+  // and one contact detail the record does not hold.
+  [
+    '**/api/v1/public-site/settings',
+    () => ({
+      enabled: true,
+      theme: 'classic',
+      tagline: 'Neighbors serving neighbors since 1947',
+      welcome_text: 'We answer fire, rescue and medical calls around the clock.',
+      about_text: 'Founded by eleven farmers with a single hand-me-down pumper.',
+      emergency_notice: 'In an emergency, call 911.',
+      show_about: true,
+      show_contact: true,
+      show_phone: true,
+      show_email: false,
+      show_address: true,
+      show_member_login: false,
+      themes: [
+        { value: 'classic', label: 'Classic', description: 'White pages under a deep red header.' },
+        { value: 'modern', label: 'Modern', description: 'Cool greys under a navy header, with blue accents.' },
+        { value: 'heritage', label: 'Heritage', description: 'Cream pages, serif headings and a dark green header.' },
+      ],
+      contact_on_record: {
+        phone: '(540) 555-0142',
+        email: null,
+        address_lines: ['214 Station Road', 'Cedar Hollow, VA 24000'],
+      },
+      servable: true,
+    }),
+  ],
   [
     '**/api/v1/history/clearance/positions',
     () => [
@@ -5815,6 +5845,10 @@ const routes = ({
     () => ({ ...request, ...EVENT_REQUEST_DETAIL }),
   ]),
   ['**/api/v1/dashboard/community-engagement**', () => COMMUNITY_ENGAGEMENT],
+  // After the glob above, which also matches this URL: the per-event list is an
+  // array, and answered with the summary object the printable report's
+  // `events.map` threw and the page rendered its error boundary.
+  ['**/api/v1/dashboard/community-engagement/events**', () => []],
   // The Outreach Overview's calendar and attention cards: one event short of
   // volunteers, one with a full crew, one waiting to be closed out.
   ['**/api/v1/events/outreach-calendar**', () => (empty ? [] : outreachCalendar())],
