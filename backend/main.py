@@ -43,6 +43,7 @@ from app.api.public.portal import router as public_portal_router
 from app.api.public.salesforce_webhook import router as sf_webhook_router
 from app.api.public.security_txt import router as security_txt_router
 from app.api.public.shift_evaluations import router as public_shift_evaluations_router
+from app.api.public.site import router as public_site_router
 from app.api.public.zeffy_webhook import router as zeffy_webhook_router
 from app.api.v1.api import api_router
 from app.core.cache import cache_manager
@@ -2600,6 +2601,12 @@ app.include_router(
     prefix="/api",
     responses={**public_responses.RATE_LIMITED, **public_responses.NOT_FOUND},
 )
+
+# The department's own public website, as server-rendered HTML. No /api
+# prefix: it is reached only on the public website port, where the web server
+# maps that address's root onto /public-site, and the members' address never
+# proxies it.
+app.include_router(public_site_router)
 
 # RFC 9116 vulnerability-disclosure pointer. Mounted at the root (no /api
 # prefix) because the spec fixes the path at /.well-known/security.txt;

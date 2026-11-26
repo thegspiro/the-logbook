@@ -390,7 +390,10 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
               { label: 'Organization', path: '/settings', permission: 'settings.manage' },
               { label: 'Role Management', path: '/settings/roles', permission: 'positions.manage_permissions' },
               ...(isModuleOn('public_info')
-                ? [{ label: 'Public Portal', path: '/admin/public-portal', permission: 'settings.manage' }]
+                ? [
+                    { label: 'Public Portal', path: '/admin/public-portal', permission: 'settings.manage' },
+                    { label: 'Public Website', path: '/admin/public-website', permission: 'settings.manage' },
+                  ]
                 : []),
               { label: 'Platform Analytics', path: '/admin/platform-analytics', permission: 'settings.manage' },
               { label: 'QR Code Analytics', path: '/admin/analytics', permission: 'analytics.view' },

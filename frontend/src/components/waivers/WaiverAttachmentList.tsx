@@ -9,7 +9,9 @@
  * same authorised, audited download as a fetched copy behind a local
  * `blob:` URL, never a public link. A PDF is not shown inside the page: the
  * app's Content-Security-Policy allows `blob:` images but not `blob:`
- * frames or objects. HEIC has no view: most browsers cannot render it.
+ * frames or objects. A HEIC has no view, since most browsers cannot render
+ * it; only one filed before 2026-11-26 is still stored as HEIC, since the
+ * server now keeps a HEIC photo as a JPEG.
  *
  * When `canAttach` is set (the member, while the request is pending, under a
  * policy that takes documents) it also offers to file more. With `onRemove`
@@ -54,7 +56,7 @@ function sizeLabel(bytes: number): string {
 
 const EMPTY_SELECTION: WaiverAttachmentSelection = { files: [], valid: false };
 
-/** The types a browser can show: everything this area accepts but HEIC. */
+/** The types a browser can show: everything this area stores but HEIC. */
 const VIEWABLE_IMAGES = new Set(['image/jpeg', 'image/png']);
 const isPdf = (attachment: WaiverAttachment) => attachment.mime_type === 'application/pdf';
 const isViewable = (attachment: WaiverAttachment) => isPdf(attachment) || VIEWABLE_IMAGES.has(attachment.mime_type);
