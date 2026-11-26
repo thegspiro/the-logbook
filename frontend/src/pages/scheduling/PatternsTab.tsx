@@ -518,7 +518,7 @@ export const PatternsTab: React.FC = () => {
             onClick={() => {
               void loadData();
             }}
-            className="text-theme-text-muted hover:text-theme-text-primary touch-target-phone rounded-lg p-2 transition-colors"
+            className="btn-icon text-theme-text-muted hover:text-theme-text-primary transition-colors"
             aria-label="Refresh patterns"
           >
             <RefreshCw className="h-4 w-4" />
