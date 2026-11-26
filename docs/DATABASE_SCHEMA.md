@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**432 tables · 6627 columns · 1431 foreign keys**
+**432 tables · 6628 columns · 1431 foreign keys**
 
 ---
 
@@ -910,7 +910,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`training_programs`](#training_programs) | `TrainingProgram` | 24 | Training Program model |
 | [`training_records`](#training_records) | `TrainingRecord` | 44 | Training Record model |
 | [`training_requirement_overrides`](#training_requirement_overrides) | `TrainingRequirementOverride` | 11 | A Chief's ruling that a member meets a requirement over a period. |
-| [`training_requirements`](#training_requirements) | `TrainingRequirement` | 52 | Training Requirement model |
+| [`training_requirements`](#training_requirements) | `TrainingRequirement` | 53 | Training Requirement model |
 | [`training_session_requirements`](#training_session_requirements) | `TrainingSessionRequirement` | 5 | A session that counts toward a SESSION_ATTENDANCE requirement. |
 | [`training_sessions`](#training_sessions) | `TrainingSession` | 30 | Training Session model |
 | [`training_submissions`](#training_submissions) | `TrainingSubmission` | 29 | Training Submission model |
@@ -13762,6 +13762,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `is_editable` | BOOL | yes |  | `True` |  |
 | `allows_external_credit` | BOOL | no |  | `0` |  |
 | `shift_credited` | BOOL | no |  | `0` |  |
+| `credited_seat` | VARCHAR(100) | yes |  |  |  |
 | `required_hours` | FLOAT | yes |  |  |  |
 | `required_courses` | JSON | yes |  |  |  |
 | `required_shifts` | INTEGER | yes |  |  |  |

@@ -112,6 +112,7 @@ from app.services.requirement_override_service import (
     accepts_override,
     holds_chief_position,
 )
+from app.services.requirement_seat import settle_credited_seat
 from app.services.training_compliance import (
     STANDING_NOT_APPLICABLE,
     STANDING_NOT_CURRENT_MEMBER,
@@ -2087,6 +2088,14 @@ async def create_requirement(
         created_by=current_user.id,
         **requirement_values,
     )
+    try:
+        settle_credited_seat(
+            new_requirement, sent=requirement_values.get("credited_seat") is not None
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
+        )
     # due_date only means anything for fixed_date -- clear anything else the
     # client sent so a stale value from a form that hasn't cleared its own
     # state on a due_date_type change (see update_requirement below) can
@@ -2254,6 +2263,14 @@ async def update_requirement(
             and new_requirement.due_date is not None
         ):
             new_requirement.due_date = None
+        try:
+            settle_credited_seat(
+                new_requirement, sent=updates.get("credited_seat") is not None
+            )
+        except ValueError as e:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
+            )
         await db.flush()
         await _audit_grandfathering(
             db,
@@ -2285,6 +2302,13 @@ async def update_requirement(
     # Update fields
     for field, value in updates.items():
         setattr(requirement, field, value)
+    try:
+        settle_credited_seat(requirement, sent=updates.get("credited_seat") is not None)
+    except ValueError as e:
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
+        )
 
     # due_date only means anything for fixed_date -- RequirementModal.tsx
     # seeds its due_date field from the existing row and only clears/edits
