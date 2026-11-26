@@ -195,7 +195,10 @@ const EventCheckInMonitoringPage: React.FC = () => {
     );
   }
 
-  if (error) {
+  // Only when there is nothing to show: one failed 10-second poll used to
+  // replace the live dashboard the door officer was working from, and the
+  // next good poll brought it back, so a weak connection made it flash.
+  if (error && !stats) {
     return (
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
         {placeholderHeader}
@@ -253,6 +256,11 @@ const EventCheckInMonitoringPage: React.FC = () => {
         }
         actions={
           <div className="sm:text-right">
+            {error && (
+              <p className="text-sm text-red-700 dark:text-red-300" role="status">
+                Not updating: {error}
+              </p>
+            )}
             <div className="text-theme-text-muted text-sm">Last updated: {formatTime(lastUpdated, tz)}</div>
             <div className="mt-1">
               {stats.is_check_in_active ? (

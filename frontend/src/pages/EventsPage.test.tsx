@@ -606,6 +606,28 @@ describe('EventsPage', () => {
       expect(row?.endsWith(',Imported')).toBe(true);
     });
 
+    it("exports a listed location's name", async () => {
+      // A listed location is held as location_name with location null; the
+      // export used location alone and left the column blank.
+      const user = userEvent.setup();
+      downloadCsv.mockReset();
+      mockAuthState.checkPermission = vi.fn().mockReturnValue(true);
+      vi.mocked(eventService.getEvents).mockResolvedValue([
+        { ...mockEvents[0], location: undefined, location_name: 'Station 3 Bay' } as EventListItem,
+      ]);
+
+      renderWithRouter(<EventsPage />);
+
+      await screen.findByText('Monthly Business Meeting');
+      await user.click(screen.getByRole('button', { name: /more event actions/i }));
+      await user.click(screen.getByRole('button', { name: /select events/i }));
+      await user.click(screen.getByRole('button', { name: /select monthly business meeting/i }));
+      await user.click(screen.getByRole('button', { name: /export csv/i }));
+
+      const [csv] = downloadCsv.mock.calls[0] as [string];
+      expect(csv).toContain('Station 3 Bay');
+    });
+
     it('should drop the selection when Done leaves the mode', async () => {
       const user = userEvent.setup();
       mockAuthState.checkPermission = vi.fn().mockReturnValue(true);
@@ -754,6 +776,22 @@ describe('EventsPage', () => {
       await waitFor(() => {
         expect(vi.mocked(eventService.getEvents).mock.calls.length).toBeGreaterThan(initialCalls);
       });
+    });
+
+    it("leaves the member's guests alone", async () => {
+      // The server keeps the stored guest count when the key is omitted; an
+      // explicit 0 released a member's guests' seats to the waitlist when
+      // they tapped Going again from the list.
+      const user = userEvent.setup();
+      renderWithRouter(<EventsPage />);
+
+      const [goingButton] = await screen.findAllByRole('button', { name: /^going$/i });
+      expect(goingButton).toBeDefined();
+      await user.click(goingButton as HTMLElement);
+
+      await waitFor(() => expect(eventService.createOrUpdateRSVP).toHaveBeenCalled());
+      const payload = vi.mocked(eventService.createOrUpdateRSVP).mock.calls[0]?.[1];
+      expect(payload).toEqual({ status: 'going' });
     });
   });
 

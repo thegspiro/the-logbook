@@ -4,7 +4,7 @@ import { QRCodeSVG } from 'qrcode.react';
 import { QrCode } from 'lucide-react';
 import { eventService } from '../services/api';
 import type { QRCheckInData } from '../types/event';
-import { getErrorMessage } from '../utils/errorHandling';
+import { getErrorMessage, toAppError } from '../utils/errorHandling';
 import { useTimezone } from '../hooks/useTimezone';
 import { formatShortDateTime } from '../utils/dateFormatting';
 import { NfcTagWriter } from '../components/nfc/NfcTagWriter';
@@ -56,9 +56,17 @@ const EventQRCodePage: React.FC = () => {
         hasDataRef.current = true;
         setError(null);
       } catch (err: unknown) {
-        // On refresh, keep existing data and only update error
-        // On initial load, set the error
-        if (!isRefresh || !hasDataRef.current) {
+        // On refresh, a dropped connection keeps the code on the door. A
+        // refusal (4xx: the event was cancelled, ended or finalized) takes it
+        // down: the kiosk kept saying check-in was open while every scan
+        // failed on the member's phone.
+        const status = toAppError(err).status;
+        const refused = status !== undefined && status >= 400 && status < 500;
+        if (!isRefresh || !hasDataRef.current || refused) {
+          if (refused) {
+            setQrData(null);
+            hasDataRef.current = false;
+          }
           setError(getErrorMessage(err, 'Failed to load QR code'));
         }
       } finally {

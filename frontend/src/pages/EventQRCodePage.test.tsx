@@ -366,7 +366,9 @@ describe('EventQRCodePage', () => {
         if (callCount === 1) {
           return Promise.resolve(mockQRCheckInData);
         }
-        return Promise.reject(createMockApiError('Network error'));
+        // A dropped connection has no response; a 4xx is the server refusing
+        // the event, which takes the code down (EventQRCodePage.refused.test).
+        return Promise.reject(new Error('Network Error'));
       });
 
       renderWithRouter(<EventQRCodePage />);

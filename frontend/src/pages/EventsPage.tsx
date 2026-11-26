@@ -439,7 +439,10 @@ export const EventsPage: React.FC = () => {
     async (eventId: string, status: 'going' | 'not_going') => {
       try {
         setRsvpLoading((prev) => ({ ...prev, [eventId]: true }));
-        const rsvpData: RSVPCreate = { status, guest_count: 0 };
+        // No guest_count: the server keeps the stored one when the key is
+        // left out, and an explicit 0 released a member's guests' seats to
+        // the waitlist when they tapped Going again.
+        const rsvpData: RSVPCreate = { status };
         const saved = await eventService.createOrUpdateRSVP(eventId, rsvpData);
         // The server's status, not the requested one. Asking to go to a full
         // event returns `waitlisted`, and echoing the request back would show
@@ -629,7 +632,8 @@ export const EventsPage: React.FC = () => {
         e.title,
         getEventTypeLabel(e.event_type),
         formatShortDateTime(e.start_datetime, tz),
-        e.location || '',
+        // A listed location is held as location_name, with location null.
+        e.location_name || e.location || '',
         e.is_mandatory ? 'Yes' : 'No',
         e.is_cancelled ? 'Yes' : 'No',
         e.source_label || '',
