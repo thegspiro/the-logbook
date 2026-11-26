@@ -102,11 +102,13 @@ It also read `IntegrationsPage.tsx` beyond its handlers. Six backend findings we
 
 | Check                                                             | Result                                                          |
 | ----------------------------------------------------------------- | --------------------------------------------------------------- |
-| integration, Microsoft 365, event, training-record, webhook tests | ✅ see the PR description                                       |
+| integration, Microsoft 365, event, training-record, webhook tests | 14,040 passed, 24 skipped, 1 failed — see below                 |
 | new tests                                                         | ✅ 7 backend (2 real database files, 1 unit file); failed first |
 | `flake8` / `black` / `isort` (changed files)                      | ✅ clean                                                        |
 | mypy ratchet                                                      | ✅ 0 errors, matching the baseline                              |
 | endpoint docstring permissions check                              | ✅ 0 warnings                                                   |
+
+The one failure was `test_outreach_feedback_notice.py::TestDelivery::test_a_department_that_switched_the_template_off_sends_no_email`, in outreach code this change does not touch. It passed on a rerun of its file (17 passed) and again with the 87 files that run before it in the same order (380 passed). That run overlapped a second process probing the same local test database, so a clash between the two is the likeliest cause. CI's integration job runs the test again on this head.
 
 ---
 
