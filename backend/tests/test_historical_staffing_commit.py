@@ -663,6 +663,7 @@ class TestPairingWithTheHours:
         assert ("Bob Diaz", "Lead Technician") in titles
 
 
+@pytest.mark.integration
 class TestTheLeftovers:
     """Every seat and hours entry the overlap rule leaves unpaired can be seen,
     paired by hand or marked reviewed (owner decisions, 2026-11-26).
