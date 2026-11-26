@@ -438,6 +438,49 @@ class TestTemplateEmail:
         assert 'class="tab"' in body
 
     @pytest.mark.asyncio
+    async def test_a_manual_send_carries_the_feedback_link_and_fills_the_text(self):
+        org = _org()
+        event_request = _request_row(status=EventRequestStatus.COMPLETED)
+        template = SimpleNamespace(
+            id="tpl-1",
+            name="Thank you",
+            subject="Thank you",
+            body_html="<p>Thanks.</p>{{feedback_link}}",
+            body_text="Thanks, {{contact_name}}. {{note}}\n{{feedback_url}}",
+        )
+        db = _seq_db([_result(event_request), _result(template), _result(org)])
+        email_service = MagicMock()
+        email_service.send_email = AsyncMock()
+        url = "https://logbook.example.org/event-request/status/tok"
+
+        with (
+            patch(
+                "app.services.email_service.EmailService",
+                MagicMock(return_value=email_service),
+            ),
+            patch(
+                "app.services.email_service.build_email_logo_img",
+                MagicMock(return_value=""),
+            ),
+            patch(
+                "app.api.v1.endpoints.event_requests.feedback_link",
+                AsyncMock(return_value=url),
+            ),
+        ):
+            await send_template_email(
+                request_id=REQUEST_ID,
+                data=SendTemplateEmail(
+                    template_id="tpl-1", additional_context={"note": "See you."}
+                ),
+                db=db,
+                current_user=SimpleNamespace(id=USER_ID, organization_id=ORG_ID),
+            )
+
+        sent = email_service.send_email.await_args.kwargs
+        assert f'<a href="{url}">share your feedback</a>' in sent["html_body"]
+        assert sent["text_body"] == f"Thanks, Dana Reyes. See you.\n{url}"
+
+    @pytest.mark.asyncio
     async def test_requester_supplied_values_are_still_escaped(self):
         """Only the logo is exempt — public text stays escaped."""
         org = _org()
@@ -1361,6 +1404,57 @@ class TestReminderTemplateRendering:
         assert '<img src="https://cdn.example.org/l.png">' not in body
         assert "<script>x</script>" not in body
         assert "&lt;script&gt;" in body
+
+
+class TestRequestTemplateFeedbackPlaceholders:
+    """A department's own template can carry the feedback survey link."""
+
+    URL = "https://logbook.example.org/event-request/status/tok?a=1&b=2"
+
+    @staticmethod
+    def _template():
+        return SimpleNamespace(
+            subject="Thanks, {{contact_name}}",
+            body_html="<p>Thank you.</p>{{feedback_link}}<p>{{feedback_url}}</p>",
+            body_text="Thank you, {{contact_name}}.\n{{feedback_link}}",
+        )
+
+    def test_both_fill_when_the_caller_offers_the_link(self):
+        _subject, body, text = render_request_template(
+            self._template(), _request_row(), _org(), feedback_url=self.URL
+        )
+
+        escaped = "https://logbook.example.org/event-request/status/tok?a=1&amp;b=2"
+        assert f'<a href="{escaped}">share your feedback</a>' in body
+        assert f"<p>{escaped}</p>" in body
+        assert f"How did it go? Share your feedback: {self.URL}" in text
+        assert "{{" not in body
+        assert "{{" not in text
+
+    def test_both_vanish_where_feedback_is_not_offered(self):
+        _subject, body, text = render_request_template(
+            self._template(), _request_row(), _org()
+        )
+
+        assert "share your feedback" not in body
+        assert "<p></p>" in body
+        assert "{{" not in body
+        assert text == "Thank you, Dana Reyes.\n"
+
+    def test_the_plain_text_body_is_filled_like_the_html_one(self):
+        # It was returned untouched, so a department's text part reached the
+        # requester with "{{contact_name}}" printed in it.
+        template = SimpleNamespace(
+            subject="Hi",
+            body_html="<p>{{contact_name}}</p>",
+            body_text="Hello {{contact_name}} of {{organization_name}}",
+        )
+
+        _subject, _body, text = render_request_template(
+            template, _request_row(), _org()
+        )
+
+        assert text == "Hello Dana Reyes of Maple Street Elementary"
 
 
 class TestRequestTemplatesUseTheShell:
