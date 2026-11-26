@@ -37,6 +37,8 @@ interface AdminPageHeaderProps {
   actions?: React.ReactNode;
   /** Extra classes on the outer column — spacing below the header, chiefly. */
   className?: string;
+  /** Drawn between the trail and the title — a module's section strip. */
+  belowTrail?: React.ReactNode;
 }
 
 export const AdminPageHeader: React.FC<AdminPageHeaderProps> = ({
@@ -47,10 +49,12 @@ export const AdminPageHeader: React.FC<AdminPageHeaderProps> = ({
   underHub,
   actions,
   className = '',
+  belowTrail,
 }) => (
   <div className={`flex flex-col gap-5 ${className}`}>
     {/* `mb-0` because the column's own gap already spaces the trail. */}
     <Breadcrumbs items={breadcrumbs} underHub={underHub} className="mb-0" omitCurrentPage />
+    {belowTrail}
 
     {/* The title's 16rem basis is what makes this row wrap. With `flex-1`
         (basis 0) the title claimed no width of its own, so the row never

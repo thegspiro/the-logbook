@@ -182,6 +182,12 @@ interface EventRequestsTabProps {
    * left with the back button, which the side panel it replaced could not.
    */
   requestId?: string | undefined;
+  /**
+   * Told the request's name once it loads, and null while there is none, so
+   * the page around it can end its trail on the request rather than on a
+   * placeholder. Only called in request-page mode.
+   */
+  onRequestTitle?: ((title: string | null) => void) | undefined;
 }
 
 /** The event form's quick durations (ScheduleSection), offered when scheduling a request. */
@@ -193,7 +199,7 @@ function endAfterHours(start: string, hours: number, tz: string): string {
   return formatForDateTimeInput(new Date(startMs + hours * 60 * 60 * 1000), tz);
 }
 
-const EventRequestsTab: React.FC<EventRequestsTabProps> = ({ requestId }) => {
+const EventRequestsTab: React.FC<EventRequestsTabProps> = ({ requestId, onRequestTitle }) => {
   const navigate = useNavigate();
   const [requests, setRequests] = useState<EventRequestListItem[]>([]);
   // A request page loads one request, not the board.
@@ -215,6 +221,11 @@ const EventRequestsTab: React.FC<EventRequestsTabProps> = ({ requestId }) => {
   const [searchParams, setSearchParams] = useSearchParams();
   const [showNewRequest, setShowNewRequest] = useState(() => !requestId && searchParams.get('new') === '1');
   const [outreachLabels, setOutreachLabels] = useState<Record<string, string>>({});
+
+  const requestTitle = expandedDetail ? expandedDetail.organization_name || expandedDetail.contact_name : null;
+  useEffect(() => {
+    if (requestId) onRequestTitle?.(requestTitle);
+  }, [requestId, requestTitle, onRequestTitle]);
 
   // Drop ?new=1 once read, so a refresh or the back button does not reopen it.
   useEffect(() => {
@@ -821,16 +832,16 @@ const EventRequestsTab: React.FC<EventRequestsTabProps> = ({ requestId }) => {
         <article aria-labelledby="request-title" className="card mt-2 p-0">
           {detailError ? (
             <div className="p-6" role="alert">
-              <h1 id="request-title" className="text-theme-text-primary text-lg font-semibold">
+              <h2 id="request-title" className="text-theme-text-primary text-lg font-semibold">
                 Request not available
-              </h1>
+              </h2>
               <p className="text-theme-text-secondary mt-1 text-sm">{detailError}</p>
             </div>
           ) : detailLoading || !detail ? (
             <div className="flex items-center justify-center py-16" role="status" aria-live="polite">
-              <h1 id="request-title" className="sr-only">
+              <h2 id="request-title" className="sr-only">
                 Loading request
-              </h1>
+              </h2>
               <Loader2 className="text-theme-text-muted h-6 w-6 animate-spin" aria-hidden="true" />
             </div>
           ) : (
@@ -848,9 +859,10 @@ const EventRequestsTab: React.FC<EventRequestsTabProps> = ({ requestId }) => {
                         Received {receivedAge(detail.created_at, tz)}
                       </span>
                     </div>
-                    <h1 id="request-title" className="text-theme-text-primary text-xl font-semibold">
+                    {/* h2: the page's <h1> is the Events Administration header above. */}
+                    <h2 id="request-title" className="text-theme-text-primary text-xl font-semibold">
                       {detail.organization_name || detail.contact_name}
-                    </h1>
+                    </h2>
                     <p className="text-theme-text-secondary text-sm">
                       {getOutreachLabel(detail.outreach_type)}
                       {detail.audience_size ? ` · ~${detail.audience_size} people` : ''}

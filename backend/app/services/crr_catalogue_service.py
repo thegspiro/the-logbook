@@ -16,6 +16,7 @@ from sqlalchemy.orm import selectinload
 from app.models.admin_hours import AdminHoursCategory
 from app.models.crr import (
     CRR_TAG_KINDS,
+    CrrActivity,
     CrrActivityMeasure,
     CrrActivityType,
     CrrActivityTypeTag,
@@ -361,16 +362,30 @@ class CrrCatalogueService:
         return await self.get_type(org_id, activity_type.id)
 
     async def delete_type(self, organization_id: str, type_id: str) -> None:
-        """Delete a type the department added. A seeded type is only retired.
+        """Delete a type the department added, while nothing names it.
 
-        A type activities were recorded against will also be refused by the
-        database once activities exist (their link restricts deletion); retire
-        it instead, which keeps those records naming it.
+        A built-in type, or one activities were recorded against, is refused:
+        retire it instead, which keeps those records naming it. The database
+        also restricts the deletion; checking first gives a sentence rather
+        than a constraint error.
         """
         activity_type = await self._type(organization_id, type_id)
         if activity_type.is_system:
             raise ValueError(
                 "A built-in activity type cannot be deleted. Retire it instead."
+            )
+        recorded = await self.db.scalar(
+            select(CrrActivity.id)
+            .where(
+                CrrActivity.organization_id == str(organization_id),
+                CrrActivity.activity_type_id == activity_type.id,
+            )
+            .limit(1)
+        )
+        if recorded is not None:
+            raise ValueError(
+                "Activities were recorded against this type, so it cannot be "
+                "deleted. Retire it instead."
             )
         await self.db.delete(activity_type)
         await self.db.flush()
@@ -508,23 +523,26 @@ class CrrCatalogueService:
         self, organization_id: str, type_id: str, tag_ids: list[str]
     ) -> dict[str, Any]:
         """Replace a type's default tags. Every id must be one of the
-        department's own tags (pitfall #14c)."""
+        department's own tags (pitfall #14c), and a retired one may stay on the
+        type but is not newly added (owner decision, 2026-11-26)."""
         org_id = str(organization_id)
         activity_type = await self._type(org_id, type_id)
         wanted = {str(t) for t in tag_ids}
+        current = {link.tag_id: link for link in activity_type.tag_links}
         if wanted:
-            found = set(
+            found = dict(
                 (
                     await self.db.execute(
-                        select(CrrTag.id).where(
+                        select(CrrTag.id, CrrTag.is_active).where(
                             CrrTag.organization_id == org_id, CrrTag.id.in_(wanted)
                         )
                     )
-                ).scalars()
+                ).all()
             )
-            if found != wanted:
+            if set(found) != wanted:
                 raise ValueError("One or more tags were not found")
-        current = {link.tag_id: link for link in activity_type.tag_links}
+            if any(not found[t] and t not in current for t in wanted):
+                raise ValueError("A retired tag cannot be added")
         for tag_id, link in current.items():
             if tag_id not in wanted:
                 activity_type.tag_links.remove(link)

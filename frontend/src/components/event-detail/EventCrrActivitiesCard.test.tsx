@@ -71,7 +71,14 @@ const seatCheck: CrrActivity = {
 };
 
 const renderCard = () =>
-  renderWithRouter(<EventCrrActivitiesCard eventId="event-1" eventTitle="Safety day" timezone="America/New_York" />);
+  renderWithRouter(
+    <EventCrrActivitiesCard
+      eventId="event-1"
+      eventTitle="Safety day"
+      eventStartsAt="2026-11-14T15:00:00Z"
+      timezone="America/New_York"
+    />
+  );
 
 describe('EventCrrActivitiesCard', () => {
   beforeEach(() => {
@@ -115,6 +122,28 @@ describe('EventCrrActivitiesCard', () => {
       expect.objectContaining({ event_id: 'event-1', counts: { 'm-seats': 12 }, members: {} })
     );
     await vi.waitFor(() => expect(listActivities).toHaveBeenCalledTimes(2));
+  });
+
+  it("defaults the time to the event's start, not to now", async () => {
+    const user = userEvent.setup();
+    renderCard();
+
+    const record = await screen.findByRole('button', { name: 'Record an activity' });
+    await vi.waitFor(() => expect(record).toBeEnabled());
+    await user.click(record);
+    const dialog = await screen.findByRole('dialog', { name: 'CRR activity at Safety day' });
+
+    expect(within(dialog).getByLabelText(/When/)).toHaveValue('2026-11-14T10:00');
+  });
+
+  it('says why recording is unavailable when the form cannot load', async () => {
+    getFormOptions.mockRejectedValue(new Error('Options are down'));
+    renderCard();
+
+    await screen.findByText('— Seats checked: 12');
+    const record = screen.getByRole('button', { name: 'Record an activity' });
+    expect(record).toBeDisabled();
+    expect(record).toHaveAccessibleDescription(/Options are down/);
   });
 
   it('shows its load error', async () => {

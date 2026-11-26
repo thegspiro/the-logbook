@@ -5,7 +5,7 @@
 
 import React from 'react';
 import type { OutreachGoalProgress } from '../../services/outreachGoalServices';
-import { GOAL_STATUS_LABELS, goalFigures, goalPercent, goalStatus, pacePercent } from './goalProgress';
+import { GOAL_STATUS_LABELS, goalFigures, goalPercent, goalStatus, pacePercent, reachedPercent } from './goalProgress';
 
 const STATUS_TONE = {
   met: 'text-green-900 dark:text-green-300',
@@ -30,7 +30,7 @@ const GoalProgressBar: React.FC<GoalProgressBarProps> = ({ goal, yearComplete })
         <span className="text-theme-text-primary min-w-0 font-medium">{goal.label}</span>
         <span className="flex items-baseline gap-2">
           <span className="text-theme-text-secondary tabular-nums">
-            {goalFigures(goal)} ({Math.round((goal.actual / goal.target) * 100)}%)
+            {goalFigures(goal)} ({reachedPercent(goal)}%)
           </span>
           <span className={`text-xs font-semibold ${STATUS_TONE[status]}`}>{statusLabel}</span>
         </span>

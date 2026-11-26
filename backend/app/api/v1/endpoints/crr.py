@@ -160,8 +160,8 @@ async def delete_activity_type(
     current_user: User = Depends(require_permission("events.manage")),
 ):
     """
-    Delete an activity type the department added. A built-in one is retired
-    instead.
+    Delete an activity type the department added. A built-in one is refused
+    (400): retire it instead.
 
     **Requires permission: events.manage**
     """

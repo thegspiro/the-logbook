@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { OutreachGoalProgress } from '../../services/outreachGoalServices';
-import { behindPace, goalFigures, goalPercent, goalStatus, pacePercent } from './goalProgress';
+import { behindPace, goalFigures, goalPercent, goalStatus, pacePercent, reachedPercent } from './goalProgress';
 
 const goal = (overrides: Partial<OutreachGoalProgress>): OutreachGoalProgress => ({
   id: 'g1',
@@ -35,6 +35,19 @@ describe('goalPercent and pacePercent', () => {
     expect(goalPercent(goal({}))).toBe(25);
     expect(pacePercent(goal({}))).toBe(50);
     expect(goalPercent(goal({ actual: 260 }))).toBe(100);
+  });
+
+  it('never read as full until the target is reached', () => {
+    expect(goalPercent(goal({ actual: 199.2, target: 200 }))).toBe(99);
+    expect(goalPercent(goal({ actual: 200, target: 200 }))).toBe(100);
+  });
+});
+
+describe('reachedPercent', () => {
+  it('is the share reached, below 100 until it is met and past it after', () => {
+    expect(reachedPercent(goal({ actual: 199.2, target: 200 }))).toBe(99);
+    expect(reachedPercent(goal({ actual: 260, target: 200 }))).toBe(130);
+    expect(reachedPercent(goal({ actual: 5, target: 0 }))).toBe(0);
   });
 });
 
