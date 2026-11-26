@@ -145,15 +145,16 @@ Select any event to open its page. It shows:
 - the title, type, date, time and location, with a **Get Directions** link
   when there is a location;
 - the description;
-- the RSVP counts;
-- your own response, under **Your RSVP**;
-- an **Event Information** card. It says whether a response is required and
+- a summary strip under the title. It says whether a response is required and
   by when, the **Capacity** if the event has a limit ("3 / 3 spots filled",
   with an **Event Full** badge once full), and whether guests are allowed. If
-  none of these apply, the card is left out.
+  none of these apply, the strip is left out;
+- your own response, under **Your RSVP**.
 
-Officers who manage events also see the full attendee list, a **Statistics**
-card, and the tools to check people in. Other members may see a **Who's
+Officers who manage events also see the full attendee list, the tools to check
+people in, and two more figures in the summary strip: **Responses** (how many
+are going, with any "not going" and "maybe" answers beside it) and **Checked
+In**, which appears once the event starts or the first person is checked in. Other members may see a **Who's
 going** list, if the department shares it (see
 [Who's going](#whos-going-rsvp-and-the-waitlist)).
 

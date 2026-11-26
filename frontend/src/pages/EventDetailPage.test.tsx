@@ -723,18 +723,17 @@ describe('EventDetailPage', () => {
       expect(await screen.findByRole('button', { name: 'Finalize Attendance' })).toBeVisible();
     });
 
-    it('should display statistics sidebar', async () => {
+    it('should display the response tally in the summary strip', async () => {
       vi.mocked(eventService.getEvent).mockResolvedValue(mockEvent);
       vi.mocked(eventService.getEventRSVPs).mockResolvedValue(mockRSVPs);
       vi.mocked(eventService.getEventStats).mockResolvedValue(mockStats);
 
       renderWithRouter(<EventDetailPage />);
 
-      await waitFor(() => {
-        expect(screen.getByText('Statistics')).toBeInTheDocument();
-        expect(screen.getByText('25')).toBeInTheDocument(); // total_rsvps
-        expect(screen.getByText('20')).toBeInTheDocument(); // going_count
-      });
+      const summary = await screen.findByRole('region', { name: 'Event summary' });
+      await waitFor(() => expect(within(summary).getByText('20 going')).toBeInTheDocument());
+      expect(within(summary).getByText('3 not going · 2 maybe')).toBeInTheDocument();
+      expect(screen.queryByText('Statistics')).not.toBeInTheDocument();
     });
 
     it('should display RSVPs list', async () => {
@@ -1418,17 +1417,16 @@ describe('EventDetailPage', () => {
     });
   });
 
-  describe('Event Information Sidebar', () => {
+  describe('Event summary strip', () => {
     it('should show RSVP required info', async () => {
       vi.mocked(eventService.getEvent).mockResolvedValue(mockEvent);
 
       renderWithRouter(<EventDetailPage />);
 
-      await waitFor(() => {
-        expect(screen.getByText('RSVP Required')).toBeInTheDocument();
-        expect(screen.getByText('Capacity')).toBeInTheDocument();
-        expect(screen.getByText('0 / 50')).toBeInTheDocument();
-      });
+      const summary = await screen.findByRole('region', { name: 'Event summary' });
+      expect(within(summary).getByText('RSVP Required')).toBeInTheDocument();
+      expect(within(summary).getByText('Capacity')).toBeInTheDocument();
+      expect(within(summary).getByText('0 / 50 spots filled')).toBeInTheDocument();
     });
 
     it('should show guests allowed info', async () => {
@@ -1450,11 +1448,10 @@ describe('EventDetailPage', () => {
 
       renderWithRouter(<EventDetailPage />);
 
-      await waitFor(() => {
-        expect(screen.getByText('Event Information')).toBeInTheDocument();
-      });
-
-      expect(screen.queryByText('RSVP Required')).not.toBeInTheDocument();
+      const summary = await screen.findByRole('region', { name: 'Event summary' });
+      expect(within(summary).getByText('Capacity')).toBeInTheDocument();
+      expect(within(summary).queryByText('RSVP Required')).not.toBeInTheDocument();
+      expect(within(summary).queryByText('Guests Allowed')).not.toBeInTheDocument();
     });
   });
 
@@ -2297,8 +2294,8 @@ describe('EventDetailPage', () => {
     });
   });
 
-  describe('Event Information card', () => {
-    // A member: no stats, so nothing else on the page draws capacity.
+  describe('Event summary strip for a member', () => {
+    // A member: no stats, so the strip carries only what the event itself says.
     beforeEach(() => {
       vi.mocked(eventService.getEventStats).mockReset();
       vi.mocked(eventService.getEventRSVPs).mockReset();
@@ -2321,7 +2318,8 @@ describe('EventDetailPage', () => {
       renderWithRouter(<EventDetailPage />);
 
       await screen.findByRole('heading', { level: 1 });
-      expect(screen.queryByRole('heading', { name: 'Event Information' })).not.toBeInTheDocument();
+      expect(screen.getByText('Event Details')).toBeInTheDocument();
+      expect(screen.queryByRole('region', { name: 'Event summary' })).not.toBeInTheDocument();
     });
 
     // The RSVP path waitlists past the cap whether or not a response is
@@ -2342,14 +2340,14 @@ describe('EventDetailPage', () => {
 
       renderWithRouter(<EventDetailPage />);
 
-      expect(await screen.findByRole('heading', { name: 'Event Information' })).toBeInTheDocument();
+      expect(await screen.findByRole('region', { name: 'Event summary' })).toBeInTheDocument();
       expect(screen.getByText('Capacity')).toBeInTheDocument();
       expect(screen.getByText('3 / 3 spots filled')).toBeInTheDocument();
       expect(screen.getByText('Event Full')).toBeInTheDocument();
       expect(screen.queryByText('RSVP Required')).not.toBeInTheDocument();
     });
 
-    it('leaves capacity to the Statistics card when that card shows it', async () => {
+    it('draws capacity once for someone who also sees the response tally', async () => {
       mockCheckPermission.mockReturnValue(true);
       mockAuthState.user = { id: 'admin-1', permissions: ['events.manage'] } as CurrentUser;
       vi.mocked(eventService.getEvent).mockResolvedValue(mockEvent);
@@ -2358,9 +2356,8 @@ describe('EventDetailPage', () => {
 
       renderWithRouter(<EventDetailPage />);
 
-      await screen.findByRole('heading', { name: 'Statistics' });
+      await screen.findByText('20 going');
       expect(screen.getAllByText('Capacity')).toHaveLength(1);
-      expect(screen.getByRole('heading', { name: 'Event Information' })).toBeInTheDocument();
       expect(screen.getByText('RSVP Required')).toBeInTheDocument();
     });
   });
