@@ -111,7 +111,9 @@ Each person on the roll is **present**, **late**, **left early**, **excused**,
 **represented by proxy**. Who counts toward quorum is the department's choice
 under **Minutes → Settings → Quorum**: present always counts, late arrivals and
 members who left early count unless switched off, proxies count when proxies
-are switched on, and excused, absent and guests never do. The roll can start from a suggestion: the linked event's
+are switched on, and excused, absent and guests never do. A quorum set as a
+number of members is met at that number or more; a fractional number rounds up
+and the requirement is never below one _(2026-11-26; it rounded down)_. The roll can start from a suggestion: the linked event's
 check-ins (guests included), or the active member list with everyone absent.
 
 What the minutes **print** can be narrower than what they record — all statuses,
@@ -199,6 +201,11 @@ copies are re-rendered to show the correction.
   before, on the due date and the day after now comes with an email too. It
   follows the member's "Action items from meetings and minutes" email setting,
   and running the task twice in a day sends one email.
+- _(2026-11-26, app-review B6 pass 6)_ The bell reminders for **minutes**
+  items cover adopted minutes only, as the emails and **Action Items** already
+  did, and now include items marked overdue. Adopting minutes emails assignees
+  only about items still open, so a re-adoption after a reopen does not resend
+  finished ones. Reopening a completed meeting item clears its completion date.
 - **Wording** _(2026-11-14)_: the minutes and action-item emails are editable
   templates under **Communications → Email Templates → Meetings & Minutes**.
 

@@ -205,7 +205,7 @@ export const SkillsTestingPage: React.FC = () => {
                 setActiveTab('available');
                 setSearchQuery('');
               }}
-              className={`touch:min-h-11 border-b-2 pb-3 text-sm font-medium transition-colors ${
+              className={`touch:min-h-11 border-b-2 py-3 text-sm font-medium transition-colors ${
                 activeTab === 'available'
                   ? 'border-red-600 text-red-600'
                   : 'text-theme-text-muted hover:text-theme-text-primary border-transparent'
@@ -221,7 +221,7 @@ export const SkillsTestingPage: React.FC = () => {
                 setActiveTab('history');
                 setSearchQuery('');
               }}
-              className={`touch:min-h-11 border-b-2 pb-3 text-sm font-medium transition-colors ${
+              className={`touch:min-h-11 border-b-2 py-3 text-sm font-medium transition-colors ${
                 activeTab === 'history'
                   ? 'border-red-600 text-red-600'
                   : 'text-theme-text-muted hover:text-theme-text-primary border-transparent'

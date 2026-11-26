@@ -329,6 +329,12 @@ requests, so a meeting request opened there is not found.
 **Supporting documents.** When the policy's `attachment` is `optional` or
 `required`, a member may file up to three documents with a request: PDF,
 JPEG, PNG or HEIC, 10 MB each, judged by the file's contents, not its name.
+Since 2026-11-26 a HEIC or HEIF photo is stored as a JPEG with no EXIF or XMP
+(`app/utils/heic_to_jpeg.py`, decoded with `pi-heif` in an isolated child
+process). It is malware-scanned before it is decoded and again as a JPEG; an
+undecodable photo or one over 25 MP is a 400, a busy converter a 503 with
+`Retry-After`, and a missing decoder a 503. A HEIC filed before that date is
+kept as filed. See `docs/KNOWN_LIMITATIONS.md` for the limits.
 They can be filed with the request (`POST .../with-attachments`, multipart)
 or added while it is pending; nothing is added once it is decided or
 withdrawn. Under `required`, a request without one is refused. Only the

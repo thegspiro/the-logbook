@@ -107,11 +107,11 @@ export const AssignSeatDialog: React.FC<AssignSeatDialogProps> = ({ eventId, tar
               <ul className="space-y-1.5">
                 {drivers.candidates.map((c) => (
                   <li key={c.user_id}>
-                    <label className="border-theme-surface-border hover:bg-theme-surface-hover flex cursor-pointer items-center gap-3 rounded-lg border p-2.5 text-sm">
+                    <label className="border-theme-surface-border hover:bg-theme-surface-hover touch:py-3 flex cursor-pointer items-start gap-3 rounded-lg border p-2.5 text-sm">
                       <input
                         type="radio"
                         name="assign-member"
-                        className="form-checkbox"
+                        className="form-checkbox mt-0.5"
                         value={c.user_id}
                         checked={chosen === c.user_id}
                         onChange={() => setChosen(c.user_id)}

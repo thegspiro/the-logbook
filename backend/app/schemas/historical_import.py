@@ -10,7 +10,7 @@ from datetime import date as CalendarDate
 from datetime import datetime
 from typing import Any, Dict, List, Literal, Optional
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.schemas.shift_history_import import MemberMapping
 
@@ -542,6 +542,11 @@ class StaffingHoursMatch(BaseModel):
     matched: int
     signups_without_hours: int
     hours_without_signup: int
+    # Of matched: paired by the reviewer rather than by overlapping time.
+    paired_by_reviewer: int = 0
+    # Of each unpaired count: the ones the reviewer accepted as unpaired.
+    signups_reviewed: int = 0
+    hours_reviewed: int = 0
     # The first of each, for the reviewer to check; the counts are whole.
     signups_without_hours_examples: List[StaffingSignupWithoutHours]
     hours_without_signup_examples: List[StaffingHoursWithoutSignup]
@@ -606,6 +611,67 @@ class StaffingUnfilledUpdate(BaseModel):
         if any(v is not None and len(str(v)) > 36 for v in value.values()):
             raise ValueError("A member id is too long.")
         return value
+
+
+class StaffingLeftoverHours(BaseModel):
+    """One hours entry the department already has, on the roster's days."""
+
+    attendance_id: str
+    date: Optional[CalendarDate] = None
+    start: datetime
+    end: datetime
+
+
+class StaffingLeftover(BaseModel):
+    """A roster seat that pairs with no hours, or an hours entry that pairs
+    with no seat. ``state`` is open, reviewed (accepted as unpaired) or, for a
+    seat, paired (by the reviewer)."""
+
+    key: str
+    state: str
+    date: Optional[CalendarDate] = None
+    member_id: str
+    member: str
+    # A seat:
+    activity: Optional[str] = None
+    title: Optional[str] = None
+    paired_with: Optional[StaffingLeftoverHours] = None
+    candidates: List[StaffingLeftoverHours] = []
+    # An hours entry:
+    attendance_id: Optional[str] = None
+    start: Optional[datetime] = None
+    end: Optional[datetime] = None
+
+
+class StaffingLeftoverMember(BaseModel):
+    id: str
+    name: str
+
+
+class StaffingLeftoversView(BaseModel):
+    kind: str
+    items: List[StaffingLeftover]
+    total: int
+    # The members the filtered list names, for its member filter.
+    members: List[StaffingLeftoverMember]
+
+
+class StaffingLeftoversUpdate(BaseModel):
+    """Seats paired with hours entries by hand (null unpairs), and leftovers
+    marked reviewed or not, named signup:<seat> or hours:<entry>."""
+
+    pairs: Dict[str, Optional[str]] = {}
+    reviewed: Dict[str, bool] = {}
+
+    @model_validator(mode="after")
+    def _check(self) -> "StaffingLeftoversUpdate":
+        if len(self.pairs) + len(self.reviewed) > 2_000:
+            raise ValueError("At most 2000 entries per request.")
+        if any(len(k) > 200 for k in [*self.pairs, *self.reviewed]):
+            raise ValueError("A seat or entry name is too long.")
+        if any(v is not None and len(v) > 36 for v in self.pairs.values()):
+            raise ValueError("An hours entry id is too long.")
+        return self
 
 
 # Undo

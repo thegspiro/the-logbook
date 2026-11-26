@@ -107,7 +107,7 @@ export default function LearningPathPage() {
                       <ArrowRight className="h-4 w-4" aria-hidden="true" />
                     </Link>
 
-                    <label className="border-theme-surface-border hover:bg-theme-surface-hover inline-flex min-h-11 cursor-pointer items-center gap-2.5 rounded-lg border px-3 py-2">
+                    <label className="border-theme-surface-border hover:bg-theme-surface-hover inline-flex min-h-11 cursor-pointer items-start gap-2.5 rounded-lg border px-3 py-3">
                       <input
                         type="checkbox"
                         checked={checked}

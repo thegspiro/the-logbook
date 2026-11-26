@@ -914,6 +914,25 @@ class MemberHoursYear(BaseModel):
     months: List[MemberHoursMonth]
 
 
+class SeatHoursMember(BaseModel):
+    """One member's credited department shifts in the seat asked about."""
+
+    user_id: str
+    shifts: int = 0
+    hours: float = 0.0
+    calls: int = 0
+
+
+class SeatHoursResponse(BaseModel):
+    """Every member's time in one seat over a period, for the roster's
+    Time in seat filter: the same figures Hours by Position reports."""
+
+    position: str
+    start_date: Optional[date] = None
+    end_date: Optional[date] = None
+    members: List[SeatHoursMember]
+
+
 class MemberPositionTotals(BaseModel):
     """A member's credited department shifts in one position.
 

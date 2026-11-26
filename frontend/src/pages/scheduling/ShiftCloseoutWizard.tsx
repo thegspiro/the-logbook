@@ -628,10 +628,10 @@ export const ShiftCloseoutWizard: React.FC<ShiftCloseoutWizardProps> = ({
                     day: 'numeric',
                   })}`;
                   return (
-                    <label key={c.id} className="touch:min-h-11 flex cursor-pointer items-center gap-2 py-2">
+                    <label key={c.id} className="touch:min-h-11 touch:py-3 flex cursor-pointer items-start gap-2 py-2">
                       <input
                         type="checkbox"
-                        className="form-checkbox"
+                        className="form-checkbox mt-0.5"
                         checked={claimed.has(c.id)}
                         onChange={(e) => toggleClaim(c.id, e.target.checked)}
                       />

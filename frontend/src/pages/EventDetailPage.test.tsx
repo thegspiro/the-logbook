@@ -39,6 +39,7 @@ vi.mock('../services/api', () => ({
     getEventAttendees: vi.fn(),
     getEventStats: vi.fn(),
     getEligibleMembers: vi.fn(),
+    sendReminders: vi.fn(),
     bulkAddAttendees: vi.fn(),
     createOrUpdateRSVP: vi.fn(),
     cancelEvent: vi.fn(),
@@ -346,17 +347,17 @@ describe('EventDetailPage', () => {
       });
     });
 
-    it('should show QR code button for active events to someone who runs them', async () => {
+    it('should offer the QR code under More for active events to someone who runs them', async () => {
       mockCheckPermission.mockReturnValue(true);
       vi.mocked(eventService.getEvent).mockResolvedValue(mockEvent);
       vi.mocked(eventService.getEventRSVPs).mockResolvedValue([]);
       vi.mocked(eventService.getEventStats).mockResolvedValue(mockStats);
 
+      const user = userEvent.setup();
       renderWithRouter(<EventDetailPage />);
 
-      await waitFor(() => {
-        expect(screen.getByRole('button', { name: /view qr code/i })).toBeInTheDocument();
-      });
+      await user.click(await screen.findByRole('button', { name: 'More' }));
+      expect(screen.getByRole('button', { name: /view qr code/i })).toBeInTheDocument();
     });
 
     // The QR page is the code put on display at the event; a member has
@@ -2377,13 +2378,37 @@ describe('EventDetailPage', () => {
       mockCheckPermission.mockReturnValue(true);
     });
 
-    it('offers both on an upcoming event', async () => {
+    // Every case opens More first, so an absence is asserted against the open
+    // menu and not against one nobody opened.
+    const openMore = async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<EventDetailPage />);
+      await user.click(await screen.findByRole('button', { name: 'More' }));
+      expect(screen.getByRole('button', { name: 'Duplicate Event' })).toBeInTheDocument();
+    };
+
+    it('offers both under More on an upcoming event, and neither in the header', async () => {
+      vi.mocked(eventService.getEvent).mockResolvedValue({ ...mockEvent, check_in_closes_at: mockEvent.end_datetime });
+
+      const user = userEvent.setup();
+      renderWithRouter(<EventDetailPage />);
+      await screen.findByRole('button', { name: 'More' });
+      expect(screen.queryByRole('button', { name: /Add to Calendar/ })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /View QR Code/ })).not.toBeInTheDocument();
+
+      await user.click(screen.getByRole('button', { name: 'More' }));
+      expect(screen.getByRole('button', { name: /Add to Calendar/ })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /View QR Code/ })).toBeInTheDocument();
+    });
+
+    it('keeps Add to Calendar in the header for a member, who has no More menu', async () => {
+      mockCheckPermission.mockReturnValue(false);
       vi.mocked(eventService.getEvent).mockResolvedValue({ ...mockEvent, check_in_closes_at: mockEvent.end_datetime });
 
       renderWithRouter(<EventDetailPage />);
 
       expect(await screen.findByRole('button', { name: /Add to Calendar/ })).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: /View QR Code/ })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'More' })).not.toBeInTheDocument();
     });
 
     it('offers neither once the event is over and check-in has closed', async () => {
@@ -2399,9 +2424,8 @@ describe('EventDetailPage', () => {
         )
       );
 
-      renderWithRouter(<EventDetailPage />);
+      await openMore();
 
-      await screen.findByRole('heading', { level: 1 });
       expect(screen.queryByRole('button', { name: /Add to Calendar/ })).not.toBeInTheDocument();
       expect(screen.queryByRole('button', { name: /View QR Code/ })).not.toBeInTheDocument();
     });
@@ -2423,9 +2447,9 @@ describe('EventDetailPage', () => {
         )
       );
 
-      renderWithRouter(<EventDetailPage />);
+      await openMore();
 
-      expect(await screen.findByRole('button', { name: /View QR Code/ })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /View QR Code/ })).toBeInTheDocument();
       expect(screen.queryByRole('button', { name: /Add to Calendar/ })).not.toBeInTheDocument();
     });
 
@@ -2436,10 +2460,95 @@ describe('EventDetailPage', () => {
         attendance_finalized_at: '2026-01-21T10:00:00Z',
       });
 
+      await openMore();
+
+      expect(screen.queryByRole('button', { name: /View QR Code/ })).not.toBeInTheDocument();
+    });
+  });
+
+  describe('Header actions for an events manager', () => {
+    const minutesFromNow = (minutes: number) => new Date(Date.now() + minutes * 60_000).toISOString();
+
+    beforeEach(() => {
+      mockCheckPermission.mockReturnValue(true);
+      mockAuthState.checkPermission = mockCheckPermission;
+      mockAuthState.user = { id: 'admin-1', permissions: ['events.manage'] } as CurrentUser;
+      vi.mocked(eventService.getEvent).mockReset();
+      vi.mocked(eventService.getEventRSVPs).mockReset();
+      vi.mocked(eventService.getEventRSVPs).mockResolvedValue([]);
+      vi.mocked(eventService.getEventStats).mockReset();
+      vi.mocked(eventService.getEventStats).mockResolvedValue(mockStats);
+      vi.mocked(eventService.sendReminders).mockReset();
+      vi.mocked(eventService.sendReminders).mockResolvedValue({ message: 'queued', sent_count: 3 });
+    });
+
+    it('keeps Edit in the header and Check In under More before check-in opens', async () => {
+      vi.mocked(eventService.getEvent).mockResolvedValue(mockEvent);
+
+      const user = userEvent.setup();
       renderWithRouter(<EventDetailPage />);
 
-      await screen.findByRole('heading', { level: 1 });
-      expect(screen.queryByRole('button', { name: /View QR Code/ })).not.toBeInTheDocument();
+      expect(await screen.findByRole('button', { name: 'Edit' })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Check In' })).not.toBeInTheDocument();
+
+      await user.click(screen.getByRole('button', { name: 'More' }));
+      expect(screen.getByRole('button', { name: 'Check In Members' })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Edit Event' })).not.toBeInTheDocument();
+    });
+
+    it('moves Check In to the header and Edit under More while the event runs', async () => {
+      vi.mocked(eventService.getEvent).mockResolvedValue(
+        withoutKeys(
+          {
+            ...mockEvent,
+            start_datetime: minutesFromNow(-30),
+            end_datetime: minutesFromNow(90),
+            check_in_opens_at: minutesFromNow(-90),
+            check_in_closes_at: minutesFromNow(90),
+          },
+          'rsvp_deadline'
+        )
+      );
+
+      const user = userEvent.setup();
+      renderWithRouter(<EventDetailPage />);
+
+      expect(await screen.findByRole('button', { name: 'Check In' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'End Event' })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Edit' })).not.toBeInTheDocument();
+
+      await user.click(screen.getByRole('button', { name: 'More' }));
+      expect(screen.getByRole('button', { name: 'Edit Event' })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Check In Members' })).not.toBeInTheDocument();
+    });
+
+    it('sends reminders from the More menu', async () => {
+      vi.mocked(eventService.getEvent).mockResolvedValue(mockEvent);
+
+      const user = userEvent.setup();
+      renderWithRouter(<EventDetailPage />);
+
+      await screen.findByRole('button', { name: 'More' });
+      expect(screen.queryByRole('button', { name: /Send Reminders/ })).not.toBeInTheDocument();
+
+      await user.click(screen.getByRole('button', { name: 'More' }));
+      await user.click(screen.getByRole('button', { name: 'Remind Non-respondents' }));
+
+      await waitFor(() => expect(eventService.sendReminders).toHaveBeenCalledWith('evt-1', 'non_respondents'));
+    });
+
+    it('offers no reminders once attendance is finalized', async () => {
+      vi.mocked(eventService.getEvent).mockResolvedValue({
+        ...mockEvent,
+        attendance_finalized_at: '2026-01-21T10:00:00Z',
+      });
+
+      const user = userEvent.setup();
+      renderWithRouter(<EventDetailPage />);
+
+      await user.click(await screen.findByRole('button', { name: 'More' }));
+      expect(screen.getByRole('button', { name: 'Duplicate Event' })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /Remind/ })).not.toBeInTheDocument();
     });
   });
 
@@ -2552,10 +2661,15 @@ describe('EventDetailPage', () => {
       vi.mocked(eventService.getEvent).mockReset();
     });
 
-    const openCheckIn = async () => {
+    const openCheckIn = async (from: 'header' | 'more') => {
       const user = userEvent.setup();
       renderWithRouter(<EventDetailPage />);
-      await user.click(await screen.findByRole('button', { name: 'Check In' }));
+      if (from === 'more') {
+        await user.click(await screen.findByRole('button', { name: 'More' }));
+        await user.click(screen.getByRole('button', { name: 'Check In Members' }));
+      } else {
+        await user.click(await screen.findByRole('button', { name: 'Check In' }));
+      }
       await waitFor(() => expect(eventService.getEligibleMembers).toHaveBeenCalledWith('evt-1'));
     };
 
@@ -2565,7 +2679,7 @@ describe('EventDetailPage', () => {
         check_in_closes_at: '2020-01-01T00:00:00Z',
       });
 
-      await openCheckIn();
+      await openCheckIn('header');
 
       expect(await screen.findByRole('heading', { name: 'Add a member' })).toBeInTheDocument();
       expect(screen.getByRole('option', { name: 'Blair Carter' })).toBeInTheDocument();
@@ -2577,7 +2691,7 @@ describe('EventDetailPage', () => {
         check_in_closes_at: '2999-01-01T00:00:00Z',
       });
 
-      await openCheckIn();
+      await openCheckIn('more');
 
       expect(await screen.findByRole('button', { name: /Add All Eligible as Going/ })).toBeInTheDocument();
       expect(screen.queryByRole('heading', { name: 'Add a member' })).not.toBeInTheDocument();
@@ -2618,7 +2732,8 @@ describe('EventDetailPage', () => {
     const addAll = async () => {
       const user = userEvent.setup();
       renderWithRouter(<EventDetailPage />);
-      await user.click(await screen.findByRole('button', { name: 'Check In' }));
+      await user.click(await screen.findByRole('button', { name: 'More' }));
+      await user.click(screen.getByRole('button', { name: 'Check In Members' }));
       await waitFor(() => expect(eventService.getEligibleMembers).toHaveBeenCalledWith('evt-1'));
       await user.click(await screen.findByRole('button', { name: /Add All Eligible as Going/ }));
     };
