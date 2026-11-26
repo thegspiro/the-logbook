@@ -3330,7 +3330,13 @@ async def run_end_of_shift_checklist_reminders(
                 select(
                     ShiftEquipmentCheck.shift_id,
                     ShiftEquipmentCheck.template_id,
-                ).where(ShiftEquipmentCheck.shift_id.in_(shift_ids))
+                ).where(
+                    ShiftEquipmentCheck.shift_id.in_(shift_ids),
+                    # A saved draft is still outstanding, as is_check_completed
+                    # says: the crew who started it is reminded to finish it
+                    # (EC2-18).
+                    ShiftEquipmentCheck.overall_status != "incomplete",
+                )
             )
             # An ad-hoc check has no template, so it cannot satisfy one.
             for sid, tid in cres.all():

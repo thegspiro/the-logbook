@@ -494,6 +494,9 @@ services:
       - no-new-privileges:true
     ports:
       - "${FRONTEND_PORT:-3000}:80"
+      # The department's public website. Point the public hostname at this
+      # port; see docs/PUBLIC_WEBSITE.md.
+      - "${PUBLIC_SITE_PORT:-3002}:8080"
     depends_on:
       backend:
         condition: service_healthy

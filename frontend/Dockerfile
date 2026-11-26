@@ -96,8 +96,10 @@ COPY --from=build /app/frontend/dist /usr/share/nginx/html
 HEALTHCHECK --interval=30s --timeout=3s \
   CMD wget --quiet --tries=1 --spider http://127.0.0.1/ || exit 1
 
-# Expose port
+# 80 is the application. 8080 is the department's public website, which
+# nginx.conf serves on a listener of its own.
 EXPOSE 80
+EXPOSE 8080
 
 # Start nginx
 CMD ["nginx", "-g", "daemon off;"]
