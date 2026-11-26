@@ -25,7 +25,9 @@ from app.api.v1.endpoints.crr import (
     list_activities,
     update_activity,
     update_activity_type,
+    update_measure,
     update_settings,
+    update_tag,
 )
 from app.api.v1.endpoints.events import crr_recording_offered
 from app.models.admin_hours import (
@@ -42,7 +44,9 @@ from app.schemas.crr import (
     CrrActivityCreate,
     CrrActivityTypeUpdate,
     CrrActivityUpdate,
+    CrrMeasureUpdate,
     CrrSettingsUpdate,
+    CrrTagUpdate,
 )
 from app.services.crr_activity_service import CrrActivityService
 from app.services.scheduled_tasks import run_crr_resident_details_retention
@@ -174,6 +178,131 @@ class TestRecording:
             "VA",
             "Falls Church (city)",
         )
+
+    async def test_a_removed_member_cannot_be_credited(self, db_session, dept, grants):
+        _, (manager, removed, *_rest) = dept
+        removed.deleted_at = NOW
+        await db_session.flush()
+        catalogue = await _catalogue(db_session, manager)
+
+        with pytest.raises(HTTPException) as caught:
+            await _record(
+                db_session,
+                manager,
+                activity_type_id=_type(catalogue, "hands_only_cpr").id,
+                members={removed.id: 30},
+            )
+        assert caught.value.status_code == 400
+
+    async def test_a_retired_tag_cannot_be_put_on_a_new_activity(
+        self, db_session, dept, grants
+    ):
+        _, (manager, *_rest) = dept
+        catalogue = await _catalogue(db_session, manager)
+        drowning = next(t for t in catalogue.tags if t.code == "drowning")
+        await update_tag(
+            tag_id=drowning.id,
+            body=CrrTagUpdate(is_active=False),
+            db=db_session,
+            current_user=manager,
+        )
+
+        with pytest.raises(HTTPException) as caught:
+            await _record(
+                db_session,
+                manager,
+                activity_type_id=_type(catalogue, "home_safety_survey").id,
+                tag_ids=[drowning.id],
+            )
+        assert caught.value.status_code == 400
+
+    async def test_a_retired_tag_already_on_an_activity_may_stay_or_be_removed(
+        self, db_session, dept, grants
+    ):
+        _, (manager, *_rest) = dept
+        catalogue = await _catalogue(db_session, manager)
+        by_code = {t.code: t.id for t in catalogue.tags}
+        row = await _record(
+            db_session,
+            manager,
+            activity_type_id=_type(catalogue, "smoke_alarm_install").id,
+            tag_ids=[by_code["fire"], by_code["older_adults"]],
+        )
+        await update_tag(
+            tag_id=by_code["fire"],
+            body=CrrTagUpdate(is_active=False),
+            db=db_session,
+            current_user=manager,
+        )
+
+        kept = await update_activity(
+            activity_id=row.id,
+            body=CrrActivityUpdate(tag_ids=[by_code["fire"], by_code["older_adults"]]),
+            db=db_session,
+            current_user=manager,
+        )
+        assert sorted(t.id for t in kept.tags) == sorted(
+            [by_code["fire"], by_code["older_adults"]]
+        )
+        removed = await update_activity(
+            activity_id=row.id,
+            body=CrrActivityUpdate(tag_ids=[by_code["older_adults"]]),
+            db=db_session,
+            current_user=manager,
+        )
+        assert [t.id for t in removed.tags] == [by_code["older_adults"]]
+
+    async def test_changing_counts_keeps_a_retired_counts_tally(
+        self, db_session, dept, grants
+    ):
+        # The form offers only active counts, so a retired count is never in
+        # the payload; replacing the counts must not erase what it recorded.
+        _, (manager, *_rest) = dept
+        catalogue = await _catalogue(db_session, manager)
+        smoke = _type(catalogue, "smoke_alarm_install")
+        first, second = smoke.measures[0], smoke.measures[1]
+        row = await _record(
+            db_session,
+            manager,
+            activity_type_id=smoke.id,
+            counts={first.id: 3, second.id: 2},
+        )
+        await update_measure(
+            measure_id=second.id,
+            body=CrrMeasureUpdate(is_active=False),
+            db=db_session,
+            current_user=manager,
+        )
+
+        changed = await update_activity(
+            activity_id=row.id,
+            body=CrrActivityUpdate(counts={first.id: 5}),
+            db=db_session,
+            current_user=manager,
+        )
+
+        assert sorted((c.measure_id, c.quantity) for c in changed.counts) == sorted(
+            [(first.id, 5), (second.id, 2)]
+        )
+
+    async def test_a_new_zip_brings_its_own_place(self, db_session, dept, grants):
+        _, (manager, *_rest) = dept
+        catalogue = await _catalogue(db_session, manager)
+        row = await _record(
+            db_session,
+            manager,
+            activity_type_id=_type(catalogue, "hands_only_cpr").id,
+            zip_code="22046",
+        )
+
+        moved = await update_activity(
+            activity_id=row.id,
+            body=CrrActivityUpdate(zip_code="10001"),
+            db=db_session,
+            current_user=manager,
+        )
+
+        assert (moved.zip_code, moved.city, moved.state) == ("10001", "New York", "NY")
 
     async def test_a_count_from_another_type_is_refused(self, db_session, dept, grants):
         _, (manager, *_rest) = dept

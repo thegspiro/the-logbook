@@ -7,7 +7,7 @@
  * next year's to plan before January.
  */
 
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
 import { Plus, Trash2 } from 'lucide-react';
 import {
@@ -79,14 +79,27 @@ const OutreachGoalsSettings: React.FC = () => {
   const [figure, setFigure] = useState('');
   const [target, setTarget] = useState('');
 
+  // Only the latest load may land: a slow answer for the year chosen first
+  // must not replace the year chosen after it.
+  const latestLoad = useRef(0);
+  const hasData = useRef(false);
+
   const load = useCallback(async (chosen?: number) => {
+    const ticket = ++latestLoad.current;
     try {
       const response = await outreachGoalService.list(chosen);
+      if (ticket !== latestLoad.current) return;
       setData({ ...response, goals: asArray(response?.goals), metrics: asArray(response?.metrics) });
       setYear(response.year);
       setError(null);
+      hasData.current = true;
     } catch (err: unknown) {
-      setError(getErrorMessage(err, 'Outreach goals could not be loaded.'));
+      if (ticket !== latestLoad.current) return;
+      const message = getErrorMessage(err, 'Outreach goals could not be loaded.');
+      // With a year already on screen, keep it and say the switch failed;
+      // only a first load that fails has nothing to show but the error.
+      if (hasData.current) toast.error(message);
+      else setError(message);
     }
   }, []);
 

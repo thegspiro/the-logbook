@@ -3440,14 +3440,19 @@ its counts (for example, **Alarms installed** and **Homes**) and default tags
   type cannot be deleted: retire it, and it stops being offered while past
   records keep naming it.
 - **Add a count** to a type, and rename or retire a count.
-- Tick the **Risks** and **Priority populations** a type carries by default.
+- Tick the **Risks** and **Priority populations** a type carries by default. A
+  retired tag the type still carries shows as **(retired)** so you can untick
+  it; a retired tag cannot be ticked on again.
 - **Add an activity type** with a name and, optionally, its counts separated by
-  commas. A type you added can be deleted.
+  commas. A type you added can be deleted while no activity has been recorded
+  against it; after that, retire it.
 - Under **Tags**, add, rename or retire risks and priority populations.
 - **Admin Hours category**, on each type: the category a member's time on a
   logged activity of that type is credited to. Left at **The Public Education
   mapping**, it follows whatever your Hour Tracking mapping for public
-  education events says.
+  education events says. If the chosen category is later deactivated, the
+  select reads **A deactivated category (credits nothing)**: logged time is
+  not credited until you choose another.
 - **Resident details → Keep for (months)**: how long a resident's address,
   name, phone, email and the activity's notes are kept, 24 months unless you
   change it. After that they are cleared automatically; the ZIP code, city,
@@ -3468,8 +3473,9 @@ because its records concern minors.
 ### CRR Activities
 
 **Who can do this:** members of the Community Outreach Team and anyone who can
-manage events. Only the Community Outreach Manager, the chiefs and the
-president see a resident's details.
+manage events. Only the Community Outreach Manager, the chiefs, the president
+and system administrators (anyone holding every permission) see a resident's
+details.
 
 **Events → CRR Activities** (also **Manage Events → Community Outreach → CRR
 Activities**) lists the community risk reduction work your department has
@@ -3500,8 +3506,9 @@ at a resident's home, a home safety survey:
 
 **At an event,** an outreach event's page has a **CRR activities** card:
 **Record an activity** records what was done there, such as seats checked at a
-car seat event. No members are listed, because the event's attendance already
-credits their time.
+car seat event. **When** starts at the event's start time, since most are
+recorded afterwards. No members are listed, because the event's attendance
+already credits their time.
 
 An activity cannot be edited once recorded. To correct one, **Delete** it —
 which also removes the Admin Hours it credited — and record it again. You can

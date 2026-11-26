@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, within } from '@testing-library/react';
+import { act, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router';
 import type { CrrActivity, CrrFormOptions } from '../../types/crr';
@@ -146,6 +146,69 @@ describe('CrrActivitiesPage', () => {
 
     expect(await screen.findByText('12 Oak St')).toBeInTheDocument();
     expect(screen.getByText('Ask for Pat')).toBeInTheDocument();
+  });
+
+  it('heads notes as notes, apart from the resident details', async () => {
+    listActivities.mockResolvedValue({
+      items: [activity({ notes: 'Back door sticks' })],
+      total: 1,
+    });
+    renderPage();
+
+    const card = await screen.findByRole('listitem', { name: 'Smoke alarm install' });
+    expect(within(card).getByText('Notes')).toBeInTheDocument();
+    expect(within(card).queryByText('Resident details')).not.toBeInTheDocument();
+  });
+
+  it('says when the filters match nothing, rather than that nothing was logged', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByRole('listitem', { name: 'Smoke alarm install' });
+
+    listActivities.mockResolvedValue({ items: [], total: 0 });
+    await user.selectOptions(screen.getByLabelText('When'), 'all');
+    expect(await screen.findByText('No CRR activities yet')).toBeInTheDocument();
+
+    await user.selectOptions(screen.getByLabelText('Activity type'), 't-smoke');
+    expect(await screen.findByText('No activities match these filters')).toBeInTheDocument();
+  });
+
+  it('keeps the form-options failure on screen and says why logging is unavailable', async () => {
+    getFormOptions.mockRejectedValue(new Error('Options are down'));
+    renderPage();
+
+    await screen.findByRole('listitem', { name: 'Smoke alarm install' });
+    const button = screen.getByRole('button', { name: 'Log a CRR activity' });
+    expect(button).toBeDisabled();
+    expect(button).toHaveAccessibleDescription(/Options are down/);
+  });
+
+  it('shows the filter chosen last when answers arrive out of order', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByRole('listitem', { name: 'Smoke alarm install' });
+
+    let answerSlowly: (value: { items: CrrActivity[]; total: number }) => void = () => undefined;
+    listActivities.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          answerSlowly = resolve;
+        })
+    );
+    listActivities.mockResolvedValueOnce({
+      items: [activity({ id: 'year', activity_type_name: 'Car seat inspection' })],
+      total: 1,
+    });
+    await user.selectOptions(screen.getByLabelText('When'), 'all');
+    await user.selectOptions(screen.getByLabelText('When'), '365');
+    expect(await screen.findByRole('listitem', { name: 'Car seat inspection' })).toBeInTheDocument();
+
+    await act(async () =>
+      answerSlowly({ items: [activity({ id: 'old', activity_type_name: 'School program' })], total: 1 })
+    );
+
+    expect(screen.getByRole('listitem', { name: 'Car seat inspection' })).toBeInTheDocument();
+    expect(screen.queryByRole('listitem', { name: 'School program' })).not.toBeInTheDocument();
   });
 
   it('deletes only after confirming', async () => {

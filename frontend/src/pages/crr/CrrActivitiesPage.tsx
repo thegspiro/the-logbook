@@ -10,7 +10,7 @@
  * else is told that details were recorded, not what they are.
  */
 
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
 import toast from 'react-hot-toast';
 import { MapPin, Plus, ShieldCheck, Trash2, Users } from 'lucide-react';
@@ -120,20 +120,30 @@ const ActivityCard: React.FC<{
       )}
 
       {details.length > 0 || activity.notes ? (
-        <div className="border-theme-surface-border mt-3 border-t pt-3 text-sm">
-          <p className="text-theme-text-muted text-xs font-semibold tracking-wider uppercase">Resident details</p>
-          {details.map((line) => (
-            <p key={line} className="text-theme-text-primary break-words">
-              {line}
-            </p>
-          ))}
-          {activity.notes && <p className="text-theme-text-secondary mt-1 break-words">{activity.notes}</p>}
+        <div className="border-theme-surface-border mt-3 space-y-2 border-t pt-3 text-sm">
+          {details.length > 0 && (
+            <div>
+              <p className="text-theme-text-muted text-xs font-semibold tracking-wider uppercase">Resident details</p>
+              {details.map((line) => (
+                <p key={line} className="text-theme-text-primary break-words">
+                  {line}
+                </p>
+              ))}
+            </div>
+          )}
+          {activity.notes && (
+            <div>
+              <p className="text-theme-text-muted text-xs font-semibold tracking-wider uppercase">Notes</p>
+              <p className="text-theme-text-secondary break-words">{activity.notes}</p>
+            </div>
+          )}
         </div>
       ) : activity.resident_details_cleared ? (
         <p className="text-theme-text-muted mt-3 text-sm">Resident details were cleared after the retention period.</p>
       ) : activity.has_resident_details ? (
         <p className="text-theme-text-muted mt-3 text-sm">
-          Resident details recorded. The Community Outreach Manager and above can see them.
+          Resident details recorded. The Community Outreach Manager, the chiefs, the president and system administrators
+          can see them.
         </p>
       ) : null}
     </li>
@@ -155,6 +165,10 @@ const CrrActivitiesPage: React.FC<CrrActivitiesPageProps> = ({ embedded = false 
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // Kept apart from the list's error: a list load that succeeds must not
+  // clear the reason the Log button is unavailable.
+  const [optionsError, setOptionsError] = useState<string | null>(null);
+  const latestLoad = useRef(0);
   const [typeFilter, setTypeFilter] = useState('');
   const [period, setPeriod] = useState<Period>('90');
   // The Overview's "Log a CRR activity" arrives with ?new=1.
@@ -178,11 +192,16 @@ const CrrActivitiesPage: React.FC<CrrActivitiesPageProps> = ({ embedded = false 
           members: asArray(data?.members),
         })
       )
-      .catch((err: unknown) => setError(getErrorMessage(err, 'CRR activities could not be loaded.')));
+      .catch((err: unknown) =>
+        setOptionsError(getErrorMessage(err, 'The activity form could not be loaded, so activities cannot be logged.'))
+      );
   }, []);
 
   const load = useCallback(
     async (offset: number) => {
+      // Only the latest load may land: a slow answer for an earlier filter
+      // must not replace the list for the one chosen after it.
+      const ticket = ++latestLoad.current;
       setLoading(true);
       try {
         const data = await crrService.listActivities({
@@ -191,14 +210,16 @@ const CrrActivitiesPage: React.FC<CrrActivitiesPageProps> = ({ embedded = false 
           limit: PAGE_SIZE,
           offset,
         });
+        if (ticket !== latestLoad.current) return;
         const items = asArray(data?.items);
         setActivities((current) => (offset === 0 ? items : [...current, ...items]));
         setTotal(typeof data?.total === 'number' ? data.total : items.length);
         setError(null);
       } catch (err: unknown) {
+        if (ticket !== latestLoad.current) return;
         setError(getErrorMessage(err, 'CRR activities could not be loaded.'));
       } finally {
-        setLoading(false);
+        if (ticket === latestLoad.current) setLoading(false);
       }
     },
     [period, typeFilter, tz]
@@ -234,6 +255,7 @@ const CrrActivitiesPage: React.FC<CrrActivitiesPageProps> = ({ embedded = false 
       type="button"
       className="btn-primary inline-flex items-center gap-2"
       disabled={!options}
+      aria-describedby={optionsError ? 'crr-options-error' : undefined}
       onClick={() => setDialogOpen(true)}
     >
       <Plus className="h-4 w-4" aria-hidden="true" />
@@ -301,6 +323,11 @@ const CrrActivitiesPage: React.FC<CrrActivitiesPageProps> = ({ embedded = false 
         </div>
       </div>
 
+      {optionsError && (
+        <p id="crr-options-error" className="alert-danger text-sm" role="alert">
+          {optionsError}
+        </p>
+      )}
       {error && (
         <p className="alert-danger text-sm" role="alert">
           {error}
@@ -308,11 +335,19 @@ const CrrActivitiesPage: React.FC<CrrActivitiesPageProps> = ({ embedded = false 
       )}
 
       {!loading && !error && activities.length === 0 ? (
-        <EmptyState
-          icon={ShieldCheck}
-          title="No CRR activities yet"
-          description="Log an alarm install, a safety survey or a class to start the record."
-        />
+        typeFilter || period !== 'all' ? (
+          <EmptyState
+            icon={ShieldCheck}
+            title="No activities match these filters"
+            description="Choose another activity type or a longer period, or log an activity."
+          />
+        ) : (
+          <EmptyState
+            icon={ShieldCheck}
+            title="No CRR activities yet"
+            description="Log an alarm install, a safety survey or a class to start the record."
+          />
+        )
       ) : (
         <ul className="space-y-3" aria-busy={loading}>
           {activities.map((activity) => (

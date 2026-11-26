@@ -7,7 +7,7 @@ of the year has gone.
 """
 
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 import pytest
@@ -16,7 +16,7 @@ from pydantic import ValidationError
 
 from app.api.dependencies import PermissionChecker
 from app.api.v1.endpoints import crr as crr_endpoints
-from app.api.v1.endpoints.crr import create_activity, get_catalogue
+from app.api.v1.endpoints.crr import create_activity, get_catalogue, update_measure
 from app.api.v1.endpoints.dashboard import get_community_engagement
 from app.api.v1.endpoints.outreach_goals import (
     create_goal,
@@ -27,9 +27,8 @@ from app.api.v1.endpoints.outreach_goals import (
 )
 from app.models.event import Event, EventType
 from app.models.user import Organization, User, UserStatus
-from app.schemas.crr import CrrActivityCreate
+from app.schemas.crr import CrrActivityCreate, CrrMeasureUpdate
 from app.schemas.outreach_goal import OutreachGoalCreate, OutreachGoalUpdate
-from app.services.community_engagement_service import CommunityEngagementService
 from app.services.outreach_goal_service import OutreachGoalService
 from tests.clock_support import reread_each_test
 
@@ -152,6 +151,53 @@ class TestSettingGoals:
         assert caught.value.status_code == 400
         assert "already a goal" in caught.value.detail
 
+    async def test_a_retired_count_cannot_be_given_a_new_goal(self, db_session, dept):
+        # Owner decision, 2026-11-26: a new goal needs an active count, as the
+        # settings picker already offers; a goal set before the count was
+        # retired keeps working.
+        _, user = dept
+        smoke, alarms = await _alarms(db_session, user)
+        await _goal(db_session, user, year=LAST_YEAR, target=5, measure_id=alarms.id)
+        await update_measure(
+            measure_id=alarms.id,
+            body=CrrMeasureUpdate(is_active=False),
+            db=db_session,
+            current_user=user,
+        )
+
+        with pytest.raises(HTTPException) as caught:
+            await _goal(
+                db_session, user, year=LAST_YEAR + 1, target=5, measure_id=alarms.id
+            )
+        assert caught.value.status_code == 400
+        assert "retired" in caught.value.detail
+        listed = await list_goals(year=LAST_YEAR, db=db_session, current_user=user)
+        assert [g.target for g in listed.goals] == [5]
+
+    async def test_a_duplicate_racing_past_the_check_is_refused_not_a_500(
+        self, db_session, dept, monkeypatch
+    ):
+        _, user = dept
+        await _goal(
+            db_session, user, year=LAST_YEAR, target=10, outreach_metric="events_held"
+        )
+
+        async def nothing_found(*_args, **_kwargs):
+            return None
+
+        # As if a concurrent save committed between the check and the insert.
+        monkeypatch.setattr(db_session, "scalar", nothing_found)
+        with pytest.raises(HTTPException) as caught:
+            await _goal(
+                db_session,
+                user,
+                year=LAST_YEAR,
+                target=12,
+                outreach_metric="events_held",
+            )
+        assert caught.value.status_code == 400
+        assert "already a goal" in caught.value.detail
+
     async def test_the_same_figure_may_have_a_goal_in_another_year(
         self, db_session, dept
     ):
@@ -253,39 +299,41 @@ class TestProgress:
     async def test_an_outreach_figure_agrees_with_outreach_impact(
         self, db_session, dept
     ):
+        # Against the report the page shows beside the goal, not against the
+        # helper the goal itself calls: this year so far on Outreach Impact
+        # and the goal's actual must be the same number.
         org, user = dept
-        for month in (4, 8):
+        now = datetime.now(timezone.utc)
+        this_year = now.astimezone(NEW_YORK).year
+        # Stored as UTC, as the app writes it: the column keeps no zone.
+        year_start = datetime(this_year, 1, 1, 0, 30, tzinfo=NEW_YORK).astimezone(
+            timezone.utc
+        )
+        for title, start, event_type in (
+            ("New year talk", year_start, EventType.PUBLIC_EDUCATION),
+            ("Safety day", now - (now - year_start) / 2, EventType.PUBLIC_EDUCATION),
+            ("Board meeting", now - (now - year_start) / 3, EventType.BUSINESS_MEETING),
+        ):
             db_session.add(
                 Event(
                     organization_id=org.id,
-                    title=f"Safety day {month}",
-                    event_type=EventType.PUBLIC_EDUCATION,
-                    start_datetime=_local(LAST_YEAR, month, 10),
-                    end_datetime=_local(LAST_YEAR, month, 10, 15),
+                    title=title,
+                    event_type=event_type,
+                    start_datetime=start,
+                    end_datetime=start + timedelta(hours=1),
                 )
             )
-        db_session.add(
-            Event(
-                organization_id=org.id,
-                title="Board meeting",
-                event_type=EventType.BUSINESS_MEETING,
-                start_datetime=_local(LAST_YEAR, 6, 1),
-                end_datetime=_local(LAST_YEAR, 6, 1, 14),
-            )
-        )
         await db_session.flush()
         await _goal(
-            db_session, user, year=LAST_YEAR, target=3, outreach_metric="events_held"
-        )
-        service = OutreachGoalService(db_session)
-        start, end = service.year_bounds(LAST_YEAR, org)
-
-        [goal] = (await service.progress(str(org.id), LAST_YEAR))["goals"]
-        totals = await CommunityEngagementService(db_session).window_totals(
-            str(org.id), start, end
+            db_session, user, year=this_year, target=3, outreach_metric="events_held"
         )
 
-        assert goal["actual"] == totals.events_held == 2
+        report = await get_community_engagement(
+            period="year", db=db_session, current_user=user
+        )
+
+        [goal] = report.goals.goals
+        assert goal.actual == report.current.events_held == 2
 
     async def test_another_departments_work_is_not_counted(self, db_session, dept):
         org, user = dept

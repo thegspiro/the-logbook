@@ -109,9 +109,11 @@ interface EventsSettingsTabProps {
 const EventsSettingsTab: React.FC<EventsSettingsTabProps> = ({ onMetricsSaved }) => {
   const navigate = useNavigate();
   const { confirm } = useConfirm();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   // A link may open a section (Outreach Impact's "Set goals" does). Read once:
-  // the section stays in state as before, so changing it touches no URL.
+  // the section stays in state as before. Choosing another drops the link's
+  // `section` from the address, so a refresh or a copied link does not
+  // reopen the one the visitor has since left.
   const [activeSection, setActiveSection] = useState<SectionKey>(
     () => SECTIONS.find((section) => section.key === searchParams.get('section'))?.key ?? 'visibility'
   );
@@ -781,6 +783,11 @@ const EventsSettingsTab: React.FC<EventsSettingsTabProps> = ({ onMetricsSaved })
       onSectionChange={(key) => {
         setActiveSection(key);
         setRequestsPage('overview');
+        if (searchParams.has('section')) {
+          const next = new URLSearchParams(searchParams);
+          next.delete('section');
+          setSearchParams(next, { replace: true });
+        }
       }}
       activeSubPage={activeSection === 'public_requests' ? requestsPage : null}
       onSubPageChange={setRequestsPage}
