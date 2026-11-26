@@ -2,7 +2,8 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'react-router';
 import { analyticsService, type QRCodeMetrics } from '../services/analytics';
 import { useTimezone } from '../hooks/useTimezone';
-import { Breadcrumbs, SkeletonText } from '../components/ux';
+import { SkeletonText } from '../components/ux';
+import { eventService } from '../services/api';
 import { QrCode } from 'lucide-react';
 import { EventsPageHeader } from '../components/events/EventsPageHeader';
 import { AdminPageHeader } from '../components/admin/AdminPageHeader';
@@ -25,6 +26,23 @@ const AnalyticsDashboardPage: React.FC<{ embedded?: boolean }> = ({ embedded = f
   const [metrics, setMetrics] = useState<QRCodeMetrics | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // The event's name for the trail. Fetched once, apart from the metrics, which
+  // refresh every ten seconds and carry no name; a failure leaves "Event".
+  const [eventTitle, setEventTitle] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!eventId || embedded) return;
+    let cancelled = false;
+    eventService
+      .getEvent(eventId)
+      .then((event) => {
+        if (!cancelled) setEventTitle(event.title);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [eventId, embedded]);
 
   const loadMetrics = useCallback(async () => {
     setLoading(true);
@@ -61,17 +79,6 @@ const AnalyticsDashboardPage: React.FC<{ embedded?: boolean }> = ({ embedded = f
     URL.revokeObjectURL(url);
   };
 
-  // Only when an event scopes this page. Without an id it renders platform-wide
-  // metrics reached from elsewhere, and a trail whose every crumb is the page
-  // you are already on offers nothing to follow.
-  const trail = eventId
-    ? [
-        { label: 'Events', path: '/events' },
-        { label: 'Event', path: `/events/${eventId}` },
-        { label: 'QR Code Analytics' },
-      ]
-    : undefined;
-
   const scopeLine = eventId ? 'Check-in scans for this event' : 'Check-in scans across all events';
   const exportButton = (
     <button
@@ -84,32 +91,37 @@ const AnalyticsDashboardPage: React.FC<{ embedded?: boolean }> = ({ embedded = f
     </button>
   );
 
-  const header = embedded ? (
-    <div className="page-header mb-6 gap-3 sm:items-start">
-      <div className="page-header-title">
-        {/* Embedded, the Events hub's section nav already names this page,
-            so the title stays for heading navigation only and the hub
-            keeps the page's one <h1>. */}
-        <h2 className="sr-only">QR Code Analytics</h2>
-        <p className="text-theme-text-secondary">{scopeLine}</p>
+  // `actions` is left off in the error state: with no figures there is nothing
+  // to export, and the header still has to be there so the page keeps its strip
+  // and its way back to the event.
+  const renderHeader = (actions: React.ReactNode) =>
+    embedded ? (
+      <div className="page-header mb-6 gap-3 sm:items-start">
+        <div className="page-header-title">
+          {/* Embedded, the Events hub's section nav already names this page,
+              so the title stays for heading navigation only and the hub
+              keeps the page's one <h1>. */}
+          <h2 className="sr-only">QR Code Analytics</h2>
+          <p className="text-theme-text-secondary">{scopeLine}</p>
+        </div>
+        {actions}
       </div>
-      {exportButton}
-    </div>
-  ) : eventId ? (
-    // Scoped to one event, this is one of that event's pages, so it keeps the
-    // Events header and section strip the event's other pages carry.
-    <EventsPageHeader
-      icon={QrCode}
-      title="QR Code Analytics"
-      subtitle={scopeLine}
-      parentCrumbs={[{ label: 'Event', path: `/events/${eventId}` }]}
-      actions={exportButton}
-    />
-  ) : (
-    // Department-wide, it is a row of the Administration menu (/admin/analytics)
-    // and draws the header every administration page shares.
-    <AdminPageHeader title="QR Code Analytics" description={scopeLine} actions={exportButton} className="mb-6" />
-  );
+    ) : eventId ? (
+      // Scoped to one event, this is one of that event's pages, so it keeps the
+      // Events header and section strip the event's other pages carry.
+      <EventsPageHeader
+        icon={QrCode}
+        title="QR Code Analytics"
+        subtitle={scopeLine}
+        parentCrumbs={[{ label: eventTitle || 'Event', path: `/events/${eventId}` }]}
+        actions={actions}
+      />
+    ) : (
+      // Department-wide, it is a row of the Administration menu (/admin/analytics)
+      // and draws the header every administration page shares.
+      <AdminPageHeader title="QR Code Analytics" description={scopeLine} actions={actions} className="mb-6" />
+    );
+  const header = renderHeader(exportButton);
 
   // Loading draws the page it will become — header and the four metric cards,
   // placeholders where the figures go — and only until the first figures
@@ -137,7 +149,7 @@ const AnalyticsDashboardPage: React.FC<{ embedded?: boolean }> = ({ embedded = f
   if (error || !metrics) {
     return (
       <div className={`mx-auto max-w-7xl ${shellPadding}`}>
-        {trail && <Breadcrumbs items={trail} />}
+        {renderHeader(null)}
         <div className="flex items-center justify-center py-24">
           <div className="text-center">
             <p className="mb-4 text-red-700 dark:text-red-400">{error || 'No analytics data available'}</p>

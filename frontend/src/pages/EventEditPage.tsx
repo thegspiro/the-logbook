@@ -10,7 +10,6 @@
 
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router';
-import { Breadcrumbs } from '../components/ux';
 import { EventsPageHeader } from '../components/events/EventsPageHeader';
 import { Calendar } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -198,19 +197,22 @@ export const EventEditPage: React.FC = () => {
     void navigate(`/events/${eventId}`);
   };
 
-  // Explicit items: /events/:id/edit skips the id, leaving "Events > Edit" with
-  // no sign of which event — and the loading and error branches had no route
-  // away at all. The event crumb links back to the record being edited.
-  const trail = [
-    { label: 'Events', path: '/events' },
-    ...(event ? [{ label: event.title, path: `/events/${eventId ?? ''}` }] : [{ label: 'Event' }]),
-    { label: 'Edit' },
-  ];
+  // Every branch draws the Events header — the strip, and the trail through the
+  // event back to Events — so loading, a failed load and a refusal keep a route
+  // away. The event crumb links back to the record being edited.
+  const placeholderHeader = (
+    <EventsPageHeader
+      icon={Calendar}
+      title="Edit Event"
+      breadcrumbLabel="Edit"
+      parentCrumbs={[{ label: event?.title || 'Event', path: `/events/${eventId ?? ''}` }]}
+    />
+  );
 
   if (loading) {
     return (
-      <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
-        <Breadcrumbs items={trail} />
+      <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+        {placeholderHeader}
         <LoadingSpinner message="Loading event..." />
       </div>
     );
@@ -218,8 +220,8 @@ export const EventEditPage: React.FC = () => {
 
   if (error && !event) {
     return (
-      <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
-        <Breadcrumbs items={trail} />
+      <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+        {placeholderHeader}
         <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-4" role="alert" aria-live="assertive">
           <p className="text-red-700 dark:text-red-300">{error}</p>
           <button
@@ -239,8 +241,8 @@ export const EventEditPage: React.FC = () => {
   // event; the server says whether this one is theirs (can_edit_event).
   if (!canManage && !event.can_edit_event) {
     return (
-      <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
-        <Breadcrumbs items={trail} />
+      <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+        {placeholderHeader}
         <div className="alert-warning rounded-lg p-4" role="alert">
           <p>Only an event manager can edit this event. A training manager can edit training events.</p>
           <button onClick={() => void navigate(`/events/${eventId ?? ''}`)} className="mt-2 text-sm underline">

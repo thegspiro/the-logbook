@@ -655,10 +655,9 @@ async def reopen_minutes(
 
     minutes, prior = ensure_found(outcome, "Meeting minutes")
 
-    logger.info(
-        f"Minutes reopened | id={minutes_id} by={current_user.id} "
-        f"reason={data.reason!r}"
-    )
+    # The reason is free text and may name a member; the audit event below
+    # records it, so the log carries ids only (MM6-16, pitfall #33).
+    logger.info("Minutes reopened | id={} by={}", minutes_id, current_user.id)
     await log_audit_event(
         db=db,
         event_type="minutes_reopened",

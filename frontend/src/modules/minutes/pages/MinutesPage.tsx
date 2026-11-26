@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useDialog } from '../../../hooks/useDialog';
 import { useDiscardGuard } from '../../../hooks/useDiscardGuard';
 import { FormField } from '../../../components/ux/FormField';
@@ -30,13 +30,13 @@ import { useAuthStore } from '../../../stores/authStore';
 import { Link, useNavigate } from 'react-router';
 import { meetingsService } from '../../../services/api';
 import type { MeetingRecord, MeetingsSummary } from '../../../services/api';
+import type { MeetingAttendanceWaiver } from '../../../services/meetingsServices';
 import { minutesService } from '../services/api';
 import { AgendaEditorDialog } from '../components/AgendaEditorDialog';
 import { ArchiveSearchResults } from '../components/ArchiveSearchResults';
 import { MyActionItemsPanel } from '../components/MyActionItemsPanel';
 import { OutlinePickerDialog } from '../components/OutlinePickerDialog';
 import { getActionFailureMessage, getErrorMessage, getLoadFailureMessage } from '../../../utils/errorHandling';
-import { toDisplayString } from '../../../utils/displayValue';
 import type { MeetingType, MinutesListItem, MinutesStats } from '../types/minutes';
 import { formatCalendarDate, formatTimeOfDay } from '../../../utils/dateFormatting';
 import TimeQuarterHour from '../../../components/ux/TimeQuarterHour';
@@ -125,6 +125,9 @@ const EMPTY_MEETING_FORM = {
   notes: '',
 };
 
+/** Matches ArchiveSearchResults, so the list and the archive search settle together. */
+const SEARCH_DEBOUNCE_MS = 350;
+
 const MinutesPage: React.FC = () => {
   const navigate = useNavigate();
   const { confirm } = useConfirm();
@@ -132,6 +135,9 @@ const MinutesPage: React.FC = () => {
   // MM-3: minutes writes and restricted reads are gated on minutes.manage on
   // the backend, not meetings.manage — check the same permission the API does.
   const canManage = checkPermission('minutes.manage');
+  // Creating, editing the agenda of, deleting and listing the waivers of a
+  // meeting are /meetings endpoints, gated on meetings.manage (MM6-2).
+  const canManageMeetings = checkPermission('meetings.manage');
   // The attendance dashboard's endpoint is gated on meetings.manage.
   const canViewAttendance = checkPermission('meetings.manage');
 
@@ -157,6 +163,12 @@ const MinutesPage: React.FC = () => {
 
   // UI state
   const [searchQuery, setSearchQuery] = useState('');
+  // What the list is fetched for: the search once typing pauses, rather than
+  // every keystroke, as ArchiveSearchResults below already does (MM6-7).
+  const [appliedSearch, setAppliedSearch] = useState('');
+  // Only the newest list request may write the page; an earlier, slower one
+  // would show results for a filter the controls no longer name.
+  const latestRequest = useRef(0);
   const [typeFilter, setTypeFilter] = useState<string>('all');
   const [showCreateModal, setShowCreateModal] = useState(false);
 
@@ -167,7 +179,7 @@ const MinutesPage: React.FC = () => {
 
   // Waivers state
   const [expandedWaivers, setExpandedWaivers] = useState<string | null>(null);
-  const [waivers, setWaivers] = useState<Record<string, Array<Record<string, unknown>>>>({});
+  const [waivers, setWaivers] = useState<Record<string, MeetingAttendanceWaiver[]>>({});
   const [loadingWaivers, setLoadingWaivers] = useState<string | null>(null);
 
   const [minutesForm, setMinutesForm] = useState(EMPTY_MEETING_FORM);
@@ -187,6 +199,7 @@ const MinutesPage: React.FC = () => {
   // -------------------------------------------------------
 
   const fetchData = useCallback(async () => {
+    const request = ++latestRequest.current;
     setLoading(true);
     setError(null);
     try {
@@ -194,8 +207,8 @@ const MinutesPage: React.FC = () => {
       if (typeFilter !== 'all') {
         params.meeting_type = typeFilter;
       }
-      if (searchQuery.trim()) {
-        params.search = searchQuery.trim();
+      if (appliedSearch) {
+        params.search = appliedSearch;
       }
       const [meetingsRes, summaryRes, minutesList, stats] = await Promise.all([
         meetingsService.getMeetings(params),
@@ -203,6 +216,7 @@ const MinutesPage: React.FC = () => {
         minutesService.listAllMinutes(),
         minutesService.getStats(),
       ]);
+      if (request !== latestRequest.current) return;
       setMeetings(asArray(meetingsRes.meetings));
       setSummary(summaryRes);
       const byMeeting = new Map<string, MinutesListItem[]>();
@@ -213,7 +227,7 @@ const MinutesPage: React.FC = () => {
       setMinutesByMeeting(byMeeting);
       const shownMeetings = new Set(asArray(meetingsRes.meetings).map((m) => m.id));
       // Only with no filter applied: a meeting a filter hid is not missing.
-      const unfiltered = typeFilter === 'all' && !searchQuery.trim();
+      const unfiltered = typeFilter === 'all' && !appliedSearch;
       setCirculatedWithoutMeeting(
         unfiltered
           ? minutesList.filter(
@@ -223,15 +237,20 @@ const MinutesPage: React.FC = () => {
       );
       setMinutesStats(stats);
     } catch (err: unknown) {
-      setError(getLoadFailureMessage(err, 'meetings'));
+      if (request === latestRequest.current) setError(getLoadFailureMessage(err, 'meetings'));
     } finally {
-      setLoading(false);
+      if (request === latestRequest.current) setLoading(false);
     }
-  }, [typeFilter, searchQuery]);
+  }, [typeFilter, appliedSearch]);
 
   useEffect(() => {
     void fetchData();
   }, [fetchData]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setAppliedSearch(searchQuery.trim()), SEARCH_DEBOUNCE_MS);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
 
   // -------------------------------------------------------
   // Handlers
@@ -428,7 +447,7 @@ const MinutesPage: React.FC = () => {
                   <span>Attendance</span>
                 </Link>
               )}
-              {canManage && (
+              {canManageMeetings && (
                 <button onClick={() => setShowCreateModal(true)} className="btn-primary inline-flex items-center gap-2">
                   <Plus className="h-4 w-4" aria-hidden="true" />
                   <span>Record Minutes</span>
@@ -650,7 +669,7 @@ const MinutesPage: React.FC = () => {
                         {meeting.creator_name && <span>Created by {meeting.creator_name}</span>}
                       </div>
                       {/* Waivers Toggle */}
-                      {canManage && (
+                      {canManageMeetings && (
                         <button
                           onClick={() => {
                             void handleToggleWaivers(meeting.id);
@@ -667,38 +686,42 @@ const MinutesPage: React.FC = () => {
                         </button>
                       )}
                     </div>
-                    {canManage && (
+                    {(canManage || canManageMeetings) && (
                       <div className="ml-4 flex items-center gap-1">
-                        <button
-                          onClick={() => setAgendaFor(meeting)}
-                          className="text-theme-text-muted touch-target-phone rounded-lg p-2 transition-colors hover:bg-cyan-500/10 hover:text-cyan-800 dark:hover:text-cyan-400"
-                          title="Edit the agenda"
-                          aria-label={`Edit the agenda of ${meeting.title}`}
-                        >
-                          <ClipboardList className="h-4 w-4" aria-hidden="true" />
-                        </button>
-                        <button
-                          onClick={() => {
-                            void handleOpenMinutes(meeting.id, String(meeting.meeting_type));
-                          }}
-                          disabled={openingMeetingId === meeting.id}
-                          className="text-theme-text-muted touch-target-phone rounded-lg p-2 transition-colors hover:bg-cyan-500/10 hover:text-cyan-800 disabled:opacity-50 dark:hover:text-cyan-400"
-                          title={
-                            minutesByMeeting.has(meeting.id)
-                              ? 'Open the minutes of this meeting'
-                              : 'Create minutes from this meeting'
-                          }
-                          aria-label={
-                            minutesByMeeting.has(meeting.id)
-                              ? `Open the minutes of ${meeting.title}`
-                              : `Create minutes from ${meeting.title}`
-                          }
-                        >
-                          <BookOpen className="h-4 w-4" aria-hidden="true" />
-                        </button>
+                        {canManageMeetings && (
+                          <button
+                            onClick={() => setAgendaFor(meeting)}
+                            className="text-theme-text-muted touch-target-phone rounded-lg p-2 transition-colors hover:bg-cyan-500/10 hover:text-cyan-800 dark:hover:text-cyan-400"
+                            title="Edit the agenda"
+                            aria-label={`Edit the agenda of ${meeting.title}`}
+                          >
+                            <ClipboardList className="h-4 w-4" aria-hidden="true" />
+                          </button>
+                        )}
+                        {canManage && (
+                          <button
+                            onClick={() => {
+                              void handleOpenMinutes(meeting.id, String(meeting.meeting_type));
+                            }}
+                            disabled={openingMeetingId === meeting.id}
+                            className="text-theme-text-muted touch-target-phone rounded-lg p-2 transition-colors hover:bg-cyan-500/10 hover:text-cyan-800 disabled:opacity-50 dark:hover:text-cyan-400"
+                            title={
+                              minutesByMeeting.has(meeting.id)
+                                ? 'Open the minutes of this meeting'
+                                : 'Create minutes from this meeting'
+                            }
+                            aria-label={
+                              minutesByMeeting.has(meeting.id)
+                                ? `Open the minutes of ${meeting.title}`
+                                : `Create minutes from ${meeting.title}`
+                            }
+                          >
+                            <BookOpen className="h-4 w-4" aria-hidden="true" />
+                          </button>
+                        )}
                         {/* An approved meeting's attendance is the settled record and the
                             server refuses to delete it, so the control is not offered. */}
-                        {meeting.status !== 'approved' && (
+                        {canManageMeetings && meeting.status !== 'approved' && (
                           <button
                             onClick={() => {
                               void handleDeleteMeeting(meeting);
@@ -739,24 +762,20 @@ const MinutesPage: React.FC = () => {
                         <p className="text-theme-text-muted py-2 text-sm">No attendance waivers for this meeting.</p>
                       ) : (
                         <div className="space-y-2">
-                          {waivers[meeting.id]?.map((waiver, wIdx) => (
-                            <div key={wIdx} className="card p-3 text-sm">
+                          {waivers[meeting.id]?.map((waiver) => (
+                            <div key={waiver.attendee_id} className="card p-3 text-sm">
                               <div className="flex items-center justify-between">
-                                <span className="text-theme-text-primary font-medium">
-                                  {toDisplayString(waiver.user_name ?? waiver.user_id ?? 'Unknown')}
-                                </span>
+                                <span className="text-theme-text-primary font-medium">{waiver.member_name}</span>
                                 <span className="rounded-full bg-green-500/10 px-2 py-0.5 text-xs text-green-800 dark:bg-green-500/20 dark:text-green-400">
                                   Waived
                                 </span>
                               </div>
-                              {waiver.reason ? (
-                                <p className="text-theme-text-muted mt-1 text-xs">
-                                  Reason: {toDisplayString(waiver.reason)}
-                                </p>
+                              {waiver.waiver_reason ? (
+                                <p className="text-theme-text-muted mt-1 text-xs">Reason: {waiver.waiver_reason}</p>
                               ) : null}
                               {waiver.granted_by_name ? (
                                 <p className="text-theme-text-muted mt-0.5 text-xs">
-                                  Granted by: {toDisplayString(waiver.granted_by_name)}
+                                  Granted by: {waiver.granted_by_name}
                                 </p>
                               ) : null}
                             </div>
@@ -778,7 +797,7 @@ const MinutesPage: React.FC = () => {
             deserves the answer — but drops the instruction to start. */}
         {!loading && meetings.length === 0 && !error && (
           <>
-            {canManage && (
+            {canManageMeetings && (
               <div className="mb-8 grid grid-cols-1 gap-6 md:grid-cols-3">
                 <div className="card p-6">
                   <ClipboardList className="mb-4 h-8 w-8 text-cyan-700" />
@@ -837,10 +856,10 @@ const MinutesPage: React.FC = () => {
             <div className="card p-12 text-center">
               <FileSearch className="text-theme-text-muted mx-auto mb-4 h-16 w-16" />
               <h3 className="text-theme-text-primary mb-2 text-xl font-bold">No Meetings Recorded</h3>
-              {canManage && (
+              {canManageMeetings && (
                 <p className="text-theme-text-secondary mb-6">Record your first meeting to start keeping minutes.</p>
               )}
-              {canManage && (
+              {canManageMeetings && (
                 <button
                   onClick={() => setShowCreateModal(true)}
                   className="btn-primary inline-flex items-center space-x-2 px-6 py-3"
@@ -871,7 +890,7 @@ const MinutesPage: React.FC = () => {
         />
 
         {/* Create Minutes Modal */}
-        {canManage && showCreateModal && (
+        {canManageMeetings && showCreateModal && (
           <div className="fixed inset-0 z-50 overflow-y-auto">
             <div className="flex min-h-screen items-center justify-center px-4">
               <div className="modal-overlay" aria-hidden="true" />

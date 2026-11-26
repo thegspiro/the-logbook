@@ -1063,10 +1063,12 @@ Admin Hours, and change no existing row except the stored positions below.
 
 - **Two permissions are added to stored positions.** `crr.record` goes to
   every built-in position holding `events.manage` (or `events.*`) and to the
-  Community Outreach Team; `crr.view_contact` goes to Public Outreach, the
-  fire, deputy and assistant chiefs, and the president. A position the
+  Community Outreach Team; `crr.view_contact` goes to the Community Outreach
+  Manager (`public_outreach`), the fire, deputy and assistant chiefs, and the
+  president. A position the
   department created is not changed. The downgrade revokes both.
-- **Resident details are cleared on a schedule.** A daily task (03:55 UTC)
+- **Resident details are cleared on a schedule.** A daily task (03:55 UTC
+  when run from cron; every 24 hours from startup under the built-in scheduler)
   clears the address, name, phone, email and notes of CRR activities older
   than the department's period, 24 months unless changed under Events
   Settings → CRR Catalogue. The ZIP code and counts are kept. What it clears

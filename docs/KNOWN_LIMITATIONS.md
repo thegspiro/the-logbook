@@ -2135,7 +2135,7 @@ without a ruling:
 
 ### CRR Activity Tracking — Owner Decisions (2026-11-22)
 
-Answers to the Phase 3 plan's questions, as they will be built:
+Answers to the Phase 3 plan's questions, as built:
 
 | Question                                  | Decision                                                                                                                                                                                                    |
 | ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -2161,8 +2161,8 @@ nothing stored.
 activity" card on an outreach event's page, and a link from the Outreach
 Overview. Two new permissions: `crr.record`, granted to the Community Outreach
 Team position and alongside every seeded `events.manage`, and
-`crr.view_contact`, granted to the Public Outreach position, the chief ranks
-and the president. The migration grants both to stored positions (pitfall #23).
+`crr.view_contact`, granted to the Community Outreach Manager position
+(`public_outreach`), the chief ranks and the president. The migration grants both to stored positions (pitfall #23).
 Boundaries drawn without a ruling:
 
 - **The screen records and deletes; it does not edit.** An activity's type,
@@ -2174,13 +2174,22 @@ Boundaries drawn without a ruling:
 - **Notes are treated as resident details.** They are encrypted, shown only
   with `crr.view_contact`, and cleared with the details, because free text is
   where a resident's name or condition turns up.
-- **Clearing is a daily task** (03:55 UTC). It clears address, name, phone,
+- **Clearing is a daily task** (03:55 UTC when run from cron; every 24 hours
+  from startup under the built-in scheduler). It clears address, name, phone,
   email and notes on activities older than the period, keeps ZIP, city, state,
   county and counts, and stamps the activity so the page says the details were
-  cleared. An activity that never held details is left unstamped. Details cannot
-  be added back to a cleared activity.
-- **Reading resident details is audited** (`crr.resident_details_viewed`, with
-  activity ids and no content), once per list or detail response that shows any.
+  cleared. An activity that never held details is left unstamped. Neither
+  details nor notes can be added back to a cleared activity; one that holds
+  text again anyway (written before that refusal, 2026-11-26) is cleared again
+  on the next run and keeps its first stamp. Each department's clearing and its
+  `crr_resident_details_retention` audit row commit together, and a failure in
+  one department does not stop the others.
+- **Disclosing resident details is audited** (`crr.resident_details_viewed`,
+  with activity ids and no content), once per list, detail, record or change
+  response that shows any to a `crr.view_contact` holder.
+- **Outreach Impact never loads resident details.** Its query reads only an
+  activity's type, time, place, counts and tags, so the encrypted columns are
+  not read or decrypted.
 - **The event card shows to `crr.record` or `events.manage`** on an outreach
   event that is not cancelled — the same rule a save is checked against.
 - **A member credited 0 minutes is recorded as taking part** but credits no
@@ -2217,6 +2226,25 @@ Boundaries drawn without a ruling:
   event that already counts.
 - **Retired types, counts and tags still appear** when they have activity in
   the period.
+
+**Review fixes (2026-11-26).** Owner decisions of 2026-11-26, from a review of
+the programme:
+
+- **A retired tag** already on an activity or a type may stay or be removed,
+  and the catalogue shows it marked _(retired)_ so it can be; it cannot be
+  newly added. Choosing a type on the activity form takes only its active
+  default tags.
+- **A new goal needs an active count.** A goal set before its count was
+  retired keeps counting.
+- **An activity recorded from an event** defaults to the event's start time.
+
+Fixed without a ruling: changing an activity's counts keeps a retired count's
+tally; a changed ZIP brings its own city and state; a deleted member cannot be
+credited; a type with recorded activities is refused deletion with a sentence,
+as is a goal saved twice at once; when two requests are linked to one event,
+Outreach Impact, the Overview and the event page all name the first; Outreach
+Impact's all-time totals use the shared outreach rule; and Outreach Impact and
+the Overview refresh after a CRR or goal save.
 
 **Phase 4 — yearly goals (built 2026-11-24).** Events Settings → Outreach
 Goals sets a target for a calendar year, for any Outreach Impact headline
@@ -8338,8 +8366,11 @@ made these choices. Everything is off until the department switches it on.
 
 Every other mutating route against a `MeetingMinutes` record —
 `update_minutes`, `add_motion`/`update_motion`/`delete_motion`,
-`add_action_item`/`delete_action_item` — rejects the call once the record's
-status is `APPROVED` (draft or rejected only). `PATCH
+`delete_action_item` — rejects the call once the record's status is
+`APPROVED` (draft or rejected only). _(Corrected 2026-11-26: this list used to
+name `add_action_item` too. It has no status guard, and adding an item to
+approved minutes changes the approved content; see MM6-18 under "Meetings &
+Minutes — Decisions From App Review B6 Pass 6".)_ `PATCH
 /minutes/{id}/quorum-config` (`set_meeting_quorum_config` in
 `app/api/v1/endpoints/minutes.py`) has no such guard: a `minutes.manage`
 holder can overwrite `quorum_type`/`quorum_threshold` and immediately trigger
@@ -12250,6 +12281,70 @@ ones; the list it opens includes lots already expired and applies the
 shelf rule. A lot that expired yesterday is in the list but not in the count.
 
 **The decision:** which rule both should use.
+
+## Meetings & Minutes — Decisions From App Review B6 Pass 6 (2026-11-26)
+
+Recorded rather than changed. Details in `docs/app-review/meetings-minutes.md`
+→ Pass 6.
+
+### MM6-18 — May an action item be added to approved minutes?
+
+`add_action_item` has no status guard, unlike every other edit to minutes. The
+approved snapshot includes each action item's description, assignee, due date
+and priority. So adding one changes the approved content, and the integrity
+check then reports the adopted version as changed (`action_items`). Signatures
+still read intact, because they are compared with the stored revision, not with
+the live record.
+
+**The decision:** refuse it, so a late item goes through a reopen like any other
+correction. Or keep items added after approval out of the snapshot, as
+follow-ups rather than part of what was adopted.
+
+### MM6-19 — How is an approved meeting's attendance corrected?
+
+Deleting an approved meeting is refused, because its attendance is the settled
+record behind membership tiers and voting eligibility. But attendees can still
+be added to or removed from it one at a time. Since MM6-15, a meeting can no
+longer be moved out of approved by an edit, and there is no other way to
+un-approve one.
+
+**The decision:** whether attendance on an approved meeting is locked, and what
+the correction path is (an un-approve action with a reason, or an audited
+attendance correction).
+
+### MM6-20 — When is the quorum result settled?
+
+Minutes store `quorum_met` and `quorum_count`, refreshed only when something
+asks for the quorum. The page asks once after saving the roll and ignores a
+failure. Approval freezes whatever is stored. The create and update payloads
+also accept both fields from the client. For approved minutes, the quorum
+endpoint reports the stored result beside a "required" count worked out from
+today's membership, so it can read "met, 6 present, 10 required".
+
+**The decision:** whether approval recomputes and stores the quorum, including
+the required count. And whether a manual override of the result stays, and if
+so, whether it is marked as one.
+
+### MM6-21 — Where does a carried-forward item live between meetings?
+
+Carrying an item forward marks the original as carried and puts a copy in the
+next minutes, which are a draft until that meeting approves them. The member's
+own list and the reminders show only approved minutes. So for the month
+between meetings the item is invisible to the person who owns it, while the
+manager's open count includes it.
+
+**The decision:** show the carried copy to its assignee from the moment it is
+carried, or keep reminding about the original until the copy is approved.
+
+### MM6-22 — Reminders that can repeat
+
+The in-app bells for action items carry no record that they were sent, so a
+manual run or a re-run of the task sends every bell again (pitfall #36).
+Re-approving reopened minutes also re-sends the assignee email for every item
+still open. Both need a stored stamp, which is a migration.
+
+**The decision:** whether a repeat is acceptable, or the stamp is worth a
+column.
 
 ## Elections — Five Counting and Ballot Decisions From App Review B5 Pass 7 (2026-11-24)
 

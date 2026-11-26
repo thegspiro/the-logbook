@@ -95,6 +95,8 @@ test.describe('Competency heat-map stays readable as it scrolls', () => {
         ).toBeVisible();
       }
 
+      // No expectContentStaysInCard: the table's card resolves to its parent,
+      // the ScrollCueRow scroller, which is narrower than the grid on purpose.
       const nameColumn = await table
         .getByRole('rowheader')
         .first()

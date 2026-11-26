@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen, within } from '@testing-library/react';
+import { act, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { OutreachGoalsResponse } from '../../services/outreachGoalServices';
 import type { CrrActivityType } from '../../types/crr';
@@ -173,6 +173,42 @@ describe('OutreachGoalsSettings', () => {
 
     expect(list).toHaveBeenLastCalledWith(2027);
     expect(await screen.findByText('No goals set for 2027.')).toBeInTheDocument();
+  });
+
+  it('keeps the shown year when another cannot be loaded', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<OutreachGoalsSettings />);
+    await screen.findByRole('list', { name: 'Goals for 2026' });
+
+    list.mockRejectedValue(new Error('The server is down'));
+    await user.click(screen.getByRole('button', { name: '2027' }));
+
+    expect(await screen.findByRole('list', { name: 'Goals for 2026' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '2026' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('shows the year chosen last when answers arrive out of order', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<OutreachGoalsSettings />);
+    await screen.findByRole('list', { name: 'Goals for 2026' });
+
+    let answerLastYear: (value: OutreachGoalsResponse) => void = () => undefined;
+    list.mockImplementationOnce(
+      () =>
+        new Promise<OutreachGoalsResponse>((resolve) => {
+          answerLastYear = resolve;
+        })
+    );
+    list.mockResolvedValueOnce(response({ year: 2027, goals: [] }));
+    await user.click(screen.getByRole('button', { name: '2025' }));
+    await user.click(screen.getByRole('button', { name: '2027' }));
+    expect(await screen.findByText('No goals set for 2027.')).toBeInTheDocument();
+
+    await act(async () => answerLastYear(response({ year: 2025, goals: [] })));
+
+    expect(screen.getByText('No goals set for 2027.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '2027' })).toHaveAttribute('aria-pressed', 'true');
   });
 
   it('shows its load error', async () => {

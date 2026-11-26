@@ -1250,6 +1250,11 @@ class MinutesRecordService:
             target["content"] = canonical(applied_text)
             target["format"] = FORMAT_HTML
             minutes.sections = sections
+            # A section rewrite is a content save: move the version on, so an
+            # editor holding the version from before it is refused rather than
+            # writing the old sections back (MM6-9). SQL-side, so it cannot lose
+            # a concurrent bump.
+            minutes.edit_version = MeetingMinutes.edit_version + 1
 
         suggestion.changes = [
             {**c, "decision": "accepted" if c["id"] in accepted else "rejected"}

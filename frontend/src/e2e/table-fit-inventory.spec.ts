@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
 import { json, signIn, TEST_USER } from './helpers';
-import { TABLE_FIT_VIEWPORTS, expectTableFitsItsCard } from './tableFit';
+import { TABLE_FIT_VIEWPORTS, expectContentStaysInCard, expectTableFitsItsCard } from './tableFit';
 
 const PERMISSIONS = [...TEST_USER.permissions, 'inventory.view', 'inventory.manage'];
 
@@ -189,6 +189,7 @@ test.describe('Inventory items — stacked Location row spans the card', () => {
         expect(row.locationWidth, `Location "${row.text}" row width`).toBe(row.conditionWidth);
         expect(row.valueRight, `Location "${row.text}" value sits at the right edge`).toBe(row.cellContentRight);
       }
+      await expectContentStaysInCard(table, 'Unavailable items table, blank Location');
     });
   }
 });
