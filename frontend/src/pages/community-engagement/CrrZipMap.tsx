@@ -39,6 +39,9 @@ const CrrZipMap: React.FC<CrrZipMapProps> = ({ zips }) => {
     // An air-gapped install, or a network that blocks the tile host, gets a
     // blank map; say why rather than leave an empty grey box.
     tiles.on('tileerror', () => setTilesFailed(true));
+    // A passing blip should not leave the notice up once every visible tile
+    // has loaded, and a new period's map starts with a clean slate.
+    tiles.on('load', () => setTilesFailed(false));
     tiles.addTo(map);
 
     const most = Math.max(...placed.map((z) => z.activities));
