@@ -2236,9 +2236,9 @@ and who may see the list, is covered in
 | **Categories**       | Your **Custom Event Categories** and their colours                              |
 | **Attendance**       | _"Who sees who's going; who takes requests"_, and **Mandatory event responses** |
 | **Hour Tracking**    | Mapping events to admin hours                                                   |
+| **Public Requests**  | Everything about outreach events the public asks for — see below                |
 | **CRR Catalogue**    | Community risk reduction activities, their counts and tags                      |
 | **Outreach Goals**   | Yearly targets for outreach figures and CRR counts                              |
-| **Public Requests**  | Everything about outreach events the public asks for — see below                |
 | **Headline Metrics** | The four numbers at the top of the page                                         |
 
 **Mandatory event responses** _(2026-11-17)_, at the foot of **Attendance**,
@@ -3453,7 +3453,8 @@ its counts (for example, **Alarms installed** and **Homes**) and default tags
   change it. After that they are cleared automatically; the ZIP code, city,
   state and counts stay.
 
-Changes save as you make them. **Juvenile firesetter intervention** is listed
+Changes save as you make them, except **Keep for (months)**, which you confirm
+with **Save**. **Juvenile firesetter intervention** is listed
 as **Coming soon**: it will be a separate option, with its own access rules
 because its records concern minors.
 
@@ -3698,12 +3699,12 @@ shows the calendar year, whichever period you chose, and **Edit goals** (or
 in a table with its **Target**, what it **Reached** and its **Status**.
 
 > **Screenshot needed** (`04-118-outreach-impact-goals.png`): **Outreach
-> Impact** with the **Goals for** this year section above the CRR
-> activities: three goals, one **On pace**, one **Behind pace** with its bar
+> Impact** with the **Goals for** this year section above **Community risk
+> reduction**: three goals, one **On pace**, one **Behind pace** with its bar
 > short of the pace mark, and one **Met**, with **Edit goals** at the right.
 
-> **Screenshot needed** (`04-113-crr-impact-map.png`): the **CRR activities**
-> section of **Outreach Impact** for this year, with **By activity** showing
+> **Screenshot needed** (`04-113-crr-impact-map.png`): the **Community risk
+> reduction** section of **Outreach Impact** for this year, with **By activity** showing
 > a change badge, **By risk**, and **By ZIP code** with **Show map** pressed
 > and two or more circles on the street map.
 

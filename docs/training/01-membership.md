@@ -1915,10 +1915,10 @@ said.
 
 A **position** is one of two things _(2026-10-29)_:
 
-| Kind          | What it is                                                                                             | Examples                                                               |
-| ------------- | ------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------- |
-| **Office**    | A job with permissions. Holding it is what lets the member do that job in The Logbook.                 | Treasurer, Quartermaster, Training Officer, Public Information Officer |
-| **Committee** | A group a member serves on. It is recorded and shown, and grants nothing beyond what every member has. | History Committee, Membership Committee, Community Outreach Team       |
+| Kind          | What it is                                                                                                                                                                   | Examples                                                               |
+| ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| **Office**    | A job with permissions. Holding it is what lets the member do that job in The Logbook.                                                                                       | Treasurer, Quartermaster, Training Officer, Public Information Officer |
+| **Committee** | A group a member serves on. It is recorded and shown, and grants nothing beyond what every member has — except the Community Outreach Team, which can record CRR activities. | History Committee, Membership Committee, Community Outreach Team       |
 
 Every department starts with four committees: **Community Outreach Team**, **History Committee**, **Fundraising Committee** and
 **Membership Committee**. The matching offices — Community Outreach Manager, Historian,
