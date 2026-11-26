@@ -1,6 +1,84 @@
 # Security Review 07 — Users & Organizations
 
-**Prefix:** `USR` · **Iteration:** 07 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-05 (pass 7), 2026-10-13 (pass 8, watchdog pickup), 2026-10-14 (pass 9, PR [#3250](https://github.com/thegspiro/the-logbook/pull/3250) — omitted from this line by that pass, corrected here), 2026-10-18 (pass 10), 2026-10-22 (pass 11), 2026-10-25 (pass 12, watchdog pickup), 2026-10-28 (pass 13, watchdog pickup), 2026-11-01 (pass 14, watchdog pickup), 2026-11-05 (pass 15, watchdog pickup), 2026-11-19 (pass 16, watchdog pickup), 2026-11-24 (pass 17, watchdog pickup) · **PR:** [#1814](https://github.com/thegspiro/the-logbook/pull/1814) (pass 1), [#1949](https://github.com/thegspiro/the-logbook/pull/1949) (pass 2), [#2402](https://github.com/thegspiro/the-logbook/pull/2402) (pass 4), [#2602](https://github.com/thegspiro/the-logbook/pull/2602) (pass 6)
+**Prefix:** `USR` · **Iteration:** 07 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-05 (pass 7), 2026-10-13 (pass 8, watchdog pickup), 2026-10-14 (pass 9, PR [#3250](https://github.com/thegspiro/the-logbook/pull/3250) — omitted from this line by that pass, corrected here), 2026-10-18 (pass 10), 2026-10-22 (pass 11), 2026-10-25 (pass 12, watchdog pickup), 2026-10-28 (pass 13, watchdog pickup), 2026-11-01 (pass 14, watchdog pickup), 2026-11-05 (pass 15, watchdog pickup), 2026-11-19 (pass 16, watchdog pickup), 2026-11-24 (pass 17, watchdog pickup), 2026-11-26 (pass 18, watchdog pickup) · **PR:** [#1814](https://github.com/thegspiro/the-logbook/pull/1814) (pass 1), [#1949](https://github.com/thegspiro/the-logbook/pull/1949) (pass 2), [#2402](https://github.com/thegspiro/the-logbook/pull/2402) (pass 4), [#2602](https://github.com/thegspiro/the-logbook/pull/2602) (pass 6)
+
+---
+
+## Pass 18 (2026-11-26, watchdog pickup) — zero-delta window, 0 fixed, 0 new findings; USR-5 and USR-8 re-verified unchanged
+
+**Step 0.** PR #4730 (Feature 06, Elections & ballots, pass 18) merged
+(`5c6f2fa21`) before this iteration started, confirmed via a fresh
+`git fetch origin main && git checkout main && git pull --ff-only`. A fresh
+`list_pull_requests` (state `open`, head `claude/security-review-*`) returned
+empty. Row 06 was `✅` and row 07 (Users & organizations) was confirmed the
+next `⬜` row on the freshly-pulled `main`. The dedicated `/loop 30m
+/security-review` session (`session_011T1ZyyLrD5HagusgK9uDw2`) remains
+unreachable.
+
+**Scope:** the same fourteen files pass 16/17 declared (`endpoints/users.py`,
+`endpoints/organizations.py`, `endpoints/member_status.py`,
+`endpoints/member_leaves.py`, `endpoints/leave_requests.py`,
+`services/user_service.py`, `services/organization_service.py`,
+`services/member_leave_service.py`, `services/leave_request_service.py`,
+`models/user.py`, `schemas/user.py`, `schemas/organization.py`,
+`app/mcp/tools/members.py`, `app/mcp/tools/organization.py`). **Baseline:**
+`7cc3f6f85` (PR #4662's merge, pass 17). **Head:** `origin/main`
+(`5c6f2fa21`) at review time.
+
+**True zero-delta window.** `git diff --stat 7cc3f6f85..origin/main` across
+all fourteen declared files is empty, and `git log --no-merges
+7cc3f6f85..origin/main -- <declared files>` returns no commits — not one
+of the 141 non-merge commits in this window (`git log --no-merges
+7cc3f6f85..origin/main | wc -l`) touches a file this feature declares. A
+broader `--diff-filter=A --name-only` sweep over `backend/app/**` for
+`user`/`organiz` paths initially looked like it found new files
+(`organization_lock.py`, `organization_officer.py`,
+`event_organizer_service.py`, `user_deletion_service.py`) — each checked
+directly with `git cat-file -e 7cc3f6f85:<path>` and confirmed to already
+exist at the baseline, so this is the same synthetic full-file-rewrite
+artifact pass 17 already flagged (some commits in this repo's history carry
+a full-file rewrite alongside their named change, which trips naive
+added-file detection), not real new work.
+
+**All 108 routes across the five principal files re-enumerated fresh by
+AST** (34 `users.py` / 30 `organizations.py` / 17 `member_status.py` /
+7 `member_leaves.py` / 20 `leave_requests.py`) — unchanged from pass 17.
+Cross-checked with an independent `grep -c` pass: `Depends(` call counts
+(79/64/36/16/40) are all strictly greater than their file's route count,
+consistent with every route carrying at least one `Depends(...)`, and the
+41 `get_current_user`-only routes still match
+`tests/permissionless_route_baseline.txt`'s count for these five files
+(41) exactly.
+
+**Re-verified against live source, not re-derived:**
+
+- **USR-5** (LOW/MED, unbounded lists; accepted) — `get_archived_members`
+  (`member_status.py:1153-1176`) still a bare `.scalars().all()`, gated on
+  `members.manage`, no row cap. Unchanged.
+- **USR-8** (MED, `GET /users` full-record exposure; accepted) —
+  `list_users` (`users.py:181-189`) still gated the same way
+  (`require_permission("users.view", "members.view", "members.manage")`),
+  no row cap. Unchanged.
+- **USR-11, USR-12, USR-14, USR-15** — unchanged, still closed/fixed as
+  pass 17 left them.
+
+**0 fixed, 0 new findings this pass.**
+
+### Completion gate (pass 18)
+
+| Check                                                                                          | Result                                         |
+| ---------------------------------------------------------------------------------------------- | ---------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                                                  | ✅ 0 violations                                |
+| `black --check app/ tests/ alembic/`                                                           | ✅ 3542 files unchanged                        |
+| `isort --check-only app/ tests/ alembic/`                                                      | ✅ clean                                       |
+| `python3 scripts/validate_migrations.py --strict`                                              | ✅ 844 revisions, single head `e9cf8ab7e4e4`   |
+| `python3 scripts/check_route_permissions.py --strict` (repo root)                              | ✅ 344 routes, 0 errors, 0 warnings            |
+| `pytest tests/ -q -k "user or organization or member_status or member_leave or leave_request"` | ✅ 749 passed, 1 pre-existing environment skip |
+| `cd frontend && npm run typecheck`                                                             | ✅ 0 errors                                    |
+| `cd frontend && npm run lint`                                                                  | ✅ clean (`--max-warnings 10`)                 |
+
+No source file was touched this pass (0 fixed) — only this findings file
+and `PROGRESS.md`.
 
 ---
 

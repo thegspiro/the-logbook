@@ -3230,7 +3230,8 @@ waiting. Only the member and the people who decide it can open them, and the
 file name is not kept. A HEIC photo (an iPhone's usual format) is kept as a
 JPEG _(2026-11-26)_, turned the right way up, and without the photo's hidden
 details such as where it was taken. If the photo cannot be read, the upload
-says _"We couldn't read this photo. Save it as a JPEG and try again"_. A
+says _"We couldn't read this photo. Save it as a JPEG and try again (on an
+iPhone, choose Most Compatible under Settings, Camera, Formats)."_ A
 photo over 25 megapixels (an iPhone's optional 48 MP setting, for example) is
 refused with _"This photo is too large to accept. Save a smaller copy as a
 JPEG and try again"_; the iPhone's default 24 MP photo is accepted. If

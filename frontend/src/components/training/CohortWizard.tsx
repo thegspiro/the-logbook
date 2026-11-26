@@ -723,15 +723,16 @@ export const CohortWizard: React.FC<CohortWizardProps> = ({ onComplete, onCancel
             {filteredMembers.map((member) => (
               <label
                 key={member.id}
-                className="hover:bg-theme-surface-hover flex cursor-pointer items-center gap-3 rounded-lg p-2"
+                className="hover:bg-theme-surface-hover touch:py-3 flex cursor-pointer items-start gap-3 rounded-lg p-2"
               >
                 <input
                   type="checkbox"
                   checked={selectedMembers.includes(member.id)}
                   onChange={() => toggleMember(member.id)}
+                  className="mt-1"
                 />
                 <span className="text-theme-text-primary text-sm">{formatMemberName(member)}</span>
-                <span className="text-theme-text-muted text-xs">{member.email}</span>
+                <span className="text-theme-text-muted mt-0.5 text-xs">{member.email}</span>
               </label>
             ))}
             {filteredMembers.length === 0 && (
