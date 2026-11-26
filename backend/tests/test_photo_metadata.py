@@ -484,14 +484,17 @@ BULK = {
 
 
 def _measured(content: bytes, mime: str) -> tuple[str, float, int]:
-    """The outcome, the seconds taken and the peak traced allocation."""
-    tracemalloc.start()
+    """The outcome, the seconds taken and the peak traced allocation. Timed
+    and traced in separate runs: tracemalloc's own bookkeeping per
+    allocation would otherwise be most of what is timed."""
     started = time.perf_counter()
+    outcome = _outcome(content, mime)
+    elapsed = time.perf_counter() - started
+    tracemalloc.start()
     try:
-        outcome = _outcome(content, mime)
-    finally:
-        elapsed = time.perf_counter() - started
+        assert _outcome(content, mime) == outcome
         _, peak = tracemalloc.get_traced_memory()
+    finally:
         tracemalloc.stop()
     return outcome, elapsed, peak
 
