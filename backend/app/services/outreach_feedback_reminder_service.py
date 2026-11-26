@@ -91,8 +91,9 @@ class OutreachFeedbackReminderService:
                         EventRequest.organization_id == org_id,
                         EventRequest.status == EventRequestStatus.COMPLETED,
                         EventRequest.feedback_reminder_sent_at.is_(None),
+                        # Encrypted at rest, so only NULL can be tested in
+                        # SQL; an empty address is caught below, decrypted.
                         EventRequest.contact_email.isnot(None),
-                        EventRequest.contact_email != "",
                         exists().where(completed_between),
                         ~exists().where(
                             EventRequestFeedback.request_id == EventRequest.id

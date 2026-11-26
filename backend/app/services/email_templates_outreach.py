@@ -215,6 +215,9 @@ SAMPLE_CONTEXT: Dict[str, Dict[str, str]] = {
 TEST_RECIPIENT_FIELDS: Dict[str, Dict[str, str]] = {
     _T.GUEST_HEADCOUNT_REMINDER.value: {"recipient_name": "full"},
     _T.OUTREACH_FEEDBACK_RECEIVED.value: {"recipient_name": "full"},
+    # The requester's name, on a test send, is the admin's: they are who reads
+    # it.
+    _T.OUTREACH_FEEDBACK_REMINDER.value: {"requester_name": "full"},
 }
 
 # Days from today a test send places a date at: the headcount reminder's event

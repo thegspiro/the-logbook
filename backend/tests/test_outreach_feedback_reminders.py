@@ -178,6 +178,14 @@ class TestWhoIsReminded:
         assert await _run(db_session, org) == 0
         send_email.assert_not_awaited()
 
+    async def test_not_with_an_empty_address(self, db_session, org, send_email):
+        # The column is encrypted, so an empty address cannot be filtered in
+        # SQL (its ciphertext is not ''); the service skips it once decrypted.
+        await _request(db_session, org, email="")
+
+        assert await _run(db_session, org) == 0
+        send_email.assert_not_awaited()
+
     async def test_only_the_departments_own_requests(self, db_session, org, send_email):
         other = await _org(db_session, "Other")
         await _request(db_session, other, email="elsewhere@x.test")
