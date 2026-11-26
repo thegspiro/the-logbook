@@ -173,21 +173,21 @@ def figure_detail(key: str, entry: Optional[Dict[str, Any]]) -> Optional[str]:
                     "department's call log"
                 )
             return text
+    breakdown = entry.get("breakdown")
+    made_of = breakdown if isinstance(breakdown, str) and breakdown else None
+    left_out = None
     if key == "shifts.hours":
         external = num("external_hours")
         if external:
-            return f"Not included: {external:g} h for other agencies"
+            left_out = f"Not included: {external:g} h for other agencies"
     if key == "shifts.count":
         external = num("external_shifts")
         if external:
-            return (
+            left_out = (
                 "Not included: "
                 f"{_plural(external, 'shift', 'shifts')} for other agencies"
             )
-    breakdown = entry.get("breakdown")
-    if isinstance(breakdown, str) and breakdown:
-        return breakdown
-    return None
+    return ". ".join(part for part in (made_of, left_out) if part) or None
 
 
 _GOAL_RESULTS = {

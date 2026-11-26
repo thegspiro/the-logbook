@@ -173,6 +173,25 @@ def test_figures_read_as_the_screens_show_them(entry, unit, expected):
             None,
         ),
         (
+            "shifts.hours",
+            {
+                "available": True,
+                "value": 40.0,
+                "external_hours": 12.5,
+                "breakdown": "4 shifts",
+            },
+            "4 shifts. Not included: 12.5 h for other agencies",
+        ),
+        (
+            "training.hours",
+            {
+                "available": True,
+                "value": 68.75,
+                "breakdown": "9 training records: Continuing Education 68.75 h",
+            },
+            "9 training records: Continuing Education 68.75 h",
+        ),
+        (
             "meetings.waivers_summary",
             {"available": True, "value": 3, "breakdown": "2 approved, 1 denied"},
             "2 approved, 1 denied",
