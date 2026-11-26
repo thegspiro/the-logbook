@@ -1,10 +1,328 @@
 # Security Review 00 — Cross-Cutting Baseline
 
-**Prefix:** `SEC` · **Iteration:** 00 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-01 (pass 3), 2026-09-07 (out-of-band, ahead of pass 4), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-04 (pass 7), 2026-10-12 (pass 8, watchdog pickup), 2026-10-14 (pass 9, opens rotation lap "pass 8"), 2026-10-18 (pass 10, watchdog pickup, opens rotation lap "pass 9"), 2026-10-22 (pass 11, watchdog pickup, opens rotation lap "pass 10"), 2026-10-25 (pass 12, opens rotation lap "pass 11"), 2026-10-28 (pass 13, watchdog pickup, opens rotation lap "pass 12"), 2026-10-30 (pass 14, watchdog pickup, opens rotation lap "pass 13"), 2026-11-04 (pass 15, watchdog pickup, opens rotation lap "pass 14"), 2026-11-04 (pass 16, watchdog pickup — a second, concurrent sweep that raced pass 15 and merged just after it; see Pass 16's own note), 2026-11-15 (pass 17, watchdog pickup, opens rotation lap "pass 16"), 2026-11-23 (pass 18, watchdog pickup, opens rotation lap "pass 17") · **PR:** [#1799](https://github.com/thegspiro/the-logbook/pull/1799) (pass 1), [#2128](https://github.com/thegspiro/the-logbook/pull/2128) (pass 3, rounds 1–2, merged), [#2132](https://github.com/thegspiro/the-logbook/pull/2132) (pass 3, round 3 — separate PR per Pitfall #24, #2128 having already merged), [#2381](https://github.com/thegspiro/the-logbook/pull/2381) (out-of-band data-leakage sweep, prior art for pass 4), #2387 (pass 4), [#2534](https://github.com/thegspiro/the-logbook/pull/2534) (pass 5), [#2592](https://github.com/thegspiro/the-logbook/pull/2592) (pass 6), pass 7 PR recorded in `PROGRESS.md`, pass 8 PR recorded in `PROGRESS.md`, pass 9 PR recorded in `PROGRESS.md`, pass 10 PR recorded in `PROGRESS.md`, pass 11 PR recorded in `PROGRESS.md`, pass 12 PR recorded in `PROGRESS.md`, pass 13 PR recorded in `PROGRESS.md`, [#3869](https://github.com/thegspiro/the-logbook/pull/3869) (pass 14), [#4019](https://github.com/thegspiro/the-logbook/pull/4019) (pass 15), [#4020](https://github.com/thegspiro/the-logbook/pull/4020) (pass 16), pass 17 PR recorded in `PROGRESS.md`, pass 18 PR recorded in `PROGRESS.md`
+**Prefix:** `SEC` · **Iteration:** 00 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-01 (pass 3), 2026-09-07 (out-of-band, ahead of pass 4), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-04 (pass 7), 2026-10-12 (pass 8, watchdog pickup), 2026-10-14 (pass 9, opens rotation lap "pass 8"), 2026-10-18 (pass 10, watchdog pickup, opens rotation lap "pass 9"), 2026-10-22 (pass 11, watchdog pickup, opens rotation lap "pass 10"), 2026-10-25 (pass 12, opens rotation lap "pass 11"), 2026-10-28 (pass 13, watchdog pickup, opens rotation lap "pass 12"), 2026-10-30 (pass 14, watchdog pickup, opens rotation lap "pass 13"), 2026-11-04 (pass 15, watchdog pickup, opens rotation lap "pass 14"), 2026-11-04 (pass 16, watchdog pickup — a second, concurrent sweep that raced pass 15 and merged just after it; see Pass 16's own note), 2026-11-15 (pass 17, watchdog pickup, opens rotation lap "pass 16"), 2026-11-23 (pass 18, watchdog pickup, opens rotation lap "pass 17"), 2026-11-25 (pass 19, watchdog pickup, opens rotation lap "pass 18") · **PR:** [#1799](https://github.com/thegspiro/the-logbook/pull/1799) (pass 1), [#2128](https://github.com/thegspiro/the-logbook/pull/2128) (pass 3, rounds 1–2, merged), [#2132](https://github.com/thegspiro/the-logbook/pull/2132) (pass 3, round 3 — separate PR per Pitfall #24, #2128 having already merged), [#2381](https://github.com/thegspiro/the-logbook/pull/2381) (out-of-band data-leakage sweep, prior art for pass 4), #2387 (pass 4), [#2534](https://github.com/thegspiro/the-logbook/pull/2534) (pass 5), [#2592](https://github.com/thegspiro/the-logbook/pull/2592) (pass 6), pass 7 PR recorded in `PROGRESS.md`, pass 8 PR recorded in `PROGRESS.md`, pass 9 PR recorded in `PROGRESS.md`, pass 10 PR recorded in `PROGRESS.md`, pass 11 PR recorded in `PROGRESS.md`, pass 12 PR recorded in `PROGRESS.md`, pass 13 PR recorded in `PROGRESS.md`, [#3869](https://github.com/thegspiro/the-logbook/pull/3869) (pass 14), [#4019](https://github.com/thegspiro/the-logbook/pull/4019) (pass 15), [#4020](https://github.com/thegspiro/the-logbook/pull/4020) (pass 16), pass 17 PR recorded in `PROGRESS.md`, pass 18 PR recorded in `PROGRESS.md`, pass 19 PR recorded in `PROGRESS.md`
 
 Passes are recorded in this one file rather than a new `SEC<n>-00-*.md` per
 lap — the sweeps are cumulative and a reader needs the earlier method beside
 the later result to tell a re-verification from a first run. Newest pass first.
+
+---
+
+## Pass 19 (2026-11-25, watchdog pickup) — rotation lap "pass 18" closes (every Feature 00–34 own-pass PR since pass 18's baseline); 0 new findings, 0 tooling findings
+
+Watchdog pickup — the dedicated `/loop 30m /security-review` session remains
+unreachable. Step 0 (`list_pull_requests`, state: open) found 0 open PRs with
+a head branch starting `claude/security-review-`; the last one, PR #4711
+(Feature 34, Frontend shared, pass 17), had already merged into `main`. Every
+row of the rotation table was at `✅` — a full lap closed — so per Step 1 the
+table is reset to `⬜` for the next pass and the rotation wraps to Feature 00,
+continuing in this same iteration (the reset rides on this pass's own commit,
+per the standing rule against a `PROGRESS.md`-only PR).
+
+**Baseline:** `4b1a87928` (pass 18's own head, PR #4616's merge). **Head:**
+`ec711f82b` (PR #4711's merge, `origin/main` at the start of this iteration).
+549 commits between baseline and head, 301 non-merge, 276 backend `.py` files
+touched and 380 frontend files touched — another full rotation lap. Routes
+checked against `APPLICATION_PAGES.md`: **344** (up from 338 at pass 18, 17
+redirects skipped), 0 errors, 0 warnings.
+
+### Re-verified standing sweeps (all 13 classes from passes 1–18)
+
+| #   | Class swept                                           | Result                                                                                                                                                                                                                                               |
+| --- | ----------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | Formula injection in exports (Pitfall #15)            | **clean** — `grep -E "csv\.(writer\|DictWriter)\("` over `app/` and `scripts/` outside `csv_export.py`: 0 hits; `tests/test_csv_writer_sweep.py` passes                                                                                              |
+| 2   | `SET NULL` on `NOT NULL` columns (Pitfall #2)         | **clean** — `test_database_schema.py::TestForeignKeyIntegrity::test_set_null_fks_are_nullable` passes, including every `SET NULL` FK on the new CRR, Outreach Goal and History Article/Public-Settings models                                        |
+| 3   | Proxy-IP attribution                                  | **clean** — same 3 `request.client.host` hits as every prior pass (two documenting comments, one deliberate direct-IP fallback); unchanged by this delta                                                                                             |
+| 4   | Alembic chain integrity                               | **clean** — single head `e9cf8ab7e4e4` (844 revisions, up from 712 at pass 18), confirmed directly via `validate_migrations.py --strict`                                                                                                             |
+| 5   | LIKE-wildcard handling (Pitfall #25)                  | **clean** — `tests/test_like_escaping.py` passes; the new History Articles search (`history_article_service.py`) uses `like_pattern()`/`escape=LIKE_ESCAPE_CHAR` correctly, confirmed by reading the call site directly                              |
+| 6   | `BaseHTTPMiddleware` usage (Pitfall #4)               | **clean** — 0 imports, 0 subclasses; every `grep` hit is a documenting comment in `security_middleware.py` / `app/mcp/transport.py`                                                                                                                  |
+| 7   | Unbounded in-memory trackers (Pitfall #9)             | **clean, 0 new unbounded trackers** — AST-shaped grep over every new backend file in this delta found 0 module-level/`self.__init__` candidates                                                                                                      |
+| 8   | `window.confirm`/`alert`/`prompt` (Pitfall #16)       | **clean** — `grep -rn "window\.\(confirm\|alert\|prompt\)("` over `frontend/src/`: 0 hits; `dialogDismissIntegrity.test.ts` passes                                                                                                                   |
+| 9   | JSON shallow-copy-then-nested-mutate (Pitfall #12)    | **clean** — `tests/test_json_column_ast_sweep.py` passes; the new `instructor_erasure.py` uses `copy.deepcopy()` correctly on `EventTemplate.training_details`, confirmed by reading the call site directly                                          |
+| 10  | Org-scoping / IDOR ratchet (Pitfall #14)              | **clean** — `tests/test_org_scoping_ratchet.py` passes against every new by-id query this delta added                                                                                                                                                |
+| 11  | Capacity-check locking (Pitfall #27)                  | **clean** — `tests/test_capacity_locking.py` passes; unchanged this delta                                                                                                                                                                            |
+| 12  | Route auth coverage                                   | **clean** — `check_route_permissions.py --strict`: 344 routes, 0 errors, 0 warnings; `tests/test_endpoint_auth_coverage.py` passes                                                                                                                   |
+| 13  | Raw exception text reaching the client (checklist §5) | **clean, 2 candidates traced, both false positives** — `migration_recovery.py`'s `str(error)` (×2) is logged by the startup recovery helper (`logger.error`) and never returned in an HTTP response; it is a CLI/startup diagnostic, not an endpoint |
+
+Also re-ran: `tests/test_baseline_member_grants.py`,
+`tests/test_account_status_gates.py` (Pitfall #32), `tests/test_log_call_shape.py`
+and `tests/test_logging.py` (Pitfall #33), `tests/test_org_scoping.py`,
+`tests/test_audit_log_org_scoping.py`, `tests/test_audit_org_scoping.py`,
+`tests/test_migration_cleanup.py`, `tests/test_api_cache_pii_exclusions.py` —
+all pass (224 passed across this group plus the 13-class suite above, run
+together as one `pytest` invocation). `tests/test_alembic_migrations.py` +
+`tests/test_migration_create_all_tables.py`: 80 passed.
+
+Outbound-transport checks: raw SQL by string interpolation is still the same
+2 sites (`scheduling_service.py`'s `int(cushion)`-guarded `INTERVAL` literal —
+confirmed unchanged at its line despite a 378-line diff elsewhere in that file
+for the new `duty_shifts_only()` exclusion below; `enum_normalization.py`'s
+fixed internal table/column names). A repo-wide grep for a newly introduced
+`text(f"...")`/`.execute(f"...")`/`.format()`-built query found 0 hits outside
+that known site. `httpx.AsyncClient(`/`Client(` construction is the same 9-file
+list as pass 18. `SSRFSafeAsyncTransport(` direct construction is unchanged
+(the same 2 real call sites). `assert_outbound_url_safe(` call sites are
+unchanged (10 files, same list as pass 18).
+
+### New surfaces this delta: a public History website, and nine further modules with no rotation row yet
+
+This window is another full rotation lap, so almost every changed file
+belongs to some Feature 00–34's own already-completed pass. The following
+genuinely new modules carry no existing rotation row and were not covered by
+name in any feature pass this lap (checked by `grep` against every
+`docs/security-review/*.md` write-up and this file's own prior sections, and
+confirmed absent from the baseline tree with `git show
+4b1a87928:<path>`), so each was read directly here rather than trusted clean
+by the tooling passing:
+
+- **History: Articles and the department's public website**
+  (`app/api/draft_visibility.py`, 72 L; `app/api/public/history.py`, 641 L,
+  mounted at `/api/public/v1/history`; `app/api/v1/endpoints/history_articles.py`,
+  413 L; `app/api/v1/endpoints/history_public.py`, 167 L;
+  `app/services/history_article_export.py`, 584 L;
+  `app/services/history_article_service.py`, 835 L;
+  `app/services/history_public_links.py`, 149 L;
+  `app/services/history_public_service.py`, 1148 L) — the highest-risk new
+  surface this delta, since it adds a second, genuinely unauthenticated
+  public API (`router`, keyed on a portal API key) and a keyless
+  browser-reached surface (`open_router`, for `<img>`/PDF links and the
+  "Today in history" widget) on top of the already-reviewed History module.
+  Read in full:
+  - Every portal route resolves `organization_id` from the authenticated
+    `PublicPortalAPIKey`, never from a client-supplied value, so XC-3 holds
+    by construction rather than by a per-query filter needing to be found.
+    Every part of History served is additionally re-checked against the
+    department's own "Public website" switches
+    (`HistoryPublicService.is_on`) and the record's `publication_level ==
+PUBLIC`/`public_snapshot is not None` **at serve time**, not just when a
+    link was issued — closing the TOCTOU the module's own docstring states
+    as its rule (a withdrawn record's link "stops working at once, not when
+    it expires"), confirmed by reading `file_allowed`/`_public_article`
+    directly rather than trusting the docstring.
+  - A disabled module, a disabled portal, or a disabled part of History all
+    answer the same 404 as a record that does not exist (existence
+    non-disclosure, checklist §5) — `_history_on`/`_portal_open`/the `kind`
+    check in `_records` fail closed to `_not_found()` on every branch.
+  - The keyless `open_router` routes are rate-limited **before** any
+    database work (`_rate_limit_files`/`_rate_limit_widget`, dependencies
+    evaluated ahead of the handler body) — checklist §6.
+  - File/widget links are HMAC-SHA256 tokens (`history_public_links.py`)
+    under a key derived from `SECRET_KEY` via a purpose-separated HKDF-style
+    `hmac.new(..., _PURPOSE, ...)` construction (not the raw app secret),
+    verified with `hmac.compare_digest` (constant-time), with the `variant`
+    a `kind` may name checked against an explicit allowlist both at sign
+    time and at verify time, and a length cap checked before any decoding.
+    The widget's own link is a 256-bit `secrets.token_urlsafe(32)` stored
+    only as a `sha256` hash (`make_widget_token`/`settings_for_widget`,
+    `history_public_service.py`), matching how this codebase already
+    handles other secret-link/API-key lookups.
+  - The embed-policy route (`get_widget_embed_policy`) re-derives
+    `frame-ancestors` from the organization's own stored website list on
+    every request (`department_embed_origins`, the same helper Forms'
+    embed origins already use) rather than caching a stale allow-list, and
+    defaults to `'none'` when the widget would not answer — checklist §4/§5.
+  - `history_articles.py`'s routes carry `require_permission("history.manage")`,
+    `require_permission("history.publish")`, or `get_current_user` gated
+    inside the service by the same `Viewer`/`get_readable_article` mechanism
+    already verified sound for `history.py`'s siblings at passes 16–18; none
+    bare. Search (`list_articles`) uses `like_pattern()`/`.ilike(...,
+escape=LIKE_ESCAPE_CHAR)` (`history_article_service.py:224`) — Pitfall #25
+    satisfied. Every by-id/list query filters `organization_id` (16 direct
+    hits in `history_article_service.py`, all org-scoped; XC-3 holds).
+  - `export_article`/`export_filename` sanitize the article's title before
+    it reaches a `Content-Disposition` header (`re.sub(r"[^\w-]+", "_",
+title)`, RFC 5987 percent-encoding for non-ASCII via `urllib.parse.quote`)
+    — no header-injection or path-traversal vector from a department-chosen
+    title. The export is rendered from `service.export_view`, which holds
+    only what the caller's own `Viewer` could already read on the page
+    (per the module's own docstring, "never the research notes"), and the
+    PDF/Word renderers (`history_article_export.py`) `html.escape()` every
+    user-supplied string placed into reportlab/docx markup; the article
+    body itself arrives already sanitized by `sanitize_html` (the
+    pre-existing, already-reviewed `nh3`-based allowlist in
+    `app/utils/rich_text.py`), confirmed by reading
+    `history_article_service.py`'s write path directly rather than assumed.
+  - Audit entries (`history_article_created`/`_updated`/`_deleted`/
+    `_published`/`_unpublished`/`_exported`) carry ids, changed field
+    _names_, and the export format only — never titles or body text,
+    matching the module's own docstring rule and checklist §5.
+  - `history_public.py` (the admin-side settings endpoint) gates both reads
+    and writes on `require_permission("history.manage", "settings.manage")`;
+    the widget's secret is returned once on creation and stored only as a
+    hash thereafter, and the audit entry for a settings change
+    (`history_public_settings_updated`) records which fields changed, never
+    the secret.
+  - Every new `SET NULL`/`CASCADE` FK on the new `HistoryArticle`/
+    `HistoryPublicSettings` models is `nullable=True` where required
+    (Pitfall #2, confirmed by `test_set_null_fks_are_nullable`, above).
+  - **Verified good ✅.** This is now the fourth "no Documents-shaped row"
+    History extension (after `history.py`, `history_documents.py`,
+    `history_media.py`, `history_import.py` and `history_events.py` at
+    earlier passes) — see the Rotation section's note.
+- **`app/core/migration_recovery.py` (143 L)** — a startup-recovery helper
+  for a real pre-existing bug: an interrupted or partially-`create_all`'d
+  migration used to be "fixed" by stamping `alembic_version` straight to
+  head, which silently marked every migration still to come as applied
+  without running any of them (the module's own docstring names a concrete
+  incident this caused:
+  `event_requests.contact_email` staying `NOT NULL` after the release that
+  relaxed it). `upgrade_skipping_duplicates` instead marks only the one
+  migration that raised a duplicate-column/already-exists error, logs which
+  one, and continues the rest. Read in full: the decision logic
+  (`ready_revisions`/`heads_after_marking`/`is_duplicate_error`) is pure and
+  takes the Alembic/DB calls as injected callables, so it is unit-testable
+  without a database (and is: `tests/test_migration_recovery.py`, part of
+  the completion gate below); it re-raises unchanged any error that is not a
+  recognized duplicate, and re-raises a duplicate error it cannot pin on one
+  migration rather than silently marking an arbitrary one applied. No HTTP
+  surface, no org-scoping question applies (whole-database startup
+  machinery, not request-scoped). **Verified good ✅** — should fold into
+  Feature 33 (Core infrastructure)'s declared scope on its next pass.
+- **`app/services/instructor_erasure.py` (120 L)** — on an anonymisation or
+  permanent delete, replaces the departing member's name with
+  `"Former member"` everywhere it is stored as free-text instructor
+  attribution (`EventTemplate.training_details`'s JSON, `TrainingSession.instructor`,
+  and each attendee's `TrainingRecord.instructor`), rather than leaving the
+  real name behind or a report-breaking blank. Confirmed wired into both
+  callers rather than assumed from the module existing (`grep -rn
+"replace_instructor_name" app/`: `member_anonymization_service.py` and
+  `users.py`'s permanent-delete path, both calling it). Read in full: every
+  query filters `organization_id` (XC-3); rows are read with
+  `.with_for_update()` before being mutated, consistent with this codebase's
+  locking convention for a read-then-write; the `EventTemplate.training_details`
+  JSON mutation uses `copy.deepcopy()` before reassigning, not a shallow
+  `dict()` copy (Pitfall #12, satisfied correctly — see class 9 above).
+  **Verified good ✅** — should fold into Feature 10 (Documents & legal) or
+  Feature 18 (Training extended)'s declared scope, whichever a future pass
+  decides is the better home for the department's erasure logic as a whole.
+- **CRR/Outreach Goals' further service-layer extension**
+  (`app/services/crr_catalogue_defaults.py`, 121 L, no DB access — static
+  owner-confirmed seed data only; `app/services/crr_impact_service.py`,
+  281 L; `app/services/outreach_goal_service.py`, 268 L;
+  `app/services/zip_lookup.py`, 68 L) — `crr.py`/`outreach_goals.py`
+  themselves were already reviewed whole at RPT6-29 (pass 17, folded into
+  row 29's declared scope), but these four backing files did not exist at
+  that baseline and were not re-covered by name. Read in full:
+  `crr_impact_service.py` (consumed by `community_engagement_service.py`,
+  row 29's own dashboard) computes only aggregated breakdowns (by type,
+  risk/population tag, and ZIP) and touches none of the encrypted-at-rest
+  resident PII fields directly (0 hits for `resident_*`/`street_address` in
+  the file); `outreach_goal_service.py` filters `organization_id` on every
+  query (22 hits, all scoped) and validates a client-supplied `measure_id`
+  against the caller's own org before storing a goal against it; `OutreachGoalsResponse`
+  carries only department-level yearly targets and progress figures, no
+  member or resident identity, so its absence from `UNCACHEABLE_PREFIXES`
+  is correct rather than a gap. `zip_lookup.py` resolves a ZIP to
+  city/state/county/coordinates from a bundled, offline GeoNames dataset —
+  deliberately not a third-party geocoding call, so no resident ZIP a
+  department enters ever leaves the server (the module's own docstring
+  states this as an owner decision). **Verified good ✅.**
+- **`app/services/apparatus_seat_request_notices.py` (295 L)** — extends
+  the already-reviewed Apparatus Events module (pass 18) with the email
+  notices for a seat request and its answer. Read in full: every query
+  filters `organization_id` (19 hits, all scoped); the recipient list for
+  "a member asked for a seat" is resolved to the night's organizer/alternate
+  or, failing both, the event's creator, each re-checked for
+  `apparatus_events.manage` before being notified — not merely a name taken
+  from the request; every paragraph placed into the email body (including a
+  coordinator's free-text decline note) passes through `html.escape()`
+  (`_send`, confirmed by reading the function rather than the import list);
+  a send failure is logged and swallowed rather than raised, with the
+  module's own docstring explaining why (the seat change already committed;
+  raising here would misread to the member as if it had not). **Verified
+  good ✅.**
+- **Training module's sign-off/requirement-correction extension**
+  (`app/services/training_approval_reminders.py`, 282 L;
+  `app/services/training_credit_duplicates.py`, 267 L;
+  `app/services/program_requirement_reopen.py`, 188 L;
+  `app/services/email_templates_program_progress.py`,
+  `app/services/email_templates_training_approval.py`, 120/117 L, static
+  template strings only) — all called from already-reviewed Training
+  endpoint files (`training.py`, row 17) or the scheduled-task runner.
+  `program_requirement_reopen.py` and `training_credit_duplicates.py` each
+  filter `organization_id` on every query (8 and 12 hits respectively, all
+  scoped). The two new email template files follow the pre-existing
+  `email_templates_outreach.py` pattern exactly (`RAW_HTML_VARIABLES: set[str]
+= set()`, i.e. every template variable is escaped at render — confirmed by
+  the same `# Every value here is plain text, escaped when it is rendered.`
+  comment and empty set in both). **Verified good ✅.**
+- **`app/api/draft_visibility.py`** (counted above with the History write-up
+  since it is consumed by `history`-adjacent code's neighbours) is actually
+  Events/Training's own single-rule fix for Pitfall #29 (a draft must not be
+  visible on one screen and hidden on another): `visible_draft_types`/
+  `can_see_draft`/`event_visible_clause` are pure, permission-driven
+  functions with no DB access of their own. Confirmed wired into all three
+  places that show an event (`events.py`, `training.py`,
+  `training_sessions.py`, `grep -rln`) rather than a fourth screen silently
+  keeping its own rule. **Verified good ✅.**
+- **`app/utils/duty_shifts.py`/`app/utils/separation_of_duties.py`** (21 L
+  each) — two small, already-consistent policy helpers.
+  `duty_shifts_only()` is a single SQLAlchemy clause
+  (`Shift.is_outreach.is_(False)`) applied everywhere shift hours are
+  totalled, so an outreach signup sheet's time is credited once (through
+  the event, via the pre-existing `outreach_sheet_credit.py`) rather than
+  twice — the Pitfall #29 "one rule, not independently re-derived" pattern
+  applied to a double-counting risk rather than a visibility one.
+  `is_own_grant()` is the shared separation-of-duties check (an officer may
+  not be the member a leave/override/waiver excuses), confirmed in use by
+  `grep -rln "is_own_grant"` across leave, rank-override and training-waiver
+  code rather than each maintaining its own copy. **Verified good ✅.**
+
+No finding in any of the above. Unlike the Apparatus Events/History Events
+pair at pass 18 (which have since been folded into rows 13 and left pending
+for History, respectively), none of this delta's new modules has an obvious
+single-feature home except the Training and Apparatus Events extensions
+(which belong with their existing rows) — see the Rotation section for the
+standing note on where each should fold in.
+
+### Standing open items, re-confirmed unchanged
+
+- **SEC12-1 (LOW/MED, S3/MinIO DNS-rebinding TOCTOU) — still OPEN/FLAGGED,
+  unchanged.** `git diff 4b1a87928..HEAD -- backend/app/services/s3_storage.py`
+  is empty.
+- **The standing egress-proxy TOCTOU item**
+  (`docs/KNOWN_LIMITATIONS.md`, "Outbound Integration Requests") — remains
+  open, unchanged. `create_integration_client()` and `SSRFSafeAsyncTransport`
+  (`app/services/integration_services/base.py`, `app/utils/ssrf_transport.py`)
+  are byte-identical to pass 18 (empty diff, confirmed directly rather than
+  assumed).
+
+## Findings
+
+**0 findings this pass.** All 13 classes re-verified clean against head, the
+new public History website and eight further new modules were read directly
+and found sound, and every pre-existing guard-test suite stays green.
+
+**0 security-tooling findings this pass.**
+
+## Guard tests added
+
+A new unit test, `tests/test_migration_recovery.py`, was found already
+present and passing for `app/core/migration_recovery.py` (added alongside
+that module itself, not by this pass) — no further guard test was needed for
+any of this delta's findings since there were none.
+
+## Completion gate
+
+| Check                                                                                                                                                                                            | Result                                       |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------- |
+| `flake8 app/ tests/ alembic/` (7.4.1, CI's pin)                                                                                                                                                  | ✅ 0 violations                              |
+| `black --check app/ tests/ alembic/` (26.10.1, CI's pin)                                                                                                                                         | ✅ clean, 3541 files unchanged               |
+| `isort --check-only app/ tests/ alembic/` (9.0.2, CI's pin)                                                                                                                                      | ✅ clean                                     |
+| `validate_migrations.py --strict`                                                                                                                                                                | ✅ single head `e9cf8ab7e4e4`, 844 revisions |
+| `check_route_permissions.py --strict`                                                                                                                                                            | ✅ 344 routes, 0 errors, 0 warnings          |
+| Cross-cutting guard suite (16 files: csv/schema/like/json/org-scoping-ratchet/capacity/auth-coverage/baseline-grants/account-status/log-shape/logging/org-scoping×3/migration-cleanup/api-cache) | ✅ 224 passed                                |
+| `test_alembic_migrations.py` + `test_migration_create_all_tables.py`                                                                                                                             | ✅ 80 passed                                 |
+| `cd frontend && npm run typecheck`                                                                                                                                                               | ✅ 0 errors                                  |
+| `cd frontend && npm run lint`                                                                                                                                                                    | ✅ 0 errors (`--max-warnings 10`)            |
+| `npx vitest run src/dialogDismissIntegrity.test.ts`                                                                                                                                              | ✅ 2 passed                                  |
+
+Backend linters (`flake8==7.4.1`, `black==26.10.1`, `isort==9.0.2`) and the
+full application dependency set were already installed in this sandbox under
+`python3.13` (the pinned backend interpreter); `python3` on `PATH` resolves
+to `3.11.18` in this sandbox and has none of them installed — every backend
+check above was run explicitly against `/usr/local/bin/python3.13` for this
+reason, not the bare `python3`/`pip` on `PATH`.
 
 ---
 
