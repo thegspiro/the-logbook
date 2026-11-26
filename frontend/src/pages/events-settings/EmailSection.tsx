@@ -97,6 +97,11 @@ const EmailSection: React.FC<EmailSectionProps> = ({
           {'{{event_date}}'}. Write only the message: it is sent inside the department&apos;s email design, which adds
           the logo, the subject as a heading, and the footer.
         </p>
+        <p className="text-theme-text-muted mb-3 text-xs">
+          For a Completed request, {'{{feedback_link}}'} adds an invitation to share feedback, and {'{{feedback_url}}'}{' '}
+          the bare link. Both stay empty unless a feedback form is set under Handling and the requester has not answered
+          yet.
+        </p>
 
         {showTemplateForm && (
           <div className="border-theme-surface-border bg-theme-surface-secondary/30 mb-4 space-y-3 rounded-lg border p-4">

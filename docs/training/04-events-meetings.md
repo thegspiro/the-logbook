@@ -3789,8 +3789,11 @@ how many there are. **Outreach Impact** adds a **Requester feedback** line: the 
 printed summary adds the same row once anyone has answered.
 
 The link is added to the built-in status email. A request email template your
-department attached to the **Completed** trigger itself is sent as written,
-without it.
+department attached to the **Completed** trigger is sent as written, so add the
+link yourself: `{{feedback_link}}` puts in a sentence inviting feedback with the
+link, and `{{feedback_url}}` the bare link, for wording of your own. Both stay
+empty unless a feedback form is chosen and the requester has not answered yet,
+so a template can carry them on any request.
 
 A requester who has not answered three days after the request was completed
 gets one reminder with the link, and never another. It goes only while a

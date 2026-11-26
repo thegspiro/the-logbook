@@ -1214,6 +1214,11 @@ opt-out applies. `GET /member-audience/options` and `POST
   and after the commit the **Requester Feedback Received** email
   (`outreach_feedback_received`, "Event officer duties"), subject prefixed
   "Low rating: " at 3 or less out of 5. A failed email never fails the submit. _(2026-11-26)_
+  A department's own request email template can carry the survey link:
+  `{{feedback_link}}` (an invitation sentence) and `{{feedback_url}}` (the bare
+  link), filled by `render_request_template` only while `feedback_link()`
+  offers one and empty otherwise. The template's plain-text part is now filled
+  with every placeholder too; it was sent with them unreplaced.
   The daily `outreach_feedback_reminders` task (10:10) emails a requester
   once, through the **Requester Feedback Reminder** template
   (`outreach_feedback_reminder`, public footer), three days after the

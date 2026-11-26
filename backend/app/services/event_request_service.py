@@ -569,7 +569,7 @@ async def apply_default_assignee(
     return default_assignee
 
 
-async def _feedback_link(
+async def feedback_link(
     db: AsyncSession, event_request: EventRequest, org: Optional[Organization]
 ) -> Optional[str]:
     """The status page link that asks for feedback, on a Completed request's
@@ -594,7 +594,10 @@ async def _feedback_link(
 
 
 def render_request_template(
-    template: Any, event_request: EventRequest, org: Optional[Organization]
+    template: Any,
+    event_request: EventRequest,
+    org: Optional[Organization],
+    feedback_url: Optional[str] = None,
 ) -> tuple[str, str, Optional[str]]:
     """Fill a department's email template for one request.
 
@@ -613,6 +616,13 @@ def render_request_template(
       (``email_theme.page_content``): only what was inside ``<body>`` is kept, and the
       page's own ``<head>`` and ``<style>`` are dropped, so every request
       email is in the house design and no document is nested in another.
+    * ``{{feedback_url}}`` is the status-page link that asks for feedback, and
+      ``{{feedback_link}}`` a sentence inviting it with that link. Both are
+      empty unless the caller passes ``feedback_url`` — which it does only
+      while ``feedback_link`` offers one (a Completed request, a feedback form
+      set, nothing sent yet) — so a department can put them in any template
+      and they vanish where they do not apply. Without them, a department's
+      own Completed email never carried the survey the built-in one links to.
     """
     from app.services.email_service import wrap_email_body
     from app.services.email_theme import ACCENT_BLUE, page_content
@@ -631,13 +641,42 @@ def render_request_template(
         ),
     }
 
+    context["feedback_url"] = feedback_url or ""
+
     subject = template.subject
+    text = template.body_text
     for key, value in context.items():
         # EV-7: coerce to str before replace/escape — a None base-context value
         # would otherwise raise TypeError -> 500.
         safe_value = "" if value is None else str(value)
         subject = subject.replace(f"{{{{{key}}}}}", safe_value)
         body = body.replace(f"{{{{{key}}}}}", _html.escape(safe_value))
+        if text:
+            text = text.replace(f"{{{{{key}}}}}", safe_value)
+    # Assembled here rather than escaped as a value: it is markup the
+    # department did not write, around a link whose only variable part (the
+    # URL) is escaped.
+    body = body.replace(
+        "{{feedback_link}}",
+        (
+            (
+                "<p>How did it go? We would be glad to hear: "
+                f'<a href="{_html.escape(feedback_url)}">share your feedback</a>.</p>'
+            )
+            if feedback_url
+            else ""
+        ),
+    )
+    subject = subject.replace("{{feedback_link}}", feedback_url or "")
+    if text:
+        text = text.replace(
+            "{{feedback_link}}",
+            (
+                f"How did it go? Share your feedback: {feedback_url}"
+                if feedback_url
+                else ""
+            ),
+        )
     # The colourway of the built-in request-status notice, so every email a
     # requester receives from the department looks like one series.
     body = wrap_email_body(
@@ -648,7 +687,7 @@ def render_request_template(
         chip="Request update",
         footer_key="public",
     )
-    return subject, body, template.body_text
+    return subject, body, text
 
 
 async def send_request_notification(
@@ -740,7 +779,7 @@ async def send_request_notification(
                     f"<p><strong>Reason:</strong> {_html.escape(decline_reason)}</p>"
                 )
                 detail_lines.append(f"Reason: {decline_reason}")
-            feedback_url = await _feedback_link(db, event_request, org)
+            feedback_url = await feedback_link(db, event_request, org)
             if feedback_url:
                 detail_rows.append(
                     "<p>How did it go? We would be glad to hear: "
@@ -777,7 +816,9 @@ async def send_request_notification(
                 # its body_text into the generic status email discarded
                 # everything an administrator actually wrote.
                 rendered: Optional[tuple[str, str, Optional[str]]] = (
-                    render_request_template(template, event_request, org)
+                    render_request_template(
+                        template, event_request, org, feedback_url=feedback_url
+                    )
                 )
             else:
                 # _render_with_fallback loads the department's template and
