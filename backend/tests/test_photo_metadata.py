@@ -484,12 +484,15 @@ BULK = {
 
 
 def _measured(content: bytes, mime: str) -> tuple[str, float, int]:
-    """The outcome, the seconds taken and the peak traced allocation. Timed
-    and traced in separate runs: tracemalloc's own bookkeeping per
-    allocation would otherwise be most of what is timed."""
-    started = time.perf_counter()
+    """The outcome, the CPU seconds taken and the peak traced allocation.
+    CPU time, not wall time: what a crafted file costs is the processor it
+    takes, and a busy CI runner stretches wall time several-fold (0.58 s
+    for a 24 ms walk, measured with every core loaded). Timed and traced in
+    separate runs: tracemalloc's own bookkeeping per allocation would
+    otherwise be most of what is timed."""
+    started = time.process_time()
     outcome = _outcome(content, mime)
-    elapsed = time.perf_counter() - started
+    elapsed = time.process_time() - started
     tracemalloc.start()
     try:
         assert _outcome(content, mime) == outcome
