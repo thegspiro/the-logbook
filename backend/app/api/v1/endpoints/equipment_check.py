@@ -1006,6 +1006,8 @@ async def submit_standalone_check(
             data=data.model_dump(exclude_unset=True),
         )
         return check
+    except EquipmentCheckConflictError as e:
+        raise HTTPException(status_code=409, detail=safe_error_detail(e))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
 

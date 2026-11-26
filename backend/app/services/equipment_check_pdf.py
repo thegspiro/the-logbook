@@ -287,7 +287,10 @@ def generate_check_detail_pdf(
     """Generate an individual check report PDF
     (compartment-by-compartment results)."""
     overall = check.get("overall_status", "unknown")
-    status_label = "PASS" if overall == "pass" else "FAIL"
+    # An unfinished check is neither: the screen shows it as incomplete, and
+    # paper calling it a failure flags a truck nobody found anything wrong
+    # with (EC2-14).
+    status_label = {"pass": "PASS", "incomplete": "INCOMPLETE"}.get(overall, "FAIL")
     checked_at = _local(check.get("checked_at"), organization, "%Y-%m-%d %H:%M %Z")
     meta = _meta(
         "Equipment Check Report",
