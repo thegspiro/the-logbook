@@ -139,16 +139,25 @@ and refused to boot an existing one.
 
 A HEIC photo filed with a training waiver request is now stored as a JPEG,
 decoded with `pi-heif`, pinned in `backend/requirements.txt`. The waiver
-document service imports it, and the API's waiver routes load that service
-whether or not a department takes documents, so **a backend started without
-the package fails at import and never serves a request**. The wheel bundles
-libheif and libde265 and needs no system package, on amd64 or arm64.
+document service checks for it when it loads, and the API's waiver routes
+load that service whether or not a department takes documents, so **a backend
+started without the package fails at import and never serves a request**.
+The wheel bundles libheif and libde265 and needs no system package, on amd64
+or arm64.
 
-- **Docker (including Unraid Compose Manager and the single-image Unraid
-  template):** rebuild the backend image (`docker compose build backend` or
-  `--build`). The backend Dockerfile installs `requirements.txt`.
+- **Docker Compose (including Unraid Compose Manager):** rebuild the backend
+  image (`docker compose build backend` or `--build`). The backend
+  Dockerfile installs `requirements.txt`.
+- **Single-image Unraid template (Community Applications):** nothing to
+  build. Update the container to the release image that carries this change
+  (**Apps**, **Check for Updates**, **Update**); the image ships with the
+  package installed.
 - **Running from source:** run `pip install -r backend/requirements.txt`
   before restarting.
+
+The decoder runs in a child Python process the backend starts per photo
+(`python -I`). It needs no extra permission, port or volume, and nothing to
+configure; it uses the same interpreter as the backend.
 
 No data change: HEIC files already stored stay as they were filed.
 

@@ -11745,12 +11745,32 @@ request, kept 365 days) shipped with these gaps, each the narrower choice:
   2026-11-26: converted to JPEG at upload with `pi-heif` 1.4.0.** A HEIC or
   HEIF photo filed with a waiver request is decoded, turned upright, and
   stored as a JPEG with no EXIF or XMP, so the location an iPhone records is
-  never kept (`app/utils/heic_to_jpeg.py`). The malware scan, the storage
-  ledger and the attachment row all see the JPEG, and the page shows it like
-  any other. A photo that cannot be decoded is a 400 asking the member to
-  save it as JPEG; it is never stored as filed, and there is no fallback when
-  the dependency is missing. Pillow's pixel limit is checked on the declared
-  size before decoding.
+  never kept (`app/utils/heic_to_jpeg.py`). The member's original is
+  malware-scanned before it is decoded, and the JPEG again as it is stored,
+  so the storage ledger and the attachment row describe the file kept; the
+  page shows it like any other. A photo that cannot be decoded is a 400
+  asking the member to save it as JPEG; it is never stored as filed, and
+  there is no fallback when the dependency is missing.
+  - **The decoder runs in a child process** (`heic_decode_worker.py`, under
+    `python -I`, with no application code and none of the server's
+    environment). An independent review found that a one-byte change to a
+    valid photo segfaults `pi_heif.open_heif`; in the server's process that
+    took the backend down for every user, and a thread does not prevent it.
+    Now a crash, an exception, a 30-second timeout or exhausted memory ends
+    the child and gives the member a 400. The child raises its own OOM score
+    so the kernel kills it before the server, caps its address space at
+    640 MiB, and one conversion runs at a time. Whether to report the crash
+    to the pi-heif maintainers is with the owner.
+  - **Photos over 25 megapixels are refused** _(default taken)_, with "This
+    photo is too large to accept. Save a smaller copy as a JPEG and try
+    again." The cap is checked on the declared size before decoding. The
+    child's peak was measured at about 193 MB for an iPhone's default 24 MP
+    photo and 360 MB for its optional 48 MP one; the backend container is
+    limited to 768 MB (384 MB in `docker-compose.minimal.yml`) and the child
+    counts against it. So the default photo converts and a 48 MP one does
+    not. On the minimal compose file even a 24 MP photo may not fit beside
+    the server; if so the kernel kills the child, the member gets the
+    "couldn't read this photo" 400, and the server keeps running.
   - **Why `pi-heif`:** it is the decode-only build of `pillow-heif` from the
     same repository (`bigcat88/pillow_heif`) and bundles only libheif and
     libde265, under the **LGPLv3** (the Python binding is BSD-3-Clause).
@@ -11766,8 +11786,12 @@ request, kept 365 days) shipped with these gaps, each the narrower choice:
     They keep their `.heic` name and type, still download, and still have no
     view in the page. Converting them would rewrite filed evidence and its
     recorded SHA-256; retention removes them on its usual schedule.
-  - **The JPEG can be larger than the HEIC was.** Quality steps down from 85
-    to 55 until it fits the 10 MB limit; a photo that is still over is a 400.
+  - **The JPEG can be larger than the HEIC was.** It is written at quality
+    85, and once more at 60 if that is over the 10 MB limit; a photo still
+    over is a 400.
+  - **JPEG and PNG waiver documents still keep their own EXIF**, GPS
+    included: only HEIC passes through the converter. That predates this
+    change and is with the owner separately.
 - ~~**There is no preview of a document in the page.**~~ ✅ Resolved
   2026-11-23 (owner decision): a JPEG or PNG opens in a dialog on the request
   page, and a PDF in a new tab under the browser's own viewer. Both are a

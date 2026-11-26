@@ -1579,12 +1579,15 @@ switch and the officer's duty-email setting).
   (`opener` cleared, closed again on failure), because the CSP has no
   `frame-src blob:`. A HEIC stored before 2026-11-26 gets no View.
 - **HEIC stored as JPEG** _(owner decision 2026-11-26)_. `_as_stored` in
-  `attendance_waiver_attachments.py` decodes `image/heic` / `image/heif` with
-  `pi-heif` (decode-only, LGPLv3; not the GPLv2 `pillow-heif`) off the event
-  loop, then `store_bytes` checks, scans and records the JPEG under
-  `STORED_FILE_RULES`, which do not admit HEIC. No EXIF or XMP is written;
-  an undecodable photo is a 400; Pillow's pixel limit applies before decode.
-  Files stored earlier stay as filed.
+  `attendance_waiver_attachments.py` malware-scans the member's
+  `image/heic` / `image/heif` original, then `heic_to_jpeg` decodes it with
+  `pi-heif` (decode-only, LGPLv3; not the GPLv2 `pillow-heif`) in a child
+  process, `heic_decode_worker.py` under `python -I`: a crafted file was
+  shown to segfault the decoder. `store_bytes` then checks, scans and
+  records the JPEG under `STORED_FILE_RULES`, which do not admit HEIC. No
+  EXIF or XMP is written; every failure in the child is a 400 (a missing
+  decoder a 503); a 25 MP cap applies before decode; one conversion at a
+  time, 30-second timeout. Files stored earlier stay as filed.
 
 ## Former members in pickers _(2026-11-19, #4380, #4432)_
 
