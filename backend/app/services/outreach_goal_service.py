@@ -17,6 +17,7 @@ from datetime import date, datetime, time, timezone
 from typing import Any, Optional
 
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.crr import (
@@ -94,6 +95,10 @@ class OutreachGoalService:
         ).scalar_one_or_none()
         if measure is None:
             raise ValueError("That count is not in the department's CRR catalogue")
+        if not measure.is_active:
+            # Owner decision, 2026-11-26: a new goal needs an active count. A
+            # goal set before the count was retired keeps counting.
+            raise ValueError("That count is retired and cannot be given a new goal")
         return measure
 
     @staticmethod
@@ -139,8 +144,14 @@ class OutreachGoalService:
             outreach_metric=outreach_metric,
             created_by=user_id,
         )
-        self.db.add(goal)
-        await self.db.flush()
+        try:
+            # In a savepoint, so a save that raced past the check above is
+            # refused with the same sentence and the session stays usable.
+            async with self.db.begin_nested():
+                self.db.add(goal)
+                await self.db.flush()
+        except IntegrityError:
+            raise ValueError(f"There is already a goal for that in {year}")
         return goal
 
     async def update_target(
