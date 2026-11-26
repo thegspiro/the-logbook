@@ -343,6 +343,69 @@ describe('RequirementModal', () => {
 
       expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ shift_credited: true }), true, 'req-1');
     });
+
+    it('offers a seat only once shift attendance counts', async () => {
+      const user = userEvent.setup();
+      render(
+        <RequirementModal
+          requirement={existing({ shift_credited: false })}
+          categories={[]}
+          onClose={vi.fn()}
+          onSave={onSave}
+        />
+      );
+
+      expect(screen.queryByLabelText('Only time in this seat')).not.toBeInTheDocument();
+      await user.click(screen.getByRole('checkbox', { name: /Shift attendance satisfies/ }));
+      expect(screen.getByLabelText('Only time in this seat')).toHaveValue('');
+    });
+
+    it('sends the seat chosen for a shift-credited hours requirement', async () => {
+      onSave.mockResolvedValue(undefined);
+      const user = userEvent.setup();
+      render(
+        <RequirementModal
+          requirement={existing({ shift_credited: true })}
+          categories={[]}
+          onClose={vi.fn()}
+          onSave={onSave}
+        />
+      );
+
+      await user.selectOptions(screen.getByLabelText('Only time in this seat'), 'Driver/Operator');
+      await user.click(screen.getByRole('button', { name: 'Update Requirement' }));
+      await user.click(screen.getByRole('button', { name: 'Save for everyone' }));
+
+      expect(onSave).toHaveBeenCalledWith(
+        expect.objectContaining({ shift_credited: true, credited_seat: 'driver' }),
+        true,
+        'req-1'
+      );
+    });
+
+    it('clears a stored seat when shift attendance stops counting', async () => {
+      onSave.mockResolvedValue(undefined);
+      const user = userEvent.setup();
+      render(
+        <RequirementModal
+          requirement={existing({ shift_credited: true, credited_seat: 'driver' })}
+          categories={[]}
+          onClose={vi.fn()}
+          onSave={onSave}
+        />
+      );
+
+      expect(screen.getByLabelText('Only time in this seat')).toHaveValue('driver');
+      await user.click(screen.getByRole('checkbox', { name: /Shift attendance satisfies/ }));
+      await user.click(screen.getByRole('button', { name: 'Update Requirement' }));
+      await user.click(screen.getByRole('button', { name: 'Save for everyone' }));
+
+      expect(onSave).toHaveBeenCalledWith(
+        expect.objectContaining({ shift_credited: false, credited_seat: null }),
+        true,
+        'req-1'
+      );
+    });
   });
 
   describe('existing members', () => {

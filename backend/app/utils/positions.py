@@ -22,7 +22,7 @@ An ambulance built from the defaults therefore had an EMT seat no EMT could
 sign up for, and no setting could unblock it (see CHANGELOG 2026-08-26).
 """
 
-from typing import Any, Dict, Iterable, List, Mapping, Optional
+from typing import Any, Dict, FrozenSet, Iterable, List, Mapping, Optional
 
 from pydantic import BaseModel
 
@@ -80,6 +80,20 @@ def canonical_position(name: str) -> str:
     if folded in CANONICAL_POSITIONS:
         return folded
     return cleaned
+
+
+def position_spellings(name: str) -> FrozenSet[str]:
+    """Every case-folded spelling a stored seat value may use for ``name``.
+
+    ``"ems"`` is also stored as ``"emt"`` by rows written before the backend
+    settled on one spelling, so a query matching stored values by seat has to
+    accept both. A department's own seat has only its own spelling.
+    """
+    canonical = canonical_position(name).casefold()
+    if not canonical:
+        return frozenset()
+    aliases = {alias for alias, seat in _POSITION_ALIASES.items() if seat == canonical}
+    return frozenset({canonical, *aliases})
 
 
 # What each canonical seat is called on screen and in print. Mirrors
