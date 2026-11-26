@@ -7,14 +7,17 @@ the stable code, and one department never sees or touches another's catalogue.
 """
 
 import uuid
+from datetime import datetime, timezone
 
 import pytest
 from fastapi import HTTPException
 from pydantic import ValidationError
 from sqlalchemy import func, select
 
+from app.api.v1.endpoints import crr as crr_endpoints
 from app.api.v1.endpoints.crr import (
     add_measure,
+    create_activity,
     create_activity_type,
     create_tag,
     delete_activity_type,
@@ -27,6 +30,7 @@ from app.api.v1.endpoints.crr import (
 from app.models.crr import CrrActivityType, CrrTag
 from app.models.user import Organization, User, UserStatus
 from app.schemas.crr import (
+    CrrActivityCreate,
     CrrActivityTypeCreate,
     CrrActivityTypeUpdate,
     CrrMeasureCreate,
@@ -212,6 +216,31 @@ class TestActivityTypes:
         catalogue = await _catalogue(db_session, officer)
         assert not any(t.id == created.id for t in catalogue.activity_types)
 
+    async def test_a_type_with_recorded_activities_is_refused_not_a_500(
+        self, db_session, dept, monkeypatch
+    ):
+        _, officer = dept
+        monkeypatch.setattr(crr_endpoints, "user_has_permission", lambda u, p: False)
+        created = await create_activity_type(
+            body=CrrActivityTypeCreate(name="Knox box check"),
+            db=db_session,
+            current_user=officer,
+        )
+        await create_activity(
+            body=CrrActivityCreate(
+                activity_type_id=created.id, occurred_at=datetime.now(timezone.utc)
+            ),
+            db=db_session,
+            current_user=officer,
+        )
+
+        with pytest.raises(HTTPException) as caught:
+            await delete_activity_type(
+                type_id=created.id, db=db_session, current_user=officer
+            )
+        assert caught.value.status_code == 400
+        assert "Retire it instead" in caught.value.detail
+
     async def test_an_explicit_null_is_refused_rather_than_dropped(
         self, db_session, dept
     ):
@@ -314,6 +343,37 @@ class TestTags:
         assert sorted(updated.tag_ids) == sorted(
             [by_code["older_adults"], by_code["fire"]]
         )
+
+    async def test_a_retired_tag_stays_on_a_type_until_removed(self, db_session, dept):
+        _, officer = dept
+        catalogue = await _catalogue(db_session, officer)
+        by_code = {t.code: t.id for t in catalogue.tags}
+        smoke = _type(catalogue, "smoke_alarm_install")
+        for code in ("fire", "drowning"):
+            await update_tag(
+                tag_id=by_code[code],
+                body=CrrTagUpdate(is_active=False),
+                db=db_session,
+                current_user=officer,
+            )
+
+        # Fire was already the type's default: it may stay.
+        kept = await set_activity_type_tags(
+            type_id=smoke.id,
+            body=CrrTypeTagsUpdate(tag_ids=[by_code["fire"], by_code["older_adults"]]),
+            db=db_session,
+            current_user=officer,
+        )
+        assert by_code["fire"] in kept.tag_ids
+        # Drowning was not: a retired tag is not newly added.
+        with pytest.raises(HTTPException) as caught:
+            await set_activity_type_tags(
+                type_id=smoke.id,
+                body=CrrTypeTagsUpdate(tag_ids=[by_code["drowning"]]),
+                db=db_session,
+                current_user=officer,
+            )
+        assert caught.value.status_code == 400
 
     async def test_a_tag_is_added_and_a_duplicate_refused(self, db_session, dept):
         _, officer = dept

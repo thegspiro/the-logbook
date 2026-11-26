@@ -235,6 +235,26 @@ class TestApplyingAcceptedChanges:
         assert "$3,950" in section["content"]
         assert "$3,900" not in section["content"]
 
+    async def test_applying_moves_the_edit_version_on(self, world: _World):
+        """MM6-9: the applied change rewrites the section, so an editor holding
+        the version from before it must be refused, not allowed to write the
+        old section back over it."""
+        minutes_id = await _circulated(world)
+        suggestion = (await _suggest(world, minutes_id)).json()
+        await _recall(world, minutes_id)
+        async with _client(world.db, world.secretary) as c:
+            loaded = (await c.get(f"/minutes/{minutes_id}")).json()["edit_version"]
+
+        resp = await _apply(world, minutes_id, suggestion["id"], ["c2"])
+        assert resp.status_code == 200, resp.text
+        async with _client(world.db, world.secretary) as c:
+            stale = await c.put(
+                f"/minutes/{minutes_id}",
+                json={"title": "Stale", "expected_version": loaded},
+            )
+
+        assert stale.status_code == 409
+
     async def test_an_old_plain_text_section_becomes_rich_text_when_changes_land(
         self, world: _World
     ):

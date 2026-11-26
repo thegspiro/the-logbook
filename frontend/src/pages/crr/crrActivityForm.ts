@@ -32,14 +32,20 @@ export interface CrrActivityFormValues {
 /** Minutes a member is credited by default when they log their own activity. */
 export const DEFAULT_MINUTES = 60;
 
+/**
+ * A fresh form. ``at`` is when it happened by default: now for a log entry,
+ * the event's start for an activity recorded from an event, which is usually
+ * entered afterwards and would otherwise be filed on the wrong day (owner
+ * decision, 2026-11-26).
+ */
 export const initialValues = (
   options: CrrFormOptions,
   timezone: string,
   currentUserId: string | null,
-  now: Date = new Date()
+  at: Date = new Date()
 ): CrrActivityFormValues => ({
   activityTypeId: '',
-  occurredAt: formatForDateTimeInput(now, timezone),
+  occurredAt: formatForDateTimeInput(at, timezone),
   counts: {},
   tagIds: [],
   zipCode: '',
@@ -57,13 +63,24 @@ export const initialValues = (
       : [],
 });
 
-/** Choosing a type starts its counts empty and takes its default tags. */
-export const withType = (values: CrrActivityFormValues, activityType: CrrActivityType | undefined) => ({
-  ...values,
-  activityTypeId: activityType?.id ?? '',
-  counts: {},
-  tagIds: activityType ? [...activityType.tag_ids] : [],
-});
+/**
+ * Choosing a type starts its counts empty and takes its default tags — those
+ * the form offers. A type can still carry a retired default tag, which the
+ * form does not show and the server refuses on a new activity.
+ */
+export const withType = (
+  values: CrrActivityFormValues,
+  activityType: CrrActivityType | undefined,
+  offeredTags: readonly { id: string }[]
+) => {
+  const offered = new Set(offeredTags.map((t) => t.id));
+  return {
+    ...values,
+    activityTypeId: activityType?.id ?? '',
+    counts: {},
+    tagIds: activityType ? activityType.tag_ids.filter((id) => offered.has(id)) : [],
+  };
+};
 
 export interface BuildResult {
   payload: CrrActivityCreate | null;
@@ -98,6 +115,9 @@ export const buildCreatePayload = (values: CrrActivityFormValues, timezone: stri
   if (!eventId) {
     for (const row of values.members) {
       if (!row.userId) continue;
+      if (row.userId in members) {
+        return { payload: null, error: 'A member is listed twice. Remove one of the rows.' };
+      }
       const minutes = Number(row.minutes);
       if (!Number.isInteger(minutes) || minutes < 0 || minutes > 1440) {
         return { payload: null, error: 'Time spent must be between 0 and 1440 minutes.' };

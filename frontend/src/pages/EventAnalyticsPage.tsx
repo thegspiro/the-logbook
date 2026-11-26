@@ -12,7 +12,7 @@ import { eventService } from '../services/api';
 import { getEventTypeLabel } from '../utils/eventHelpers';
 import { formatDate } from '../utils/dateFormatting';
 import { useTimezone } from '../hooks/useTimezone';
-import { Breadcrumbs, SkeletonPage } from '../components/ux';
+import { SkeletonPage } from '../components/ux';
 import { EventsPageHeader } from '../components/events/EventsPageHeader';
 import { DateRangePicker } from '../components/ux';
 
@@ -204,10 +204,32 @@ export const EventAnalyticsPage: React.FC = () => {
     void fetchData();
   }, [fetchData]);
 
+  // A section of Events, so no trail: the strip marks where the viewer is, as
+  // on the section's siblings. Drawn in every state, so neither the strip nor
+  // the period picker disappears while figures load or when they cannot.
+  const header = (
+    <EventsPageHeader
+      icon={BarChart3}
+      title="Attendance Trends"
+      subtitle="Attendance and check-in rates across your events"
+      actions={
+        <DateRangePicker
+          startDate={startDate}
+          endDate={endDate}
+          onChange={(s, e) => {
+            setStartDate(s);
+            setEndDate(e);
+          }}
+          label="Period"
+        />
+      }
+    />
+  );
+
   if (loading) {
     return (
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-        <Breadcrumbs underHub="/events/admin" />
+        {header}
         <SkeletonPage />
       </div>
     );
@@ -216,7 +238,7 @@ export const EventAnalyticsPage: React.FC = () => {
   if (error) {
     return (
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-        <Breadcrumbs underHub="/events/admin" />
+        {header}
         <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-4" role="alert" aria-live="assertive">
           <p className="text-red-700 dark:text-red-300">{error}</p>
           <button
@@ -240,23 +262,7 @@ export const EventAnalyticsPage: React.FC = () => {
   return (
     <div className="min-h-screen">
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-        <EventsPageHeader
-          icon={BarChart3}
-          title="Attendance Trends"
-          subtitle="Attendance and check-in rates across your events"
-          underHub="/events/admin"
-          actions={
-            <DateRangePicker
-              startDate={startDate}
-              endDate={endDate}
-              onChange={(s, e) => {
-                setStartDate(s);
-                setEndDate(e);
-              }}
-              label="Period"
-            />
-          }
-        />
+        {header}
 
         {/* Summary Cards */}
         <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">

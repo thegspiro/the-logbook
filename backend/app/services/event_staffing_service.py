@@ -37,12 +37,19 @@ from app.services.member_audience import AudienceFilter
 
 
 async def linked_request(db: AsyncSession, event: Event) -> Optional[EventRequest]:
-    """The request this event was scheduled from, if any (org-scoped)."""
+    """The request this event was scheduled from, if any (org-scoped).
+
+    The first, if two were ever linked: the same one the Outreach Overview and
+    Outreach Impact name (pitfall #29).
+    """
     return await db.scalar(
-        select(EventRequest).where(
+        select(EventRequest)
+        .where(
             EventRequest.event_id == str(event.id),
             EventRequest.organization_id == str(event.organization_id),
         )
+        .order_by(EventRequest.created_at, EventRequest.id)
+        .limit(1)
     )
 
 

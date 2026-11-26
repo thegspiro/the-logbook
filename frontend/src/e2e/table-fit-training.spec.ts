@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { json, signIn, TEST_USER } from './helpers';
-import { TABLE_FIT_VIEWPORTS, expectTableFitsItsCard } from './tableFit';
+import { TABLE_FIT_VIEWPORTS, expectContentStaysInCard, expectTableFitsItsCard } from './tableFit';
 
 const MEMBER_ID = 'member-table-fit';
 
@@ -88,6 +88,9 @@ test.describe('Member training history list fits its card', () => {
         return widest - room;
       });
       expect(overflow, `Member training history list is ${overflow}px wider than its card`).toBeLessThanOrEqual(0);
+      // A long code or certificate number can run past the clipping card
+      // without widening any list item; the width check above cannot see that.
+      await expectContentStaysInCard(list, 'Member training history list');
     });
   }
 });
