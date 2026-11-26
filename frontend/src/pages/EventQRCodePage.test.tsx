@@ -401,8 +401,11 @@ describe('EventQRCodePage', () => {
 
       renderWithRouter(<EventQRCodePage />);
 
+      // The event's crumb is named once its data has loaded, which can be
+      // after the trail itself renders; reading it synchronously failed on
+      // a loaded CI runner.
       const trail = await screen.findByRole('navigation', { name: /breadcrumb/i });
-      expect(within(trail).getByRole('link', { name: 'Test Event' })).toHaveAttribute('href', '/events/1');
+      expect(await within(trail).findByRole('link', { name: 'Test Event' })).toHaveAttribute('href', '/events/1');
     });
   });
 
