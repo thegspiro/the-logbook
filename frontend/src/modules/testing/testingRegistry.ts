@@ -1543,6 +1543,13 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
         permission: 'settings.manage',
         module: 'public_info',
       },
+      {
+        path: '/admin/public-website',
+        label: 'Public website settings',
+        permission: 'settings.manage',
+        module: 'public_info',
+        note: 'The published pages are served on the public website port (PUBLIC_SITE_PORT), not in this app',
+      },
       { path: '/admin/audit-log', label: 'Audit log', permission: 'audit.view' },
       { path: '/admin/security-alerts', label: 'Security alerts', permission: 'audit.view' },
       { path: '/admin/errors', label: 'Error monitoring', permission: 'settings.manage' },

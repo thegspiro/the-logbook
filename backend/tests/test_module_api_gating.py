@@ -255,6 +255,7 @@ EXPECTED_GATES = {
     "/api/v1/notifications": "notifications",
     "/api/v1/prospective-members": "prospective_members",
     "/api/v1/public-portal": "public_info",
+    "/api/v1/public-site": "public_info",
     "/api/v1/reports": "reports",
     "/api/v1/scheduling": "scheduling",
     "/api/v1/store": "storefront",

@@ -1,5 +1,48 @@
 # Known Limitations & Open Decisions
 
+## Public Website — Owner Decisions and What the First Version Leaves Out (2026-11-26)
+
+An installation can now publish a website for its department's community
+([PUBLIC_WEBSITE.md](./PUBLIC_WEBSITE.md)). The owner decided its shape on
+2026-11-26:
+
+### Decided
+
+- **A separate public hostname, reached through a dedicated port.** The web
+  container serves the website on `PUBLIC_SITE_PORT` (3002; 7882 on Unraid)
+  and the operator points the public hostname at it. No hostname is configured
+  in the application.
+- **Server-rendered HTML**, so search engines and link previews read the
+  pages. The pages run no script.
+- **Fixed sections with switches**, not custom pages or a page builder.
+- **A few selectable themes.** Three ship: Classic, Modern and Heritage. They
+  differ in colour and type, not in layout.
+- **Built in stages.** The first change is the foundation and the Home, About
+  and Contact pages.
+
+### Accepted
+
+- **Events, Join us, News, History, minutes and donations are not on the
+  website yet.** Each is planned as its own change.
+- **Text is plain text.** Paragraphs only; no headings, links or emphasis.
+- **No canonical URL, sitemap or `og:url`.** The application is not told the
+  website's public address, so it cannot write one into a page.
+- **No preview inside the members' application.** The pages are served only on
+  the public website port, so an administrator checks them there.
+- **The bundled TLS proxy does not serve the website by itself.** A
+  host-installed nginx and the Compose `production` profile need the server
+  block in `infrastructure/nginx/public-site.conf.example` added by hand.
+  `setup-ssl.sh` does not request a certificate for a second hostname.
+- **Only where there is exactly one department,** as for the public minutes.
+- **The port is published by default** by the Compose files and the Unraid
+  template. It answers 404 until the website is switched on.
+
+### What would reopen this
+
+A department that wants formatted text or its own pages; an operator who needs
+the application to know the public address (for canonical links or a sitemap);
+or a decision to have `setup-ssl.sh` configure the second hostname.
+
 ## Found by the November 21 – 22 Documentation Pass — Awaiting an Owner Decision (2026-11-22)
 
 None of these is a regression, and none was changed by the documentation
@@ -1389,7 +1432,9 @@ Phase 7, publishing outward (2026-11-24 spec), ships with these:
   portal route does. Signed files and the widget answer 404 in every refused
   case.
 - **No public pages inside the app.** The department's own website shows the
-  records; only the widget is served by the app.
+  records; only the widget is served by the app. (Since 2026-11-26 an
+  installation can publish a website of its own, but its first version has no
+  History pages; see "Public Website" at the top of this file.)
 
 ## Department Store — Decisions for the Owner (2026-11-13)
 
