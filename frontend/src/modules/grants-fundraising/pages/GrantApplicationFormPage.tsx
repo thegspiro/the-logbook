@@ -195,7 +195,11 @@ export const GrantApplicationFormPage: React.FC = () => {
   const assignableMembers = members.filter((m) => isActiveAccount(m.status));
   const storedAssignee = members.find((m) => m.id === formData.assignedTo);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
+  // An edit starts loading, so the blank form is never on screen before the
+  // record is; and a failed load shows no form at all. Saving the blank form
+  // that used to stand in sent a PUT that nulled every field left untouched.
+  const [isLoading, setIsLoading] = useState(isEditing);
+  const [loadFailed, setLoadFailed] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   // Kept beside formData rather than in it: both are structured values, not
   // a single text box each (see utils/applicationStructuredFields).
@@ -261,6 +265,7 @@ export const GrantApplicationFormPage: React.FC = () => {
       const loadApplication = async () => {
         try {
           setIsLoading(true);
+          setLoadFailed(false);
           const app: GrantApplication = await grantsService.getApplication(id);
           // GF-7: the statuses this grant may move to come from the server's
           // lifecycle; the picker offers those plus where it is now.
@@ -296,7 +301,7 @@ export const GrantApplicationFormPage: React.FC = () => {
           setBudgetNotes(budget.notes);
           setContactRows(readKeyContacts(app.keyContacts));
         } catch {
-          toast.error('Failed to load application.');
+          setLoadFailed(true);
         } finally {
           setIsLoading(false);
         }
@@ -435,6 +440,19 @@ export const GrantApplicationFormPage: React.FC = () => {
     return (
       <div className="flex items-center justify-center py-16" role="status" aria-live="polite">
         <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-red-500" />
+      </div>
+    );
+  }
+
+  if (loadFailed) {
+    return (
+      <div className="space-y-4">
+        <div className="alert-danger text-sm" role="alert">
+          This application could not be loaded, so it cannot be edited. Refresh the page to try again.
+        </div>
+        <button type="button" className="btn-secondary text-sm" onClick={() => void navigate('/grants/applications')}>
+          Back to Applications
+        </button>
       </div>
     );
   }

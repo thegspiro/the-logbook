@@ -12260,6 +12260,74 @@ shelf rule. A lot that expired yesterday is in the list but not in the count.
 
 **The decision:** which rule both should use.
 
+## Grants & Fundraising — Decisions From App Review B14 Pass 6 (2026-11-26)
+
+Details in `docs/app-review/grants-fundraising.md` → Pass 6.
+
+### GF2-3 — Compliance tasks are never generated in two common cases
+
+Standard compliance tasks (periodic reports, closeout, equipment inventory) are
+generated only on a change of status into Awarded. Two ordinary paths never
+reach it, and nothing says so:
+
+- **An application created as Awarded**, the usual way to enter a grant already
+  won, gets no tasks: creation does not generate them and the lifecycle never
+  re-enters Awarded.
+- **An application awarded before its dates are entered** gets only what the
+  missing dates allow (often nothing), and is then marked as generated, so
+  entering the dates later builds nothing.
+
+Reproduced both: 0 tasks each.
+
+**The decision:** generate on creation as Awarded, and regenerate (or add the
+missing tasks) when the dates or reporting frequency are entered after award,
+or leave generation to a deliberate "Generate tasks" action.
+
+### GF2-4 — What the grant report counts as overdue
+
+The grant report counts a compliance task as overdue only if an officer set its
+status to Overdue; nothing sets it automatically. The dashboard and the
+reminder emails call an open task past its due date overdue. So a task five days
+late is "pending" in the report and "overdue" everywhere else.
+
+**The decision:** whether overdue means the status, or open and past due.
+
+### GF2-5 — The closeout deadline is fixed, and "Final Report Due" is not read
+
+The closeout task is always due 90 days after the grant ends. The application's
+own "Final Report Due" and "Next Report Due" fields are stored and read by no
+task generator or reminder. Federal closeout under 2 CFR 200.344 is 120 days
+since the 2020 revision; check the current rule before relying on either figure.
+
+**The decision:** use the entered final-report date when there is one, and
+what default to use when there is not.
+
+### GF2-6 — The report's spending by category does not add up to Total Spent
+
+Total Spent sums every expenditure; the category bars sum budget lines. An
+expenditure with no budget line counts in the total and in no bar.
+
+**The decision:** add an "Unassigned" category, or require a budget line.
+
+### GF2-7 — Changing a pledge's donor locks the gifts already paid toward it
+
+After a pledge's donor is changed, every gift already linked to it is refused on
+any later edit, a notes fix included ("That pledge was made by a different
+donor").
+
+**The decision:** refuse the donor change while another donor's gifts are
+linked, or check the donor only when a gift is newly linked or its donor changes.
+
+### GF2-8 — The Budget tab's Total Spent disagrees with the overspend banner
+
+The Budget tab's Total Spent and Remaining add up the budget lines. The
+overspend banner uses the server's total of every expenditure. With spending
+recorded against no line, the banner can say the grant is over its award while
+the tab shows nothing spent and money remaining.
+
+**The decision:** show the server's total on the tab, with an "Uncharged" row so
+the lines still reconcile, or another wording.
+
 ## Elections — Five Counting and Ballot Decisions From App Review B5 Pass 7 (2026-11-24)
 
 Recorded rather than changed. Details in `docs/app-review/elections.md` →

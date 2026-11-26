@@ -30,6 +30,7 @@ from app.services.restricted_funds import is_charged
 from app.utils.model_updates import apply_updates, reload_updated_at
 from app.utils.org_timezone import (
     local_date,
+    local_day_start_utc,
     local_range_utc,
     resolve_local_range_utc,
     resolve_org_today,
@@ -800,17 +801,39 @@ class FundraisingService:
     async def update_pledge(
         self, pledge_id: str, organization_id: str, data: Dict[str, Any]
     ) -> Optional[Pledge]:
+        # Locked like the donation writes that move fulfilled_amount by a
+        # delta (pitfall #27): an edit saved alongside a gift must not write
+        # back the amount it read before the gift landed.
         result = await self.db.execute(
-            select(Pledge).where(
+            select(Pledge)
+            .where(
                 Pledge.id == pledge_id,
                 Pledge.organization_id == organization_id,
             )
+            .with_for_update()
+            .execution_options(populate_existing=True)
         )
         pledge: Optional[Pledge] = result.scalar_one_or_none()
         if not pledge:
             return None
         await self._validate_pledge_fks(data, organization_id, pledge.campaign_id)
+        amounts_before = (pledge.pledged_amount, pledge.fulfilled_amount)
         apply_updates(pledge, data, skip={"organization_id", "id"})
+        # A new amount re-settles the status the arithmetic owns: a paid-up
+        # pledge raised to more is open again (or the next gift is refused as
+        # paying a fulfilled pledge), and one lowered to what was received is
+        # fulfilled. A status sent with the edit is the officer's and stands.
+        # The dialog sends the pledged amount on every save, so only a changed
+        # amount counts: a notes edit must not undo a status set by hand.
+        amounts_changed = (pledge.pledged_amount, pledge.fulfilled_amount) != (
+            amounts_before
+        )
+        if amounts_changed and "status" not in data:
+            pledge.status = pledge_status_after(
+                PledgeStatus(pledge.status),
+                Decimal(pledge.fulfilled_amount or 0),
+                Decimal(pledge.pledged_amount or 0),
+            )
         await self.db.flush()
         await reload_updated_at(self.db, pledge)
         return pledge
@@ -915,13 +938,18 @@ class FundraisingService:
         today = await resolve_org_today(self.db, organization_id)
         year_start = date(today.year, 1, 1)
         twelve_months_ago = today - timedelta(days=365)
+        # donation_date is a UTC timestamp: bound it at the department's
+        # midnights, as the fundraising report does (GF-24a), or a gift on the
+        # evening of December 31 counts in next year's tile and last year's
+        # report at once.
+        tz = await resolve_reporting_timezone(self.db, organization_id)
 
         # Total raised YTD
         ytd_result = await self.db.execute(
             select(func.coalesce(func.sum(Donation.amount), 0)).where(
                 Donation.organization_id == organization_id,
                 Donation.payment_status == PaymentStatus.COMPLETED.value,
-                Donation.donation_date >= year_start,
+                Donation.donation_date >= local_day_start_utc(year_start, tz),
             )
         )
         total_raised_ytd = float(ytd_result.scalar() or 0)
@@ -931,7 +959,7 @@ class FundraisingService:
             select(func.coalesce(func.sum(Donation.amount), 0)).where(
                 Donation.organization_id == organization_id,
                 Donation.payment_status == PaymentStatus.COMPLETED.value,
-                Donation.donation_date >= twelve_months_ago,
+                Donation.donation_date >= local_day_start_utc(twelve_months_ago, tz),
             )
         )
         total_raised_12mo = float(twelve_mo_result.scalar() or 0)
@@ -967,16 +995,29 @@ class FundraisingService:
         )
         total_donors = donor_count_result.scalar() or 0
 
-        # Outstanding pledges
+        # Outstanding pledges: what is still owed on every open pledge, the
+        # same set the pledge reminders treat as open (overdue included) and
+        # the same per-pledge floor at zero the Pledges page shows. A pledge
+        # lowered below what was already received owes nothing; it must not
+        # subtract from the others.
         pledges_result = await self.db.execute(
             select(
                 func.coalesce(
-                    func.sum(Pledge.pledged_amount - Pledge.fulfilled_amount), 0
+                    func.sum(
+                        func.greatest(
+                            Pledge.pledged_amount - Pledge.fulfilled_amount, 0
+                        )
+                    ),
+                    0,
                 )
             ).where(
                 Pledge.organization_id == organization_id,
                 Pledge.status.in_(
-                    [PledgeStatus.PENDING.value, PledgeStatus.PARTIAL.value]
+                    [
+                        PledgeStatus.PENDING.value,
+                        PledgeStatus.PARTIAL.value,
+                        PledgeStatus.OVERDUE.value,
+                    ]
                 ),
             )
         )
