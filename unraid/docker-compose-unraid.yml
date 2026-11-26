@@ -523,6 +523,9 @@ services:
     # bypass HTTPS.
     ports:
       - "${BIND_ADDRESS:-0.0.0.0}:${FRONTEND_PORT:-7880}:80"
+      # The department's public website. Point the public hostname at this
+      # port; see docs/PUBLIC_WEBSITE.md.
+      - "${BIND_ADDRESS:-0.0.0.0}:${PUBLIC_SITE_PORT:-7882}:8080"
 
     depends_on:
       - backend

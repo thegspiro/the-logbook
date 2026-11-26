@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}{{ name }}{% endblock %}</title>
+  {% if tagline %}
+  <meta name="description" content="{{ tagline }}">
+  <meta property="og:description" content="{{ tagline }}">
+  {% endif %}
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="{{ name }}">
+  <meta property="og:title" content="{{ self.title() }}">
+  {% block robots %}{% endblock %}
+  <link rel="stylesheet" href="{{ stylesheet_href }}">
+</head>
+<body class="theme-{{ theme }}">
+  <a class="skip-link" href="#main">Skip to main content</a>
+  {% if emergency_notice %}
+  <p class="emergency" role="note">{{ emergency_notice }}</p>
+  {% endif %}
+  <header class="site-header">
+    <div class="wrap site-header-inner">
+      <a class="brand" href="{{ home_href }}">
+        {% if logo_href %}
+        <img class="brand-logo" src="{{ logo_href }}" alt="" width="56" height="56">
+        {% endif %}
+        <span class="brand-name">{{ name }}</span>
+      </a>
+      {% if nav|length > 1 %}
+      <nav aria-label="Main">
+        <ul class="nav">
+          {% for item in nav %}
+          <li><a href="{{ item.href }}"{% if item.key == page %} aria-current="page"{% endif %}>{{ item.label }}</a></li>
+          {% endfor %}
+        </ul>
+      </nav>
+      {% endif %}
+    </div>
+  </header>
+  <main id="main" tabindex="-1">
+    {% block content %}{% endblock %}
+  </main>
+  <footer class="site-footer">
+    <div class="wrap site-footer-inner">
+      <p>{{ name }}</p>
+      {% if member_login_url %}
+      <p><a href="{{ member_login_url }}" rel="nofollow">Member sign-in</a></p>
+      {% endif %}
+    </div>
+  </footer>
+</body>
+</html>

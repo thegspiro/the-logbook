@@ -105,6 +105,14 @@ class TestFrontendConfig:
         assert "backend:3001" not in config
         assert "http://127.0.0.1:3001" in config
 
+    def test_the_public_website_listens_on_loopback_too(self):
+        """Left on ``listen 8080;`` it would open a plaintext port on every
+        interface of the host; the host's own nginx is what faces the public."""
+        config = _render("render_frontend_config", str(REPO))
+
+        assert "listen 127.0.0.1:3002;" in config
+        assert not re.search(r"^\s*listen (?!127\.0\.0\.1:)", config, re.M)
+
     def test_uses_names_a_debian_nginx_has_and_the_host_site_does_not(self):
         config = _render("render_frontend_config", str(REPO))
 

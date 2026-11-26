@@ -82,4 +82,17 @@ describe('EquipmentCheckReportsPage compliance tab', () => {
     expect(screen.queryByText(/expected/)).not.toBeInTheDocument();
     expect(within(screen.getByRole('region', { name: 'Apparatus' })).queryByText(/missed/)).not.toBeInTheDocument();
   });
+  // EC2-12: anything but pass read as a red "Fail", and the backend reports an
+  // incomplete check's status as it is.
+  it('labels an incomplete last check as incomplete, not failed', async () => {
+    const base = report();
+    mockGetReport.mockResolvedValue(
+      report({ apparatus: base.apparatus.map((a) => ({ ...a, lastStatus: 'incomplete' })) })
+    );
+    renderWithRouter(<EquipmentCheckReportsPage />);
+
+    const unit = within(await screen.findByRole('region', { name: 'Apparatus' }));
+    expect(await unit.findByText('Incomplete')).toBeInTheDocument();
+    expect(unit.queryByText('Fail')).not.toBeInTheDocument();
+  });
 });
