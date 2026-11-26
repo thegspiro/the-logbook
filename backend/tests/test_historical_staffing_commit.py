@@ -661,3 +661,139 @@ class TestPairingWithTheHours:
         }
         assert ("Alice Ng", "Driver") in titles
         assert ("Bob Diaz", "Lead Technician") in titles
+
+
+class TestTheLeftovers:
+    """Every seat and hours entry the overlap rule leaves unpaired can be seen,
+    paired by hand or marked reviewed (owner decisions, 2026-11-26).
+
+    Alice's A106E night seat runs 19:00 to 07:00 on 3 May, New York time; she
+    logged hours that morning, 04:00 to 08:00, which no overlap pairs."""
+
+    async def _alice_logged_the_wrong_hours(self, db_session):
+        org, admin, import_id = await _setup(db_session)
+        alice = await _user(db_session, org, "101")
+        bob = await _user(db_session, org, "102")
+        morning = await _hours_entry(db_session, org, alice, _utc(3, 8), _utc(3, 12))
+        return org, admin, import_id, alice, bob, morning
+
+    async def _signup_key(self, service, org, import_id, member, title):
+        view = await service.leftovers_view(org, import_id, kind="signups")
+        (item,) = [
+            i for i in view["items"] if i["member_id"] == member and i["title"] == title
+        ]
+        return item
+
+    async def test_both_sides_are_listed_with_the_members_own_hours_to_pair(
+        self, db_session
+    ):
+        org, _, import_id, alice, _, morning = await self._alice_logged_the_wrong_hours(
+            db_session
+        )
+        service = HistoricalStaffingCommitService(db_session)
+
+        seat = await self._signup_key(service, org, import_id, alice, "Driver")
+        hours = await service.leftovers_view(org, import_id, kind="hours")
+
+        assert seat["state"] == "open"
+        assert seat["date"] == date(2016, 5, 3)
+        assert [c["attendance_id"] for c in seat["candidates"]] == [
+            str(
+                (
+                    await db_session.execute(
+                        select(ShiftAttendance.id).where(
+                            ShiftAttendance.shift_id == morning.id
+                        )
+                    )
+                ).scalar_one()
+            )
+        ]
+        assert [(i["member"], i["date"]) for i in hours["items"]] == [
+            ("Alice Ng", date(2016, 5, 3))
+        ]
+
+    async def test_a_hand_pairing_is_written_onto_those_hours(self, db_session):
+        org, admin, import_id, alice, _, morning = (
+            await self._alice_logged_the_wrong_hours(db_session)
+        )
+        service = HistoricalStaffingCommitService(db_session)
+        seat = await self._signup_key(service, org, import_id, alice, "Driver")
+        entry = seat["candidates"][0]["attendance_id"]
+
+        await service.update_leftovers(org, import_id, {seat["key"]: entry}, {})
+
+        preview = (await service.preview(org, import_id))["hours_match"]
+        assert preview["paired_by_reviewer"] == 1
+        assert preview["hours_without_signup"] == 0
+        open_seats = await service.leftovers_view(org, import_id, kind="signups")
+        assert seat["key"] not in {i["key"] for i in open_seats["items"]}
+        resolved = await service.leftovers_view(
+            org, import_id, kind="signups", show_resolved=True
+        )
+        (paired,) = [i for i in resolved["items"] if i["key"] == seat["key"]]
+        assert paired["state"] == "paired"
+        assert paired["paired_with"]["attendance_id"] == entry
+
+        await service.commit(org, import_id, admin)
+        assert await _seats_on(db_session, morning.id) == {alice: "driver"}
+
+    async def test_a_seat_cannot_take_another_members_hours(self, db_session):
+        org, _, import_id, _, bob, morning = await self._alice_logged_the_wrong_hours(
+            db_session
+        )
+        service = HistoricalStaffingCommitService(db_session)
+        seat = await self._signup_key(service, org, import_id, bob, "Lead Technician")
+        hours = await service.leftovers_view(org, import_id, kind="hours")
+        alices = hours["items"][0]["key"]
+
+        with pytest.raises(ValueError, match="own member"):
+            await service.update_leftovers(org, import_id, {seat["key"]: alices}, {})
+
+    async def test_reviewed_leftovers_stop_counting_as_outstanding(self, db_session):
+        org, _, import_id, _, _, _ = await self._alice_logged_the_wrong_hours(
+            db_session
+        )
+        service = HistoricalStaffingCommitService(db_session)
+        hours = await service.leftovers_view(org, import_id, kind="hours")
+        mark = m.HOURS_LEFTOVER + hours["items"][0]["key"]
+
+        await service.update_leftovers(org, import_id, {}, {mark: True})
+
+        preview = (await service.preview(org, import_id))["hours_match"]
+        assert preview["hours_reviewed"] == 1
+        assert (await service.leftovers_view(org, import_id, kind="hours"))[
+            "total"
+        ] == 0
+        shown = await service.leftovers_view(
+            org, import_id, kind="hours", show_resolved=True
+        )
+        assert [i["state"] for i in shown["items"]] == ["reviewed"]
+
+        await service.update_leftovers(org, import_id, {}, {mark: False})
+        assert (await service.leftovers_view(org, import_id, kind="hours"))[
+            "total"
+        ] == 1
+
+    async def test_the_seats_list_filters_by_member_and_date(self, db_session):
+        org, _, import_id, alice, bob, _ = await self._alice_logged_the_wrong_hours(
+            db_session
+        )
+        service = HistoricalStaffingCommitService(db_session)
+
+        bobs = await service.leftovers_view(
+            org, import_id, kind="signups", member_id=bob
+        )
+        on_the_third = await service.leftovers_view(
+            org,
+            import_id,
+            kind="signups",
+            date_from=date(2016, 5, 3),
+            date_to=date(2016, 5, 3),
+        )
+
+        assert {i["member_id"] for i in bobs["items"]} == {bob}
+        assert {i["date"] for i in on_the_third["items"]} == {date(2016, 5, 3)}
+        assert {(mem["id"], mem["name"]) for mem in bobs["members"]} == {
+            (bob, "Bob Diaz")
+        }
+        assert alice in {mem["id"] for mem in on_the_third["members"]}
