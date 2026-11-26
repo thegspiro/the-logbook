@@ -70,6 +70,7 @@ class TestMinutesActionItemReminder:
             organization_id=org.id,
             title="Monthly Business Meeting",
             meeting_date=datetime.now(timezone.utc),
+            status="approved",
         )
         db_session.add(minutes)
         await db_session.flush()
@@ -106,6 +107,56 @@ class TestMinutesActionItemReminder:
         result = await run_action_item_reminders(db_session)
 
         assert result["total_reminders"] >= 1
+        assert await _notification_count(db_session, assignee.id) == 1
+
+
+async def _minutes_item(db, status: str, item_status: str):
+    org = await _make_org(db)
+    assignee = await _make_user(db, org)
+    minutes = MeetingMinutes(
+        organization_id=org.id,
+        title="Monthly Business Meeting",
+        meeting_date=datetime.now(timezone.utc),
+        status=status,
+    )
+    db.add(minutes)
+    await db.flush()
+    item = ActionItem(
+        minutes_id=minutes.id,
+        description="Order new hose",
+        assignee_id=assignee.id,
+        due_date=datetime.combine(
+            org_today(org) + timedelta(days=1),
+            datetime.min.time(),
+            tzinfo=timezone.utc,
+        ),
+        status=item_status,
+    )
+    db.add(item)
+    await db.flush()
+    db.expunge(minutes)
+    db.expunge(item)
+    return assignee
+
+
+class TestWhichMinutesItemsAreReminded:
+    """MM6-14: the bell went out for items on draft and circulated minutes,
+    which every other path treats as not yet a commitment (``/action-items``
+    does not even list them), and skipped items marked overdue, which the
+    email reminders treat as open."""
+
+    async def test_an_item_on_draft_minutes_is_not_reminded(self, db_session):
+        assignee = await _minutes_item(
+            db_session, "draft", MinutesActionItemStatus.PENDING.value
+        )
+        await run_action_item_reminders(db_session)
+        assert await _notification_count(db_session, assignee.id) == 0
+
+    async def test_an_overdue_item_on_approved_minutes_is_reminded(self, db_session):
+        assignee = await _minutes_item(
+            db_session, "approved", MinutesActionItemStatus.OVERDUE.value
+        )
+        await run_action_item_reminders(db_session)
         assert await _notification_count(db_session, assignee.id) == 1
 
 
@@ -184,6 +235,7 @@ class TestDeactivatedOrganization:
             organization_id=org.id,
             title="Monthly Business Meeting",
             meeting_date=datetime.now(timezone.utc),
+            status="approved",
         )
         db_session.add(minutes)
         await db_session.flush()

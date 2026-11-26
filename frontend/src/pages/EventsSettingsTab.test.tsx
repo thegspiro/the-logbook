@@ -155,6 +155,29 @@ describe('EventsSettingsTab', () => {
     }
   });
 
+  it('drops the linked section from the address once another is chosen', async () => {
+    const user = userEvent.setup();
+    listGoals.mockResolvedValue({
+      year: 2026,
+      current_year: 2026,
+      year_fraction: 0.5,
+      year_complete: false,
+      goals: [],
+      metrics: [{ value: 'events_held', label: 'Events held' }],
+    });
+    window.history.pushState({}, '', '/events/admin?tab=settings&section=goals');
+    try {
+      renderWithRouter(<EventsSettingsTab />);
+      const sections = await screen.findByRole('navigation', { name: 'Event settings sections' });
+
+      await user.click(within(sections).getByRole('button', { name: /CRR Catalogue/ }));
+
+      expect(window.location.search).toBe('?tab=settings');
+    } finally {
+      window.history.pushState({}, '', '/');
+    }
+  });
+
   describe('public requests section', () => {
     it('groups every request setting under one section that opens on its overview', async () => {
       const user = userEvent.setup();

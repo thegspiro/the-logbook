@@ -20,14 +20,22 @@ import CrrActivityDialog from '../../pages/crr/CrrActivityDialog';
 interface EventCrrActivitiesCardProps {
   eventId: string;
   eventTitle: string;
+  /** The event's start (UTC ISO): what a new activity defaults to. */
+  eventStartsAt: string;
   timezone: string;
 }
 
-const EventCrrActivitiesCard: React.FC<EventCrrActivitiesCardProps> = ({ eventId, eventTitle, timezone }) => {
+const EventCrrActivitiesCard: React.FC<EventCrrActivitiesCardProps> = ({
+  eventId,
+  eventTitle,
+  eventStartsAt,
+  timezone,
+}) => {
   const currentUserId = useAuthStore((state) => state.user?.id ?? null);
   const [activities, setActivities] = useState<CrrActivity[]>([]);
   const [options, setOptions] = useState<CrrFormOptions | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [optionsError, setOptionsError] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
 
   const load = useCallback(async () => {
@@ -52,7 +60,10 @@ const EventCrrActivitiesCard: React.FC<EventCrrActivitiesCardProps> = ({ eventId
           members: asArray(data?.members),
         })
       )
-      .catch(() => setOptions(null));
+      .catch((err: unknown) => {
+        setOptions(null);
+        setOptionsError(getErrorMessage(err, 'The activity form could not be loaded.'));
+      });
   }, [load]);
 
   return (
@@ -69,12 +80,18 @@ const EventCrrActivitiesCard: React.FC<EventCrrActivitiesCardProps> = ({ eventId
           type="button"
           className="btn-secondary touch:min-h-11 inline-flex items-center gap-1.5 text-sm"
           disabled={!options}
+          aria-describedby={optionsError ? 'event-crr-options-error' : undefined}
           onClick={() => setOpen(true)}
         >
           <Plus className="h-4 w-4" aria-hidden="true" />
           Record an activity
         </button>
       </div>
+      {optionsError && (
+        <p id="event-crr-options-error" className="text-theme-text-secondary mt-2 text-sm">
+          {optionsError} Activities cannot be recorded until it loads.
+        </p>
+      )}
 
       {error ? (
         <p className="text-theme-text-secondary mt-3 text-sm" role="alert">
@@ -111,6 +128,7 @@ const EventCrrActivitiesCard: React.FC<EventCrrActivitiesCardProps> = ({ eventId
           currentUserId={currentUserId}
           eventId={eventId}
           eventTitle={eventTitle}
+          eventStartsAt={eventStartsAt}
         />
       )}
     </section>

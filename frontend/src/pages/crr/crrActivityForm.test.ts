@@ -19,7 +19,9 @@ const smoke: CrrActivityType = {
 
 const options: CrrFormOptions = {
   activity_types: [smoke],
-  tags: [],
+  tags: [
+    { id: 'tag-fire', kind: 'risk', code: 'fire', label: 'Fire', is_system: true, is_active: true, sort_order: 0 },
+  ],
   default_city: 'Falls Church',
   default_state: 'VA',
   zip_lookup_enabled: true,
@@ -29,7 +31,7 @@ const options: CrrFormOptions = {
 };
 
 const filled = (overrides: Partial<CrrActivityFormValues> = {}): CrrActivityFormValues => ({
-  ...withType(initialValues(options, TZ, 'me', new Date('2026-11-22T17:30:00Z')), smoke),
+  ...withType(initialValues(options, TZ, 'me', new Date('2026-11-22T17:30:00Z')), smoke, options.tags),
   ...overrides,
 });
 
@@ -48,13 +50,36 @@ describe('initialValues', () => {
 
 describe('withType', () => {
   it('takes the type’s default tags and starts its counts empty', () => {
-    const values = withType({ ...initialValues(options, TZ, null), counts: { stale: '3' } }, smoke);
+    const values = withType({ ...initialValues(options, TZ, null), counts: { stale: '3' } }, smoke, options.tags);
     expect(values.tagIds).toEqual(['tag-fire']);
     expect(values.counts).toEqual({});
+  });
+
+  it('leaves out a default tag that is no longer offered, which would be refused', () => {
+    const values = withType(
+      initialValues(options, TZ, null),
+      { ...smoke, tag_ids: ['tag-fire', 'tag-retired'] },
+      options.tags
+    );
+    expect(values.tagIds).toEqual(['tag-fire']);
   });
 });
 
 describe('buildCreatePayload', () => {
+  it('refuses the same member listed twice, rather than keeping one silently', () => {
+    const { payload, error } = buildCreatePayload(
+      filled({
+        members: [
+          { userId: 'me', minutes: '60' },
+          { userId: 'me', minutes: '30' },
+        ],
+      }),
+      TZ
+    );
+    expect(payload).toBeNull();
+    expect(error).toBe('A member is listed twice. Remove one of the rows.');
+  });
+
   it('refuses a missing type', () => {
     const { payload, error } = buildCreatePayload(filled({ activityTypeId: '' }), TZ);
     expect(payload).toBeNull();

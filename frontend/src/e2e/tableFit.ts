@@ -14,7 +14,7 @@
  * `overflow-hidden` card would miss.
  *
  * A second measurement then looks for content that leaves the card without
- * widening the table; see the comment inside `expectTableFitsItsCard`.
+ * widening the table; see the comment inside `expectContentStaysInCard`.
  * Content under a scroller nearer than the card is reachable and skipped, and
  * content an `overflow-hidden` box clips (a `truncate`) is measured only as far
  * as that box shows it.
@@ -39,11 +39,26 @@ export const TABLE_FIT_VIEWPORTS = [
 
 export async function expectTableFitsItsCard(table: Locator, label: string): Promise<void> {
   await expect(table.locator('tbody tr').first(), `${label} rendered no rows to measure`).toBeVisible();
-  const { width, room, spill } = await table.evaluate((el) => {
+  const { width, room } = await table.evaluate((el) => {
     const card = el.closest('.rwd-table-container') ?? el.parentElement;
-    const width = Math.ceil(el.getBoundingClientRect().width);
+    return { width: Math.ceil(el.getBoundingClientRect().width), room: card ? card.clientWidth : 0 };
+  });
+  expect(width, `${label} is ${width - room}px wider than its card`).toBeLessThanOrEqual(room);
+  await expectContentStaysInCard(table, label);
+  await expectStackedRowsAligned(table, label);
+}
+
+/**
+ * The spill half of `expectTableFitsItsCard`, callable on its own by a spec
+ * that measures its table's width some other way (a fractional card, or a list
+ * rather than a table) and so cannot use the helper whole. The card is the
+ * nearest `rwd-table-container`, or the element's parent.
+ */
+export async function expectContentStaysInCard(table: Locator, label: string): Promise<void> {
+  const spill = await table.evaluate((el) => {
+    const card = el.closest('.rwd-table-container') ?? el.parentElement;
     const worst = { over: 0, what: '', cell: '' };
-    if (!card) return { width, room: 0, spill: worst };
+    if (!card) return worst;
 
     // The width check alone misses content that leaves its cell without
     // widening the table. In card mode each <td> is a flex row, so an
@@ -95,7 +110,7 @@ export async function expectTableFitsItsCard(table: Locator, label: string): Pro
     let start: Clip | null = null;
     for (let up = el.parentElement; up && up !== card; up = up.parentElement) {
       const style = getComputedStyle(up);
-      if (scrolls(style)) return { width, room: card.clientWidth, spill: worst };
+      if (scrolls(style)) return worst;
       if (style.overflowX !== 'visible') start = clipTo(start, up);
     }
 
@@ -129,14 +144,12 @@ export async function expectTableFitsItsCard(table: Locator, label: string): Pro
     };
     visit(el, start);
 
-    return { width, room: card.clientWidth, spill: worst };
+    return worst;
   });
-  expect(width, `${label} is ${width - room}px wider than its card`).toBeLessThanOrEqual(room);
   const cell = spill.cell ? ` in its "${spill.cell}" cell` : '';
   expect(spill.over, `${label}: ${spill.what}${cell} reaches ${spill.over}px past its card's edge`).toBeLessThanOrEqual(
     1
   );
-  await expectStackedRowsAligned(table, label);
 }
 
 /**

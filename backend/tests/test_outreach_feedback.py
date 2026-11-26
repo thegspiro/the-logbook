@@ -8,8 +8,11 @@ the server, that a response is final, and where the rating goes, against real
 rows.
 """
 
+import copy
 import uuid
 from datetime import datetime, timedelta, timezone
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from fastapi import HTTPException
@@ -35,7 +38,11 @@ from app.models.user import Organization, User, UserStatus
 from app.schemas.event import EventSettingsUpdate
 from app.services import outreach_feedback_service
 from app.services.community_engagement_service import CommunityEngagementService
-from app.services.event_request_service import _feedback_link
+from app.services.email_service import EmailService
+from app.services.event_request_service import (
+    feedback_link,
+    send_request_notification,
+)
 from app.services.outreach_feedback_service import (
     STARTER_FORM_NAME,
     FeedbackAlreadySent,
@@ -496,18 +503,47 @@ class TestTheCompletedEmail:
         rating, _well, _better = _fields(form)
         req, token = await _request(db_session, org)
 
-        link = await _feedback_link(db_session, req, org)
+        link = await feedback_link(db_session, req, org)
         assert link is not None
         assert link.endswith(f"/event-request/status/{token}")
 
         await OutreachFeedbackService(db_session).submit(token, {str(rating.id): "5"})
-        assert await _feedback_link(db_session, req, org) is None
+        assert await feedback_link(db_session, req, org) is None
 
     async def test_no_link_before_completion_or_without_a_form(self, db_session, dept):
         org, officer = dept
         done, _ = await _request(db_session, org)
-        assert await _feedback_link(db_session, done, org) is None
+        assert await feedback_link(db_session, done, org) is None
 
         await _starter(db_session, org, officer)
         scheduled, _ = await _request(db_session, org, EventRequestStatus.SCHEDULED)
-        assert await _feedback_link(db_session, scheduled, org) is None
+        assert await feedback_link(db_session, scheduled, org) is None
+
+    async def test_a_departments_own_completed_template_can_carry_the_link(
+        self, db_session, dept
+    ):
+        org, officer = dept
+        await _starter(db_session, org, officer)
+        settings = copy.deepcopy(org.settings)
+        settings["events"]["request_pipeline"]["email_triggers"] = {
+            "on_completed": {"enabled": True, "notify_requester": True}
+        }
+        org.settings = settings
+        await db_session.flush()
+        req, token = await _request(db_session, org)
+        template = SimpleNamespace(
+            subject="Thank you",
+            body_html="<p>Thanks for having us.</p>{{feedback_link}}",
+            body_text="Thanks.\n{{feedback_url}}",
+        )
+        send = AsyncMock(return_value=(1, 0))
+
+        with patch.object(EmailService, "send_email", send):
+            await send_request_notification(
+                db_session, req, "on_completed", org, template=template
+            )
+
+        sent = send.await_args.kwargs
+        assert "share your feedback</a>" in sent["html_body"]
+        assert f"/event-request/status/{token}" in sent["html_body"]
+        assert sent["text_body"].endswith(f"/event-request/status/{token}")

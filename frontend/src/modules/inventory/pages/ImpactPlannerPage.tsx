@@ -32,6 +32,7 @@ import { formatCurrency } from '../../../utils/currencyFormatting';
 import { ConfirmDialog } from '../../../components/ux/ConfirmDialog';
 import { EmptyState } from '../../../components/ux/EmptyState';
 import { Skeleton } from '../../../components/ux/Skeleton';
+import { CardSortControl } from '../../../components/ux/CardSortControl';
 import { SortableHeader, type SortDirection } from '../../../components/ux/SortableHeader';
 import { enumLabel } from '@/utils/displayValue';
 import { sizeLabel } from '../types';
@@ -928,6 +929,17 @@ const ImpactPlannerPage: React.FC = () => {
                     />
                   ) : (
                     <div className="rwd-table-container overflow-x-auto">
+                      <CardSortControl
+                        options={[
+                          { field: 'full_name', label: 'Member' },
+                          { field: 'rank', label: 'Rank / Station' },
+                          ...(result.size_field ? [{ field: 'needed_size', label: 'Size' }] : []),
+                        ]}
+                        currentSort={sortField}
+                        currentDirection={sortDir}
+                        onSort={onSort}
+                        tier="narrow"
+                      />
                       <table className="rwd-table rwd-table-narrow w-full text-sm">
                         <thead>
                           <tr className="border-theme-surface-border border-b text-left">

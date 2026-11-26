@@ -1,6 +1,134 @@
 # Security Review — Storefront & Payments
 
-**Prefix:** `SF` · **Iteration:** 04 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-01 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-05 (pass 7), 2026-10-12 (pass 8), 2026-10-14 (pass 9), 2026-10-18 (pass 10), 2026-10-22 (pass 11), 2026-10-25 (pass 12), 2026-10-28 (pass 13), 2026-10-31 (pass 14), 2026-11-04 (pass 15), 2026-11-16 (pass 16), 2026-11-24 (pass 17) · **PR:** #1807 (pass 1)
+**Prefix:** `SF` · **Iteration:** 04 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-01 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-05 (pass 7), 2026-10-12 (pass 8), 2026-10-14 (pass 9), 2026-10-18 (pass 10), 2026-10-22 (pass 11), 2026-10-25 (pass 12), 2026-10-28 (pass 13), 2026-10-31 (pass 14), 2026-11-04 (pass 15), 2026-11-16 (pass 16), 2026-11-24 (pass 17), 2026-11-26 (pass 18) · **PR:** #1807 (pass 1)
+
+---
+
+## Pass 18 (2026-11-26, watchdog pickup) — true zero delta, 0 fixed, 0 new findings
+
+Watchdog-delegated iteration (the dedicated `/loop 30m /security-review`
+session remains unreachable). Step 0 (`list_pull_requests`, state `open`)
+found 0 open PRs with a head branch starting `claude/security-review-`. Row
+04 (Storefront & payments) was the next `⬜` row in `PROGRESS.md`'s rotation
+table, confirmed directly against a freshly-pulled `main` (`424fa044e`, the
+merge of PR #4715, Feature 03 pass 18) rather than trusted from the briefing.
+
+**Baseline re-verification.** `git log --all --oneline --grep
+"security(storefront" -i` confirmed pass 17's section above corresponds to a
+single commit, `76ad28398` ("0 fixed, 0 new findings (pass 17)"), with no
+same-pass follow-up fix commit directly after it (unlike Feature 03's
+pass-17/pass-18 pair) — pass 17 closed with 0 findings open, so there was
+nothing for a follow-up to fix. Confirmed `76ad28398` is an ancestor of
+`424fa044e` and is the correct, full-state baseline.
+
+**Scope diffed against `76ad28398`.** `git diff --stat` across the three
+scope files named in `PROGRESS.md` (`storefront.py`, `storefront_service.py`,
+`storefront_payments.py`) is **empty**. A broader `git log --name-only`
+sweep over every commit between baseline and head for any path containing
+`storefront`, `stripe` or `payment` found exactly one touching commit,
+`7140b4cf8` — the prior pass's own `PROGRESS.md`/findings-file write-up, not
+code. No backend model, schema, service, endpoint, migration, or frontend
+file under `frontend/src/modules/storefront/` changed. This matches
+`SEC-00-cross-cutting-baseline.md`'s own Pass 19 cross-cutting sweep (which
+covered this same window across the whole codebase and reported 0 findings),
+cross-checked rather than merely cited.
+
+**Fresh re-enumeration, not trusted from the file.** Rather than carry
+forward pass 17's "49 routes" count, re-ran an independent AST walk of every
+`@router.{get,post,put,patch,delete}` decorator in `storefront.py`: **49**
+routes, unchanged, every one with `require_permission(...)` or
+`get_current_user` in its dependency chain — 0 bare routes.
+`check_route_permissions.py --strict` independently confirms **344** total
+application routes, 0 errors, 0 warnings (same count as `SEC-00`'s pass 19,
+confirming no route was added or removed anywhere in the app over this
+window, not just in storefront).
+
+**Payment-path invariants re-verified by direct read, not by citation:**
+
+- **Webhook signature verification is not bypassable.** Read
+  `app/api/public/paypal_webhook.py` in full: the handler resolves the
+  `Integration` row, reads the raw body, calls
+  `verify_webhook_signature(integration, headers, payload)` and returns 401
+  on failure — **before** the duplicate check, before `extract_capture`,
+  before any write. An integration with no webhook id configured fails
+  verification rather than being trusted (per the module's own docstring,
+  confirmed by reading `verify_webhook_signature` is not reachable with a
+  short-circuit default). This codebase's payment-reconciliation provider is
+  PayPal (verify-webhook-signature API), not Stripe — `storefront.py`,
+  `storefront_service.py` and `storefront_payments.py` have 0 hits for
+  `stripe` (case-insensitive grep); Stripe is listed in `CLAUDE.md`'s tech
+  stack as an available integration but is not the processor this feature's
+  webhook path uses, so the "Stripe webhook" framing in this pass's brief is
+  applied to the actual PayPal signature-verification + replay/idempotency
+  mechanism instead.
+- **Idempotency on the payment-recording webhook (Pitfall #36) holds at the
+  database, not just in application logic.** `StorePaymentEvent.__table_args__`
+  (`app/models/storefront.py:958`) carries
+  `UniqueConstraint("organization_id", "provider", "external_id")`. The
+  service-layer `record_external_payment` (`storefront_service.py:3176`)
+  looks the row up by that same triple before inserting and returns the
+  existing row on a repeat — the constraint is the guard that catches two
+  deliveries racing past that lookup, exactly the shape Pitfall #36
+  prescribes, confirmed by reading both the model and the method rather than
+  assuming the docstring's claim. The webhook endpoint also checks
+  `is_duplicate_webhook` (signed-body replay guard) ahead of this, and
+  acknowledges a duplicate with 200 so PayPal stops retrying rather than
+  erroring.
+- **No client-supplied amount reaches a charge.** `StoreOrderItemInput`
+  (`schemas/storefront.py:677`) carries no price field — only
+  `product_id`/`variant_id`/`quantity`/`personalization_text`; the schema's
+  own docstring on `StoreOrderCreate` states prices are "deliberately
+  absent" because the server recomputes every line from the catalog.
+  Confirmed unchanged from pass 17's finding (same line range, byte-identical
+  per the empty diff above).
+- **Org-scoping (XC-3) and capacity locking (Pitfall #27).** `with_for_update()`
+  appears at 6 sites across `storefront_service.py` (order/window/product
+  reads before a mutating decision), unchanged from the locking shape pass
+  17 verified (organisation → window → product → tally). Spot-re-read
+  `record_payment`/`refund_order`/`cancel_window` — all still resolve their
+  target through an org-scoped parent fetch before mutating, never a bare
+  by-id query.
+- **Separation of duties.** `assert_different_person` is called at 5 sites
+  (`storefront_service.py:2421,2520,2609,2653,2929`) — unchanged count and
+  unchanged call sites from pass 17.
+- **CSV export (Pitfall #15).** `stream_orders_csv`/`_order_csv_chunks`
+  (`storefront_service.py:3895,3928`) write through `SafeCsvChunks` —
+  confirmed by reading the import (`from app.utils.csv_export import
+SafeCsvChunks, collect_csv`) and the writer construction directly, not a
+  grep-only check. No bare `csv.writer`/`csv.DictWriter` anywhere in the
+  three scope files.
+- **LIKE escaping (Pitfall #25).** Every `.ilike()`/`.like()` call in
+  `storefront_service.py` (product search, order-number prefix match, order
+  search) carries `escape=LIKE_ESCAPE_CHAR` — 5 call sites, all correct.
+
+**0 fixed, 0 new findings. 0 findings remain OPEN or FLAGGED going into pass
+19** — SF-1 through SF-11, SF8-04-1/2/3 and SF14-04-1 re-verified by name
+against pass 17's own text (all previously FIXED, all unchanged by an empty
+diff) rather than re-litigated from scratch. No fix was needed, so no new
+guard test was added this pass.
+
+### Completion gate (pass 18)
+
+| Check                                                                            | Result                                                   |
+| -------------------------------------------------------------------------------- | -------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/` (7.4.1, CI's pin, via `/usr/local/bin/python3.13`) | ✅ 0 violations                                          |
+| `black --check app/ tests/ alembic/` (26.10.1, CI's pin)                         | ✅ 3541 files unchanged                                  |
+| `isort --check-only app/ tests/ alembic/` (9.0.2, CI's pin)                      | ✅ clean                                                 |
+| `python3 scripts/validate_migrations.py --strict`                                | ✅ 844 revisions, single head (`e9cf8ab7e4e4`)           |
+| `python3 scripts/check_route_permissions.py --strict` (repo root)                | ✅ 344 routes, 0 errors, 0 warnings                      |
+| `docs/DATABASE_SCHEMA.md` vs `generate_schema_docs.py`                           | ✅ n/a — no model change this window                     |
+| backend tests (scoped: `-k "storefront or stripe or payment or webhook_replay"`) | ✅ 999 passed, 1 skipped (environment-only: `pywebpush`) |
+| `cd frontend && npm run typecheck`                                               | ✅ 0 errors                                              |
+| `cd frontend && npm run lint`                                                    | ✅ 0 errors (`--max-warnings 10`)                        |
+
+`python3` on `PATH` resolves to `3.11.18` in this sandbox with none of the
+pinned linters installed; every backend check above ran explicitly against
+`/usr/local/bin/python3.13`, which already had `flake8==7.4.1`,
+`black==26.10.1` and `isort==9.0.2` installed — matching CI's Backend Lint
+job pins exactly, confirmed against `.github/workflows/ci.yml` before
+running.
+
+Next in the rotation: Feature 05 (Finance & approvals).
 
 ---
 
