@@ -556,10 +556,7 @@ class TestHeicIsStoredAsJpeg:
         assert _files_on_disk(dept.uploads) == []
         assert await _request_count(db_session, dept.org) == 0
 
-    @pytest.mark.parametrize(
-        "fixture",
-        ["corrupt-segfault", "corrupt-infe-v4", "corrupt-exif-header"],
-    )
+    @pytest.mark.parametrize("fixture", ["corrupt-segfault", "corrupt-infe-v4"])
     async def test_a_photo_that_breaks_the_decoder_is_a_400(
         self, as_user, dept, db_session, fixture
     ):
@@ -578,6 +575,17 @@ class TestHeicIsStoredAsJpeg:
         # And the server is still here to take the next request.
         retry = await _submit_with(as_user, dept.member, dept.drill, [_pdf()])
         assert retry.status_code == 201, retry.text
+
+    async def test_a_photo_with_broken_exif_is_filed_without_it(self, as_user, dept):
+        broken = (HEIC_FIXTURES / "corrupt-exif-header.heic").read_bytes()
+        resp = await _submit_with(
+            as_user,
+            dept.member,
+            dept.drill,
+            [("files", ("IMG_0006.HEIC", broken, "image/heic"))],
+        )
+        assert resp.status_code == 201, resp.text
+        assert [a["mime_type"] for a in resp.json()["attachments"]] == ["image/jpeg"]
 
 
 async def _download_audits(db_session, user_id):

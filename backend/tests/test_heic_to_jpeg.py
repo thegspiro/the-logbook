@@ -42,7 +42,8 @@ changed, each found by an independent review:
   libheif does not support. It raised ``SyntaxError``, which escaped as a 500;
 * ``corrupt-exif-header.heic``: offset 733, 0x4D -> 0x23, turning the EXIF
   ``MM`` byte order into ``M#``. It decoded, then Pillow's EXIF parser raised
-  ``SyntaxError`` inside ``exif_transpose``.
+  ``SyntaxError`` inside ``exif_transpose``. The EXIF is no longer parsed at
+  all, so this one now converts.
 """
 
 import ast
@@ -149,7 +150,6 @@ async def test_the_colour_profile_is_kept():
         _corrupt_body(),
         CORRUPT["segfault"],
         CORRUPT["infe-v4"],
-        CORRUPT["exif-header"],
     ],
     ids=[
         "truncated",
@@ -157,7 +157,6 @@ async def test_the_colour_profile_is_kept():
         "corrupt-picture",
         "crashes-the-decoder",
         "unsupported-infe",
-        "broken-exif",
     ],
 )
 async def test_a_photo_that_cannot_be_read_is_refused(content):
@@ -169,6 +168,14 @@ async def test_a_photo_that_cannot_be_read_is_refused(content):
     assert refused.value.error_code == ErrorCode.UPLD_TYPE_NOT_ALLOWED
     assert "couldn't read this photo" in refused.value.detail
     assert "JPEG" in refused.value.detail
+
+
+async def test_a_photo_with_broken_exif_converts_without_it():
+    # The EXIF is discarded, so it is never parsed: a file whose EXIF header
+    # is damaged is still a readable photo, and comes out upright and clean.
+    jpeg = await heic_to_jpeg(CORRUPT["exif-header"])
+    _assert_upright(jpeg)
+    assert b"Exif\x00\x00" not in jpeg
 
 
 async def test_this_process_survives_a_decoder_crash():
@@ -289,4 +296,5 @@ def test_the_worker_runs_no_application_code():
             imported |= {alias.name.split(".")[0] for alias in node.names}
         elif isinstance(node, ast.ImportFrom) and node.module:
             imported.add(node.module.split(".")[0])
-    assert imported - set(sys.stdlib_module_names) == {"pi_heif", "PIL"}
+    assert "pi_heif" in imported
+    assert imported - set(sys.stdlib_module_names) <= {"pi_heif", "PIL"}

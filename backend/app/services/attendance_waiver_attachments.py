@@ -10,10 +10,13 @@ decisions, 2026-11-10):
   claim, through ``FileStorageService``; HEIC is accepted here and nowhere
   else in the application.
 - **A HEIC photo is stored as a JPEG** (owner decision 2026-11-26), upright
-  and with no EXIF, so the location an iPhone records is never kept
-  (``app/utils/heic_to_jpeg.py``). The malware scan, the storage ledger and
-  the row all see the JPEG. A photo that cannot be decoded is refused, never
-  stored as filed. HEIC files stored before that decision stay as they are.
+  and with no EXIF or XMP, so the location an iPhone records is never kept
+  (``app/utils/heic_to_jpeg.py``). The decoder runs in a child process, since
+  a crafted file can crash it. The member's original is malware-scanned
+  before it is decoded, and the JPEG again as it is stored, so the ledger and
+  the row describe the file kept. A photo that cannot be decoded, or is over
+  25 megapixels, is refused, never stored as filed. HEIC files stored before
+  that decision stay as they are.
 - **Filed by the member**, with the request or while it is pending. Once it is
   decided, withdrawn or voided nothing more can be added. While it is pending
   the member may also remove one (owner decision 2026-11-23), except the last
@@ -30,7 +33,6 @@ uploader's filename is not kept: a download is always
 ``waiver-attachment-<n>.<ext>``.
 """
 
-import asyncio
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from datetime import timezone as dt_timezone
@@ -155,7 +157,7 @@ class AttendanceWaiverAttachmentService:
             for upload in pending:
                 stored.append(
                     await self.storage.store_bytes(
-                        await self._as_stored(upload),
+                        await self._as_stored(upload, member),
                         original_name=upload.filename,
                         organization_id=org_id,
                         area=AREA,
@@ -170,20 +172,26 @@ class AttendanceWaiverAttachmentService:
             raise
         return stored
 
-    async def _as_stored(self, upload: PendingUpload) -> bytes:
+    async def _as_stored(self, upload: PendingUpload, member: User) -> bytes:
         """The bytes to store: a HEIC photo converted to JPEG, anything else
-        as filed. Converted before ``store_bytes``, so its type check, the
-        malware scan and the storage ledger all see the file that is kept."""
+        as filed. The member's original HEIC is malware-scanned before the
+        decoder reads a byte of it (with no scanner reachable, that is a 503
+        and nothing is decoded); the JPEG is checked and scanned again by
+        ``store_bytes``, so the ledger and the row describe the file kept."""
         detected, _ = self.storage.inspect(
             upload.content, upload.filename, ATTACHMENT_FILE_RULES
         )
         if detected not in HEIC_TYPES:
             return upload.content
-        # Decoding is CPU-bound; off the event loop so a 10 MB photo does not
-        # stall every other request this worker is serving.
-        return await asyncio.to_thread(
-            heic_to_jpeg, upload.content, MAX_ATTACHMENT_BYTES
+        await self.storage.check(
+            upload.content,
+            upload.filename,
+            ATTACHMENT_FILE_RULES,
+            upload_kind=UPLOAD_KIND,
+            user=member,
         )
+        # In a child process: libheif is native code a crafted file can crash.
+        return await heic_to_jpeg(upload.content, MAX_ATTACHMENT_BYTES)
 
     async def _abandon(
         self, org_id: str, request_id: str, stored: Sequence[StoredFile]
