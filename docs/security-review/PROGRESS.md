@@ -16,6 +16,63 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#4723](https://github.com/thegspiro/the-logbook/pull/4723) (branch
+`claude/security-review-finance-approvals-p18`)**: Feature 05
+(Finance & approvals), pass 18 — watchdog pickup (the dedicated
+`/loop 30m /security-review` session remains unreachable).
+
+PR #4716 (Feature 04, Storefront & payments, pass 18) was confirmed merged
+(`d160b1fd5`) before this iteration started, via a fresh `git fetch origin
+&& git checkout main && git pull --ff-only` (3 commits fast-forwarded)
+rather than trusting a stale local checkout, and a fresh
+`list_pull_requests` (state=open) returned one result, #4717 ("Let a
+department's own request email carry the feedback link") — an unrelated
+feature PR, not a `claude/security-review-*` head, so it does not block
+this pass. The baseline commit was re-derived from scratch with `git log
+--all --oneline --grep "security(finance" -i` against the fresh pull
+rather than trusted from a stale note: `66be9bf99` ("0 fixed, 0 new
+findings (pass 17)") was still the newest hit, confirmed an ancestor of
+`main`, and confirmed a complete baseline (the only later commit touching
+this feature, `b075b4f0d`, only records pass 17's PR number in
+`PROGRESS.md` — not a same-pass fix, since pass 17 closed with 0 open
+findings). Rows 00–04 were `✅` and row 05 (Finance & approvals) was
+confirmed the next `⬜` row on the freshly-pulled `main`.
+
+`git diff --stat 66be9bf99..HEAD` across all thirteen declared/absorbed
+scope files (backend) and all of `frontend/src/modules/finance/` is
+empty — a true zero-delta window, backend and frontend both, unlike pass
+17 (which had 19 real frontend touches). Fresh AST re-enumeration still
+finds **150** routes in `finance.py`, all auth-gated;
+`check_route_permissions.py --strict` finds 344 total application routes
+(0 errors/warnings). Independently re-read and confirmed unchanged: the
+public token surface's non-disclosure/rate-limiting/token-before-work
+ordering, the token path's email-match separation-of-duties check
+(`approve_by_token`'s compensating check for an approver whose address
+equals the requester's or the advance-raiser's), the QuickBooks Online
+OAuth connect flow's signed-state/nonce/single-use-attempt/permission-
+recheck ordering (expensive Intuit call always last), encrypted-at-rest
+token storage with no token field in any response schema, and
+`SafeCsvWriter` on every export. A full sweep of every `log_audit_event(...)`
+call in scope against the `organization_id=` keyword
+`create_log_entry` actually stamps the column from (the PUB-15 check) found
+31 `finance.py` calls that omit the keyword but all 31 carry `user_id=` on
+an authenticated endpoint, so `AuditLogger`'s own fallback (resolve the org
+from the user when `organization_id` is omitted) applies and none land
+`organization_id = NULL` — the same mechanism PUB-15 and Storefront's pass
+18 both already established as sound, re-confirmed by reading
+`create_log_entry` directly rather than pattern-matching the keyword's
+absence. **Not a finding.** FIN-30 and FIN8-05-1 (the two standing items)
+re-confirmed unchanged and still correctly dispositioned in
+`KNOWN_LIMITATIONS.md`. **0 fixed, 0 new findings.** Full write-up:
+`docs/security-review/FIN-05-finance-approvals.md`'s **Pass 18** section.
+
+Row 05 → ✅ (pending this PR's merge); next is Feature 06 (Elections &
+ballots) — re-check `list_pull_requests` fresh rather than trusting this
+note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 04, Storefront & payments, pass 18, PR #4716, merged), preserved for history</summary>
+
 **PR [#4716](https://github.com/thegspiro/the-logbook/pull/4716) (branch
 `claude/security-review-storefront-payments-p18`)**: Feature 04
 (Storefront & payments), pass 18 — watchdog pickup (the dedicated
@@ -53,6 +110,8 @@ new findings.** Full write-up:
 Row 04 → ✅ (pending this PR's merge); next is Feature 05 (Finance &
 approvals) — re-check `list_pull_requests` fresh rather than trusting this
 note.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 03, Public surface & webhooks, pass 18, PR #4715, merged), preserved for history</summary>
@@ -29175,7 +29234,7 @@ commit" rule.
 | 02  | Permissions & roles       | PERM   | `dependencies.py`, `core/permissions.py`, `roles.py`, `operational_ranks.py`, `officers.py`, `org_chart.py`                                                                                                                                                                           | ✅     |
 | 03  | Public surface & webhooks | PUB    | `api/public/*` (71 unauth routes, added pass 18: a new public History website, `history.py`, 20 routes), `paypal_webhook.py`, `integrations_webhook.py`, `salesforce_webhook.py`, `zeffy_webhook.py`, `shift_evaluations.py` (added pass 16)                                          | ✅     |
 | 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                                                                                                                                                                    | ✅     |
-| 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`, `endpoints/quickbooks_online.py` (8 routes; corrected from `services/quickbooks_online.py`, pass 16), `services/quickbooks_online_client.py`, `services/quickbooks_sync_service.py` (both added pass 16) | ⬜     |
+| 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`, `endpoints/quickbooks_online.py` (8 routes; corrected from `services/quickbooks_online.py`, pass 16), `services/quickbooks_online_client.py`, `services/quickbooks_sync_service.py` (both added pass 16) | ✅     |
 | 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (76 routes, token-scoped voting), `election_service.py`, `services/voter_rules.py` (added pass 16), `services/election_attendance_service.py` (added pass 16), `services/election_defaults.py` (added pass 16)                                               | ⬜     |
 | 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`, `leave_requests.py` (20 routes, added pass 17; Chief routing, approver cover, escalation, calendar/export added pass 17)                                                                                      | ⬜     |
 | 08  | Membership pipeline       | MP     | `membership_pipeline.py` (64 routes), `membership_pipeline_service.py`, `models/membership_pipeline.py` (`identity_edited_by_applicant_at`, added pass 18)                                                                                                                            | ⬜     |
@@ -56226,4 +56285,104 @@ errors/warnings.
 
 Row 04 → ✅ (pending this PR's merge). Next is Feature 05 (Finance &
 approvals) — re-check `list_pull_requests` fresh rather than trusting this
+note.
+
+### 2026-11-26 — Feature 04 (Storefront & payments, pass 18) merged (PR #4716); Feature 05 (Finance & approvals, pass 18): watchdog pickup, true zero delta backend and frontend, audit-logging keyword sweep re-confirms no PUB-15-class gap, 0 fixed, 0 new findings
+
+Watchdog pickup (the dedicated `/loop 30m /security-review` session
+remains unreachable). PR #4716 (Feature 04, Storefront & payments, pass 18)
+was confirmed merged (`d160b1fd5`) via a fresh `git fetch origin && git
+checkout main && git pull --ff-only` (3 commits fast-forwarded) rather than
+trusting a stale local checkout, and a fresh `list_pull_requests`
+(state=open) returned one result, #4717 ("Let a department's own request
+email carry the feedback link") — an unrelated feature PR with no
+`claude/security-review-*` head, so it does not block this pass. Row 05
+(Finance & approvals) was confirmed the next `⬜` row.
+
+Baseline re-derived from scratch with `git log --all --oneline --grep
+"security(finance" -i`: `66be9bf99` ("0 fixed, 0 new findings (pass 17)")
+was the newest hit, confirmed an ancestor of `main`
+(`git merge-base --is-ancestor`), and confirmed a **complete** baseline —
+checked specifically for the pass-17/18-split-commit shape Feature 03's
+PUB-15 had, and found none: the only commit after `66be9bf99` touching this
+feature is `b075b4f0d`, which only records pass 17's PR number in
+`PROGRESS.md` (the same kind of commit this very pass writes at its own
+Step 8), not a code fix — pass 17 closed with 0 open findings, so there was
+nothing for a same-pass follow-up to have fixed.
+
+`git diff --stat 66be9bf99..HEAD` across all thirteen declared/absorbed
+backend scope files and all of `frontend/src/modules/finance/` is
+empty — a true zero-delta window on both sides, unlike pass 17 (19 real
+frontend touches). A sweep for any unclaimed new finance/quickbooks-named
+file across the 348 commits since baseline found only
+`training_approval_reminders.py` and its two siblings, which are Training's
+own approval-reminder feature, not finance-adjacent (matched on the word
+"approval" only; confirmed by reading the paths). Fresh, independent
+re-verification rather than trusting the file's prior counts: AST walk of
+`finance.py` finds **150** routes, unchanged, all auth-gated (0 bare);
+`check_route_permissions.py --strict` finds **344** total application
+routes, 0 errors/warnings (matching `SEC-00` pass 19's own whole-app count
+for this window).
+
+Extra-care re-reads given this surface (a token-scoped public approval
+flow, separation of duties, a third-party OAuth integration, and money):
+`public/finance_approvals.py`'s token validation (length check before the
+query, 404 on an unknown/reassigned/wrong-type token — no differential
+response), rate-limiting before any work, and expiry/single-use enforcement
+server-side in the service layer are all unchanged. The token path's
+separation-of-duties check (`approve_by_token` cannot call
+`assert_different_person()` since an email-token approver has no account
+id, so it instead rejects when the step's approver address equals the
+request's own requester or cash-advance-raiser email, unless the step opts
+into `allow_self_approval`) is unchanged, as are the four in-app
+`assert_different_person` call sites. QuickBooks Online's OAuth connect
+flow (`begin_connect`/`complete_connect`) still orders a signed 10-minute
+JWT state, a double-submitted nonce cookie, and a single-use pending
+attempt consumed before validation, with a fresh `finance.manage`
+permission recheck immediately before the one genuinely expensive external
+call (the Intuit code exchange); tokens are `EncryptedText`-backed and
+absent from every response schema; no webhook receiver exists in this
+integration (confirmed by grep, 0 `webhook`/`signature`/`hmac` hits across
+all three QBO files), so webhook-signature verification does not apply.
+Every export still routes through `SafeCsvWriter` (0 bare `csv.writer`
+hits).
+
+A full sweep of every `log_audit_event(...)` call across scope against the
+`organization_id=` keyword `create_log_entry` actually stamps the column
+from — the exact check that found PUB-15 elsewhere — found 31 of
+`finance.py`'s 51 calls omitting that keyword. Read `create_log_entry`
+directly rather than treating the keyword's absence as the defect itself:
+it resolves `organization_id` from `user_id` when the former is omitted and
+the latter is not, by looking the user up. All 31 flagged calls carry
+`user_id=` on an authenticated endpoint, so none land
+`organization_id = NULL` — this is the same fallback mechanism Storefront's
+pass 18 `reject-payment-report` audit event relied on, already established
+sound, not a recurrence of PUB-15's actual defect (which was _unauthenticated
+public_ handlers with no `user_id` to fall back on at all).
+`public/finance_approvals.py`'s two calls and `quickbooks_online.py`'s four
+calls all pass `organization_id=` explicitly, correctly, since the public
+token path has no user to fall back on. **Not a finding.**
+
+**0 fixed, 0 new findings.** FIN-30 (LOW, `list_dues_payments` unbounded —
+owner decision, 2026-10-05, leave as is) and FIN8-05-1 (MED,
+`decide_budget_request` separation-of-duties — resolved 2026-10-26, refuse,
+no single-officer exception) both re-confirmed unchanged against the empty
+diff. Full write-up: `docs/security-review/FIN-05-finance-approvals.md`'s
+**Pass 18** section.
+
+**Completion gate:** `flake8`/`black --check`/`isort --check-only` (CI's
+pins — `flake8==7.4.1`, `black==26.10.1`, `isort==9.0.2` — via
+`/usr/local/bin/python3.13`, confirmed already installed at those exact
+versions) on `app/ tests/ alembic/` — all clean.
+`validate_migrations.py --strict` — single head `e9cf8ab7e4e4`, 844
+revisions. `check_route_permissions.py --strict` — 344 routes, 0
+errors/warnings. Scoped backend pytest (`-k "finance or quickbooks or
+finance_approval"`) — 1755 passed, 2 pre-existing environment-only skips
+(`pywebpush`; a MySQL time-zone-tables-not-loaded skip in
+`test_finance_utc_backfill_migration.py`, confirmed by reading the skip
+condition — both sandbox artifacts, not regressions). `npm run typecheck` —
+0 errors. `npm run lint` — 0 errors/warnings.
+
+Row 05 → ✅ (pending this PR's merge). Next is Feature 06 (Elections &
+ballots) — re-check `list_pull_requests` fresh rather than trusting this
 note.
