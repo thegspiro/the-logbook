@@ -255,14 +255,16 @@ feed listing every change, such as "John Smith changed from Maybe to Going at
 - **Export CSV** downloads it. _(2026-11-19)_ Its last column, **Source**,
   reads **Imported** for a check-in the Historical Data Import wrote and **The
   Logbook** for the rest.
-- **Send Reminders** sends a reminder to **Non-respondents only** (everyone
-  who has not answered) or **All members**.
+- **More → Remind Non-respondents** sends a reminder to everyone who has not
+  answered, and **More → Remind All Members** to the whole membership.
 
 ![Event attendance list with each member's RSVP and check-in state](./images/04-10-event-attendance.png)
 
 ### After an event has ended
 
-The event page drops actions that can no longer do anything:
+The event page drops actions that can no longer do anything. Someone who
+manages events finds both of these under **More**; a member, or an organizer
+who does not manage events, finds them beside the title:
 
 - **Add to Calendar** is hidden once the event has ended — its scheduled end
   has passed, or an officer recorded an actual end.
@@ -366,8 +368,10 @@ they leave. The usual way is a QR code shown at the door.
 ### For Officers (Setting Up Check-In)
 
 1. Open the event page.
-2. Select **View QR Code**. The button is not offered once check-in can no
-   longer succeed (see [After an event has ended](#after-an-event-has-ended)).
+2. Select **More**, then **View QR Code**. An organizer who does not manage
+   events has no More menu and finds **View QR Code** beside the title. It is
+   not offered once check-in can no longer succeed (see
+   [After an event has ended](#after-an-event-has-ended)).
 3. Show the code on a screen, or print it for the entrance.
 
 ![Event QR code display page for member self check-in, its check-in window open](./images/04-04-event-qr-code.png)
@@ -2221,6 +2225,28 @@ under them a strip of the chosen area's pages with a line naming the open one.
 An area card and the page under it carry a red count when the **Needs
 attention** list has items there.
 
+**The Events strip stays at the top** _(2026-11-26)_. Every Events page,
+Events Administration included, now opens with the same row of Events
+sections, **Events**, **Attendance Requests**, **Event Templates**,
+**Attendance Trends** and **CRR Activities** (each shown to those who can open
+it), so a manager is one tap from any of them. On Events Administration the
+row sits between the trail and the administration header. Opening one
+outreach request keeps a lighter form of the header: the trail ends on the
+request, the Events row and the **Events Administration** title are there,
+and the **Community Outreach** page row has **Outreach Requests** selected.
+The headline numbers and area cards are left off so the request starts on a
+phone's first screen. An event's own pages (edit, monitoring, analytics, QR
+code) keep the header while loading and after a failed load, where before
+they showed only the trail. The trail for **Event Templates** and
+**Attendance Trends** no longer passes through Events Administration, and
+**QR Code Analytics** names the event rather than "Event".
+
+> **Screenshot needed** (`04-121-outreach-request-header.png`): one outreach
+> request on a phone, showing the trail ending on the request, the Events
+> section row, the **Events Administration** title and the **Community
+> Outreach** page row with **Outreach Requests** selected, with the request's
+> own heading and status beneath.
+
 **The top of the page.** Like every administration page, it opens with four
 headline numbers and a **Needs attention** list. The built-in numbers are
 **Upcoming**, **RSVPs this week** and **Check-ins logged**; the fourth is
@@ -2504,6 +2530,10 @@ app. Apart from that, the meeting record enforces:
 - editing a meeting cannot set it to **Approved** — _"A meeting cannot be
   marked approved by editing it; submit it for approval and use Approve
   instead"_.
+- editing an approved meeting cannot move it out of **Approved** either
+  _(2026-11-26)_ — _"An approved meeting cannot be moved back by editing it;
+  its attendance is the settled record"_. Otherwise an edit back to draft
+  would have let the meeting, and its attendance, be deleted.
 
 So every approved meeting records who approved it and when — except one
 approved on upgrade from minutes adopted before adoptions were stamped, which is
@@ -2522,7 +2552,11 @@ Under **Minutes → Settings → Quorum**, a settings administrator chooses:
 | Use proxies                    | Off     | Adds **Represented by proxy** to the roll call; a proxy counts |
 
 The defaults are the rule every department had before, so an upgrade changes no
-count. Adopted minutes keep the quorum they were adopted with; a draft is
+count.
+
+_(2026-11-26)_ A quorum set as a **number of members** is met at that number or
+more, like a percentage. A fractional number rounds up (2.5 needs 3), and the
+requirement is never less than one member. Before, it rounded down. Adopted minutes keep the quorum they were adopted with; a draft is
 recounted the next time its quorum is checked. A proxy is not "present": they do
 not vote in a roll call. A line already recorded as a proxy stays editable after
 proxies are switched off, but no longer counts. A department set up from
@@ -2770,7 +2804,18 @@ priority or assignee — is changed by whoever keeps the minutes.
 
 **Reminders.** An open or in-progress item with a due date reminds its
 assignee in the app three days before it is due, one day before, on the due date,
-and on the day after. The check runs once a day.
+and on the day after. The check runs once a day. _(2026-11-26)_ An item on
+minutes reminds only once those minutes are **adopted**, the same rule the
+reminder emails and this list follow: an item on a draft is not yet a
+commitment. An item already marked **Overdue** is still reminded. Before, items
+on draft minutes were reminded and overdue ones were not.
+
+**When the minutes are adopted**, each assignee is emailed about their items.
+_(2026-11-26)_ The email lists only items still open, so minutes reopened and
+adopted again do not re-send finished or cancelled items.
+
+**Reopening an item.** Setting a completed meeting item back to open or in
+progress clears its completion date _(2026-11-26)_.
 
 **Reminder emails.** _(2026-10-15)_ Assignees also get an email, one per member
 per day, listing their items that are due soon or overdue. It covers items on
@@ -3171,7 +3216,9 @@ click. It does not open the request or change its status.
 Select a request to open it on a page of its own _(2026-11-21; was a panel
 over the list)_. The page has its own web address, so you can bookmark it,
 send it to another officer, refresh it, or come back to it with the browser's
-back button. **All requests** at the top returns to the list. The page leads
+back button. **All requests** returns to the list. Above the request, the page
+keeps the Events Administration title and its **Community Outreach** page row
+_(2026-11-26; see [Event Settings](#event-settings))_. The page leads
 with the one action that moves the request forward; on a phone that button
 stays in a bar at the bottom of the screen while you scroll:
 
@@ -3399,7 +3446,9 @@ next year; an older year's goals are not shown here.
 - **Add a goal for** _year_: choose the **Figure** (the Outreach Impact
   figures, then each CRR activity's counts) and type the **Target**, a whole
   number, then select **Add goal**. Each figure can have one goal a year, so a
-  figure that already has one is not offered again.
+  figure that already has one is not offered again. A retired activity type or
+  count is not offered either _(2026-11-26)_; a goal it already has keeps
+  counting.
 - **Target**, beside each goal, changes it: type the new number and select
   **Save**. **Remove** asks first (**Remove this goal?**, with **Keep it**)
   and takes the goal away without touching the work counted toward it.
@@ -3408,7 +3457,8 @@ Each goal shows how far it has got, a bar with a mark where it should be by
 now, and whether it is **On pace**, **Behind pace** or **Met**. Pace assumes
 the work is spread evenly through the year, so a goal for seasonal work can
 read as behind for part of it. Once the year is over, a goal is **Met** or
-**Missed**.
+**Missed**. The percentage never rounds up to 100 before the goal is reached:
+199 of 200 reads 99% _(2026-11-26)_.
 
 **Set goals** (or **Edit goals**) on Outreach Impact's goals section, and on
 the Overview's goals card when no goal is set, opens this screen.
@@ -3456,7 +3506,9 @@ its counts (for example, **Alarms installed** and **Homes**) and default tags
 - **Resident details → Keep for (months)**: how long a resident's address,
   name, phone, email and the activity's notes are kept, 24 months unless you
   change it. After that they are cleared automatically; the ZIP code, city,
-  state and counts stay.
+  state and counts stay. Each day's clearing is written to the audit log
+  _(2026-11-26; before, that audit entry was lost)_, and notes cannot be added
+  back to an activity once its details have been cleared.
 
 Changes save as you make them, except **Keep for (months)**, which you confirm
 with **Save**. **Juvenile firesetter intervention** is listed
@@ -3487,7 +3539,8 @@ at a resident's home, a home safety survey:
 1. Choose the **Activity type** and when it happened, and fill in its counts
    (for example, **Alarms installed: 3**). Blank counts are left out.
 2. Tick the **Risks** and **Priority populations** it addressed; the type's
-   defaults are ticked for you.
+   defaults are ticked for you, leaving out any tag since retired. A retired
+   tag cannot be added to an activity _(2026-11-26)_.
 3. Enter the **ZIP code**. In a US department the city and state fill in from
    it; the form starts with your department's own city and state.
 4. Tick **Add resident details** only when you need to record the address,
@@ -3496,7 +3549,8 @@ at a resident's home, a home safety survey:
    period.
 5. Under **Who took part**, list the members and their minutes. You are listed
    with 60 minutes to start with. Each member's time is credited to Admin
-   Hours, in the category the activity type names.
+   Hours, in the category the activity type names. A member can be listed
+   once, and a deleted member cannot be listed _(2026-11-26)_.
 
 > **Screenshot needed** (`04-112-crr-activity-dialog.png`): the **Log a CRR
 > activity** dialog filled in for a smoke alarm install: **Alarms installed**

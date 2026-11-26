@@ -318,6 +318,11 @@ RSVP list and check-in status]**
 **Community Outreach**, **Check-ins**, **Settings**) with a page strip beneath;
 open **Check-ins → Card Check-ins**.]**
 
+**[PRODUCTION NOTE (2026-11-26): since #4721 the Events section row (**Events**,
+**Attendance Requests**, **Event Templates**, **Attendance Trends**, **CRR
+Activities**) sits above the Events Administration title. Footage recorded
+before then lacks it; re-shoot the opening pan. Narration unchanged.]**
+
 > "Events Administration is laid out as area cards over a strip of pages, the
 > same as Training and Inventory: Events, Community Outreach, Check-ins and
 > Settings. A red count on a card means the Needs attention list has something

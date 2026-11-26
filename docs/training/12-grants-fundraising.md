@@ -249,7 +249,10 @@ You can view applications two ways:
 - **Table** — a sortable, filterable list with status badges, one page at a
   time. The pager under the table moves between pages and sets how many rows a
   page shows (25 by default). Sorting by a column sorts every application, not
-  only the page you are on.
+  only the page you are on. On a phone or tablet, where the table shows as
+  cards, a **Sort by** list and an arrow button above the cards do the same
+  _(2026-11-26)_. The list is always sorted by some column, by **Deadline**
+  soonest first unless you choose another, so it offers no **Default order**.
 
 Every application matching your filters can be reached in either view, however
 many the department has.

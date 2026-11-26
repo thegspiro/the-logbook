@@ -144,6 +144,15 @@ On a desktop, select a column heading as before.
 **Platoons.** The Platoon Roster panel in Scheduling shows each member's
 current platoon, taken from their member record.
 
+**Time in seat** _(2026-11-26)_. Officers who can see other members' hours
+(**scheduling.report**: the chiefs, captains, lieutenants and scheduling
+officer by default) get one more filter beside the status filters. Choose a
+seat, such as **Time as Driver/Operator**, and a period (**This year**, **Last
+year** or **All time**): the directory narrows to members with credited shift
+time in that seat, and an **Hours in seat** column shows each one's hours and
+shifts there. The figures are the ones **Reports > Hours by Position** shows.
+Other members never see this filter.
+
 ### Who Sees What on Profiles and Contact Details
 
 A member's profile works like a directory card. Colleagues see the contact

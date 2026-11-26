@@ -2,7 +2,156 @@
 
 **Prefix:** `EC2` · **Iteration:** B7 · **Reviewed:** 2026-08-06 (pass 1),
 2026-08-06 (pass 2), 2026-08-09 (pass 3), 2026-08-09 (pass 4),
-2026-10-14 (pass 5)
+2026-10-14 (pass 5), 2026-11-26 (pass 6)
+
+---
+
+## Pass 6 (2026-11-26) — performing and filing a check: 10 fixed, 6 flagged
+
+### Scope, stated plainly
+
+Pass 5 named what it did not read, and this pass read those parts:
+
+- check submission and completion;
+- auto-fail and expiry;
+- the failure alert and the apparatus deficiency flag;
+- standalone checks;
+- the readiness board's rules;
+- the check-detail PDF;
+- the reminder tasks;
+- on the frontend: the check form, My Checklists, the reports, the check log and checklist settings.
+
+Every fix below has a test that failed on the unfixed code. The backend findings were first reproduced by a probe against the real service.
+
+**What the frontend findings depend on:** crews perform checks in the accordion form. The guided sweep (`experience="sweep"`) is reached only from the builder's preview, which never submits, so sweep-only findings are latent and rated lower for that.
+
+**Not read:**
+
+- Backend: the supply overview and expiring-stock views, catalog linking, checklist editing, `get_last_check_results`, the start-of-shift reminder body, `supply_expiration_alerts`.
+- Frontend: most of the accordion's render code, the sweep bridge and adapter in detail, `ChecklistsAdminPage`, the fleet board, and the NFC, strip, contents and clone components.
+
+### Frontend
+
+**EC2-9 — MED-HIGH — An unchecked count was submitted as a count — ✅ FIXED**
+
+- Where: `EquipmentCheckForm.buildSubmissionItems`.
+- The form seeds a count item with the truck's running total or the last check's number, unanswered. On submit it sent that as `quantity_found` even when the item was still `not_checked`.
+- The server takes any `quantity_found` as a recount and resets the truck's count and lots to it. So an incomplete check overwrote the running total with a number nobody took, and could raise restock lines.
+- An unchecked item now sends no count or level.
+
+**EC2-10 — HIGH — Continuing a started check wiped the answers since its last save — ✅ FIXED**
+
+- "Continue checklist" loads the incomplete check from the server and replaced the form's answers with it.
+- The local draft, which holds everything answered since, restores first, so it was overwritten. Autosave then wrote the older answers back over the draft, though the leave dialog promises progress is kept.
+- A draft only exists after the last submit, so the crew's answered items in it now win, item by item, and the server's copy fills the rest.
+
+**EC2-11 — MED — Checklist Settings could save defaults over the department's values — ✅ FIXED**
+
+- A failed read left the defaults on screen, and every save sends the whole `checklist_timing` block. So one toggle wrote the defaults over all four real values.
+- A failed read now says so and offers a retry, and nothing can be changed until the settings load.
+
+**EC2-12 — LOW-MED — The compliance tab labelled an incomplete check "Fail" — ✅ FIXED**
+
+- It now shows Incomplete.
+
+**EC2-13 — LOW — An incomplete check opened from history was titled "Completed checklist" — ✅ FIXED**
+
+### Backend
+
+**EC2-14 — LOW — The check PDF printed an incomplete check as FAIL — ✅ FIXED**
+
+- It now prints INCOMPLETE, matching the screen.
+
+**EC2-15 — MED — The server's expiry check read the item's date, not the earliest lot aboard — ✅ FIXED**
+
+- A top-up swap writes the fresh lot's date onto the item and leaves the expired lot on the truck.
+- `_resolve_expiration` read only the item's date, so a check filed an expired pen as passing with `is_expired=False`. That covers a direct API call, or yesterday's offline check synced today.
+- The form and the failure-note rule already read the earliest lot. The server now does too, for items that track expiry.
+
+**EC2-16 — HIGH — Finishing a check saved part-way never alerted or flagged the truck — ✅ FIXED**
+
+- A first submit sends the failure alert and sets the apparatus's deficiency flag. `complete_incomplete_check` did neither.
+- The form resubmits a resumed check through that path, so any check that was ever saved as a draft never alerted, however badly it failed.
+- Completion now does both, from the same alert builder (`_failure_alert_items`) the first submit uses.
+- Whether failures inside a check left _incomplete_ should alert is EC2-19.
+
+**EC2-17 — LOW-MED — A retried unscheduled check filed a second record — ✅ FIXED**
+
+- The form sends `client_submission_id`, but `StandaloneEquipmentCheckCreate` had no such field and dropped it, and `submit_standalone_check` had no replay path.
+- Both now match the shift path: a repeat returns the check already filed, and a key that filed a different check is refused (409). The unique constraint already existed.
+
+**EC2-18 — LOW — A saved draft stopped the end-of-shift reminder — ✅ FIXED**
+
+- `run_end_of_shift_checklist_reminders` counted any check row as done. `is_check_completed`, which the shift screens use, treats a draft as outstanding. A draft now still gets its reminder.
+- `run_post_shift_validation` has the same shape. It is recorded as open below rather than changed without a test of its own.
+
+### Flagged for the owner (in `docs/KNOWN_LIMITATIONS.md`)
+
+- **EC2-19 (HIGH) — Failures inside an incomplete check send no alert and leave the truck unflagged.**
+  - A crew can mark the SCBA out of service and leave one optional item unchecked, and nobody is told.
+  - Decide whether a failed or out-of-service line alerts and flags the apparatus whatever the check's overall status.
+- **EC2-20 (MED-HIGH) — Any passing check clears the apparatus's deficiency flag.**
+  - That includes a different checklist on the same truck, or a three-item standalone check.
+  - The dashboard and the compliance report read that flag, while the fleet board takes the last check of each checklist, so the two disagree (pitfall #29).
+  - Decide one rule, probably the board's.
+- **EC2-21 (MED) — Completing a check takes no row lock, and nothing stops duplicate item rows.**
+  - Two completions at once insert the missing rows twice, doubling report counts and the count side effects.
+  - The fix needs a unique key on (check, template item), which is a migration that must settle any duplicates already stored (pitfall #35).
+- **EC2-22 (MED) — The board and compliance report rebuild history from the checklists active today.**
+  - Any edit unpublishes a checklist until it is republished. Meanwhile its past occasions drop out, its last failed check stops counting, and for a truck-specific checklist the type-level one is substituted retroactively.
+- **EC2-23 (MED) — "Required" is not enforced by the server.**
+  - The accordion blocks Submit until required items are answered; the sweep does not.
+  - Decide whether a required item blocks filing.
+- **EC2-24 (LOW-MED) — Editing a checklist mid-shift refuses the check a crew is part-way through.**
+  - The crew gets "Template is not applicable", and the offline queue discards the entry after its retry limit. `content_revision` is never compared at submit.
+
+### Open, not flagged
+
+- **MED — The lot-quantity lock is incomplete.** `swap_item_lot` and `report_item_used` lock the item, but its lots arrive through a selectin load without `FOR UPDATE` and are not refreshed. `set_item_quantity`, `update_deployed_lot` and the count reconcile take no lock at all (pitfall #27). The fix is local, but it needs a two-session test against MariaDB that this pass did not write.
+- **MED — Resuming an unscheduled check files a new one.** `MyChecklistsPage` submits it through `submitStandaloneCheck` instead of `PUT /checks/{id}/complete`, which the frontend service has no method for, so the old record stays incomplete.
+- **LOW/MED — The board marks an overnight shift's end-of-shift check missed** after midnight, while My Checklists uses the shift's end time.
+- **LOW/MED — The board's "last check" has no tiebreak** between two shifts on one date.
+- **LOW — Other backend items:**
+  - `run_post_shift_validation` counts drafts as done.
+  - My check history bounds dates at UTC midnight.
+  - The compliance report counts drafts as completed.
+  - The failure email is sent before commit, so a failed commit has already emailed (pitfall #36 ordering).
+  - Completion's count reconcile records no author.
+- **LOW — Other frontend items:**
+  - Reports and check-log loads can lose to a stale response.
+  - The failures export ignores the item filter.
+  - The stock-swap overlay is not a dialog (no role, focus trap or Escape).
+  - The sweep's progress screens use the phone's date.
+  - A photo-upload failure leaves the unscheduled draft behind.
+  - A resumed check drops its seals and recorded replacement dates.
+
+### Mechanical checks
+
+- **Route gating:** 54 routes, all gated.
+  - 22 need `inventory.check_manage`; the rest are combinations of view, submit and manage.
+  - Four are scoped by sign-in alone, and are correct:
+    - `my-checklists` and its history are the member's own;
+    - `/log` narrows itself to the member without `check_view`;
+    - the CSV sample is a static file.
+  - `templates/{id}/changelog` is gated at the decorator.
+- **Status filters:** no `== UserStatus.ACTIVE` gates.
+- **Search:** every `LIKE` passes `escape=`.
+
+### Completion gate (pass 6)
+
+| Check                                                    | Result                                              |
+| -------------------------------------------------------- | --------------------------------------------------- |
+| equipment-check, shift task, PDF kit and readiness tests | ✅ **673 passed**, 1 skipped (optional `pywebpush`) |
+| new tests                                                | ✅ 7 backend, 6 frontend; each seen to fail first   |
+| `flake8` / `black` / `isort` (changed files)             | ✅ clean                                            |
+| mypy ratchet                                             | ✅ 0 errors, matching the baseline                  |
+| inventory frontend tests                                 | ✅ 2,015 passed (133 files)                         |
+| `npm run typecheck` / `npm run lint`                     | ✅ 0 errors / 0 warnings                            |
+
+One existing test's fixture changed:
+`test_completion_repairs_legacy_timing_from_template` now gives its check no
+apparatus, because completion now also updates the apparatus deficiency flag
+(EC2-16), which that timing test is not about.
 
 ---
 

@@ -204,6 +204,24 @@ What it depends on and leaves open:
   fork when two migration branches merge close together, and Migration Chain
   reports it on the push to `main`.
 
+## Found by the November 25 – 26 Documentation Pass (2026-11-26)
+
+One gap the documentation pass found while checking the guides against the
+code. It is not a regression of the pass's own making and needs an owner's
+layout choice. The pass fixed the documentation it found wrong (listed in
+`docs/CHANGE_AUDIT_2026-11.md`) and changed no code.
+
+- **Inventory items cannot be sorted as cards on a tablet.** #4724 gave
+  medical supplies, the impact planner and grant applications a
+  `CardSortControl`, and named this one and left it: the item list's own sort
+  select (`InventoryItemsPage.tsx`, the `md:hidden` row) hides from 768px up,
+  while the page's `ItemTable`s (up to three: a pinned shortlist and the rest
+  of the shelf) use `rwd-table-xwide` and stay cards up to a 78rem card, so on
+  a tablet (or a laptop with the sidebar open) the headers are hidden and no
+  sort is offered. Pitfall #39 asks every sortable reflow table for a control
+  shown exactly while its headers are hidden. Fixing it means choosing one
+  control above the tables, or one per table. Open for that decision.
+
 ## Found by the November 24 – 25 Documentation Pass (2026-11-25)
 
 Two gaps the documentation pass found while checking the guides against the
@@ -12448,6 +12466,77 @@ still open. Both need a stored stamp, which is a migration.
 
 **The decision:** whether a repeat is acceptable, or the stamp is worth a
 column.
+
+## Equipment Checks — Decisions From App Review B7 Pass 6 (2026-11-26)
+
+Recorded rather than changed. Details in `docs/app-review/equipment-check.md`
+→ Pass 6.
+
+### EC2-19 — Does a failure inside an unfinished check raise the alarm?
+
+The failure alert and the apparatus deficiency flag fire only when a check's
+overall result is a failure. A check with one optional item left unchecked is
+filed as incomplete, whatever else it found. So a crew can mark the SCBA out
+of service, leave one item blank, and nobody is told and the truck is not
+flagged. Finishing a draft now alerts like a first submit (EC2-16). This
+question is about the draft itself.
+
+**The decision:** whether a failed or out-of-service line alerts officers and
+flags the apparatus whatever the check's overall result.
+
+### EC2-20 — What clears an apparatus's deficiency flag?
+
+Any passing check clears it. That includes a different checklist on the same
+truck (the EMS check passing clears the driver check's failure), and a
+standalone check of three items. The dashboard, the compliance report and its
+PDF read that flag. The fleet board instead looks at the last check of each
+checklist, so the two screens can disagree about whether a truck is in
+service.
+
+**The decision:** one rule for both, most likely the board's (the flag clears
+only when every checklist's latest check is free of open findings).
+
+### EC2-21 — Completing a check twice at once
+
+Finishing an incomplete check takes no lock on the check, and nothing stops
+two rows for the same item on one check. Two completions arriving together
+(the crew and an officer, or a retried request) insert the missing items
+twice, which doubles report counts and runs the count and replacement-date
+updates twice. Closing it needs a unique key on (check, template item): a
+migration that must first settle any duplicates already stored.
+
+**The decision:** approve the migration, or accept the race as rare.
+
+### EC2-22 — Which checklists does history judge against?
+
+The fleet board and the compliance report rebuild past occasions from the
+checklists active today. Any edit to a checklist unpublishes it until it is
+republished. While it is unpublished, its past occasions drop out of expected
+and missed counts, and its last failed check stops counting toward the
+verdict. For a truck-specific checklist, the type-level checklist is
+substituted retroactively, so past shifts show as having missed a checklist
+nobody was offered.
+
+**The decision:** whether history is judged against the checklist that applied
+at the time (which means recording it) or against today's set.
+
+### EC2-23 — Does "required" block filing a check?
+
+The server never reads an item's required flag. The accordion form will not
+submit until required items are answered; the guided sweep (not yet offered
+to crews) will. A required item answered "not applicable" passes.
+
+**The decision:** whether a required item must be answered, by the server,
+before a check can be filed, and whether "not applicable" counts as an answer.
+
+### EC2-24 — Editing a checklist while a crew is using it
+
+Editing a checklist unpublishes it, so a crew part-way through gets "Template
+is not applicable" at submit. An offline check queued against it is discarded
+after its retry limit. The revision the crew worked from is never compared.
+
+**The decision:** whether a check already started may be filed against the
+revision it began on.
 
 ## Elections — Five Counting and Ballot Decisions From App Review B5 Pass 7 (2026-11-24)
 

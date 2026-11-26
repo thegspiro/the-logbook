@@ -1184,11 +1184,23 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
             notes: item.notes,
           };
         }
+        // A draft only exists after the last submit (a successful submit
+        // deletes it), and being local it usually restores before this
+        // answers. So an item the crew answered in the draft keeps that
+        // answer; the server's copy fills in the rest, including any carried
+        // starting count, which is not an answer (EC2-10).
         if (Object.keys(seed).length > 0) {
-          setResults(seed);
+          setResults((current) => {
+            const merged = { ...seed };
+            for (const [itemId, result] of Object.entries(current)) {
+              if (result.status !== 'not_checked') merged[itemId] = result;
+            }
+            return merged;
+          });
         }
         if (record.notes) {
-          setOverallNotes(record.notes);
+          const serverNotes = record.notes;
+          setOverallNotes((current) => current || serverNotes);
         }
       })
       .catch(() => {
@@ -1837,17 +1849,23 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
           itemsWithPhotos.push({ itemId: item.id, files: result.photoFiles });
         }
 
+        const status = getEffectiveStatus(item, result, today);
+        // An unchecked item may still hold the number the form seeded into it
+        // (the truck's running total or the last count). The server takes any
+        // quantity_found as a recount and resets the truck to it, so a number
+        // nobody took is not sent (EC2-9).
+        const observed = status !== 'not_checked';
         items.push({
           template_item_id: item.id,
           compartment_name: storagePathByItemId.get(item.id) ?? compartment.name,
           item_name: item.name,
           check_type: item.checkType,
-          status: getEffectiveStatus(item, result, today),
-          quantity_found: result?.quantityFound,
+          status,
+          quantity_found: observed ? result?.quantityFound : undefined,
           // Advisory: the server snapshots both quantities off the template.
           required_quantity: item.requiredQuantity ?? undefined,
           critical_minimum_quantity: item.criticalMinimumQuantity ?? undefined,
-          level_reading: result?.levelReading,
+          level_reading: observed ? result?.levelReading : undefined,
           level_unit: item.levelUnit || undefined,
           serial_number: item.serialNumber || undefined,
           lot_number: item.lotNumber || undefined,

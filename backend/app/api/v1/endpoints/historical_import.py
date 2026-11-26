@@ -13,6 +13,7 @@ default role holds: only the IT Manager (System Owner) has it unless a
 department grants it on purpose.
 """
 
+from datetime import date
 from typing import Optional
 from uuid import UUID
 
@@ -49,6 +50,8 @@ from app.schemas.historical_import import (
     StaffingCommitPreview,
     StaffingDecisionsUpdate,
     StaffingFileKind,
+    StaffingLeftoversUpdate,
+    StaffingLeftoversView,
     StaffingMappingList,
     StaffingMappingUpdate,
     StaffingMappingView,
@@ -878,6 +881,58 @@ async def assign_staffing_unfilled(
         await service.assign_unfilled(org, str(import_id), payload.assignments)
         return await service.unfilled_view(
             org, str(import_id), offset=offset, limit=limit
+        )
+    except Exception as exc:
+        raise _http_error(exc)
+
+
+@router.get("/{import_id}/staffing/leftovers", response_model=StaffingLeftoversView)
+async def staffing_leftovers(
+    import_id: UUID,
+    kind: str = Query(..., pattern="^(signups|hours)$"),
+    member_id: Optional[str] = Query(None, max_length=36),
+    date_from: Optional[date] = Query(None),
+    date_to: Optional[date] = Query(None),
+    show_resolved: bool = Query(False),
+    offset: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=200),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("integrations.historical_import")),
+):
+    """Every roster seat that pairs with no hours entry (``kind=signups``), or
+    every hours entry on the roster's days that pairs with no seat
+    (``kind=hours``), to pair by hand or mark reviewed."""
+    try:
+        return await HistoricalStaffingCommitService(db).leftovers_view(
+            str(current_user.organization_id),
+            str(import_id),
+            kind=kind,
+            member_id=member_id,
+            date_from=date_from,
+            date_to=date_to,
+            show_resolved=show_resolved,
+            offset=offset,
+            limit=limit,
+        )
+    except Exception as exc:
+        raise _http_error(exc)
+
+
+@router.patch("/{import_id}/staffing/leftovers", status_code=204)
+async def update_staffing_leftovers(
+    import_id: UUID,
+    payload: StaffingLeftoversUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("integrations.historical_import")),
+):
+    """Pair roster seats with their member's hours entries by hand, unpair
+    them, or mark leftovers reviewed. Written when the roster is written."""
+    try:
+        await HistoricalStaffingCommitService(db).update_leftovers(
+            str(current_user.organization_id),
+            str(import_id),
+            payload.pairs,
+            payload.reviewed,
         )
     except Exception as exc:
         raise _http_error(exc)

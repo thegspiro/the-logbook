@@ -153,6 +153,50 @@ deletes rows of the new template type.
   the built-in scheduler needs the new line from
   `app/services/scheduled_tasks.py`.
 
+### The web container publishes a second port for the public website (2026-11-26)
+
+The department's [public website](./PUBLIC_WEBSITE.md) (#4732) is served by a
+second nginx listener in the web container, on container port 8080. The base
+Compose file, the Unraid Compose files and the Unraid template now publish it:
+
+| Deployment                        | Host port                    | Setting            |
+| --------------------------------- | ---------------------------- | ------------------ |
+| `docker-compose.yml`              | 3002                         | `PUBLIC_SITE_PORT` |
+| Unraid Compose files and template | 7882                         | `PUBLIC_SITE_PORT` |
+| `docker-compose.proxy.yml`        | none (`ports: !reset []`)    | n/a                |
+| Host install (`setup-ssl.sh`)     | 127.0.0.1:3002, nginx itself | none               |
+
+**If something on the host already listens on that port, `docker compose up`
+refuses to start the web container** ("port is already allocated" or
+"address already in use"), and members cannot reach the application. Check
+before upgrading:
+
+```sh
+ss -ltn | grep -E ':(3002|7882)\b'
+```
+
+If it is taken, set `PUBLIC_SITE_PORT` in `.env` to a free port (on Unraid,
+edit **Public Website Port** in the template) before you restart. A host
+install re-run through `setup-ssl.sh --traditional` makes the host's nginx
+listen on `127.0.0.1:3002`, so the same check applies there; nginx will not
+reload with the port taken.
+
+Nothing is served on the new port until an officer publishes the website under
+**Administration → Organization Settings → Public Website**; until then every
+path answers 404. A department that does not want a public website can leave
+the port firewalled.
+
+One migration, **`7c3a91e5b2d4`**, creates the empty table
+`public_site_settings`. A department without a row reads as a website that is
+switched off, so no existing row changes. It is skipped where `create_all`
+already built the table. After it, the single head is `7c3a91e5b2d4`. A
+downgrade drops the table and the website's text with it.
+
+A self-managed proxy in front of the installation needs nothing for the
+members' application. To serve the public website it needs a server block for
+the public hostname, which
+`infrastructure/nginx/public-site.conf.example` provides.
+
 ### The backend needs `pi-heif` (2026-11-26)
 
 A HEIC photo filed with a training waiver request is now stored as a JPEG,
@@ -984,6 +1028,33 @@ every authentication and public endpoint at once.
 
 Newest first. Nothing here blocks a restart — these are changes an operator
 should not have to discover by being surprised.
+
+### Minutes quorum and reminders; outreach goals and CRR tags (2026-11-26)
+
+Nothing blocks a restart and no migration is involved. Behaviour that changes
+on upgrade, with no setting to restore the old one:
+
+- **A quorum set as a number of members rounds up** (#4728, MM6-10). A
+  fractional threshold such as 2.5 now needs 3 present, and the requirement is
+  never below one; before, it rounded down. Adopted minutes keep the quorum
+  they were adopted with, but a draft is recounted the next time its quorum is
+  checked and can change from met to not met.
+- **Bell reminders for minutes action items cover adopted minutes only, and
+  now include overdue items** (MM6-14), as the reminder emails and **Action
+  Items** already did. Assignees of items on draft minutes stop being
+  reminded; assignees of overdue items start.
+- **Adopting minutes emails assignees only about open items** (MM6-13), so a
+  re-adoption after a reopen does not resend finished or cancelled ones.
+- **An approved meeting cannot be edited back out of Approved** (MM6-15).
+- **A retired CRR tag cannot be added** to an activity or a type, and **a new
+  outreach goal cannot be set on a retired CRR count** (owner decisions of
+  2026-11-26, #4726). Tags and goals already in place stay and keep counting.
+- **Outreach Impact's all-time totals count an event a request was scheduled
+  onto** (#4726), as the period report beside them already did, so an
+  all-time figure can rise on upgrade.
+- **The daily CRR resident-details clearing now keeps its audit row**
+  (#4718). Before, the row was rolled back, so the audit log has no record of
+  clearings made before the upgrade.
 
 ### Deleting an event now deletes the files attached to it (2026-11-24)
 
