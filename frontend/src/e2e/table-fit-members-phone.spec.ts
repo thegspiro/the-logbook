@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
 import { json, signIn, TEST_USER } from './helpers';
-import { TABLE_FIT_VIEWPORTS, expectTableFitsItsCard } from './tableFit';
+import { TABLE_FIT_VIEWPORTS, expectContentStaysInCard, expectTableFitsItsCard } from './tableFit';
 
 const VIEWPORTS = [{ name: 'iPhone 390x844', width: 390, height: 844 }, ...TABLE_FIT_VIEWPORTS];
 
@@ -82,6 +82,10 @@ test.describe('Assigned inventory on the member profile fits its card', () => {
       expect(scrollWidth, `Assigned inventory scrolls ${scrollWidth - clientWidth}px sideways`).toBeLessThanOrEqual(
         clientWidth
       );
+      // The spill half of expectTableFitsItsCard. The wrapper's scrollWidth
+      // already counts a rightward spill; this adds the left edge and names the
+      // element and cell. It allows 1px, so the fractional card does not trip it.
+      await expectContentStaysInCard(table, 'Assigned inventory');
     });
   }
 });

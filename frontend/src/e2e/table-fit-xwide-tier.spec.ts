@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { json, signIn, TEST_USER } from './helpers';
+import { expectContentStaysInCard } from './tableFit';
 
 const PERMISSIONS = [...TEST_USER.permissions, 'inventory.view', 'inventory.manage'];
 
@@ -91,6 +92,8 @@ test.describe('xwide tier keeps the table layout on a desktop', () => {
       const table = page.getByRole('table', { name: 'Pinned' });
       await table.waitFor();
       await expect(table.locator('thead')).toBeVisible();
+      await expect(table.locator('tbody tr').first()).toBeVisible();
+      await expectContentStaysInCard(table, 'Pinned items table at the xwide tier');
     });
   }
 });

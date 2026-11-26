@@ -116,4 +116,29 @@ describe('AttendanceDashboardPage', () => {
 
     expect(await screen.findByRole('alert')).toBeInTheDocument();
   });
+  // MM6-8: a slower response for an earlier filter used to land last and
+  // replace the table, which then disagreed with the selects above it.
+  it('keeps the latest filter when an earlier response arrives late', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<AttendanceDashboardPage />);
+    await screen.findByRole('row', { name: /Alice Adams/ });
+
+    let releaseBusiness: (value: unknown) => void = () => undefined;
+    mockGetDashboard.mockImplementationOnce(() => new Promise((resolve) => (releaseBusiness = resolve)));
+    await user.selectOptions(screen.getByLabelText(/Meeting type/i), 'business');
+    const special = {
+      ...dashboard,
+      meeting_type_filter: 'special',
+      members: dashboard.members.filter((m) => m.name === 'Bob Brown'),
+    };
+    mockGetDashboard.mockResolvedValueOnce(special);
+    await user.selectOptions(screen.getByLabelText(/Meeting type/i), 'special');
+    await screen.findByRole('row', { name: /Bob Brown/ });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    releaseBusiness({ ...dashboard, meeting_type_filter: 'business' });
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    expect(screen.queryByRole('row', { name: /Alice Adams/ })).not.toBeInTheDocument();
+  });
 });

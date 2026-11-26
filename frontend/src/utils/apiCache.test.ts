@@ -886,6 +886,24 @@ describe('invalidateAfterMutation', () => {
     expect(getCached(getCacheKey('/apparatus'))).not.toBeNull();
   });
 
+  it('clears Outreach Impact and Admin Hours after a CRR activity is saved', () => {
+    setCache(getCacheKey('/dashboard/community-engagement', { period: 'year' }), { goals: [] });
+    setCache(getCacheKey('/admin-hours/entries'), [1]);
+
+    invalidateAfterMutation('/crr/activities');
+
+    expect(getCached(getCacheKey('/dashboard/community-engagement', { period: 'year' }))).toBeNull();
+    expect(getCached(getCacheKey('/admin-hours/entries'))).toBeNull();
+  });
+
+  it('clears the goals Outreach Impact and the Overview read after a goal is saved', () => {
+    setCache(getCacheKey('/dashboard/community-engagement', { period: 'year' }), { goals: [] });
+
+    invalidateAfterMutation('/outreach-goals/g-1');
+
+    expect(getCached(getCacheKey('/dashboard/community-engagement', { period: 'year' }))).toBeNull();
+  });
+
   it('clears only its own resource when nothing else is listed', () => {
     setCache(getCacheKey('/apparatus/a-1'), { id: 'a-1' });
     setCache(getCacheKey('/events/ev-1'), { id: 'ev-1' });

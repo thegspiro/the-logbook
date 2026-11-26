@@ -1,6 +1,180 @@
 # Security Review 05 — Finance & Approvals
 
-**Prefix:** `FIN` · **Iteration:** 05 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-05 (pass 7), 2026-10-12 (pass 8), 2026-10-14 (pass 9, [#3225](https://github.com/thegspiro/the-logbook/pull/3225)), 2026-10-18 (pass 10), 2026-10-22 (pass 11), 2026-10-25 (pass 12), 2026-10-28 (pass 13), 2026-10-31 (pass 14), 2026-11-04 (pass 15), 2026-11-18 (pass 16), 2026-11-24 (pass 17) · **PR:** [#1809](https://github.com/thegspiro/the-logbook/pull/1809) (pass 1)
+**Prefix:** `FIN` · **Iteration:** 05 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-05 (pass 7), 2026-10-12 (pass 8), 2026-10-14 (pass 9, [#3225](https://github.com/thegspiro/the-logbook/pull/3225)), 2026-10-18 (pass 10), 2026-10-22 (pass 11), 2026-10-25 (pass 12), 2026-10-28 (pass 13), 2026-10-31 (pass 14), 2026-11-04 (pass 15), 2026-11-18 (pass 16), 2026-11-24 (pass 17), 2026-11-26 (pass 18) · **PR:** [#1809](https://github.com/thegspiro/the-logbook/pull/1809) (pass 1)
+
+---
+
+## Pass 18 (2026-11-26, watchdog pickup) — true zero delta, backend and frontend both byte-identical to pass 17; audit-logging keyword sweep re-confirms no PUB-15-class gap — 0 fixed, 0 new findings
+
+**Watchdog pickup.** The dedicated `/loop 30m /security-review` session
+remains unreachable. A fresh `git fetch origin && git checkout main && git
+pull --ff-only` fast-forwarded 3 commits to `d160b1fd5` (PR #4716's merge,
+Feature 04/Storefront & payments pass 18). A fresh `list_pull_requests`
+(state=open) returned one result, #4717 ("Let a department's own request
+email carry the feedback link") — an unrelated feature PR, not a
+`claude/security-review-*` head, so it does not block this pass. Rows 00–04
+were `✅`; row 05 (Finance & approvals) was confirmed the next `⬜` row.
+
+**Baseline re-derived from scratch**, not trusted from a stale note:
+`git log --all --oneline --grep "security(finance" -i` against the fresh
+pull still finds `66be9bf99` ("0 fixed, 0 new findings (pass 17)") as the
+newest hit. Confirmed an ancestor of `main`
+(`git merge-base --is-ancestor 66be9bf99 main`). Confirmed a **complete**
+baseline, not half of a pass-17/18-style pair the way Feature 03's PUB-15
+was: the only commit after `66be9bf99` that touches this feature's docs is
+`b075b4f0d`, "docs(security-review): record PR #4655 for finance-approvals
+pass 17" — a PR-number-recording commit of the kind this very pass writes at
+Step 8, not a code fix, and `git diff --stat 66be9bf99..b075b4f0d` touches
+only `PROGRESS.md`. Pass 17 itself closed with 0 open findings, so there was
+nothing for a same-pass follow-up to have fixed.
+
+**Backend: zero delta, confirmed by an empty `git diff --stat`, not a stat
+count of zero.** Every one of the thirteen declared/absorbed scope files —
+`finance.py`, `finance_service.py`, `public/finance_approvals.py`,
+`quickbooks_online.py`, `quickbooks_online_client.py`,
+`quickbooks_sync_service.py`, `models/finance.py`, `schemas/finance.py`,
+`finance_second_approval.py`, `finance_approval_notifications.py`,
+`finance_budget_request_notifications.py`, `finance_approver_matching.py`,
+`finance_budget_request_service.py` — produces an empty diff against
+`66be9bf99`. A sweep for any unclaimed new finance/quickbooks/budget/dues/
+advance/expense/approval-named file added anywhere in the tree across the
+348 commits since baseline found only `training_approval_reminders.py` and
+its two siblings — the Training module's own approval-reminder feature
+(matched on the word "approval", not finance-adjacent; confirmed by reading
+the paths, which sit under no finance import). Route count re-enumerated by
+AST, fresh rather than cited: **150 routes** in `finance.py`, unchanged;
+`check_route_permissions.py --strict` finds 344 total application routes
+(up from 339 at pass 17, matching `SEC-00` pass 19's own whole-app count for
+this window), 0 errors, 0 warnings — no route added or removed anywhere in
+this feature.
+
+**Frontend: also zero delta**, unlike pass 17 (which had 19 real
+`modules/finance/` file touches). `git diff --stat 66be9bf99..HEAD --
+frontend/src/modules/finance/` is empty.
+
+### Extra-care checks this pass (re-verification against live code, not re-assertion of prior text)
+
+- **`public/finance_approvals.py` (token-scoped, unauthenticated).**
+  Byte-identical to pass 17; re-read in full. `_load_record` validates the
+  token's length (20–255) before the query and rejects an unknown token,
+  a token whose step is no longer an `APPROVAL`/`EMAIL` step, or a
+  reassigned step, all with the same `404 "Approval not found"` — no
+  differential response between "no such token" and "token exists but no
+  longer authorizes anything" (existence non-disclosure, checklist §5).
+  `approve_via_token`/`deny_via_token` call `_load_record` before the
+  service layer's heavier `with_for_update()` read, so a malformed/unknown
+  token is rejected before any row lock or expensive work. Rate-limited
+  (30/min/IP) ahead of the handler body via `Depends(_rate_limit)` on every
+  route (checklist §6). Expiry and single-use (`status != PENDING`) are
+  both checked server-side in `approve_by_token`/`deny_by_token`
+  (`finance_service.py`), not just at the public layer.
+- **Separation of duties, token path.** `approve_by_token`'s own docstring
+  states it does _not_ call `assert_different_person()` the way the
+  in-app `approve_step()` does, because an email-token approver has no
+  Logbook account id to compare — and explains the compensating check: if
+  the step's `approver_value` (the email address the link was sent to)
+  equals the request's own requester email, or the email of whoever raised
+  a cash advance on a member's behalf, it raises `SeparationOfDutiesError`
+  unless the step explicitly set `allow_self_approval`. Read directly at
+  `finance_service.py:3972-4043`, unchanged since baseline. The in-app path
+  (`approve_step`/`decide_request`/`decide_budget_request`) still carries
+  `assert_different_person` at the four call sites recorded in prior
+  passes (lines 2519, 3859, 4614, 5834) — all unchanged by the empty diff.
+  FIN8-05-1 (the one in-app gap this class of check once had, on
+  `decide_budget_request`) remains resolved per `KNOWN_LIMITATIONS.md`
+  (2026-10-26); re-confirmed unchanged below.
+- **QuickBooks Online OAuth.** Read `quickbooks_sync_service.py`'s
+  `begin_connect`/`complete_connect`/`_may_still_manage` in full again
+  rather than trusting the pass-16 write-up. The connect flow is a signed,
+  10-minute JWT `state` plus a double-submitted httpOnly nonce cookie plus
+  a single-use `pending_attempt` stored on the connection row, consumed
+  (set to `None` and committed) _before_ any of it is validated — so a
+  replayed callback finds nothing to consume. Nonce comparisons use
+  `secrets.compare_digest` (constant-time). The Intuit code-exchange call
+  — the one genuinely expensive/external step — only happens after state
+  decode, nonce match, pending-attempt match, expiry check, realm-id shape
+  check, and a fresh `_may_still_manage` permission re-check (the Treasurer
+  who started the attempt must still hold `finance.manage` ten minutes
+  later). A failed exchange logs `type(exc).__name__` only, never the
+  exception text, so no token or secret reaches the log
+  (`quickbooks_sync_service.py:402-408`). Tokens are stored via
+  `EncryptedText` (`models/finance.py:2212-2213`, "the tokens Intuit issues
+  are encrypted at rest" per the model's own docstring) and never appear in
+  any response schema (`QuickBooksConnectionResponse` and its siblings in
+  `schemas/finance.py` carry no token field — confirmed by reading the
+  schema, not inferred from the name). **No webhook receiver exists in
+  this integration** — all 8 routes are either the admin-facing
+  connect/disconnect/sync/postings surface (behind `finance.view`/
+  `finance.manage`) or the one unauthenticated `GET /oauth/callback`, which
+  is Intuit's own browser redirect, not a server-to-server webhook — so
+  "webhook signature verification" does not apply here; confirmed by
+  grepping for `webhook`/`signature`/`hmac` across all three QBO files (0
+  hits) rather than assumed from the absence of a route named "webhook".
+- **Financial amounts.** `ApprovalDetailResponse.amount` on the public
+  surface comes from `service.approval_subject(...)`, which resolves the
+  entity's stored amount server-side from `entity_id`/`entity_type` — the
+  token never carries or influences an amount. `QuickBooksSyncResponse`/
+  posting amounts are likewise read off the already-persisted
+  purchase/check/expense rows at sync time, not accepted from the request.
+  Unchanged since pass 9's original "`_mutate_budget` takes a locking read
+  ... fail-closed with no override" finding (`KNOWN_LIMITATIONS.md`),
+  re-confirmed by the empty diff.
+- **CSV export.** `grep -n "csv\.\(writer\|DictWriter\)\|SafeCsvWriter"`
+  across `finance.py`/`finance_service.py`: every export still goes through
+  `SafeCsvWriter` (`finance.py:2201`, `finance_service.py:8909`); 0 bare
+  `csv.writer`/`csv.DictWriter` hits anywhere in scope (Pitfall #15).
+- **Audit logging — every `log_audit_event(...)` call across all eleven
+  non-model/schema scope files checked against the `organization_id=`
+  keyword `create_log_entry` actually stamps the column from**, the exact
+  sweep that found PUB-15 elsewhere. `finance_approvals.py`'s two calls
+  (approve/deny via token) pass `organization_id=` explicitly — correctly,
+  since the public token path has no `user_id` to fall back on.
+  `quickbooks_online.py`'s four calls all pass `organization_id=`
+  explicitly too. **`finance.py` has 31 of its 51 calls that omit the
+  `organization_id=` keyword** — at first read, PUB-15-shaped. Read
+  `create_log_entry` directly (`core/audit.py:319-360`) rather than
+  assuming the keyword's absence is the defect itself: when
+  `organization_id` is `None` and `user_id` is not, it resolves the org by
+  looking the user up and stamping `organization_id` from
+  `User.organization_id` before the row is written. Checked every one of
+  the 31 flagged calls for a `user_id=` keyword alongside: all 31 have one
+  (every flagged call is on an authenticated, `current_user`-backed
+  endpoint). So none of these rows land `organization_id = NULL`; this is
+  the same fallback path Storefront's `reject-payment-report` audit event
+  relied on at pass 18 and that PUB-15's own write-up names as sound — not
+  a recurrence of PUB-15's actual defect, which was unauthenticated
+  **public** handlers with no `user_id` to fall back on at all. **Not a
+  finding** — re-confirmed by reading the mechanism rather than pattern-
+  matching the keyword's absence.
+
+**Standing items — re-confirmed, not re-asserted.** FIN-30 (LOW,
+`list_dues_payments` unbounded) remains the owner's 2026-10-05 "leave as
+is" decision in `KNOWN_LIMITATIONS.md`; `finance_service.py:5714`'s
+`list_dues_payments` is unchanged by the empty diff. FIN8-05-1 (budget-
+request decide separation-of-duties) remains resolved (`KNOWN_LIMITATIONS.md`,
+2026-10-26, "refuse, no single-officer exception"); `decide_request`'s
+guard at line 5834 is unchanged. No code change this pass, so no new guard
+test.
+
+**0 fixed, 0 new findings.**
+
+### Completion gate (pass 18)
+
+| Check                                                                                                   | Result                                        |
+| ------------------------------------------------------------------------------------------------------- | --------------------------------------------- |
+| `flake8 app/ tests/ alembic/` (CI's pin, 7.4.1)                                                         | ✅ 0 violations                               |
+| `black --check app/ tests/ alembic/` (CI's pin, 26.10.1)                                                | ✅ 3541 files unchanged                       |
+| `isort --check-only app/ tests/ alembic/` (9.0.2, matches CI)                                           | ✅ clean                                      |
+| `python3 scripts/validate_migrations.py --strict`                                                       | ✅ 844 revisions, single head `e9cf8ab7e4e4`  |
+| `python3 scripts/check_route_permissions.py --strict`                                                   | ✅ 344 routes, 0 errors, 0 warnings           |
+| `pytest tests/ -q -k "finance or quickbooks or finance_approval"` (`/usr/local/bin/python3.13`, pinned) | ✅ 1755 passed, 2 pre-existing env-only skips |
+| `cd frontend && npm run typecheck`                                                                      | ✅ 0 errors                                   |
+| `cd frontend && npm run lint`                                                                           | ✅ 0 errors, 0 warnings                       |
+
+**Sandbox note:** `/usr/local/bin/python3.13` already carried `flake8`,
+`black` and `isort` at CI's exact pinned versions; the bare `python3` on
+`$PATH` resolves to 3.11.18 with none of them installed, so every backend
+check above was run explicitly against `python3.13`.
 
 ---
 

@@ -5815,6 +5815,10 @@ const routes = ({
     () => ({ ...request, ...EVENT_REQUEST_DETAIL }),
   ]),
   ['**/api/v1/dashboard/community-engagement**', () => COMMUNITY_ENGAGEMENT],
+  // After the glob above, which also matches this URL: the per-event list is an
+  // array, and answered with the summary object the printable report's
+  // `events.map` threw and the page rendered its error boundary.
+  ['**/api/v1/dashboard/community-engagement/events**', () => []],
   // The Outreach Overview's calendar and attention cards: one event short of
   // volunteers, one with a full crew, one waiting to be closed out.
   ['**/api/v1/events/outreach-calendar**', () => (empty ? [] : outreachCalendar())],

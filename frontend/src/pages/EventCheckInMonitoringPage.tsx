@@ -5,7 +5,7 @@ import { eventService } from '../services/api';
 import type { CheckInMonitoringStats } from '../types/event';
 import { getErrorMessage } from '../utils/errorHandling';
 import { useTimezone } from '../hooks/useTimezone';
-import { Breadcrumbs, SkeletonText } from '../components/ux';
+import { SkeletonText } from '../components/ux';
 import { EventsPageHeader } from '../components/events/EventsPageHeader';
 import { formatShortDateTime, formatTime } from '../utils/dateFormatting';
 import { getRSVPStatusLabel } from '../utils/eventHelpers';
@@ -142,14 +142,14 @@ const EventCheckInMonitoringPage: React.FC = () => {
     return `${diffDays} days ago`;
   };
 
-  // Explicit items: /events/:id/monitoring skips the id. This page never loads
-  // the event itself — `stats` carries no title — so the middle crumb is a plain
-  // link back to the record rather than a name this page cannot know.
-  const trail = [
-    { label: 'Events', path: '/events' },
-    { label: 'Event', path: `/events/${eventId ?? ''}` },
-    { label: 'Check-In Monitoring' },
-  ];
+  // This page never loads the event itself — `stats` carries its name — so
+  // until they arrive, or when they cannot, the middle crumb is a plain link
+  // back to the record. Every branch draws the header, so the strip and that
+  // way back never vanish.
+  const eventCrumb = { label: stats?.event_name || 'Event', path: `/events/${eventId ?? ''}` };
+  const placeholderHeader = (
+    <EventsPageHeader icon={Activity} title="Check-In Monitoring" parentCrumbs={[eventCrumb]} />
+  );
 
   // Loading draws the page it will become — the header and the four metric
   // cards, with placeholders where the figures go. A line of text in a narrower
@@ -160,7 +160,7 @@ const EventCheckInMonitoringPage: React.FC = () => {
         <EventsPageHeader
           icon={Activity}
           title="Check-In Monitoring"
-          parentCrumbs={[{ label: 'Event', path: `/events/${eventId ?? ''}` }]}
+          parentCrumbs={[eventCrumb]}
           subtitle={
             <p className="text-theme-text-secondary text-xl">
               <SkeletonText className="w-48" />
@@ -197,8 +197,8 @@ const EventCheckInMonitoringPage: React.FC = () => {
 
   if (error) {
     return (
-      <div className="mx-auto max-w-4xl p-6">
-        <Breadcrumbs items={trail} />
+      <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+        {placeholderHeader}
         <div className="mb-4 rounded-lg border border-red-500/30 bg-red-500/10 p-4">
           <p className="text-red-700 dark:text-red-300">{error}</p>
         </div>
@@ -214,8 +214,8 @@ const EventCheckInMonitoringPage: React.FC = () => {
 
   if (!stats) {
     return (
-      <div className="mx-auto max-w-4xl p-6">
-        <Breadcrumbs items={trail} />
+      <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+        {placeholderHeader}
         <p className="text-theme-text-secondary">No monitoring data available</p>
         <Link
           to={`/events/${eventId}`}

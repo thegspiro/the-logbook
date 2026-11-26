@@ -175,6 +175,12 @@ def _default_sections_for(meeting_type) -> list:
     return _DEFAULT_SECTIONS_BY_TYPE.get(value, DEFAULT_BUSINESS_SECTIONS)
 
 
+# The stored totals a roll call is counted into (``tally``).
+_VOTE_TOTALS = frozenset(
+    {"votes_for", "votes_against", "votes_abstain", "votes_recused"}
+)
+
+
 class MinuteService:
     """Service for meeting minutes management"""
 
@@ -468,6 +474,11 @@ class MinuteService:
             section["order"] = index
 
         minutes.sections = sections
+        # A section rewrite is a content save: move the version on, so an
+        # editor holding the version from before it is refused rather than
+        # writing the old sections back (MM6-9). SQL-side, so it cannot lose
+        # a concurrent bump.
+        minutes.edit_version = MeetingMinutes.edit_version + 1
         await self.ensure_section_motions(minutes, organization_id)
         await self.db.commit()
         return await self.get_minutes(minutes_id, organization_id, refresh=True)
@@ -818,6 +829,11 @@ class MinuteService:
             section["order"] = index
 
         minutes.sections = merged
+        # A section rewrite is a content save: move the version on, so an
+        # editor holding the version from before it is refused rather than
+        # writing the old sections back (MM6-9). SQL-side, so it cannot lose
+        # a concurrent bump.
+        minutes.edit_version = MeetingMinutes.edit_version + 1
         minutes.template_id = outline.id
         if not minutes.header_config and outline.header_config:
             minutes.header_config = copy.deepcopy(outline.header_config)
@@ -1150,7 +1166,7 @@ class MinuteService:
         self, minutes_id: str, organization_id: UUID | str, data: MinutesUpdate
     ) -> Optional[MeetingMinutes]:
         """Update meeting minutes (only if in draft or rejected status)"""
-        minutes = await self.get_minutes(minutes_id, organization_id)
+        minutes = await self._locked_minutes(minutes_id, organization_id)
         if not minutes:
             return None
 
@@ -1340,11 +1356,33 @@ class MinuteService:
     # Approval Workflow
     # ============================================
 
+    async def _locked_minutes(
+        self, minutes_id: str, organization_id: UUID | str
+    ) -> Optional[MeetingMinutes]:
+        """The minutes, read after their row is locked.
+
+        A status change, or a save that depends on the status, checks a value
+        another request may be about to change: without the lock a save could
+        land in minutes already circulated to members, or a reject overwrite
+        an approval and keep its stamps (MM6-12, pitfall #27). Approve and
+        reopen take the same lock.
+        """
+        from app.services.minutes_record_service import MinutesRecordService
+
+        if (
+            await MinutesRecordService(self.db).lock_minutes(
+                minutes_id, organization_id
+            )
+            is None
+        ):
+            return None
+        return await self.get_minutes(minutes_id, organization_id)
+
     async def submit_for_approval(
         self, minutes_id: str, organization_id: UUID | str, submitted_by: UUID | str
     ) -> Optional[MeetingMinutes]:
         """Circulate draft minutes for review (the 'submitted' status)"""
-        minutes = await self.get_minutes(minutes_id, organization_id)
+        minutes = await self._locked_minutes(minutes_id, organization_id)
         if not minutes:
             return None
 
@@ -1420,7 +1458,7 @@ class MinuteService:
         Suggestions already made are kept. The minutes must be circulated again
         before they can be adopted.
         """
-        minutes = await self.get_minutes(minutes_id, organization_id)
+        minutes = await self._locked_minutes(minutes_id, organization_id)
         if not minutes:
             return None
         if minutes.status != MinutesStatus.SUBMITTED.value:
@@ -1517,7 +1555,17 @@ class MinuteService:
 
         approved = await self.get_minutes(minutes_id, organization_id, refresh=True)
         if approved is not None:
-            await self._notify_assignees(approved, approved.action_items or [])
+            from app.services.minutes_record_service import OPEN_ITEM_STATUSES
+
+            # What an assignee still has to do: a re-approval after a reopen
+            # must not email them again about finished or cancelled items
+            # (MM6-13).
+            open_items = [
+                item
+                for item in approved.action_items or []
+                if getattr(item.status, "value", item.status) in OPEN_ITEM_STATUSES
+            ]
+            await self._notify_assignees(approved, open_items)
         return approved
 
     async def _approve_linked_meeting(
@@ -1582,7 +1630,7 @@ class MinuteService:
         reason: str,
     ) -> Optional[MeetingMinutes]:
         """Reject submitted minutes with a reason"""
-        minutes = await self.get_minutes(minutes_id, organization_id)
+        minutes = await self._locked_minutes(minutes_id, organization_id)
         if not minutes:
             return None
 
@@ -1805,6 +1853,12 @@ class MinuteService:
             record = self._vote_record(data.roll_call, minutes.attendees)
             update_data.pop("roll_call")
             update_data.update(record or {"roll_call": None})
+        elif motion.roll_call and _VOTE_TOTALS & update_data.keys():
+            # Totals sent on their own are a vote taken by count, which is
+            # what the page's count mode sends. Written beside the old roll
+            # call they would contradict it, and the two must never disagree
+            # (see _vote_record), so the roll call they replace goes (MM6-11).
+            update_data["roll_call"] = None
 
         if "election_id" in update_data or "ballot_item_id" in update_data:
             election_id = update_data.get("election_id", motion.election_id)

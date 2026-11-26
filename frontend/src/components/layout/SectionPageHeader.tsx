@@ -25,6 +25,7 @@ interface SectionNavProps {
   active: SectionNavItem | undefined;
   label: string;
   accent: SectionAccent;
+  className?: string | undefined;
 }
 
 /**
@@ -34,14 +35,14 @@ interface SectionNavProps {
  * marking the open section with `aria-current="page"`, and a section can be
  * bookmarked, refreshed into and reached with the back button.
  */
-const SectionNav: React.FC<SectionNavProps> = ({ items, active, label, accent }) => {
+const SectionNav: React.FC<SectionNavProps> = ({ items, active, label, accent, className = 'mb-6' }) => {
   const labelId = useId();
   // One section is no navigation: the strip would be a single selected link
   // to the page already open.
   if (items.length < 2) return null;
 
   return (
-    <nav aria-labelledby={labelId} className="card mb-6 overflow-hidden">
+    <nav aria-labelledby={labelId} className={`card overflow-hidden ${className}`}>
       {/* One name for the landmark and its scrolling row: the mobile sweep
           requires a declared scroll region to carry a label of its own, and
           pointing both at one heading names it without saying it twice. */}
@@ -246,6 +247,32 @@ export const SectionPageHeader: React.FC<SectionPageHeaderProps> = ({
       </div>
     </div>
   );
+};
+
+interface SectionStripProps {
+  sections: SectionNavItem[];
+  stripLabel: string;
+  accent?: SectionAccent;
+  /**
+   * The row to mark, when the URL cannot say: a strip of `?tab=` links into a
+   * hub, drawn on a page that is not the hub. Defaults to the longest prefix of
+   * the current path, as the full header does.
+   */
+  activePath?: string | undefined;
+}
+
+/**
+ * The strip alone, for a page whose title row is drawn by something else — an
+ * administration hub, which keeps the admin header every hub shares but still
+ * sits inside its module, so the module's sections stay one tap away.
+ */
+export const SectionStrip: React.FC<SectionStripProps> = ({ sections, stripLabel, accent = 'red', activePath }) => {
+  const { pathname } = useLocation();
+  const checkPermission = useSectionPermission();
+  const items = visibleSectionNavItems(sections, checkPermission);
+  const active = activePath ? items.find((item) => item.path === activePath) : activeSection(items, pathname);
+  // No margin of its own: the admin header's column spaces it with a gap.
+  return <SectionNav items={items} active={active} label={stripLabel} accent={accent} className="" />;
 };
 
 export default SectionPageHeader;

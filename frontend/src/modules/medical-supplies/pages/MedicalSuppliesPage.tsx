@@ -41,6 +41,7 @@ import { formatDate, formatNumber } from '../../../utils/dateFormatting';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { useRegisterPullToRefresh } from '../../../hooks/useRegisterPullToRefresh';
 import { EmptyState } from '../../../components/ux/EmptyState';
+import { CardSortControl } from '../../../components/ux/CardSortControl';
 import { SortableHeader } from '../../../components/ux/SortableHeader';
 import type { SortDirection } from '../../../components/ux/SortableHeader';
 import { SkeletonCard } from '../../../components/ux/Skeleton';
@@ -1231,6 +1232,20 @@ const MedicalSuppliesPage: React.FC = () => {
                   </label>
                 )}
                 <div className="card rwd-table-container overflow-x-auto p-0">
+                  <CardSortControl
+                    options={[
+                      { field: 'name', label: 'Item' },
+                      { field: 'category', label: 'Category' },
+                      { field: 'on_hand', label: 'On hand' },
+                      { field: 'reorder_point', label: 'Reorder at' },
+                      { field: 'next_expiry', label: 'Next expiry' },
+                    ]}
+                    currentSort={sortField}
+                    currentDirection={sortDirection}
+                    onSort={handleSort}
+                    tier="wide"
+                    className="px-4 pt-3"
+                  />
                   <table className="rwd-table rwd-table-wide w-full text-sm">
                     <thead>
                       <tr className="border-theme-surface-border border-b">

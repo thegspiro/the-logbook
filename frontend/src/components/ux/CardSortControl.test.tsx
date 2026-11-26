@@ -35,6 +35,20 @@ describe('CardSortControl', () => {
     expect(screen.getAllByRole('option').map((o) => o.textContent)).toEqual(['Default order', 'Name', 'Hours']);
   });
 
+  it('leaves out the default order for a table that is always sorted', () => {
+    render(
+      <CardSortControl
+        options={options}
+        currentSort="hours"
+        currentDirection="asc"
+        onSort={onSort}
+        allowDefault={false}
+      />
+    );
+    expect(screen.getAllByRole('option').map((o) => o.textContent)).toEqual(['Name', 'Hours']);
+    expect(screen.getByRole('combobox', { name: 'Sort by' })).toHaveValue('hours');
+  });
+
   it('sorts ascending by a column picked with nothing sorted yet', async () => {
     const user = userEvent.setup();
     renderControl(null, null);

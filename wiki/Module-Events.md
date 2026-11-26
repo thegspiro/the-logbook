@@ -1213,7 +1213,12 @@ opt-out applies. `GET /member-audience/options` and `POST
   hold it): a bell (`outreach_feedback`) written in the submit's transaction,
   and after the commit the **Requester Feedback Received** email
   (`outreach_feedback_received`, "Event officer duties"), subject prefixed
-  "Low rating: " at 3 or less out of 5. A failed email never fails the submit.
+  "Low rating: " at 3 or less out of 5. A failed email never fails the submit. _(2026-11-26)_
+  A department's own request email template can carry the survey link:
+  `{{feedback_link}}` (an invitation sentence) and `{{feedback_url}}` (the bare
+  link), filled by `render_request_template` only while `feedback_link()`
+  offers one and empty otherwise. The template's plain-text part is now filled
+  with every placeholder too; it was sent with them unreplaced.
 
 ---
 
@@ -1231,9 +1236,12 @@ attention** (requests **Waiting for a reply**, events **Short of people** in
 the next 60 days, events **Waiting to be closed out** from the last 30 days —
 over, with attendance not finalized), a **Week** / **Month** planning calendar
 of every outreach event with its sheet and crew fill, quick links (**New
-outreach event**, **Log a request**, **Apparatus nights**) and **This year at a
-glance** from Outreach Impact. It counts the same events Outreach Impact does,
-so an apparatus night on a non-public event type is not on it.
+outreach event**, **Log a request**, **Log a CRR activity**, **Apparatus
+nights**), **This year at a glance** from Outreach Impact, and **Goals for**
+the year, listing the [goals](#outreach-goals) furthest behind pace (**All
+goals** opens Outreach Impact; **Set goals** when there are none). It counts
+the same events Outreach Impact does, so an apparatus night on a non-public
+event type is not on it.
 
 > **Public intake is opt-in.** Turn it on under **Event settings → Public Requests →
 > Overview → Accept Public Requests**; it is **off by default**. While it is off the
@@ -1392,8 +1400,11 @@ and **Homes**), and the **Risks** and **Priority populations** tags. Every
 department starts with the same built-in types, seeded the first time its
 catalogue is read. Built-in types, counts and tags can be renamed, described,
 retired and restored but not deleted; types a department added can be
-deleted. Each type can name the **Admin Hours category** a member's logged
-time is credited to (otherwise the department's Public Education mapping).
+deleted until an activity is recorded against one, then only retired. A
+retired tag stays on a type or activity that carries it until removed, but is
+not newly added. Each type can name the **Admin Hours category** a member's
+logged time is credited to (otherwise the department's Public Education
+mapping); if that category is deactivated, nothing is credited.
 **Resident details → Keep for (months)** (24 by default) sets how long a
 resident's address, name, phone, email and the activity's notes are kept.
 **Juvenile firesetter intervention** is shown as **Coming soon**.
@@ -1415,11 +1426,12 @@ resident's address, name, phone, email and the activity's notes are kept.
   **Delete** it, which removes the Admin Hours it credited, and record it
   again. A member deletes their own; an events manager any.
 - Resident details are encrypted, shown only to holders of `crr.view_contact`
-  (the Community Outreach Manager, the chiefs and the president), and cleared
+  (the Community Outreach Manager, the chiefs, the president and system
+  administrators), and cleared
   by a daily task after the retention period. The ZIP code, city, state and
   counts stay.
 
-**Reporting.** **Outreach Impact** adds a **CRR activities** section for the
+**Reporting.** **Outreach Impact** adds a **Community risk reduction** section for the
 period: counts **By activity** (with the change since the same point last
 period), **By risk**, **By priority population** (an activity with two tags
 counts under both) and **By ZIP code**, with **Show map** drawing a circle
@@ -1429,6 +1441,18 @@ The printed summary carries the lists without the map.
 
 Endpoints and storage are in
 [Events — Developer](Module-Events-Developer#community-risk-reduction-crr).
+
+### Outreach goals
+
+**Event settings → Outreach Goals** (`events.manage`) sets a target for a
+calendar year, for **Events held**, **People reached**, **Member hours** or
+any active CRR count. Last year, this year and next year are offered. Each
+goal shows a bar with a mark where an even pace through the year would put it,
+and reads **On pace**, **Behind pace**, **Met** or, once the year is over,
+**Missed**. Outreach Impact shows this year's goals above **Community risk
+reduction** whatever its period, with **Edit goals**; the printed summary lists
+them in a table; and the Overview's **Goals for** card lists the goals furthest
+behind pace. The outreach figures count exactly what Outreach Impact counts.
 
 ---
 
@@ -1446,6 +1470,7 @@ scrollable tab strip on phones. A deep-linked Settings tab scrolls into view.
 | Hour Tracking    | Event → admin hours category mappings                                                                                                                                                                            |
 | Public Requests  | Five pages: **Overview** (Accept Public Requests, lead time), **Request form**, **Types & roles** (types, role presets, outreach roles), **Handling** (coordinator, checklist), **Emails** (triggers, templates) |
 | CRR Catalogue    | CRR activity types, their counts, risk and priority-population tags, each type's Admin Hours category, resident-detail retention                                                                                 |
+| Outreach Goals   | Yearly targets for events held, people reached, member hours or any CRR count; see [Outreach goals](#outreach-goals)                                                                                             |
 | Headline Metrics | The four cards at the top of the admin hub                                                                                                                                                                       |
 
 Settings are stored in `organization.settings.events`; nested JSON writes use

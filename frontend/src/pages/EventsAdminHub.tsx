@@ -30,6 +30,7 @@ import {
   type EventsAdminTab,
 } from './eventsAdminTabs';
 import { lazyWithRetry } from '../utils/lazyWithRetry';
+import { EventsSectionStrip } from '../components/events/EventsPageHeader';
 
 const HUB_PATH = '/events/admin';
 
@@ -110,6 +111,7 @@ export const EventsAdminHub: React.FC = () => {
   return (
     <AdminHubFrame
       moduleKey="events"
+      sectionNav={<EventsSectionStrip />}
       title="Events Administration"
       description="Create and manage events, view analytics"
       actions={actions}

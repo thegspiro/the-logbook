@@ -4,7 +4,7 @@
  * longer claims the action cannot be undone.
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
@@ -23,6 +23,7 @@ vi.mock('../services/api', () => ({
 
 import EventTemplatesPage from './EventTemplatesPage';
 import { renderWithRouter } from '../test/utils';
+import { useAuthStore } from '../stores/authStore';
 
 const base = {
   organization_id: 'org-1',
@@ -99,5 +100,38 @@ describe('EventTemplatesPage failed save', () => {
     expect(
       await within(dialog).findByRole('textbox', { name: /^Template Name/, description: 'Value is too long.' })
     ).toHaveFocus();
+  });
+});
+
+describe('EventTemplatesPage header', () => {
+  beforeEach(() => {
+    mockGetTemplates.mockReset();
+    // An events manager: the viewer for whom the old trail linked Events
+    // Administration, and for whom it must now be absent.
+    useAuthStore.setState({ user: { id: 'u1', permissions: ['events.manage'] } as never, isAuthenticated: true });
+  });
+
+  afterEach(() => {
+    useAuthStore.setState({ user: null, isAuthenticated: false });
+  });
+
+  it('keeps the Events strip and title when the templates cannot be loaded', async () => {
+    mockGetTemplates.mockRejectedValue(new Error('offline'));
+    renderWithRouter(<EventTemplatesPage />);
+
+    expect(await screen.findByText('Try again')).toBeInTheDocument();
+    expect(screen.getByRole('navigation', { name: 'Events sections' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 1, name: 'Event Templates' })).toBeInTheDocument();
+  });
+
+  it('draws no trail through Events Administration: the strip says it is a section of Events', async () => {
+    mockGetTemplates.mockResolvedValue([]);
+    window.history.pushState({}, '', '/events/templates');
+    renderWithRouter(<EventTemplatesPage />);
+
+    expect(await screen.findByText('No templates yet')).toBeInTheDocument();
+    const sections = screen.getByRole('navigation', { name: 'Events sections' });
+    expect(within(sections).getByRole('link', { name: 'Event Templates' })).toHaveAttribute('aria-current', 'page');
+    expect(screen.queryByRole('navigation', { name: 'Breadcrumb' })).not.toBeInTheDocument();
   });
 });
