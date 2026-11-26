@@ -123,7 +123,11 @@ export const ShiftBoard: React.FC<ShiftBoardProps> = ({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<BoardFilter>('all');
-  const [selectedDate, setSelectedDate] = useState<Date>(() => new Date());
+  // The department's day, as `today` below is: the browser's clock opened a
+  // device in another timezone on a different day near midnight.
+  const [selectedDate, setSelectedDate] = useState<Date>(
+    () => new Date(`${toLocalDateString(new Date(), timezone)}T12:00:00`)
+  );
   const [eligibleByShift, setEligibleByShift] = useState<Record<string, string[]>>({});
   const [pendingShiftId, setPendingShiftId] = useState<string | null>(null);
   const [giveUp, setGiveUp] = useState<{ shift: ShiftRecord; choice: 'drop' | 'trade' } | null>(null);
@@ -275,6 +279,8 @@ export const ShiftBoard: React.FC<ShiftBoardProps> = ({
     );
   }, [shifts, currentUserId, now, todayKey, rangeStartKey, rangeEndKey, signupWindow]);
 
+  const refreshSeq = useRef(0);
+
   /**
    * Re-read the visible range. Returns the shifts so a caller that has just
    * mutated the roster can act on the server's answer rather than on the
@@ -282,6 +288,11 @@ export const ShiftBoard: React.FC<ShiftBoardProps> = ({
    */
   const refresh = useCallback(
     async (options?: { background?: boolean }): Promise<ShiftRecord[]> => {
+      // Only the newest request may write the board: two quick "Next week"
+      // taps, or a poll landing after navigation, otherwise left one week's
+      // shifts under another week's header, where none match a visible day.
+      refreshSeq.current += 1;
+      const ticket = refreshSeq.current;
       // Only the timer's own poll says it is in the background. A handler that
       // passes this function an event object reads as "not background".
       const config = options?.background === true ? BACKGROUND_REQUEST_CONFIG : undefined;
@@ -319,6 +330,7 @@ export const ShiftBoard: React.FC<ShiftBoardProps> = ({
             )
             .catch(() => [] as CalendarOutreachItem[])
         : [];
+      if (ticket !== refreshSeq.current) return data;
       setShifts(data);
       setOutreach(outreachItems);
       setMyOffers(offers);
@@ -332,12 +344,15 @@ export const ShiftBoard: React.FC<ShiftBoardProps> = ({
   const fetchShifts = useCallback(async () => {
     setLoading(true);
     setError(null);
+    // `refresh` takes its ticket before its first await, so this is its ticket.
+    const pending = refresh();
+    const ticket = refreshSeq.current;
     try {
-      await refresh();
+      await pending;
     } catch (err) {
-      setError(getErrorMessage(err, 'Could not load the schedule.'));
+      if (ticket === refreshSeq.current) setError(getErrorMessage(err, 'Could not load the schedule.'));
     } finally {
-      setLoading(false);
+      if (ticket === refreshSeq.current) setLoading(false);
     }
   }, [refresh]);
 
@@ -647,8 +662,8 @@ export const ShiftBoard: React.FC<ShiftBoardProps> = ({
           <button
             type="button"
             onClick={() => {
-              onVisibleDateChange(new Date());
-              setSelectedDate(new Date());
+              onVisibleDateChange(new Date(today));
+              setSelectedDate(new Date(today));
             }}
             className="btn-secondary btn-sm rounded-full px-3.5 text-[13px] font-semibold"
           >
