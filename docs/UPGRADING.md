@@ -135,6 +135,49 @@ _is_ the upgrade. Before it:
 Newest first. Every entry here is a change that was safe on a fresh install
 and refused to boot an existing one.
 
+### The backend needs `pi-heif` (2026-11-26)
+
+A HEIC photo filed with a training waiver request is now stored as a JPEG,
+decoded with `pi-heif`, pinned in `backend/requirements.txt`. The waiver
+document service checks for it when it loads, and the API's waiver routes
+load that service whether or not a department takes documents, so **a backend
+started without the package fails at import and never serves a request**.
+The wheel bundles libheif and libde265 and needs no system package, on amd64
+or arm64.
+
+- **Docker Compose (including Unraid Compose Manager):** rebuild the backend
+  image (`docker compose build backend` or `--build`). The backend
+  Dockerfile installs `requirements.txt`.
+- **Single-image Unraid template (Community Applications):** nothing to
+  build. Update the container to the release image that carries this change
+  (**Apps**, **Check for Updates**, **Update**); the image ships with the
+  package installed.
+- **Running from source:** run `pip install -r backend/requirements.txt`
+  before restarting.
+- **Native systemd install (`install.sh --traditional`):** also add
+  `OOMPolicy=continue` to the backend's unit, which new installs write. The
+  decoder runs in a child Python process that makes itself the kernel's first
+  choice when memory runs out; under systemd's default `OOMPolicy=stop`, that
+  kill stops the whole backend service until it restarts. Without the line
+  the backend still boots, so this does not stop an upgrade; it stops the
+  service later, on the first such kill:
+
+  ```sh
+  sudo systemctl edit logbook-backend
+  # in the editor, add:
+  #   [Service]
+  #   OOMPolicy=continue
+  sudo systemctl daemon-reload
+  sudo systemctl restart logbook-backend
+  ```
+
+The decoder runs in a child Python process the backend starts per photo
+(`python -I`), with the same interpreter, in the temp directory. It needs no
+extra port, volume or setting under Docker; a native systemd install needs
+the `OOMPolicy` line above.
+
+No data change: HEIC files already stored stay as they were filed.
+
 ### History articles, essential seats, double-credit flags and waiver retention counts (2026-11-25)
 
 Nothing blocks a restart. Five migrations that no other entry covers arrive

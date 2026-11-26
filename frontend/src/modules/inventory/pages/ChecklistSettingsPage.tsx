@@ -58,24 +58,30 @@ export const ChecklistSettingsPage: React.FC = () => {
     setClosesDraft(String(timing.checkin_closes_hours_after));
   }, [timing.checkin_opens_hours_before, timing.checkin_closes_hours_after]);
 
-  useEffect(() => {
-    const load = async () => {
-      try {
-        const orgSettings = (await organizationService.getSettings()) as Record<string, unknown>;
-        const reports = orgSettings.shift_reports as
-          { checklist_timing?: Partial<ChecklistTimingSettings> } | undefined;
-        if (reports?.checklist_timing) {
-          setTiming({ ...DEFAULT_CHECKLIST_TIMING, ...reports.checklist_timing });
-        }
-      } catch {
-        // Defaults stand. They are today's behaviour, so a failed read shows
-        // the screen as it would be rather than an error the officer cannot act on.
-      } finally {
-        setLoading(false);
+  // A save sends the whole checklist_timing block, so editing over defaults
+  // shown after a failed read would write them over the department's real
+  // values. Nothing is offered until the settings have loaded (EC2-11).
+  const [loadFailed, setLoadFailed] = useState(false);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setLoadFailed(false);
+    try {
+      const orgSettings = (await organizationService.getSettings()) as Record<string, unknown>;
+      const reports = orgSettings.shift_reports as { checklist_timing?: Partial<ChecklistTimingSettings> } | undefined;
+      if (reports?.checklist_timing) {
+        setTiming({ ...DEFAULT_CHECKLIST_TIMING, ...reports.checklist_timing });
       }
-    };
-    void load();
+    } catch {
+      setLoadFailed(true);
+    } finally {
+      setLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
 
   const save = useCallback(async (updated: ChecklistTimingSettings, field: TimingField): Promise<boolean> => {
     setSaving(true);
@@ -162,6 +168,21 @@ export const ChecklistSettingsPage: React.FC = () => {
     return (
       <div className="flex items-center justify-center py-16">
         <Loader2 className="text-theme-text-muted h-6 w-6 animate-spin" aria-label="Loading checklist settings" />
+      </div>
+    );
+  }
+
+  if (loadFailed) {
+    return (
+      <div className="max-w-3xl py-6">
+        <div className="alert-danger flex flex-wrap items-center justify-between gap-3" role="alert">
+          <p className="text-sm">
+            The checklist settings could not be loaded, so they cannot be changed here until they are.
+          </p>
+          <button type="button" onClick={() => void load()} className="btn-secondary">
+            Try again
+          </button>
+        </div>
       </div>
     );
   }

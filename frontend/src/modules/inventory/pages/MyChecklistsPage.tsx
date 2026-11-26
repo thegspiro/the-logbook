@@ -423,7 +423,9 @@ export const MyChecklistsPage: React.FC = () => {
 
         <div className="card p-4 sm:p-6">
           <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-theme-text-primary text-lg font-semibold">Completed checklist</h2>
+            <h2 className="text-theme-text-primary text-lg font-semibold">
+              {selectedCheck.overallStatus === 'incomplete' ? 'Checklist in progress' : 'Completed checklist'}
+            </h2>
             {statusBadge(selectedCheck.overallStatus)}
           </div>
 

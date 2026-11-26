@@ -1566,6 +1566,12 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
     detail: 'fast route-level mobile presentation ratchet — public portal admin',
   },
   {
+    path: '/admin/public-website',
+    source: 'src/modules/public-portal/routes.tsx',
+    coverage: 'ratchet',
+    detail: 'fast route-level mobile presentation ratchet — public website settings',
+  },
+  {
     path: '/reports',
     source: 'src/modules/reports/routes.tsx',
     coverage: 'ratchet',

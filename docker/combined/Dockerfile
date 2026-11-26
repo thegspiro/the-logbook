@@ -73,6 +73,11 @@ RUN nginx -t
 # beyond loopback here.)
 EXPOSE 3000
 
+# 8080 is the department's public website: frontend/nginx.conf's second
+# listener, which the rewrite above leaves on its own port. It answers 404
+# until the department switches its website on.
+EXPOSE 8080
+
 # Through nginx to the backend's /health, so it passes only when both halves
 # answer. Same timings as the backend image: first start runs migrations.
 HEALTHCHECK --interval=30s --timeout=10s --start-period=300s --retries=3 \
