@@ -4,6 +4,11 @@
 
 The Public Portal module enables fire departments to expose selected data to a public-facing website. This module is designed with security as the top priority, as it creates a bridge between internal systems and the public internet.
 
+> Not to be confused with the **Public Website**
+> ([PUBLIC_WEBSITE.md](./PUBLIC_WEBSITE.md)), which this installation renders
+> and serves itself. The portal described here is an API for a website the
+> department hosts elsewhere.
+
 ## Use Cases
 
 - Show upcoming public education events

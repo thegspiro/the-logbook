@@ -14,6 +14,7 @@ path — so it errs toward naming every endpoint it cannot verify.
 
 import ast
 import inspect
+import textwrap
 from pathlib import Path
 
 import pytest
@@ -129,6 +130,30 @@ def test_the_waiver_attachment_entry_points_route_through_the_scanning_service()
     assert ".store_bytes(" in inspect.getsource(service._store)
     for entry in (service.submit_with_attachments, service.add_attachments):
         assert "self._store(" in inspect.getsource(entry)
+
+
+def test_a_waiver_heic_is_scanned_before_it_is_decoded():
+    """libheif parses the member's bytes; the original is scanned first, and
+    the converted JPEG again when it is stored."""
+    service = attendance_waiver_attachments.AttendanceWaiverAttachmentService
+    source = inspect.getsource(service._as_stored)
+    assert source.index("self.storage.check(") < source.index("heic_to_jpeg(")
+    # What store_bytes scans and writes is what _as_stored returned: the
+    # call is store_bytes(await self._as_stored(...), ...).
+    tree = ast.parse(textwrap.dedent(inspect.getsource(service._store)))
+    stores = [
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and node.func.attr == "store_bytes"
+    ]
+    assert len(stores) == 1
+    first = stores[0].args[0]
+    assert isinstance(first, ast.Await)
+    assert isinstance(first.value, ast.Call)
+    assert isinstance(first.value.func, ast.Attribute)
+    assert first.value.func.attr == "_as_stored"
 
 
 def test_the_history_media_entry_point_routes_through_the_scanning_service():

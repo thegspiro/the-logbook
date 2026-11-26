@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}About | {{ name }}{% endblock %}
+{% block content %}
+<div class="wrap page">
+  <h1>About {{ name }}</h1>
+  {% if founded_year or county %}
+  <dl class="facts">
+    {% if founded_year %}
+    <div><dt>Founded</dt><dd>{{ founded_year }}</dd></div>
+    {% endif %}
+    {% if county %}
+    <div><dt>County</dt><dd>{{ county }}</dd></div>
+    {% endif %}
+  </dl>
+  {% endif %}
+  {% if about %}
+  <div class="prose">
+    {% for paragraph in about %}
+    <p>{{ paragraph }}</p>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p class="muted">More about the department will be posted here soon.</p>
+  {% endif %}
+</div>
+{% endblock %}
