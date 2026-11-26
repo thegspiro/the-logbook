@@ -25,7 +25,6 @@ export const useEventNotifications = (eventId: string | undefined) => {
   const [showNotifyConfirm, setShowNotifyConfirm] = useState(false);
   const [lastNotification, setLastNotification] = useState<LastNotification | null>(null);
   const [sendingReminders, setSendingReminders] = useState(false);
-  const [showReminderMenu, setShowReminderMenu] = useState(false);
 
   const handleSendNotification = useCallback(async () => {
     if (!eventId) return;
@@ -59,7 +58,6 @@ export const useEventNotifications = (eventId: string | undefined) => {
 
       try {
         setSendingReminders(true);
-        setShowReminderMenu(false);
         const result = await eventService.sendReminders(eventId, reminderType);
         toast.success(`${result.sent_count} reminder(s) queued`);
       } catch (err) {
@@ -83,8 +81,6 @@ export const useEventNotifications = (eventId: string | undefined) => {
     setShowNotifyConfirm,
     lastNotification,
     sendingReminders,
-    showReminderMenu,
-    setShowReminderMenu,
     handleSendNotification,
     handleSendReminders,
   };

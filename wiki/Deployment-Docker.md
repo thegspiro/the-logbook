@@ -256,14 +256,15 @@ docker compose config | grep SMTP_HOST
 
 ## Services
 
-| Service    | Container           | Port                                    | Notes                                                |
-| ---------- | ------------------- | --------------------------------------- | ---------------------------------------------------- |
-| `frontend` | `intranet-frontend` | `FRONTEND_PORT` (3000) → 80             | nginx; serves the app, forwards `/api` and `/health` |
-| `backend`  | `intranet-backend`  | `BACKEND_PORT` (3001), development only | FastAPI; not published with the production override  |
-| `mysql`    | `intranet-mysql`    | internal                                | MySQL 8.0                                            |
-| `redis`    | `intranet-redis`    | internal                                | Redis 7, password required                           |
-| `clamav`   | `intranet-clamav`   | internal (3310)                         | Malware scanner, always started                      |
-| `backup`   | (Compose default)   | —                                       | Production override only; nightly backups            |
+| Service    | Container           | Port                                    | Notes                                                     |
+| ---------- | ------------------- | --------------------------------------- | --------------------------------------------------------- |
+| `frontend` | `intranet-frontend` | `FRONTEND_PORT` (3000) → 80             | nginx; serves the app, forwards `/api` and `/health`      |
+| `frontend` | (same container)    | `PUBLIC_SITE_PORT` (3002) → 8080        | The [public website](Public-Website); 404 until published |
+| `backend`  | `intranet-backend`  | `BACKEND_PORT` (3001), development only | FastAPI; not published with the production override       |
+| `mysql`    | `intranet-mysql`    | internal                                | MySQL 8.0                                                 |
+| `redis`    | `intranet-redis`    | internal                                | Redis 7, password required                                |
+| `clamav`   | `intranet-clamav`   | internal (3310)                         | Malware scanner, always started                           |
+| `backup`   | (Compose default)   | —                                       | Production override only; nightly backups                 |
 
 Optional services, started by profile (`docker compose --profile <name> up -d`):
 
