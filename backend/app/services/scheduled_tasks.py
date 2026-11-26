@@ -1908,7 +1908,12 @@ async def run_event_reminders(db: AsyncSession) -> Dict[str, Any]:
                     ]
                     if going_user_ids:
                         users_result = await db.execute(
-                            select(User).where(User.id.in_(going_user_ids))
+                            select(User).where(
+                                User.id.in_(going_user_ids),
+                                # Leaving never removes an RSVP; the "all" audience
+                                # already filters to current members (NOTIF2-11).
+                                User.is_active,
+                            )
                         )
                         recipients = list(users_result.scalars().all())
 

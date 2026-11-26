@@ -13,7 +13,7 @@ most urgent applicable tier and suppresses the skipped earlier tiers
 
 from datetime import date, datetime, timedelta, timezone
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -240,6 +240,21 @@ class TestTieredAlerts:
         assert out["in_app_sent"] == 1
         assert record.alert_90_sent_at is not None
         assert record.alert_60_sent_at is None
+
+    async def test_the_alert_opens_a_page_that_exists(self):
+        """NOTIF2-8: the alert linked to /training/records, which is not a
+        frontend route, so "View Training" on a certification-expiry alert
+        opened the Not Found page. The alert goes to the member themselves."""
+        record = _record(90)
+        member = _member(email_enabled=False)
+        service = CertAlertService(self._db(record, member))
+        logged = AsyncMock()
+        with patch.object(service, "_log_in_app_notification", logged):
+            await service.process_alerts("org-1")
+
+        assert [c.kwargs["action_url"] for c in logged.await_args_list] == [
+            "/training/my-training"
+        ]
 
     async def test_already_sent_tier_is_deduped(self):
         # 90 days out, 90-tier already sent; 60-tier not yet applicable (90>60).
