@@ -4827,40 +4827,52 @@ async def run_crr_resident_details_retention(db: AsyncSession) -> Dict[str, Any]
     from app.models.user import Organization
     from app.services.crr_activity_service import CrrActivityService
 
-    organizations = (
-        (await db.execute(select(Organization).where(Organization.active.isnot(False))))
-        .scalars()
-        .all()
-    )
+    # Ids, not loaded rows: a rollback expires every loaded object, and an
+    # expired organization cannot be read again in async code, so one
+    # department's failure would otherwise end the sweep for the rest.
+    organization_ids = [
+        str(org_id)
+        for org_id in (
+            await db.execute(
+                select(Organization.id).where(Organization.active.isnot(False))
+            )
+        ).scalars()
+    ]
     cleared_total = 0
     failed = 0
-    for organization in organizations:
+    for organization_id in organization_ids:
         try:
+            organization = await db.get(Organization, organization_id)
+            if organization is None:
+                continue
             cleared = await CrrActivityService(db).clear_expired_resident_details(
                 organization
             )
+            if cleared:
+                # In the same transaction as the clearing: the scheduler does
+                # not commit after a task returns, so an audit row written
+                # after this commit would be rolled back with the session.
+                await log_audit_event(
+                    db=db,
+                    event_type="crr_resident_details_retention",
+                    event_category="events",
+                    severity="info",
+                    event_data={
+                        "organization_id": organization_id,
+                        "activities_cleared": cleared,
+                    },
+                )
             await db.commit()
         except Exception as exc:
             failed += 1
             await db.rollback()
             logger.error(
                 "CRR resident-details retention failed for organization {}: {}",
-                organization.id,
+                organization_id,
                 exc,
             )
             continue
-        if cleared:
-            cleared_total += cleared
-            await log_audit_event(
-                db=db,
-                event_type="crr_resident_details_retention",
-                event_category="events",
-                severity="info",
-                event_data={
-                    "organization_id": str(organization.id),
-                    "activities_cleared": cleared,
-                },
-            )
+        cleared_total += cleared
     return {
         "task": "crr_resident_details_retention",
         "activities_cleared": cleared_total,

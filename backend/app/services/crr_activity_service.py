@@ -547,7 +547,15 @@ class CrrActivityService:
             for field, value in location.items():
                 setattr(activity, field, value)
         if "notes" in data:
-            activity.notes = (data["notes"] or "").strip() or None
+            notes = (data["notes"] or "").strip() or None
+            # The sweep has already passed this activity; a note written now
+            # would outlive the retention period it was cleared under.
+            if notes and activity.resident_details_cleared_at is not None:
+                raise ValueError(
+                    "This activity's resident details and notes were cleared "
+                    "after the retention period; notes cannot be added back"
+                )
+            activity.notes = notes
 
         touched = [f for f in RESIDENT_FIELDS if f in data]
         if touched:
@@ -611,8 +619,10 @@ class CrrActivityService:
     ) -> int:
         """Clear resident details older than the retention period; caller commits.
 
-        Safe to run any number of times (pitfall #36): an activity is cleared
-        once, stamped, and skipped by every later run.
+        Safe to run any number of times (pitfall #36): an activity is stamped
+        the first time it is cleared and keeps that stamp. One already stamped
+        is cleared again only if it holds text again, which the update path
+        now refuses but a row written before that refusal may carry.
         """
         moment = now or datetime.now(timezone.utc)
         cutoff = months_before(moment, retention_months(organization))
@@ -622,7 +632,6 @@ class CrrActivityService:
                     select(CrrActivity).where(
                         CrrActivity.organization_id == str(organization.id),
                         CrrActivity.occurred_at < cutoff,
-                        CrrActivity.resident_details_cleared_at.is_(None),
                         # Only rows holding something to clear: the stamp is
                         # what the page reads as "details were cleared", so an
                         # activity that never had any must not carry it.
@@ -643,7 +652,8 @@ class CrrActivityService:
                 setattr(activity, field, None)
             # Notes are free text, where resident details turn up.
             activity.notes = None
-            activity.resident_details_cleared_at = moment
+            if activity.resident_details_cleared_at is None:
+                activity.resident_details_cleared_at = moment
         if activities:
             await self.db.flush()
         return len(activities)
