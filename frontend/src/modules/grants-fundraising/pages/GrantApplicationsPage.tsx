@@ -39,6 +39,8 @@ import { formatCurrencyWhole } from '@/utils/currencyFormatting';
 import { getErrorMessage } from '@/utils/errorHandling';
 import { useTimezone } from '../../../hooks/useTimezone';
 import { Pagination } from '@/components/ux/Pagination';
+import { CardSortControl } from '@/components/ux/CardSortControl';
+import type { SortDirection } from '@/components/ux/SortableHeader';
 import { DEFAULT_PAGE_SIZE } from '@/constants/config';
 import { useMemberNames } from '../hooks/useMemberNames';
 import type { MemberNames } from '../hooks/useMemberNames';
@@ -103,6 +105,18 @@ type SortField =
   | 'priority'
   | 'assignedTo';
 type SortDir = 'asc' | 'desc';
+
+// The columns the table's headers sort by, for the card-mode Sort by control.
+const SORT_OPTIONS: { field: SortField; label: string }[] = [
+  { field: 'grantProgramName', label: 'Program Name' },
+  { field: 'grantAgency', label: 'Agency' },
+  { field: 'applicationStatus', label: 'Status' },
+  { field: 'amountRequested', label: 'Amount Requested' },
+  { field: 'amountAwarded', label: 'Amount Awarded' },
+  { field: 'applicationDeadline', label: 'Deadline' },
+  { field: 'priority', label: 'Priority' },
+  { field: 'assignedTo', label: 'Assigned To' },
+];
 
 /** The filters both views share, as the server takes them. */
 type ListFilters = Pick<GrantApplicationQuery, 'status' | 'statusGroup' | 'priority' | 'search'>;
@@ -389,6 +403,15 @@ const ApplicationsTable: React.FC<ApplicationsTableProps> = ({ filters, timezone
       });
   }, [filters, sortField, sortDir, page, pageSize]);
 
+  // The card-mode control names a column and a direction outright; the server
+  // always sorts by some column, so it never clears (allowDefault is off).
+  const handleCardSort = (field: string, direction: SortDirection) => {
+    const option = SORT_OPTIONS.find((o) => o.field === field);
+    if (!option || !direction) return;
+    setSortField(option.field);
+    setSortDir(direction);
+  };
+
   const handleSort = (field: SortField) => {
     if (sortField === field) {
       setSortDir((prev) => (prev === 'asc' ? 'desc' : 'asc'));
@@ -420,6 +443,14 @@ const ApplicationsTable: React.FC<ApplicationsTableProps> = ({ filters, timezone
   return (
     <div className="card mt-6 overflow-hidden">
       <div className="rwd-table-container overflow-x-auto">
+        <CardSortControl
+          options={SORT_OPTIONS}
+          currentSort={sortField}
+          currentDirection={sortDir}
+          onSort={handleCardSort}
+          tier="wide"
+          allowDefault={false}
+        />
         <table className="rwd-table rwd-table-wide w-full" aria-busy={isLoading}>
           <thead>
             <tr className="border-theme-surface-border bg-theme-surface border-b">
