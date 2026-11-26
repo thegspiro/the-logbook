@@ -118,6 +118,9 @@ interface AdminHubFrameProps<K extends string> {
    */
   onSummaryChange?: ((summary: AdminHubSummary | null) => void) | undefined;
 
+  /** A module's section strip, drawn between the trail and the title. */
+  sectionNav?: React.ReactNode;
+
   children: React.ReactNode;
 }
 
@@ -139,6 +142,7 @@ export function AdminHubFrame<K extends string>({
   refreshToken,
   showAttentionQueue = true,
   onSummaryChange,
+  sectionNav,
   children,
 }: AdminHubFrameProps<K>) {
   const [summary, setSummary] = useState<AdminHubSummary | null>(null);
@@ -261,6 +265,7 @@ export function AdminHubFrame<K extends string>({
           description={description}
           eyebrow={eyebrow}
           breadcrumbs={breadcrumbs}
+          belowTrail={sectionNav}
           actions={
             actions.length > 0 || primaryAction || headerAside ? (
               <>

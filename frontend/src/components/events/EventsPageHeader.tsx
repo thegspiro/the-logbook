@@ -1,6 +1,6 @@
 import React from 'react';
 import { EVENTS_NAV_ITEMS } from '../layout/eventsNavigation';
-import { SectionPageHeader } from '../layout/SectionPageHeader';
+import { SectionPageHeader, SectionStrip } from '../layout/SectionPageHeader';
 import type { PageHeaderProps } from '../layout/SectionPageHeader';
 
 /**
@@ -11,6 +11,10 @@ import type { PageHeaderProps } from '../layout/SectionPageHeader';
  */
 export const EventsPageHeader: React.FC<PageHeaderProps> = (props) => (
   <SectionPageHeader {...props} sections={EVENTS_NAV_ITEMS} stripLabel="Events sections" />
+);
+
+export const EventsSectionStrip: React.FC = () => (
+  <SectionStrip sections={EVENTS_NAV_ITEMS} stripLabel="Events sections" />
 );
 
 export default EventsPageHeader;
