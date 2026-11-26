@@ -612,9 +612,12 @@ describe('EventsPage', () => {
       const user = userEvent.setup();
       downloadCsv.mockReset();
       mockAuthState.checkPermission = vi.fn().mockReturnValue(true);
-      vi.mocked(eventService.getEvents).mockResolvedValue([
-        { ...mockEvents[0], location: undefined, location_name: 'Station 3 Bay' } as EventListItem,
-      ]);
+      vi.mocked(eventService.getEvents).mockResolvedValue(
+        mockEvents.slice(0, 1).map(({ location: _freeText, ...meeting }) => ({
+          ...meeting,
+          location_name: 'Station 3 Bay',
+        }))
+      );
 
       renderWithRouter(<EventsPage />);
 
