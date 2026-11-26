@@ -37,6 +37,7 @@ from app.schemas.organization import MembershipTierSettings
 from app.services.admin_continuity_service import (
     LastAdministratorError,
     assert_not_last_administrator,
+    assert_rank_change_retains_administrator,
     lock_administrator_continuity,
 )
 from app.services.member_service_history_service import (
@@ -375,7 +376,7 @@ async def change_member_status(
     # Leaving ACTIVE may remove an administrator, and the continuity guard
     # below locks the organization's administrator scope. Take that first,
     # before this row lock, so every path locks in the same order.
-    if new_status != UserStatus.ACTIVE:
+    if new_status not in ACTIVE_ACCOUNT_STATUSES:
         await lock_administrator_continuity(db, str(current_user.organization_id))
     result = await db.execute(
         select(User)
@@ -416,12 +417,15 @@ async def change_member_status(
     # Enforce the lifecycle state machine
     assert_transition_allowed(UserStatus(previous_status), new_status)
 
-    # Every status other than ACTIVE fails the is_active check that
-    # authentication requires, so this endpoint is the cheapest single-request
-    # path to locking an organization out of its own admin tools. Checked after
-    # the transition rules: if the change is not a legal one at all, saying so
-    # is more useful than explaining who would be left holding the keys.
-    if new_status != UserStatus.ACTIVE:
+    # Every status outside ACTIVE_ACCOUNT_STATUSES fails the is_active check
+    # that authentication requires, so this endpoint is the cheapest
+    # single-request path to locking an organization out of its own admin
+    # tools. Probationary is a current status that signs in (pitfall 32), so
+    # moving the sole administrator there removes nobody (app-review ORU6-9).
+    # Checked after the transition rules: if the change is not a legal one at
+    # all, saying so is more useful than explaining who would be left holding
+    # the keys.
+    if new_status not in ACTIVE_ACCOUNT_STATUSES:
         try:
             await assert_not_last_administrator(
                 db,
@@ -1025,12 +1029,16 @@ async def archive_member(
 
     Requires `members.manage` permission.
     """
-    # Load the target member
+    # Locked, as status changes, undo-drop and reactivate are: read unlocked,
+    # an archive racing a reinstatement wrote ARCHIVED over the restored
+    # member and left their service stint open (app-review ORU6-11).
     result = await db.execute(
         select(User)
         .where(User.id == str(user_id))
         .where(User.organization_id == current_user.organization_id)
         .where(User.deleted_at.is_(None))
+        .with_for_update()
+        .execution_options(populate_existing=True)
         .options(selectinload(User.positions))
     )
     member = ensure_found(result.scalar_one_or_none(), "Member")
@@ -1346,6 +1354,11 @@ async def change_membership_type(
     # the order MembershipTierService.advance_all uses for its whole scan
     # (USR-10a). The opposite order here would let this request hold a member
     # the scan is waiting on while waiting on the Organization the scan holds.
+    #
+    # A move to the administrative class clears the member's rank, which the
+    # continuity guard below checks; its lock comes before every row lock.
+    if is_administrative(None, request.membership_type):
+        await lock_administrator_continuity(db, str(current_user.organization_id))
     org_result = await db.execute(
         select(Organization)
         .where(Organization.id == current_user.organization_id)
@@ -1373,6 +1386,7 @@ async def change_membership_type(
         .where(User.deleted_at.is_(None))
         .with_for_update()
         .execution_options(populate_existing=True)
+        .options(selectinload(User.positions))
     )
     member = ensure_found(result.scalar_one_or_none(), "Member")
 
@@ -1424,6 +1438,20 @@ async def change_membership_type(
     previous_rank = member.rank
     cleared_rank = None
     if previous_rank and is_administrative(None, request.membership_type):
+        # The sole administrator's access can rest on that rank alone, and
+        # clearing it left nobody able to manage members (app-review ORU6-2).
+        try:
+            await assert_rank_change_retains_administrator(
+                db,
+                str(current_user.organization_id),
+                member,
+                None,
+                action="move to the administrative class",
+            )
+        except LastAdministratorError as e:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)
+            ) from e
         member.rank = None
         cleared_rank = previous_rank
 
