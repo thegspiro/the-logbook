@@ -1051,7 +1051,7 @@ export const ReorderRequestsPage: React.FC = () => {
             className="btn-secondary btn-md"
             aria-label="Refresh"
           >
-            <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+            <RefreshCw className={`h-5 w-5 ${loading ? 'animate-spin' : ''}`} aria-hidden="true" />
           </button>
           <button onClick={() => setShowCreate(true)} className="btn-info btn-md flex items-center gap-2">
             <Plus className="h-4 w-4" />

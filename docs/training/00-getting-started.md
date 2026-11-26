@@ -270,19 +270,19 @@ example, a department that doesn't hold elections has no **Elections** link.
 Officers and administrators also see an **Administration** section below the
 member links. Each person sees only the parts their position allows.
 
-| Menu item                   | What it's for                                                                                                                   |
-| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| **Department Setup**        | A step-by-step checklist for setting up the department                                                                          |
-| **Members** ▾               | Prospective (applicants), Pipeline Settings, Member Management, Scan Member ID, Waivers, Medical Screening                      |
-| **Manage Events**           | Create events, see event reports and change event settings                                                                      |
-| **Training Admin**          | Review training submissions, manage requirements and check who is up to date                                                    |
-| **Scheduling Admin**        | Plan shifts, platoons and positions; scheduling reports and settings                                                            |
-| **Inventory Admin**         | Manage gear, uniforms and equipment checklists; see what each member has been issued                                            |
-| **Store Admin**             | The department store: products, order windows and handing out orders                                                            |
-| **Admin Hours**             | Review and approve administrative hours                                                                                         |
-| **Forms & Comms** ▾         | Email Templates, Messages, Suggestion Boxes, Photo Use Consent, Forms, Integrations                                             |
-| **Reports**                 | Department reports                                                                                                              |
-| **Organization Settings** ▾ | Organization (department-wide settings), Role Management (positions and their permissions), Public Portal (your public website) |
+| Menu item                   | What it's for                                                                                                                                                                                            |
+| --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Department Setup**        | A step-by-step checklist for setting up the department                                                                                                                                                   |
+| **Members** ▾               | Prospective (applicants), Pipeline Settings, Member Management, Scan Member ID, Waivers, Medical Screening                                                                                               |
+| **Manage Events**           | Create events, see event reports and change event settings                                                                                                                                               |
+| **Training Admin**          | Review training submissions, manage requirements and check who is up to date                                                                                                                             |
+| **Scheduling Admin**        | Plan shifts, platoons and positions; scheduling reports and settings                                                                                                                                     |
+| **Inventory Admin**         | Manage gear, uniforms and equipment checklists; see what each member has been issued                                                                                                                     |
+| **Store Admin**             | The department store: products, order windows and handing out orders                                                                                                                                     |
+| **Admin Hours**             | Review and approve administrative hours                                                                                                                                                                  |
+| **Forms & Comms** ▾         | Email Templates, Messages, Suggestion Boxes, Photo Use Consent, Forms, Integrations                                                                                                                      |
+| **Reports**                 | Department reports                                                                                                                                                                                       |
+| **Organization Settings** ▾ | Organization (department-wide settings), Role Management (positions and their permissions), Public Portal (data for a website you host elsewhere), Public Website (a website The Logbook serves for you) |
 
 ![The sidebar scrolled to its Administration section with the admin-only links](./images/00-16-sidebar-admin.png)
 

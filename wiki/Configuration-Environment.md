@@ -175,10 +175,11 @@ sections.
 
 ## Port Configuration
 
-| Variable        | Description        | Default                 |
-| --------------- | ------------------ | ----------------------- |
-| `FRONTEND_PORT` | Frontend HTTP port | `3000` (Unraid: `7880`) |
-| `BACKEND_PORT`  | Backend API port   | `3001` (Unraid: `7881`) |
+| Variable           | Description                                                                    | Default                 |
+| ------------------ | ------------------------------------------------------------------------------ | ----------------------- |
+| `FRONTEND_PORT`    | Frontend HTTP port                                                             | `3000` (Unraid: `7880`) |
+| `BACKEND_PORT`     | Backend API port                                                               | `3001` (Unraid: `7881`) |
+| `PUBLIC_SITE_PORT` | The department's [public website](Public-Website); answers 404 until published | `3002` (Unraid: `7882`) |
 
 ### Ports by Deployment Type
 

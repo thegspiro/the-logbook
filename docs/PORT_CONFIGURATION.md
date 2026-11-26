@@ -18,6 +18,7 @@ port therefore needs no frontend change — only `.env` and `ALLOWED_ORIGINS`.
 - **Frontend (Web UI)**: http://YOUR-UNRAID-IP:**7880**
 - **Backend API**: http://YOUR-UNRAID-IP:**7881**
 - **API Documentation**: http://YOUR-UNRAID-IP:**7881/docs**
+- **Public website** (the department's own, 404 until published): http://YOUR-UNRAID-IP:**7882** — see [PUBLIC_WEBSITE.md](./PUBLIC_WEBSITE.md)
 
 **Configuration:**
 
@@ -42,6 +43,7 @@ BACKEND_PORT=7881
 - **Frontend (Web UI)**: http://localhost:**3000**
 - **Backend API**: http://localhost:**3001**
 - **API Documentation**: http://localhost:**3001/docs**
+- **Public website** (the department's own, 404 until published): http://localhost:**3002** (`PUBLIC_SITE_PORT`) — see [PUBLIC_WEBSITE.md](./PUBLIC_WEBSITE.md)
 
 **Configuration:**
 
