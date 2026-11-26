@@ -8347,8 +8347,11 @@ made these choices. Everything is off until the department switches it on.
 
 Every other mutating route against a `MeetingMinutes` record —
 `update_minutes`, `add_motion`/`update_motion`/`delete_motion`,
-`add_action_item`/`delete_action_item` — rejects the call once the record's
-status is `APPROVED` (draft or rejected only). `PATCH
+`delete_action_item` — rejects the call once the record's status is
+`APPROVED` (draft or rejected only). _(Corrected 2026-11-26: this list used to
+name `add_action_item` too. It has no status guard, and adding an item to
+approved minutes changes the approved content; see MM6-18 under "Meetings &
+Minutes — Decisions From App Review B6 Pass 6".)_ `PATCH
 /minutes/{id}/quorum-config` (`set_meeting_quorum_config` in
 `app/api/v1/endpoints/minutes.py`) has no such guard: a `minutes.manage`
 holder can overwrite `quorum_type`/`quorum_threshold` and immediately trigger
@@ -12259,6 +12262,70 @@ ones; the list it opens includes lots already expired and applies the
 shelf rule. A lot that expired yesterday is in the list but not in the count.
 
 **The decision:** which rule both should use.
+
+## Meetings & Minutes — Decisions From App Review B6 Pass 6 (2026-11-26)
+
+Recorded rather than changed. Details in `docs/app-review/meetings-minutes.md`
+→ Pass 6.
+
+### MM6-18 — May an action item be added to approved minutes?
+
+`add_action_item` has no status guard, unlike every other edit to minutes. The
+approved snapshot includes each action item's description, assignee, due date
+and priority. So adding one changes the approved content, and the integrity
+check then reports the adopted version as changed (`action_items`). Signatures
+still read intact, because they are compared with the stored revision, not with
+the live record.
+
+**The decision:** refuse it, so a late item goes through a reopen like any other
+correction. Or keep items added after approval out of the snapshot, as
+follow-ups rather than part of what was adopted.
+
+### MM6-19 — How is an approved meeting's attendance corrected?
+
+Deleting an approved meeting is refused, because its attendance is the settled
+record behind membership tiers and voting eligibility. But attendees can still
+be added to or removed from it one at a time. Since MM6-15, a meeting can no
+longer be moved out of approved by an edit, and there is no other way to
+un-approve one.
+
+**The decision:** whether attendance on an approved meeting is locked, and what
+the correction path is (an un-approve action with a reason, or an audited
+attendance correction).
+
+### MM6-20 — When is the quorum result settled?
+
+Minutes store `quorum_met` and `quorum_count`, refreshed only when something
+asks for the quorum. The page asks once after saving the roll and ignores a
+failure. Approval freezes whatever is stored. The create and update payloads
+also accept both fields from the client. For approved minutes, the quorum
+endpoint reports the stored result beside a "required" count worked out from
+today's membership, so it can read "met, 6 present, 10 required".
+
+**The decision:** whether approval recomputes and stores the quorum, including
+the required count. And whether a manual override of the result stays, and if
+so, whether it is marked as one.
+
+### MM6-21 — Where does a carried-forward item live between meetings?
+
+Carrying an item forward marks the original as carried and puts a copy in the
+next minutes, which are a draft until that meeting approves them. The member's
+own list and the reminders show only approved minutes. So for the month
+between meetings the item is invisible to the person who owns it, while the
+manager's open count includes it.
+
+**The decision:** show the carried copy to its assignee from the moment it is
+carried, or keep reminding about the original until the copy is approved.
+
+### MM6-22 — Reminders that can repeat
+
+The in-app bells for action items carry no record that they were sent, so a
+manual run or a re-run of the task sends every bell again (pitfall #36).
+Re-approving reopened minutes also re-sends the assignee email for every item
+still open. Both need a stored stamp, which is a migration.
+
+**The decision:** whether a repeat is acceptable, or the stamp is worth a
+column.
 
 ## Elections — Five Counting and Ballot Decisions From App Review B5 Pass 7 (2026-11-24)
 
