@@ -42,6 +42,7 @@ uploader's filename is not kept: a download is always
 ``waiver-attachment-<n>.<ext>``.
 """
 
+import asyncio
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from datetime import timezone as dt_timezone
@@ -206,8 +207,9 @@ class AttendanceWaiverAttachmentService:
             # In a child process: libheif is native code a crafted file can
             # crash.
             return await heic_to_jpeg(upload.content, MAX_ATTACHMENT_BYTES)
-        # Pure Python over the bytes, linear in their size: in-process.
-        return strip_photo_metadata(upload.content, detected)
+        # In-process (it parses nothing native) but off the event loop: a
+        # crafted 10 MB file still takes the walk tens of milliseconds.
+        return await asyncio.to_thread(strip_photo_metadata, upload.content, detected)
 
     async def _abandon(
         self, org_id: str, request_id: str, stored: Sequence[StoredFile]

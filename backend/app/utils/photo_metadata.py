@@ -11,15 +11,16 @@ produced from the original.
 **JPEG.** The markers from SOI to the first SOS are walked one by one.
 
 * Kept: SOI; APP0 JFIF, rewritten without the uncompressed thumbnail it may
-  carry; DQT, every SOFn, DHT, DAC, DRI, DNL, DHP, EXP; APP2
-  ``ICC_PROFILE`` chunks (the colours); APP14 ``Adobe`` (a CMYK or YCCK
-  file's colours depend on its transform flag); and the JPEG-LS SOF55 and
-  LSE, which are image structure too.
+  carry; DQT, every SOFn of the DCT and lossless processes, DHT, DAC, DRI,
+  DNL, DHP, EXP; APP2 ``ICC_PROFILE`` chunks (the colours); and APP14
+  ``Adobe`` (a CMYK or YCCK file's colours depend on its transform flag).
 * Dropped: APP1 (Exif, XMP, extended XMP), any other APP2 (MPF, FlashPix),
-  APP3 to APP13 (APP13 is Photoshop and IPTC), APP15, COM, and an APP0 that
-  is not JFIF (a JFXX thumbnail).
-* Refused: any other marker. None appears in a photo a phone or a scanner
-  writes, and an unknown segment can carry anything.
+  APP3 to APP13 (APP13 is Photoshop and IPTC), any other APP14, APP15, COM,
+  and an APP0 that is not JFIF (a JFXX thumbnail).
+* Refused: any other marker, JPEG-LS's SOF55 and LSE included. None
+  appears in a photo a phone or a scanner writes, an unknown segment can
+  carry anything, and JPEG-LS stuffs bits rather than bytes, so its scan
+  cannot be told apart from a marker the way a JPEG's can.
 
 The entropy-coded data after each SOS is copied as it is, honouring byte
 stuffing (FF00), restart markers and fill bytes. A progressive file's
@@ -45,11 +46,26 @@ signature, a length that is impossible or runs past the end, or no SOS, EOI
 or IEND is a 400. The walk is a single pass that always moves forward, with
 no recursion, so it ends on every input in time linear in its size; it
 raises nothing but that refusal.
+
+**A crafted file costs little more than a photo.** A 10 MB upload can be
+built from millions of tiny segments or chunks, or from bytes that make a
+byte-by-byte scan slow, and an independent review measured seconds of CPU
+and hundreds of MB for such files on the first version of this walk. So:
+
+* the entropy-coded data and runs of fill bytes are crossed by compiled
+  regular expressions, in C, never byte by byte in Python;
+* a JPEG may hold ``MAX_JPEG_SEGMENTS`` markers and a PNG
+  ``MAX_PNG_CHUNKS`` chunks, far above what any camera, phone or editor
+  writes; more is refused with the same 400;
+* the output is joined once from views of the input, so the walk holds the
+  input and one output, never a copy per segment;
+* the caller runs it on a worker thread, off the event loop.
 """
 
+import re
 import struct
 import zlib
-from typing import List, Optional
+from typing import List, Optional, Union
 
 from loguru import logger
 
@@ -73,17 +89,30 @@ _APP2 = 0xE2
 _APP14 = 0xEE
 _COM = 0xFE
 
-#: Segments that describe the image itself, kept wherever they appear:
-#: SOF0-3, 5-7, 9-11, 13-15; DHT; DAC; DQT; DNL; DRI; DHP; EXP; and the
-#: JPEG-LS SOF55 and LSE.
-_STRUCTURE = frozenset(
-    [0xC0, 0xC1, 0xC2, 0xC3, 0xC5, 0xC6, 0xC7, 0xC9, 0xCA, 0xCB, 0xCD, 0xCE, 0xCF]
-    + [0xC4, 0xCC, 0xDB, 0xDC, 0xDD, 0xDE, 0xDF, 0xF7, 0xF8]
-)
 _FRAME_HEADERS = frozenset(
     [0xC0, 0xC1, 0xC2, 0xC3, 0xC5, 0xC6, 0xC7, 0xC9, 0xCA, 0xCB, 0xCD, 0xCE, 0xCF]
-    + [0xF7]
 )
+#: Segments that describe the image itself, kept wherever they appear:
+#: SOF0-3, 5-7, 9-11, 13-15; DHT; DAC; DQT; DNL; DRI; DHP; EXP.
+_STRUCTURE = _FRAME_HEADERS | {0xC4, 0xCC, 0xDB, 0xDC, 0xDD, 0xDE, 0xDF}
+
+#: The most markers a JPEG may hold. A camera's photo has a few dozen; the
+#: most a 10 MB file needs is about 255 ICC chunks, some 160 extended-XMP
+#: segments and a progressive file's scans and tables, all far below this.
+MAX_JPEG_SEGMENTS = 4096
+#: The most chunks a PNG may hold. libpng writes its image data in 8 KB
+#: IDAT chunks, about 1,300 for 10 MB; this leaves room for an encoder
+#: writing chunks a sixteenth that size, or an APNG of many frames.
+MAX_PNG_CHUNKS = 16384
+
+#: A run of fill bytes, crossed in one step.
+_FILL = re.compile(rb"\xff+")
+#: The end of a scan: an 0xFF followed by a marker code, that is, by
+#: anything but a stuffed zero (FF00), a restart marker (FFD0-FFD7) or
+#: another 0xFF (a fill byte, which the match moves past). A single literal
+#: byte leading the pattern lets the engine search for it in C, so the
+#: search is linear whatever the scan holds.
+_SCAN_END = re.compile(rb"\xff[^\x00\xd0-\xd7\xff]")
 
 _JFIF = b"JFIF\x00"
 _EXIF = b"Exif\x00\x00"
@@ -162,88 +191,79 @@ def _orientation_tiff(orientation: int) -> bytes:
     )
 
 
-def _jfif(payload: bytes) -> bytes:
-    """The APP0 JFIF payload without a thumbnail."""
-    if len(payload) < _JFIF_LENGTH:
+def _jfif(data: bytes, start: int, end: int) -> bytes:
+    """The APP0 JFIF segment whose payload is ``data[start:end]``, without
+    a thumbnail."""
+    if end - start < _JFIF_LENGTH:
         raise _Unreadable("jpeg-short-jfif")
-    return payload[: _JFIF_LENGTH - 2] + b"\x00\x00"
+    return _segment(_APP0, data[start : start + _JFIF_LENGTH - 2] + b"\x00\x00")
 
 
-def _keep_app(marker: int, payload: bytes) -> bool:
+def _keep_app(marker: int, data: bytes, start: int) -> bool:
     if marker == _APP2:
-        return payload.startswith(_ICC)
+        return data.startswith(_ICC, start)
     if marker == _APP14:
-        return payload.startswith(_ADOBE)
+        return data.startswith(_ADOBE, start)
     return False
 
 
-def _marker_at(data: bytes, pos: int) -> tuple[int, int]:
-    """The marker starting at *pos*, after any fill bytes: ``(marker,
-    position after it)``."""
-    end = len(data)
-    if pos >= end or data[pos] != 0xFF:
+def _marker_at(data: bytes, pos: int) -> tuple[int, int, int]:
+    """The marker at *pos*, after any fill bytes: ``(marker, where its 0xFF
+    is, where its length starts)``."""
+    fill = _FILL.match(data, pos)
+    if fill is None:
         raise _Unreadable("jpeg-expected-marker")
-    while pos < end and data[pos] == 0xFF:
-        pos += 1
-    if pos >= end:
+    at = fill.end()
+    if at >= len(data):
         raise _Unreadable("jpeg-truncated")
-    marker = data[pos]
+    marker = data[at]
     if marker == 0x00:
         raise _Unreadable("jpeg-expected-marker")
-    return marker, pos + 1
+    return marker, at - 1, at + 1
 
 
-def _payload(data: bytes, pos: int) -> tuple[bytes, int]:
-    """The segment's payload after its two-byte length, and where the next
-    segment starts."""
+def _segment_end(data: bytes, pos: int) -> int:
+    """Where the segment whose two-byte length starts at *pos* ends."""
     if pos + 2 > len(data):
         raise _Unreadable("jpeg-truncated")
-    (length,) = struct.unpack_from(">H", data, pos)
+    length = int.from_bytes(data[pos : pos + 2], "big")
     if length < 2:
         raise _Unreadable("jpeg-bad-length")
     end = pos + length
     if end > len(data):
         raise _Unreadable("jpeg-segment-past-end")
-    return data[pos + 2 : end], end
+    return end
 
 
 def _scan_end(data: bytes, pos: int) -> int:
-    """Where the entropy-coded data starting at *pos* ends: the position of
-    the 0xFF that begins the next real marker (the first of any fill bytes).
-    FF00 is a stuffed data byte and FFD0-FFD7 a restart marker; both belong
-    to the scan."""
-    end = len(data)
-    while True:
-        found = data.find(b"\xff", pos)
-        if found < 0:
-            raise _Unreadable("jpeg-no-eoi")
-        run = found
-        while found < end and data[found] == 0xFF:
-            found += 1
-        if found >= end:
-            raise _Unreadable("jpeg-no-eoi")
-        following = data[found]
-        if found == run + 1 and (following == 0x00 or 0xD0 <= following <= 0xD7):
-            pos = found + 1
-            continue
-        if following == 0x00 or 0xD0 <= following <= 0xD7:
-            # Fill bytes then a stuffed byte or a restart: not valid JPEG.
-            raise _Unreadable("jpeg-bad-scan")
-        return run
+    """Where the entropy-coded data starting at *pos* ends: the 0xFF of the
+    marker that follows it. Fill bytes before that marker stay with the
+    scan, which a decoder skips; FF00 and FFD0-FFD7 belong to it."""
+    found = _SCAN_END.search(data, pos)
+    if found is None:
+        raise _Unreadable("jpeg-no-eoi")
+    return found.start()
 
 
 def _strip_jpeg(data: bytes) -> bytes:
     if len(data) < 4 or data[0] != 0xFF or data[1] != _SOI:
         raise _Unreadable("jpeg-no-soi")
-    header: List[bytes] = []
-    body: List[bytes] = []
+    view = memoryview(data)
+    # Views of the input, and the few short segments rewritten here; joined
+    # once at the end.
+    header: List[Union[bytes, memoryview]] = []
+    body: List[Union[bytes, memoryview]] = []
     orientation: Optional[int] = None
     jfif_first = False
     seen_frame = False
     seen_scan = False
+    segments = 0
     pos = 2
     while True:
-        marker, pos = _marker_at(data, pos)
+        marker, at, pos = _marker_at(data, pos)
+        segments += 1
+        if segments > MAX_JPEG_SEGMENTS:
+            raise _Unreadable("jpeg-too-many-segments")
         if marker == _EOI:
             if not seen_scan:
                 raise _Unreadable("jpeg-no-sos")
@@ -252,37 +272,47 @@ def _strip_jpeg(data: bytes) -> bytes:
         if marker == _SOI or marker == 0x01 or 0xD0 <= marker <= 0xD7:
             # A second SOI, TEM, or a restart outside a scan.
             raise _Unreadable("jpeg-misplaced-marker")
-        payload, pos = _payload(data, pos)
+        end = _segment_end(data, pos)
+        payload = pos + 2
         out = body if seen_scan else header
         if marker == _SOS:
             if not seen_frame:
                 raise _Unreadable("jpeg-sos-before-frame")
             seen_scan = True
-            scan_start = pos
-            pos = _scan_end(data, pos)
-            body.append(_segment(marker, payload) + data[scan_start:pos])
+            pos = _scan_end(data, end)
+            body.append(view[at:pos])
         elif marker in _STRUCTURE:
             if marker in _FRAME_HEADERS:
                 seen_frame = True
-            out.append(_segment(marker, payload))
+            out.append(view[at:end])
+            pos = end
         elif marker == _APP0:
-            if not seen_scan and payload.startswith(_JFIF):
+            if not seen_scan and data.startswith(_JFIF, payload):
                 jfif_first = jfif_first or not header
-                header.append(_segment(marker, _jfif(payload)))
+                header.append(_jfif(data, payload, end))
+            pos = end
         elif marker == _APP1:
-            if orientation is None and not seen_scan and payload.startswith(_EXIF):
-                orientation = _orientation_from_tiff(payload[len(_EXIF) :])
+            if (
+                orientation is None
+                and not seen_scan
+                and data.startswith(_EXIF, payload)
+            ):
+                orientation = _orientation_from_tiff(
+                    bytes(view[payload + len(_EXIF) : end])
+                )
+            pos = end
         elif _APP0 <= marker <= 0xEF:
-            if not seen_scan and _keep_app(marker, payload):
-                header.append(_segment(marker, payload))
+            if not seen_scan and _keep_app(marker, data, payload):
+                header.append(view[at:end])
+            pos = end
         elif marker == _COM:
-            pass
+            pos = end
         else:
             raise _Unreadable("jpeg-unknown-marker")
     if orientation is not None and orientation != 1:
         exif = _segment(_APP1, _EXIF + _orientation_tiff(orientation))
         header.insert(1 if jfif_first else 0, exif)
-    return b"\xff\xd8" + b"".join(header) + b"".join(body)
+    return b"".join([b"\xff\xd8", *header, *body])
 
 
 # --------------------------------------------------------------------------
@@ -330,38 +360,44 @@ def _chunk(kind: bytes, payload: bytes) -> bytes:
 def _strip_png(data: bytes) -> bytes:
     if not data.startswith(PNG_SIGNATURE):
         raise _Unreadable("png-bad-signature")
-    kept: List[bytes] = []
+    view = memoryview(data)
+    kept: List[Union[bytes, memoryview]] = []
     orientation: Optional[int] = None
     pos = len(PNG_SIGNATURE)
     end = len(data)
+    chunks = 0
     while True:
+        chunks += 1
+        if chunks > MAX_PNG_CHUNKS:
+            raise _Unreadable("png-too-many-chunks")
         if pos + 12 > end:
             raise _Unreadable("png-no-iend")
         (length,) = struct.unpack_from(">I", data, pos)
         kind = data[pos + 4 : pos + 8]
         if length > _PNG_MAX_CHUNK:
             raise _Unreadable("png-bad-length")
-        if not all(65 <= c <= 90 or 97 <= c <= 122 for c in kind):
+        # ASCII letters only; bytes.isalpha() checks exactly that, in C.
+        if not kind.isalpha():
             raise _Unreadable("png-bad-chunk-type")
         payload_end = pos + 8 + length
         if payload_end + 4 > end:
             raise _Unreadable("png-chunk-past-end")
         (crc,) = struct.unpack_from(">I", data, payload_end)
-        if zlib.crc32(data[pos + 4 : payload_end]) & 0xFFFFFFFF != crc:
+        if zlib.crc32(view[pos + 4 : payload_end]) & 0xFFFFFFFF != crc:
             raise _Unreadable("png-bad-crc")
         if not kept and kind != b"IHDR":
             raise _Unreadable("png-ihdr-not-first")
         if kind in PNG_KEPT_CHUNKS:
-            kept.append(data[pos : payload_end + 4])
+            kept.append(view[pos : payload_end + 4])
         elif kind == b"eXIf" and orientation is None:
-            orientation = _orientation_from_tiff(data[pos + 8 : payload_end])
+            orientation = _orientation_from_tiff(bytes(view[pos + 8 : payload_end]))
         pos = payload_end + 4
         if kind == b"IEND":
             break
     if orientation is not None and orientation != 1:
         # Straight after IHDR: eXIf must come before the image data.
         kept.insert(1, _chunk(b"eXIf", _orientation_tiff(orientation)))
-    return PNG_SIGNATURE + b"".join(kept)
+    return b"".join([PNG_SIGNATURE, *kept])
 
 
 # --------------------------------------------------------------------------
