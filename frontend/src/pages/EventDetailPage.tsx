@@ -34,6 +34,7 @@ import {
   formatForDateTimeInput,
   localToUTC,
 } from '../utils/dateFormatting';
+import { useEnabledModules } from '../hooks/useEnabledModules';
 import { useTimezone } from '../hooks/useTimezone';
 import { useRSVPForm } from '../hooks/useRSVPForm';
 import { useEventNotifications } from '../hooks/useEventNotifications';
@@ -354,10 +355,31 @@ export const EventDetailPage: React.FC = () => {
   useEffect(() => {
     if (eventId) {
       void fetchEvent();
-      void fetchLinkedElections();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [eventId]);
+
+  // The elections list answers 403 to anyone without elections.view, and to
+  // everyone while the Elections module is off. Asked unconditionally it
+  // failed on every load of every event for most departments, so it waits for
+  // both answers.
+  const { isModuleOn, isLoading: modulesLoading } = useEnabledModules();
+  const canListElections = !modulesLoading && isModuleOn('elections') && checkPermission('elections.view');
+  useEffect(() => {
+    if (!eventId || !canListElections) return;
+    let cancelled = false;
+    electionService
+      .getElectionsByEvent(eventId)
+      .then((elections) => {
+        if (!cancelled) setLinkedElections(elections);
+      })
+      .catch(() => {
+        if (!cancelled) setLinkedElections([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [eventId, canListElections]);
 
   // Separate from the event fetch: an organizer's access is only known once
   // the event arrives, and refetching the event when it does would loop.
@@ -433,16 +455,6 @@ export const EventDetailPage: React.FC = () => {
       toast.success('Attachment removed');
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'The attachment could not be removed'));
-    }
-  };
-
-  const fetchLinkedElections = async () => {
-    if (!eventId) return;
-    try {
-      const elections = await electionService.getElectionsByEvent(eventId);
-      setLinkedElections(elections);
-    } catch {
-      setLinkedElections([]);
     }
   };
 
@@ -1041,8 +1053,14 @@ export const EventDetailPage: React.FC = () => {
   // The QR page is the code put on display at the event, for members to scan.
   // A member shown it on their own phone has nothing to scan it with, so it
   // goes to whoever runs the event; members get Check In below instead.
+  // Nor on a draft: the API serves no QR payload for one, so the page the
+  // button opens could only show an error.
   const showCheckInQrCode =
-    (canManage || canManageOrganizers) && !event.is_cancelled && !isAttendanceFinalized && !checkInClosed;
+    (canManage || canManageOrganizers) &&
+    !event.is_cancelled &&
+    !event.is_draft &&
+    !isAttendanceFinalized &&
+    !checkInClosed;
   // The same window the list card reads, so the page offers Check In exactly
   // when the "happening now" card does. A payload without the field never
   // offers it rather than guessing at the window.

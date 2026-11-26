@@ -99,6 +99,15 @@ vi.mock('../components/event-detail/EventApparatusCrewCard', () => ({ default: (
 // The card-taps section has its own tests (EventCardCheckinsTab.test.tsx);
 // here it would only add a request the services/api mock above does not serve.
 vi.mock('../components/event-detail/EventCardTapsCard', () => ({ EventCardTapsCard: () => null }));
+// The module switch, as useEnabledModules reports it. On by default.
+const mockModules = { on: true, loading: false };
+vi.mock('../hooks/useEnabledModules', () => ({
+  useEnabledModules: () => ({
+    isModuleOn: () => mockModules.on,
+    enabledModules: null,
+    isLoading: mockModules.loading,
+  }),
+}));
 vi.mock('../hooks/useConnectedIntegrations', () => ({
   useConnectedIntegrations: () => ({ connected: new Set<string>(), loading: false, isConnected: () => false }),
 }));
@@ -218,6 +227,10 @@ describe('EventDetailPage', () => {
     vi.mocked(eventService.getAttendancePetitions).mockResolvedValue([]);
     vi.mocked(electionService.getElectionsByEvent).mockReset();
     vi.mocked(electionService.getElectionsByEvent).mockResolvedValue([]);
+    // Set per test where it matters; reset here so one that turns the module
+    // off cannot leave it off for the blocks after it.
+    mockModules.on = true;
+    mockModules.loading = false;
     vi.mocked(applicantService.getApplicants).mockReset();
     vi.mocked(applicantService.getApplicants).mockResolvedValue({
       items: [],
@@ -2571,6 +2584,84 @@ describe('EventDetailPage', () => {
       expect(await screen.findByDisplayValue('Forty neighbours came through.')).toBeInTheDocument();
       expect(screen.queryByRole('button', { name: 'Record headcount' })).not.toBeInTheDocument();
       expect(screen.queryByRole('button', { name: 'Write it up' })).not.toBeInTheDocument();
+    });
+  });
+
+  describe('Linked elections', () => {
+    beforeEach(() => {
+      mockAuthState.checkPermission = mockCheckPermission;
+      vi.mocked(eventService.getEvent).mockReset();
+      vi.mocked(eventService.getEvent).mockResolvedValue(mockEvent);
+      vi.mocked(eventService.getEventRSVPs).mockReset();
+      vi.mocked(eventService.getEventRSVPs).mockResolvedValue([]);
+      vi.mocked(electionService.getElectionsByEvent).mockReset();
+      vi.mocked(electionService.getElectionsByEvent).mockResolvedValue([]);
+    });
+
+    it('are not requested while the Elections module is off', async () => {
+      mockModules.on = false;
+      mockCheckPermission.mockReturnValue(true);
+
+      renderWithRouter(<EventDetailPage />);
+
+      await screen.findByRole('button', { name: 'More' });
+      expect(electionService.getElectionsByEvent).not.toHaveBeenCalled();
+    });
+
+    it('are not requested before the module switch is known', async () => {
+      mockModules.loading = true;
+      mockCheckPermission.mockReturnValue(true);
+
+      renderWithRouter(<EventDetailPage />);
+
+      await screen.findByRole('button', { name: 'More' });
+      expect(electionService.getElectionsByEvent).not.toHaveBeenCalled();
+    });
+
+    // The endpoint requires elections.view, so asking without it is a 403 on
+    // every load of every event.
+    it('are not requested by someone who may not list elections', async () => {
+      mockCheckPermission.mockImplementation((permission: string) => permission === 'events.manage');
+
+      renderWithRouter(<EventDetailPage />);
+
+      await screen.findByRole('button', { name: 'More' });
+      expect(electionService.getElectionsByEvent).not.toHaveBeenCalled();
+    });
+
+    it('are requested by someone who may', async () => {
+      mockCheckPermission.mockImplementation((permission: string) => permission === 'elections.view');
+
+      renderWithRouter(<EventDetailPage />);
+
+      await screen.findByRole('heading', { level: 1 });
+      await waitFor(() => expect(electionService.getElectionsByEvent).toHaveBeenCalledWith('evt-1'));
+    });
+  });
+
+  describe('A draft event', () => {
+    beforeEach(() => {
+      mockCheckPermission.mockReturnValue(true);
+      mockAuthState.checkPermission = mockCheckPermission;
+      mockAuthState.user = { id: 'admin-1', permissions: ['events.manage'] } as CurrentUser;
+      vi.mocked(eventService.getEvent).mockReset();
+      vi.mocked(eventService.getEventRSVPs).mockReset();
+      vi.mocked(eventService.getEventRSVPs).mockResolvedValue([]);
+      vi.mocked(eventService.getEventStats).mockReset();
+      vi.mocked(eventService.getEventStats).mockResolvedValue(mockStats);
+    });
+
+    // The API serves no QR payload for a draft, so the page behind the button
+    // could only show an error.
+    it('offers no QR code until it is published', async () => {
+      vi.mocked(eventService.getEvent).mockResolvedValue({ ...mockEvent, is_draft: true });
+
+      const user = userEvent.setup();
+      renderWithRouter(<EventDetailPage />);
+
+      await user.click(await screen.findByRole('button', { name: 'More' }));
+      expect(screen.getByRole('button', { name: 'Duplicate Event' })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /View QR Code/ })).not.toBeInTheDocument();
     });
   });
 
