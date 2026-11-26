@@ -16,6 +16,38 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#4713](https://github.com/thegspiro/the-logbook/pull/4713) (branch
+`claude/security-review-auth-session-p18`)**: Feature 01 (Auth & session
+lifecycle), pass 18 — watchdog pickup (the dedicated `/loop 30m
+/security-review` session remains unreachable).
+
+PR #4712 (Feature 00, Cross-cutting baseline, pass 19, which also reset the
+whole 35-row rotation for a new lap) was confirmed merged (`91e5bba50`,
+merge commit) before this iteration started, and a fresh `list_pull_requests`
+(state=open) returned 0 results. The local checkout was initially 5 commits
+behind `origin/main` (still at PR #4707's merge) — `git checkout main &&
+git pull --ff-only` brought it current before anything was read or trusted,
+per this lap's own warning about a stale checkout's view of this file. Row
+00 was `✅` and row 01 (Auth & session lifecycle) was confirmed the next `⬜`
+row on the freshly-pulled `main`.
+
+Baseline `135330443` (PR #4625's merge, pass 17). 551 commits since then, 302
+non-merge. 17 of this feature's 18 tracked files are byte-identical to pass
+17; the 18th (`apiClient.ts`) has a pure cache-invalidation refactor
+(delegates to a shared helper in Feature 34's own `apiCache.ts`, with no
+change in effect for any route this feature owns — `/auth/` stays excluded
+from caching entirely). Route count re-enumerated by AST: still 38, matching
+the byte-identical `auth.py`. All standing items (AUTH-23 resolved;
+AUTH-15/17/21/22 closed; AUTH-4 accepted/unchanged) reconfirmed, none newly
+open. **0 fixed, 0 new findings.** Full write-up:
+`docs/security-review/AUTH-01-auth-session.md`'s **Pass 18** section.
+
+Row 01 → ✅ (pending this PR's merge); next is Feature 02 (Permissions &
+roles) — re-check `list_pull_requests` fresh rather than trusting this note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 00, Cross-cutting baseline, pass 19, PR #4712, merged), preserved for history</summary>
+
 **PR [#4712](https://github.com/thegspiro/the-logbook/pull/4712) (branch
 `claude/security-review-cross-cutting-p19`)**: Feature 00 (Cross-cutting
 baseline), pass 19 — watchdog pickup (the dedicated `/loop 30m
@@ -57,6 +89,8 @@ findings.** Full write-up:
 Row 00 → ✅ (pending this PR's merge). This closes the review of the first
 feature in the new lap; next is Feature 01 (Auth & session lifecycle) —
 re-check `list_pull_requests` fresh rather than trusting this note.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 34, Frontend shared, pass 17, PR #4711, merged), preserved for history</summary>
@@ -28983,7 +29017,7 @@ commit" rule.
 | #   | Feature                   | Prefix | Principal code                                                                                                                                                                                                                                                                        | Status |
 | --- | ------------------------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
 | 00  | Cross-cutting baseline    | SEC    | whole-codebase sweeps; see `SEC-00-cross-cutting-baseline.md`                                                                                                                                                                                                                         | ✅     |
-| 01  | Auth & session lifecycle  | AUTH   | `endpoints/auth.py`, `auth_service.py`, `mfa_service.py`, `oauth_service.py`                                                                                                                                                                                                          | ⬜     |
+| 01  | Auth & session lifecycle  | AUTH   | `endpoints/auth.py`, `auth_service.py`, `mfa_service.py`, `oauth_service.py`                                                                                                                                                                                                          | ✅     |
 | 02  | Permissions & roles       | PERM   | `dependencies.py`, `core/permissions.py`, `roles.py`, `operational_ranks.py`, `officers.py`, `org_chart.py`                                                                                                                                                                           | ⬜     |
 | 03  | Public surface & webhooks | PUB    | `api/public/*` (51 unauth routes, added pass 16), `paypal_webhook.py`, `integrations_webhook.py`, `salesforce_webhook.py`, `zeffy_webhook.py`, `shift_evaluations.py` (added pass 16)                                                                                                 | ⬜     |
 | 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                                                                                                                                                                    | ⬜     |
@@ -29172,6 +29206,58 @@ whole.
 ---
 
 ## Log
+
+### 2026-11-26 — Feature 01 (Auth & session lifecycle, pass 18) — watchdog pickup, 0 fixed, 0 new findings
+
+Watchdog pickup — the dedicated `/loop 30m /security-review` session remains
+unreachable. The local checkout started 5 commits behind `origin/main`
+(still at PR #4707's merge); `git checkout main && git pull --ff-only`
+brought it to `91e5bba50` (PR #4712's merge) before anything was read, per
+this lap's own warning about trusting a stale checkout's view of this file.
+A fresh `list_pull_requests` (state=open) returned 0 results. Row 00
+(Cross-cutting baseline) was `✅` and row 01 (this feature) was confirmed the
+next `⬜` row. `git log --all --oneline --grep "security(auth" -i` confirmed
+`135330443` (PR #4625, pass 17) is still the latest merged Auth pass.
+
+**Baseline** `135330443` (pass 17's merge, PR #4625) to **head** `main`'s
+`91e5bba50`: 551 commits, 302 non-merge, 276 backend `.py` files and 380
+frontend files touched repo-wide — another full rotation lap elsewhere in
+the tree. Diffed each of this feature's 18 tracked files individually: **17
+byte-identical** to pass 17; the 18th, `apiClient.ts`, has a 24-line
+cache-invalidation refactor that delegates to a shared helper
+(`invalidateAfterMutation` in Feature 34's own `apiCache.ts`) with no change
+in effect for this feature — `/auth/` remains unconditionally excluded from
+caching, and neither new `RELATED_PREFIXES` entry names an auth-adjacent
+path. No brand-new auth/mfa/oauth/passkey/webauthn/stepup/lockout/session-
+named file was added this lap. Routes re-enumerated independently by `grep`
+and by an AST walk: both agree at **38**, unchanged, consistent with the
+byte-identical `auth.py`.
+
+All standing items reconfirmed, none newly open: AUTH-23 (step-up lockout)
+remains ✅ Resolved per `docs/KNOWN_LIMITATIONS.md` (owner decision
+2026-11-01), its wiring (`stepup_throttle.py`) unchanged inside the
+byte-identical `auth.py`; AUTH-15/17/21/22 remain closed; AUTH-4
+(informational, unbounded roster query) remains accepted and unchanged.
+CLAUDE.md's breached-password-fails-open / CAPTCHA-fails-closed invariants
+are governed by `core/security.py` and `core/suspicious_ip.py`, both
+byte-identical to pass 17, so neither direction could have moved. Alembic
+chain: single head `e9cf8ab7e4e4` (844 revisions).
+
+**Completion gate:** `flake8`/`black --check`/`isort --check-only` (CI's
+exact pins, 7.4.1/26.10.1/9.0.2, installed under `/usr/local/bin/python3.13`
+since the bare `python3` on this sandbox is 3.11.18 with no linters) on
+`app/ tests/ alembic/` — all clean. `validate_migrations.py --strict` —
+single head. `check_route_permissions.py --strict` — 344 routes, 0
+errors/warnings. Scoped backend pytest (`-k "auth or mfa or oauth or
+webauthn or passkey or session or login"`) — 1235 passed, 1 pre-existing
+environment-only skip (`py_vapid`), 0 failures. `npm run typecheck` — 0
+errors. `npm run lint` — 0 errors, 0 warnings.
+
+**0 fixed, 0 new findings.** Full write-up:
+`docs/security-review/AUTH-01-auth-session.md`'s **Pass 18** section.
+
+Row 01 → ✅ (pending this PR's merge); next is Feature 02 (Permissions &
+roles) — re-check `list_pull_requests` fresh rather than trusting this note.
 
 ### 2026-11-25 — Feature 34 (Frontend shared, pass 17) merged (PR #4711), closing the lap at every row ✅; Feature 00 (Cross-cutting baseline, pass 19): lap reset + own review, 0 fixed, 0 new findings
 
