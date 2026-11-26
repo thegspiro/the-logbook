@@ -206,6 +206,9 @@ def everything_jpeg() -> bytes:
         (0xE2, mpf(0, 0, 0)),
         (0xE2, b"FPXR\x00\x00FLASHPIX-MARKER"),
         (0xED, photoshop),
+        (0xE6, b"GoPro\x00GOPRO-MARKER"),
+        (0xEC, b"Ducky\x00\x01\x00\x04DUCKY-MARKER"),
+        (0xEE, b"NotAdobe APP14-MARKER"),
         (0xEF, b"APP15-MARKER"),
         (0xFE, b"COMMENT-MARKER from the camera"),
     ]
@@ -295,12 +298,68 @@ def everything_png() -> bytes:
     return png[:ihdr_end] + time + private + png[ihdr_end:] + b"TRAILER-AFTER-IEND"
 
 
+def restart_jpeg() -> bytes:
+    """A restart interval of one MCU, so the scan carries RSTn markers."""
+    return _jpeg(
+        _picture("RGB", (64, 48)),
+        restart_marker_blocks=1,
+        exif=b"Exif\x00\x00" + gps_exif(">"),
+    )
+
+
+def palette_png() -> bytes:
+    """A palette PNG with transparency and every colour chunk the strip
+    keeps, plus GPS in eXIf. Pillow writes PLTE, tRNS and pHYs; sRGB, gAMA
+    and cHRM are spliced in before PLTE, where the specification puts them."""
+    image = _picture("RGB", (20, 12)).quantize(colors=16)
+    out = io.BytesIO()
+    image.save(out, format="PNG", transparency=3, dpi=(144, 144), exif=gps_exif("<"))
+    png = out.getvalue()
+    for kind in (b"PLTE", b"tRNS", b"pHYs", b"eXIf"):
+        assert kind in png
+    ihdr_end = 8 + 12 + 13
+    colour = (
+        chunk(b"sRGB", b"\x00")
+        + chunk(b"gAMA", struct.pack(">I", 45455))
+        + chunk(
+            b"cHRM",
+            struct.pack(">8I", 31270, 32900, 64000, 33000, 30000, 60000, 15000, 6000),
+        )
+    )
+    return png[:ihdr_end] + colour + png[ihdr_end:]
+
+
+def animated_png() -> bytes:
+    """A two-frame APNG (acTL, fcTL, fdAT) with a cICP chunk and GPS in
+    eXIf."""
+    first = _picture("RGB", (16, 16))
+    second = first.transpose(Image.FLIP_LEFT_RIGHT)
+    out = io.BytesIO()
+    first.save(
+        out,
+        format="PNG",
+        save_all=True,
+        append_images=[second],
+        duration=100,
+        exif=gps_exif("<"),
+    )
+    png = out.getvalue()
+    for kind in (b"acTL", b"fcTL", b"fdAT", b"eXIf"):
+        assert kind in png
+    ihdr_end = 8 + 12 + 13
+    # BT.709 primaries, sRGB transfer, RGB, full range.
+    return png[:ihdr_end] + chunk(b"cICP", b"\x01\x0d\x00\x01") + png[ihdr_end:]
+
+
 def main() -> None:
     for name, content in [
         ("everything.jpg", everything_jpeg()),
         ("progressive.jpg", progressive_jpeg()),
         ("cmyk-adobe.jpg", cmyk_jpeg()),
         ("everything.png", everything_png()),
+        ("restart.jpg", restart_jpeg()),
+        ("palette.png", palette_png()),
+        ("animated.png", animated_png()),
     ]:
         (HERE / name).write_bytes(content)
         Image.open(io.BytesIO(content)).load()

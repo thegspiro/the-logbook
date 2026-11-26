@@ -162,8 +162,12 @@ def test_a_waiver_jpeg_or_png_is_scanned_before_its_metadata_is_removed():
     original is scanned first; the stripped file again when it is stored."""
     service = attendance_waiver_attachments.AttendanceWaiverAttachmentService
     source = inspect.getsource(service._as_stored)
-    assert source.count("strip_photo_metadata(") == 1
-    assert source.index("self.storage.check(") < source.index("strip_photo_metadata(")
+    # On a worker thread: a crafted file can take the walk a while, and on
+    # the event loop that stalls every request the worker is serving.
+    call = "asyncio.to_thread(strip_photo_metadata,"
+    assert source.count("strip_photo_metadata") == 1
+    assert source.count(call) == 1
+    assert source.index("self.storage.check(") < source.index(call)
 
 
 def test_the_history_media_entry_point_routes_through_the_scanning_service():
