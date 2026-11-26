@@ -1312,21 +1312,26 @@ async def create_record(
         username=current_user.username,
     )
 
-    # Notify the org's chat integrations about the recorded training (background).
-    notify_member = await db.get(User, str(new_record.user_id))
-    member_name = (
-        getattr(notify_member, "display_name", None) if notify_member else None
-    ) or "A member"
-    background_tasks.add_task(
-        notify_entity_created,
-        str(current_user.organization_id),
-        "training",
-        {
-            "member_name": member_name,
-            "course_name": new_record.course_name,
-            "hours": new_record.hours_completed,
-        },
-    )
+    # Notify the org's chat integrations about the recorded training
+    # (background). The message says the member completed the course, so only
+    # a completed record is announced; a record defaults to scheduled, and a
+    # scheduled, cancelled or failed one posted a false completion (INT2-12).
+    record_status = getattr(new_record.status, "value", new_record.status)
+    if record_status == "completed":
+        notify_member = await db.get(User, str(new_record.user_id))
+        member_name = (
+            getattr(notify_member, "display_name", None) if notify_member else None
+        ) or "A member"
+        background_tasks.add_task(
+            notify_entity_created,
+            str(current_user.organization_id),
+            "training",
+            {
+                "member_name": member_name,
+                "course_name": new_record.course_name,
+                "hours": new_record.hours_completed,
+            },
+        )
 
     response = TrainingRecordResponse.model_validate(new_record)
     response_data = response.model_dump(mode="json")

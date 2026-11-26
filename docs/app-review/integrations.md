@@ -2,7 +2,111 @@
 
 **Prefix:** `INT2` · **Iteration:** B12 · **Reviewed:** 2026-08-06 (pass 1),
 2026-08-08 (pass 2), 2026-08-09 (pass 3), 2026-08-09 (pass 4),
-2026-10-16 (pass 5)
+2026-10-16 (pass 5), 2026-11-26 (pass 6)
+
+---
+
+## Pass 6 (2026-11-26) — the connectors' delivery and sync logic, and the connections screen: 4 fixed, 3 flagged, 2 MED defects open
+
+### Scope, stated plainly
+
+Pass 5 read the connect, save and disconnect handlers. This pass read the
+connectors' own delivery and sync logic:
+
+- calendar sync (Google, Outlook, iCal);
+- outbound chat notifications and generic webhooks;
+- the QuickBooks, Zeffy and PayPal syncs;
+- connection health.
+
+It also read `IntegrationsPage.tsx` beyond its handlers. Six backend findings were reproduced first against the real database. Every fix has a test that failed on the unfixed code.
+
+**Not read:**
+
+- the OAuth endpoints' bodies and their `*_oauth_service.py`;
+- `paypal_service.py` beyond amount parsing, and the body of `zeffy_service.py`;
+- the Discord and Teams send functions in detail;
+- the historical-import pages beyond a sweep;
+- how long Intuit and Graph keep their dedupe keys (no network access).
+
+### Fixed
+
+**INT2-9 — HIGH — Saved settings were damaged by the secret mask — ✅ FIXED**
+
+- `_sanitize_config` masks any key whose name contains "auth", "secret", "key"…, including values that are not secrets.
+- `oauth_enabled` (a boolean) came back as bullets, so the Claude settings form opened it unticked, and any settings save turned members' own MCP sign-in off behind a "saved" toast.
+- The Microsoft 365 `client_secret_expires_on` date came back as bullets and was sent back as an invalid date, so those settings could never be saved.
+- A boolean is no longer masked, and the expiry date is exempted by name. Secret strings are still masked.
+
+**INT2-10 — HIGH — A Microsoft 365 directory connected through the screen could not work — ✅ FIXED**
+
+- Connecting stores `client_id` encrypted (`SECRET_CONFIG_KEYS`), but `directory_for` read it from public config.
+- So Test and every account creation failed with "missing its tenant ID, client ID or client secret". The provisioning tests had built the row by hand with the id in public config, which hid it.
+- It now reads the encrypted value first, and public config for rows set up before.
+
+**INT2-11 — MED — Draft events were announced to chat; publishing announced nothing — ✅ FIXED**
+
+- Creating an event sent it to Slack, Discord, Teams and the generic webhooks even as a draft, so the draft's title went out early and the published event never did.
+- Drafts are now skipped at creation and announced when published.
+
+**INT2-12 — MED — Every training record was announced as a completion — ✅ FIXED**
+
+- A record defaults to "scheduled", and a scheduled, cancelled or failed record posted "<member> completed <course>" to a third-party channel.
+- Only a completed record is announced. Whether training records should go to chat at all is INT2-15.
+
+### Open defects (recorded in `docs/KNOWN_LIMITATIONS.md` so they are not lost)
+
+- **INT2-13 (MED) — A calendar outage permanently strands the soonest events.**
+  - Each pass charges a provider outage against the first due event's retry budget, and upcoming events go first.
+  - After a few hours' outage the next days' events sit "failed" with no further attempt, and nothing resets them: not the provider returning, not a reconnect, not Retry.
+  - Reproduced: a 4-hour outage left the next four days' events unpublished.
+  - Local fix: do not count a transient failure, or reset failed rows after a successful pass.
+- **INT2-14 (MED) — Calendar health reads healthy while events are unpublished (pitfall #29).**
+  - A pass with no new failure counts as success, so the pass after an event's last attempt resets health to healthy and the error count to 0.
+  - At the real cadence, a persistently failing event never reaches "failing". Retry on the card is a connection test that also zeroes the count.
+
+### Flagged for the owner
+
+- **INT2-15 (LOW) — Should training records be announced to chat at all?** The message names a member and a course to a third-party service.
+- **INT2-16 (LOW) — Is a Microsoft 365 client ID a secret?**
+  - It is stored encrypted, so the settings form can never show it. The form then sends it blank, which the server refuses: the open frontend item below.
+- **INT2-17 (LOW) — Chat settings nothing reads (pitfall #19).**
+  - `SlackConfig.event_types`, `DiscordConfig.event_types`, `SlackConfig.channel` and `TeamsConfig.channel_name` are accepted and stored but never used.
+  - Remove them, or wire them; the owner earlier chose not to add trigger selection.
+
+### Open (not flagged)
+
+- **MED — Microsoft 365 settings send `client_id: ''`.** The ID is never echoed (INT2-16), so a settings save is refused with 422 "client ID is required". The fix is `msClientId.trim() || undefined` with a "leave blank to keep" placeholder, as Salesforce does. It was not made without a page test, which needs a connected directory and admin access in the mocks.
+- **MED — The integration card shows a green "Connected" while the backend reports it failing.** The list carries `health`, which the frontend type does not declare (pitfall #29).
+- **MED — "Connect with Salesforce" can leave the admin on a raw JSON page.** The authorize endpoint raises 400 or 401 to a top-level navigation.
+- **LOW-MED — Chat messages print times as raw UTC ISO strings.**
+- **LOW-MED — An event moved more than 30 days into the past leaves its old copy in the calendar.**
+- **LOW-MED — A calendar sync pass can write back settings an admin changed while it ran,** such as turning descriptions off.
+- **LOW — Other items:**
+  - An Outlook create whose response was lost, followed by a delete, orphans the copy.
+  - The calendar connection test drops refreshed tokens.
+  - Generic webhook retries carry no delivery id (pitfall #36).
+  - On the frontend:
+    - the Salesforce error toast prints the URL parameter verbatim;
+    - Test does not refresh the card, and one test disables every Test button;
+    - closing a dialog mid-save can reset another integration's form;
+    - the detail page shows raw operation ids;
+    - the iCal and webhook URLs use the page's origin.
+
+### Mechanical checks
+
+- **Route gating:** 16 routes.
+  - `integrations.py` (12): 10 `integrations.manage`, plus the connected-status list and active weather alerts, which are sign-in only and read-only.
+  - The calendar OAuth start routes need `integrations.manage`. Their callbacks are public by nature and state-verified (INT-27).
+
+### Completion gate (pass 6)
+
+| Check                                                             | Result                                                          |
+| ----------------------------------------------------------------- | --------------------------------------------------------------- |
+| integration, Microsoft 365, event, training-record, webhook tests | ✅ see the PR description                                       |
+| new tests                                                         | ✅ 7 backend (2 real database files, 1 unit file); failed first |
+| `flake8` / `black` / `isort` (changed files)                      | ✅ clean                                                        |
+| mypy ratchet                                                      | ✅ 0 errors, matching the baseline                              |
+| endpoint docstring permissions check                              | ✅ 0 warnings                                                   |
 
 ---
 

@@ -50,7 +50,7 @@ from its open list.
 | B9  | membership pipeline        | MP2    | ⬜     |
 | B10 | messaging & communications | MSG2   | ⬜     |
 | B11 | notifications              | NOTIF2 | ⬜     |
-| B12 | integrations               | INT2   | ⬜     |
+| B12 | integrations               | INT2   | ✅     |
 | B13 | forms                      | FORM2  | ⬜     |
 | B14 | grants & fundraising       | GF2    | ⬜     |
 | B15 | admin-hours                | AH2    | ⬜     |
@@ -3737,3 +3737,19 @@ secrets redacted for non-admins. See
   Nine LOW items are recorded as open. Gate clean; 1,070 backend and 260
   frontend election tests pass. See elections.md → Pass 7. Next: B6 meetings &
   minutes.
+
+- **B12 integrations ✅ (pass 6).** Read the connectors' delivery and sync
+  logic (calendar sync, chat and webhook announcements, accounting syncs,
+  health) and the connections screen. **4 fixes**, each test red first.
+  - INT2-9 (HIGH): the secret mask damaged saved settings; saving Claude
+    settings turned member sign-in off.
+  - INT2-10 (HIGH): a Microsoft 365 directory connected through the screen
+    could not work.
+  - INT2-11: drafts were announced to chat, and publishing announced nothing.
+  - INT2-12: every training record was announced as a completion.
+
+  **2 MED defects recorded as open** (INT2-13 a calendar outage strands the
+  soonest events; INT2-14 calendar health reads healthy while events are
+  missing) and **3 flagged** (INT2-15 training in chat, INT2-16 Microsoft 365
+  client ID, INT2-17 unused chat settings). See integrations.md → Pass 6.
+  Next: B13 forms.
