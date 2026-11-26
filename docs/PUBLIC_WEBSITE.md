@@ -11,6 +11,10 @@ installation of The Logbook. It is separate from two things with similar names:
 This first version has the foundation and three pages: Home, About and Contact.
 See [What is not built yet](#what-is-not-built-yet).
 
+The officer's walkthrough is in
+[Administration, Reports & Settings → The Public Website](./training/08-admin-reports.md#the-public-website),
+and the wiki's summary is [`wiki/Public-Website.md`](../wiki/Public-Website.md).
+
 ## How it is served
 
 The pages are plain HTML rendered by the backend

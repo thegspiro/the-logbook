@@ -167,6 +167,7 @@ set from `.env`, except `DB_HOST`, `DB_PORT`, `REDIS_HOST`, `REDIS_PORT` and
 | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
 | `FRONTEND_PORT`                   | `7880` — web interface                                                                                                         |
 | `BACKEND_PORT`                    | `7881` — backend, published for health checks                                                                                  |
+| `PUBLIC_SITE_PORT`                | `7882` — the department's [public website](Public-Website); answers 404 until it is published in Administration                |
 | `BIND_ADDRESS`                    | `0.0.0.0` — set `127.0.0.1` (or one host IP) once the proxy works, so LAN clients cannot bypass HTTPS                          |
 | `ALLOWED_ORIGINS`, `FRONTEND_URL` | Your public `https://` origin; email links are built from `FRONTEND_URL`                                                       |
 | `TRUSTED_PROXY_IPS`               | Empty. Set it to the proxy's address only when a reverse proxy fronts the app; otherwise clients could spoof `X-Forwarded-For` |

@@ -159,7 +159,7 @@ export const PublicWebsiteSettings: React.FC = () => {
             <label
               key={key}
               htmlFor={`public-${key}`}
-              className="card-secondary mobile-touch-row cursor-pointer gap-3 rounded-md p-3"
+              className="card-secondary flex min-h-11 cursor-pointer items-start gap-3 rounded-md p-3"
             >
               <input
                 type="checkbox"
@@ -167,7 +167,7 @@ export const PublicWebsiteSettings: React.FC = () => {
                 checked={settings[key]}
                 disabled={busy}
                 onChange={() => void save({ [key]: !settings[key] })}
-                className="form-checkbox shrink-0"
+                className="form-checkbox mt-0.5 shrink-0"
               />
               <span className="text-sm">
                 <span className="text-theme-text-primary block font-medium">{label}</span>
