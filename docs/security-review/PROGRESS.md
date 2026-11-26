@@ -16,6 +16,47 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR (this commit's branch, `claude/security-review-membership-pipeline-p19`)**:
+Feature 08 (Membership pipeline), pass 19 — watchdog pickup (the dedicated
+`/loop 30m /security-review` session remains unreachable). PR number to be
+recorded by the next pass's commit, per this file's own convention.
+**Branch-name deviation note:** a stale, never-merged
+`claude/security-review-membership-pipeline` branch (no pass suffix) exists
+from an earlier pass; this pass uses `-p19` rather than reuse it, per
+CLAUDE.md Pitfall #24.
+
+PR #4744 (Feature 07, Users & organizations, pass 18) was confirmed merged
+(`6e7d71c9e`) before this iteration started, via a fresh `git fetch origin
+main && git checkout main && git pull --ff-only`, and a fresh
+`list_pull_requests` (state=open, head=`claude/security-review-`) returned
+empty, so nothing blocks this pass. Row 07 was `✅` and row 08 (Membership
+pipeline) was confirmed the next `⬜` row on the freshly-pulled `main`. The
+baseline commit was re-derived from scratch: `cb849db0b` (PR #4664's merge,
+pass 18) was confirmed an ancestor of `main`.
+
+`git diff --stat cb849db0b..HEAD` across this feature's declared scope files
+found exactly 2 files changed, both frontend-only
+(`frontend/src/modules/prospective-members/components/PipelineTable.tsx`,
+`+17/-0`; `.../pages/ProspectiveMembersPage.tsx`, `+1/-1`), out of 275
+commits (153 non-merge) in the full window. Both commits read in full: a
+`CardSortControl` added to the pipeline table (shared component, wired to
+existing local sort state, no new network call) and an icon-centring CSS
+fix on the refresh button — neither touches an endpoint, permission check,
+query, or schema. 64 routes in `membership_pipeline.py` re-enumerated fresh
+by AST, unchanged (the file has zero line changes in this window).
+`check_route_permissions.py --strict`: 345 routes app-wide, 0 errors, 0
+warnings. Standing findings re-confirmed unchanged: MP-10 (listing half) and
+MP-22 (both accepted, open). **0 fixed, 0 new findings.** Full write-up:
+`docs/security-review/MP-08-membership-pipeline.md`'s **Pass 19** section.
+
+Row 08 → ✅ (pending this PR's merge); next is Feature 09 — re-check
+`list_pull_requests` fresh rather than trusting this note, and confirm
+Feature 09's identity against `docs/security-review/CHECKLIST.md`/the prior
+pass's own findings-file naming before starting it.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 07, Users & organizations, pass 18, PR #4744, merged), preserved for history</summary>
+
 **PR [#4744](https://github.com/thegspiro/the-logbook/pull/4744) (branch
 `claude/security-review-users-organizations-p18`)**: Feature 07 (Users &
 organizations), pass 18 — watchdog pickup (the dedicated `/loop 30m
@@ -52,6 +93,8 @@ section.
 Row 07 → ✅ (pending this PR's merge); next is Feature 08 (Membership
 pipeline) — re-check `list_pull_requests` fresh rather than trusting this
 note.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 06, Elections & ballots, pass 18, PR #4730, merged), preserved for history</summary>
