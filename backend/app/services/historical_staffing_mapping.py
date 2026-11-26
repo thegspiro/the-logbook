@@ -211,6 +211,13 @@ def suggest_event_title(core: str, roles: Sequence[Choice]) -> Optional[str]:
 # ---------------------------------------------------------------------------
 
 
+#: How a leftover is named in ``Decisions.reviewed``: a roster seat that
+#: pairs with no hours, or an hours entry that pairs with no seat.
+SIGNUP_LEFTOVER = "signup:"
+HOURS_LEFTOVER = "hours:"
+LEFTOVER_PREFIXES = (SIGNUP_LEFTOVER, HOURS_LEFTOVER)
+
+
 @dataclass
 class Decisions:
     """The reviewer's choices, keyed by normalized activity or title."""
@@ -223,6 +230,12 @@ class Decisions:
     # Whether events with no seats become calendar events (the department's
     # decision: yes, unless the reviewer turns it off).
     include_unstaffed: bool = True
+    # A reviewer's pairing of a seat with an hours entry the overlap rule did
+    # not pair: seat ledger key -> attendance id (owner decisions, 2026-11-26).
+    hours_pairs: Dict[str, str] = field(default_factory=dict)
+    # Leftovers the reviewer has looked at and accepts as unpaired, so they
+    # stop counting as outstanding: "signup:<seat key>" or "hours:<id>".
+    reviewed: List[str] = field(default_factory=list)
 
     @classmethod
     def from_stored(cls, stored: Any) -> "Decisions":
@@ -242,12 +255,21 @@ class Decisions:
             if v in ACTIVITY_KINDS
         }
         include = data.get("include_unstaffed")
+        reviewed = data.get("reviewed")
         return cls(
             activity_kinds=kinds,
             seat_titles=strings(data.get("seat_titles")),
             event_titles=strings(data.get("event_titles")),
             seat_members=strings(data.get("seat_members")),
             include_unstaffed=include if isinstance(include, bool) else True,
+            hours_pairs=strings(data.get("hours_pairs")),
+            reviewed=sorted(
+                {
+                    str(key)
+                    for key in (reviewed if isinstance(reviewed, list) else [])
+                    if isinstance(key, str) and key.startswith(LEFTOVER_PREFIXES)
+                }
+            ),
         )
 
     def to_stored(self) -> Dict[str, Any]:
@@ -257,6 +279,8 @@ class Decisions:
             "event_titles": dict(self.event_titles),
             "seat_members": dict(self.seat_members),
             "include_unstaffed": self.include_unstaffed,
+            "hours_pairs": dict(self.hours_pairs),
+            "reviewed": sorted(set(self.reviewed)),
         }
 
     def mapping(self, list_name: str) -> Dict[str, str]:
