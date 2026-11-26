@@ -252,6 +252,12 @@ feed listing every change, such as "John Smith changed from Maybe to Going at
 
 **More tools on the attendee list (officers):**
 
+- Each attendee is one line: their name, their answer or **Checked In** with
+  the time, and **Check In** if they have not been. The **⋮** button at the
+  end of the line shows their email and holds **Edit Times** and **Remove**.
+- A list of more than eight has a **Search attendees** box, by name or email.
+  Once someone is checked in, **Checked in** and **Not checked in** narrow
+  the list.
 - **Print Roster** prints the attendee list for use at the door.
 - **Export CSV** downloads it. _(2026-11-19)_ Its last column, **Source**,
   reads **Imported** for a check-in the Historical Data Import wrote and **The
@@ -649,9 +655,10 @@ Monitoring Dashboard**. It shows:
 ![Event check-in monitoring page with the live attendee list](./images/04-06-check-in-monitoring.png)
 
 > **Hint:** The monitoring view is read-only. To check in a member who forgot
-> to scan, or to correct their times, use **Check In** and **Edit Times** on
-> the event's attendance list. On a phone these buttons, **Remove** and its
-> **Yes / No** are full-size touch targets.
+> to scan, or to correct their times, use **Check In** on their line of the
+> event's attendance list, and **Edit Times** under the **⋮** at its end. On a
+> phone these buttons, **Remove** and its **Yes / No** are full-size touch
+> targets.
 
 An officer-edited time is marked "(times edited)" on the attendance list.
 
@@ -1159,7 +1166,7 @@ which opens **Check In Members**. They can add and check in members,
 
 - **You cannot record your own attendance** at an event you organize. You are
   left out of the **Check In Members** list, and your own row has no check-in
-  or **Remove**. Check in like any member, or ask the alternate or a manager.
+  , **Edit Times** or **Remove**. Check in like any member, or ask the alternate or a manager.
   This is the same rule as ["I was there"](#i-was-there--asking-to-be-marked-present):
   someone else vouches for you.
 - **On a Training event, the organizer pair do not get Edit Times.** Those

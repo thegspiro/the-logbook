@@ -845,10 +845,16 @@ describe('EventDetailPage', () => {
 
       renderWithRouter(<EventDetailPage />);
 
+      const user = userEvent.setup();
       expect(await screen.findByText('Olive Organizer')).toBeInTheDocument();
-      // Three rows, two of them writable.
-      expect(screen.getAllByRole('button', { name: /^remove$/i })).toHaveLength(2);
-      expect(screen.getAllByRole('button', { name: /edit times/i })).toHaveLength(2);
+      // Three rows, two of them writable: the row menu is where a row's
+      // actions live, and the organizer's own row has none to open.
+      expect(screen.getAllByRole('button', { name: /^Actions for / })).toHaveLength(2);
+      expect(screen.queryByRole('button', { name: 'Actions for Olive Organizer' })).not.toBeInTheDocument();
+
+      await user.click(screen.getByRole('button', { name: 'Actions for John Doe' }));
+      expect(screen.getByRole('button', { name: 'Edit Times' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Remove' })).toBeInTheDocument();
     });
 
     it('offers no Edit Times on a training event, where the organizer may not correct them', async () => {
@@ -861,9 +867,12 @@ describe('EventDetailPage', () => {
 
       renderWithRouter(<EventDetailPage />);
 
+      const user = userEvent.setup();
       expect(await screen.findByText('John Doe')).toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: 'Actions for John Doe' }));
+
+      expect(screen.getByRole('button', { name: 'Remove' })).toBeInTheDocument();
       expect(screen.queryByRole('button', { name: /edit times/i })).not.toBeInTheDocument();
-      expect(screen.getAllByRole('button', { name: /^remove$/i })).toHaveLength(2);
     });
 
     it('does not ask for the roster for a member the server gives no access', async () => {
