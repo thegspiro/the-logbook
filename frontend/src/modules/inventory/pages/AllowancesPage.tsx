@@ -223,7 +223,7 @@ const AllowancesPage: React.FC = () => {
               className="btn-secondary btn-md"
               aria-label="Refresh"
             >
-              <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+              <RefreshCw className={`h-5 w-5 ${loading ? 'animate-spin' : ''}`} aria-hidden="true" />
             </button>
             <button onClick={openCreate} className="btn-info btn-md inline-flex items-center gap-1">
               <Plus className="h-4 w-4" /> New Allowance
