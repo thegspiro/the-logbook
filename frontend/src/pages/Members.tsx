@@ -17,6 +17,7 @@ import {
   CreditCard,
   RotateCcw,
 } from 'lucide-react';
+import toast from 'react-hot-toast';
 import { userService } from '../services/api';
 import type { User } from '../types/user';
 import { memberDirectoryService, type MemberDirectoryEntry } from '../services/memberDirectoryService';
@@ -24,7 +25,8 @@ import { getErrorMessage, getLoadFailureMessage } from '../utils/errorHandling';
 import { useTimezone } from '../hooks/useTimezone';
 import { useRanks } from '../hooks/useRanks';
 import { useRegisterPullToRefresh } from '../hooks/useRegisterPullToRefresh';
-import { formatDate, getTodayLocalDate } from '../utils/dateFormatting';
+import { formatDate, formatNumber, getTodayLocalDate } from '../utils/dateFormatting';
+import { formatHours } from '../utils/hoursFormatting';
 import { useAuthStore } from '../stores/authStore';
 import { DeleteMemberModal } from '../components/DeleteMemberModal';
 import { ReactivateMemberModal } from '../components/ReactivateMemberModal';
@@ -41,6 +43,9 @@ import { useMembershipTierOptions } from '../hooks/useMembershipTierOptions';
 import { buildCsv, downloadCsv } from '../utils/csv';
 import { displayNameOf } from '../utils/memberName';
 import { StatGrid } from '@/components/ux/StatGrid';
+import { seatHoursService, type SeatHoursMember } from '../services/seatHoursService';
+import { RosterSeatFilter } from './members/RosterSeatFilter';
+import { SeatPeriod, seatPeriodDates } from './members/rosterSeatPeriod';
 
 /**
  * A roster row. A coordinator's rows are full `GET /users` records; everybody
@@ -78,6 +83,14 @@ const Members: React.FC = () => {
   // quietly dropped what they clicked. users.create is what POST /users
   // actually enforces; members.create only reads like it (see MembersAdminHub).
   const canCreateMembers = checkPermission('users.create');
+  // Another member's hours are an officer's to see (scheduling.report), so
+  // only they get the Time in seat filter (owner decisions, 2026-11-26).
+  const canSeeSeatHours = checkPermission('scheduling.report');
+  const [seatFilter, setSeatFilter] = useState<{ position: string; period: SeatPeriod }>({
+    position: '',
+    period: SeatPeriod.THIS_YEAR,
+  });
+  const [seatHours, setSeatHours] = useState<Map<string, SeatHoursMember> | null>(null);
   const [members, setMembers] = useState<RosterMember[]>([]);
   const [stats, setStats] = useState<MemberStats>({
     total: 0,
@@ -230,6 +243,28 @@ const Members: React.FC = () => {
     ? 'Search by name, membership number, or email...'
     : 'Search by name or membership number...';
 
+  useEffect(() => {
+    if (!canSeeSeatHours || !seatFilter.position) {
+      setSeatHours(null);
+      return;
+    }
+    let cancelled = false;
+    const thisYear = Number(getTodayLocalDate(tz).slice(0, 4));
+    seatHoursService
+      .getSeatHours({ position: seatFilter.position, ...seatPeriodDates(seatFilter.period, thisYear) })
+      .then((result) => {
+        if (!cancelled) setSeatHours(new Map(result.members.map((m) => [m.user_id, m])));
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        setSeatHours(null);
+        toast.error(getErrorMessage(err, 'Could not read time in that seat'));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [canSeeSeatHours, seatFilter, tz]);
+
   const filteredMembers = useMemo(() => {
     let result = members.filter((member) => {
       // Both the name the member goes by and their legal first name match, so
@@ -264,7 +299,10 @@ const Members: React.FC = () => {
       const memberStatus = canonicalMemberStatus(member.member_status) ?? canonicalMemberStatus(member.membership_type);
       const matchesMemberStatus = filterMemberStatus === 'all' || memberStatus === filterMemberStatus;
 
-      return matchesSearch && matchesFilter && matchesClass && matchesMemberStatus;
+      // With a seat chosen, only members with credited time in it.
+      const matchesSeat = seatHours === null || seatHours.has(member.id);
+
+      return matchesSearch && matchesFilter && matchesClass && matchesMemberStatus && matchesSeat;
     });
 
     // Apply sorting (#30)
@@ -278,13 +316,25 @@ const Members: React.FC = () => {
           return item.hire_date || '';
         case 'membership_number':
           return item.membership_number || '';
+        case 'seat_hours':
+          return seatHours?.get(item.id)?.hours ?? 0;
         default:
           return (item as unknown as Record<string, unknown>)[field] as string;
       }
     });
 
     return result;
-  }, [members, searchQuery, filterStatus, filterClass, filterMemberStatus, sortField, sortDirection, canManageMembers]);
+  }, [
+    members,
+    searchQuery,
+    filterStatus,
+    filterClass,
+    filterMemberStatus,
+    seatHours,
+    sortField,
+    sortDirection,
+    canManageMembers,
+  ]);
 
   const memberStatusOptions = useMemo(
     () => statusOptionsFor(tiers, members.map((m) => m.member_status ?? m.membership_type ?? '').filter(Boolean)),
@@ -311,13 +361,17 @@ const Members: React.FC = () => {
   // result that follows from a search or a status filter is still reported to
   // everyone — that is feedback on what they asked for.
   const listIsNarrowed =
-    searchQuery !== '' || filterStatus !== defaultFilterStatus || filterClass !== 'all' || filterMemberStatus !== 'all';
+    searchQuery !== '' ||
+    filterStatus !== defaultFilterStatus ||
+    filterClass !== 'all' ||
+    filterMemberStatus !== 'all' ||
+    seatHours !== null;
   const showEmptyState = canManageMembers || listIsNarrowed;
 
   // Reset to page 1 when filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchQuery, filterStatus, filterClass, filterMemberStatus, sortField, sortDirection]);
+  }, [searchQuery, filterStatus, filterClass, filterMemberStatus, seatHours, sortField, sortDirection]);
 
   // The roster's sortable columns, offered in card mode where the headers are
   // hidden. Conditional exactly as the headers are, so a column that is not
@@ -327,7 +381,15 @@ const Members: React.FC = () => {
     ...(showMemberNumber ? [{ field: 'membership_number', label: 'Member #' }] : []),
     { field: 'status', label: 'Status' },
     ...(canManageMembers ? [{ field: 'hire_date', label: 'Hire Date' }] : []),
+    ...(seatHours ? [{ field: 'seat_hours', label: 'Hours in seat' }] : []),
   ];
+
+  /** "12 hrs · 3 shifts" for a member's time in the chosen seat. */
+  const seatSummary = (memberId: string) => {
+    const row = seatHours?.get(memberId);
+    if (!row) return '';
+    return `${formatHours(row.hours)} hrs · ${formatNumber(row.shifts)} ${row.shifts === 1 ? 'shift' : 'shifts'}`;
+  };
 
   const handleSort = (field: string, direction: SortDirection) => {
     setSortField(direction ? field : null);
@@ -542,6 +604,8 @@ const Members: React.FC = () => {
               </select>
             </div>
 
+            {canSeeSeatHours && <RosterSeatFilter {...seatFilter} onChange={setSeatFilter} />}
+
             {/* Action Buttons */}
             {canCreateMembers && (
               <div className="flex w-full items-center space-x-2 sm:space-x-3 md:w-auto">
@@ -650,6 +714,7 @@ const Members: React.FC = () => {
                         {member.rank && (
                           <div className="text-theme-text-secondary text-sm">{formatRank(member.rank)}</div>
                         )}
+                        {seatHours && <div className="text-theme-text-secondary text-sm">{seatSummary(member.id)}</div>}
                       </div>
                     </div>
                     <span
@@ -819,6 +884,17 @@ const Members: React.FC = () => {
                           onSort={handleSort}
                         />
                       </th>
+                      {seatHours && (
+                        <th scope="col" className="px-6 py-3 text-left">
+                          <SortableHeader
+                            label="Hours in seat"
+                            field="seat_hours"
+                            currentSort={sortField}
+                            currentDirection={sortDirection}
+                            onSort={handleSort}
+                          />
+                        </th>
+                      )}
                       {canManageMembers && (
                         <th scope="col" className="px-6 py-3 text-left">
                           <SortableHeader
@@ -929,6 +1005,11 @@ const Members: React.FC = () => {
                             {member.status.replace('_', ' ').toUpperCase()}
                           </span>
                         </td>
+                        {seatHours && (
+                          <td data-label="Hours in seat" className="text-theme-text-secondary px-6 py-4 text-sm">
+                            {seatSummary(member.id)}
+                          </td>
+                        )}
                         {canManageMembers && (
                           <td data-label="Hire Date" className="px-6 py-4 whitespace-nowrap">
                             <div className="text-theme-text-secondary text-sm">

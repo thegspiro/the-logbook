@@ -162,14 +162,14 @@ export const BallotItemCard: React.FC<BallotItemCardProps> = ({
             candidates.map((candidate) => (
               <label
                 key={candidate.id}
-                className="border-theme-surface-border flex cursor-pointer items-center gap-3 rounded-lg border p-3 transition-colors hover:border-blue-300 hover:bg-blue-50 dark:hover:bg-blue-500/10"
+                className="border-theme-surface-border flex cursor-pointer items-start gap-3 rounded-lg border p-3 transition-colors hover:border-blue-300 hover:bg-blue-50 dark:hover:bg-blue-500/10"
               >
                 <input
                   type="radio"
                   name={`item-${item.id}`}
                   checked={choice?.choice === candidate.id}
                   onChange={() => onChoice(item.id, candidate.id)}
-                  className="focus:ring-theme-focus-ring h-4 w-4 text-blue-600"
+                  className="focus:ring-theme-focus-ring mt-1 h-4 w-4 text-blue-600"
                 />
                 <CandidateText candidate={candidate} />
               </label>

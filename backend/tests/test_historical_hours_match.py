@@ -110,6 +110,53 @@ class TestPairing:
         )
 
 
+class TestAReviewersPairs:
+    """A reviewer may pair a seat with an hours entry by hand (owner
+    decisions, 2026-11-26): the pin wins whatever the overlap, but only for
+    the seat's own member, and only while both sides still exist."""
+
+    def test_a_pin_pairs_what_no_overlap_would(self):
+        result = match(
+            [_signup("s1", "alice", 19, 31)],
+            [_entry("a1", "alice", 4, 8)],
+            pinned={"s1": "a1"},
+        )
+
+        assert result.matched["s1"].attendance_id == "a1"
+        assert result.pinned == {"s1"}
+        assert result.unmatched_hours == []
+
+    def test_a_pin_takes_the_entry_before_a_larger_overlap_can(self):
+        result = match(
+            [_signup("s1", "alice", 12, 22), _signup("s2", "alice", 12, 22)],
+            [_entry("a1", "alice", 12, 22)],
+            pinned={"s2": "a1"},
+        )
+
+        assert result.matched["s2"].attendance_id == "a1"
+        assert result.unmatched_signups == ["s1"]
+
+    def test_a_pin_on_another_members_hours_pairs_nothing(self):
+        result = match(
+            [_signup("s1", "alice", 12, 22)],
+            [_entry("b1", "bob", 12, 22)],
+            pinned={"s1": "b1"},
+        )
+
+        assert result.matched == {}
+        assert result.pinned == set()
+
+    def test_a_pin_naming_an_entry_that_is_gone_falls_back_to_overlap(self):
+        result = match(
+            [_signup("s1", "alice", 12, 22)],
+            [_entry("a2", "alice", 12, 22)],
+            pinned={"s1": "deleted"},
+        )
+
+        assert result.matched["s1"].attendance_id == "a2"
+        assert result.pinned == set()
+
+
 class TestCrewSeatForAnEventTitle:
     @pytest.mark.parametrize(
         ("title", "seat"),

@@ -5,6 +5,43 @@ section at the top of the current month's page, and a new month starts a
 new page. The engineering audit behind each pass is in
 [`docs/CHANGE_AUDIT_2026-11.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-11.md).
 
+## Recent changes: November 25 – 26, 2026
+
+The engineering audit is
+[`docs/CHANGE_AUDIT_2026-11.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-11.md#change-audit-november-25--26-2026).
+
+- **A public website for your community.** The Logbook can now serve a
+  simple website for your department: a **Home** page, an **About** page and a
+  **Contact** page, in one of three looks. Everything is off until an officer
+  publishes it under **Administration → Organization Settings → Public
+  Website**, and contact details come from the department's own record. It has
+  its own address, which whoever runs your server points at it. Events,
+  recruitment, news and History are planned but not on it yet. See
+  [Public Website](Public-Website).
+- **Before upgrading:** the web container now publishes a second port for
+  the website (3002, or 7882 on Unraid). If something on the server already
+  uses it, set `PUBLIC_SITE_PORT` first, or the web container will not start.
+  Compose installs also rebuild the backend for the new HEIC photo support.
+  See
+  [Upgrading](https://github.com/thegspiro/the-logbook/blob/main/docs/UPGRADING.md).
+- **iPhone photos on waiver requests** are kept as JPEGs, turned the right
+  way up, without the hidden details such as where the photo was taken. See
+  [Training](Module-Training).
+- **The Events row stays at the top** of every Events page, Events
+  Administration and each outreach request included, so **Events**, **Event
+  Templates**, **CRR Activities** and the rest are one tap away.
+- **Outreach.** Your own Completed email can now include the feedback link
+  with `{{feedback_link}}`. Retired tags and retired CRR counts can no longer
+  be added to new work, and a member can be listed on an activity once.
+  Outreach Impact refreshes as soon as you save. See
+  [Public Programs](Public-Programs) and [Events](Module-Events).
+- **Minutes.** Action-item reminders now follow adopted minutes only, and
+  include overdue items. Adopting minutes emails assignees only about items
+  still open. A quorum set as a number of members rounds up. See
+  [Meeting Minutes](Module-Meeting-Minutes).
+- **Sort by on a phone** now works for medical supplies, the impact planner
+  and grant applications.
+
 ## Recent changes: November 24 – 25, 2026
 
 The engineering audit is

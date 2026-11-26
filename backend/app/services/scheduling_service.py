@@ -110,6 +110,7 @@ from app.utils.org_timezone import resolve_org_today, resolve_scheduling_timezon
 from app.utils.positions import (
     CANONICAL_POSITIONS,
     UnknownSeatError,
+    canonical_position,
     normalize_stored_positions,
     position_label,
     resolve_department_seat,
@@ -10203,6 +10204,72 @@ class SchedulingService:
             seat_filters=[],
         )
         return {str(user): by_seat for user, by_seat in cells.items()}
+
+    async def get_seat_hours(
+        self,
+        organization_id: UUID | str,
+        position: str,
+        start_date: Optional[date] = None,
+        end_date: Optional[date] = None,
+    ) -> List[Dict[str, Any]]:
+        """Every member's credited department shifts in one seat over a
+        period, most hours first: the roster's Time in seat filter.
+
+        A projection of :meth:`get_department_position_totals`, the query
+        behind Hours by Position, so the roster and the report cannot
+        disagree (CLAUDE.md pitfall 29). Seats compare after
+        ``canonical_position``, case-folded, so a legacy ``EMT`` row counts
+        toward the ``ems`` seat; minutes are summed across those spellings
+        and turned into hours once.
+        """
+
+        def _key(value: Any) -> Optional[str]:
+            raw = str(getattr(value, "value", value) or "").strip()
+            if not raw:
+                return None
+            return canonical_position(raw).casefold() or None
+
+        wanted = _key(position)
+        if wanted is None:
+            return []
+        totals = await self.get_department_position_totals(
+            organization_id, start_date, end_date
+        )
+        # Only this department's members, as Hours by Position lists them: a
+        # shift on its roster worked by someone from elsewhere is not theirs
+        # to report (pitfall 14).
+        members: Set[str] = set()
+        if totals:
+            members = {
+                str(uid)
+                for uid in (
+                    await self.db.execute(
+                        select(User.id)
+                        .where(User.organization_id == str(organization_id))
+                        .where(User.id.in_(list(totals)))
+                    )
+                ).scalars()
+            }
+        rows: List[Dict[str, Any]] = []
+        for user_id, by_seat in totals.items():
+            if user_id not in members:
+                continue
+            raw = {"shifts": 0, "minutes": 0, "calls": 0}
+            for seat, cell in by_seat.items():
+                if _key(seat) == wanted:
+                    for name in raw:
+                        raw[name] += cell[name]
+            if raw["shifts"] or raw["minutes"]:
+                rows.append(
+                    {
+                        "user_id": user_id,
+                        "shifts": raw["shifts"],
+                        "hours": hours_from_minutes(raw["minutes"]),
+                        "calls": raw["calls"],
+                    }
+                )
+        rows.sort(key=lambda r: (-r["hours"], -r["shifts"], r["user_id"]))
+        return rows
 
     async def _credited_seat_totals(
         self,

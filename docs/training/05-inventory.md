@@ -2782,7 +2782,10 @@ Needs the **Manage gear, uniforms and equipment** permission.
 - **Totals**: the number to buy and the estimated cost, shown as two badges
   beside the panel heading.
 - **Member list**: each member's name, rank, station and size, and whether they
-  need the item, need a replacement, or are over their allowance.
+  need the item, need a replacement, or are over their allowance. On a phone,
+  where the list shows as cards, sort it with **Sort by** above the cards:
+  **Member**, **Rank / Station**, or **Size** when you chose a size field
+  _(2026-11-26)_.
 
 ![Impact planner results with its summary cards, size breakdown and cost estimate](./images/05-59-impact-planner-results.png)
 
@@ -3404,7 +3407,10 @@ Supplies categories page.
   **Supply items** clears the filter.
 - **Sort** the table by item name, category, on-hand stock or reorder point.
   Sorting covers every page, not only the one on screen. Blank categories and
-  reorder points sort last.
+  reorder points sort last. Where the table shows as cards (a phone, or a
+  tablet), the headings are hidden, so a **Sort by** list and an arrow button
+  above the cards sort it instead _(2026-11-26; before, it could not be sorted
+  there)_.
 - **Next expiry** shows the soonest stocked lot's date, in colour only when it
   is inside the expiring window.
 - **Size** (for example adult or pediatric) is a field on the supply form and
