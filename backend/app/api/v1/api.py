@@ -92,6 +92,7 @@ from app.api.v1.endpoints import (
     outlook_calendar_oauth,
     outreach_goals,
     platform_analytics,
+    public_site,
     quickbooks_online,
     reports,
     roles,
@@ -692,6 +693,12 @@ api_router.include_router(
 )
 api_router.include_router(
     public_portal_admin.router,
+    dependencies=module_gate("public_info", "Public Information"),
+)
+api_router.include_router(
+    public_site.router,
+    prefix="/public-site",
+    tags=["public-site"],
     dependencies=module_gate("public_info", "Public Information"),
 )
 
