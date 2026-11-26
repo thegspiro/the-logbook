@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="hero">
+  <div class="wrap">
+    <h1>{{ name }}</h1>
+    {% if tagline %}
+    <p class="hero-tagline">{{ tagline }}</p>
+    {% endif %}
+  </div>
+</section>
+<div class="wrap page">
+  {% if welcome %}
+  <section class="prose" aria-label="Welcome">
+    {% for paragraph in welcome %}
+    <p>{{ paragraph }}</p>
+    {% endfor %}
+  </section>
+  {% endif %}
+  {% if show_about or (contact and contact.any) %}
+  <div class="cards">
+    {% if show_about %}
+    <section class="card">
+      <h2>About us</h2>
+      <p>Who we are and the community we serve.</p>
+      <p><a class="more" href="{{ nav | selectattr('key', 'equalto', 'about') | map(attribute='href') | first }}">About {{ name }}</a></p>
+    </section>
+    {% endif %}
+    {% if contact and contact.any %}
+    <section class="card">
+      <h2>Contact</h2>
+      {% include "_contact_details.html" %}
+    </section>
+    {% endif %}
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

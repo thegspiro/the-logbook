@@ -626,6 +626,9 @@ EnvironmentFile=$SCRIPT_DIR/.env
 ExecStart=$SCRIPT_DIR/backend/venv/bin/uvicorn main:app --host 0.0.0.0 --port 3001
 Restart=always
 RestartSec=10
+# The HEIC decoder runs in a child process that makes itself the kernel's
+# first choice when memory runs out; that kill must not stop the service.
+OOMPolicy=continue
 
 [Install]
 WantedBy=multi-user.target

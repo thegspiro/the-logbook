@@ -1,0 +1,64 @@
+# The Logbook — the department's public website, behind your own hostname
+#
+# The web container serves the public website on a port of its own
+# (PUBLIC_SITE_PORT, 3002 by default). This file is the server block that puts
+# a public hostname and TLS in front of that port. It is an example: copy it,
+# replace www.yourdepartment.org and the certificate paths, and load it beside
+# the main site configuration. docs/PUBLIC_WEBSITE.md walks through each
+# layout, including Nginx Proxy Manager, Cloudflare Tunnel and a load
+# balancer, none of which need this file.
+#
+# Host-installed nginx: copy to /etc/nginx/sites-available/, link it into
+# sites-enabled/, and keep the upstream below as it is.
+#
+# Compose production profile (infrastructure/nginx/docker.conf): mount this
+# file into the nginx container as /etc/nginx/conf.d/public-site.conf, change
+# the upstream to `server frontend:8080;`, and point the certificate paths at
+# /etc/nginx/ssl/.
+
+upstream logbook_public_site {
+    server 127.0.0.1:3002;
+    keepalive 8;
+}
+
+limit_req_zone $binary_remote_addr zone=public_site_limit:10m rate=20r/s;
+
+server {
+    listen 80;
+    server_name www.yourdepartment.org;
+    server_tokens off;
+
+    location /.well-known/acme-challenge/ {
+        root /var/www/certbot;
+    }
+
+    location / {
+        return 301 https://$host$request_uri;
+    }
+}
+
+server {
+    listen 443 ssl http2;
+    server_name www.yourdepartment.org;
+    server_tokens off;
+
+    ssl_certificate /etc/letsencrypt/live/www.yourdepartment.org/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/www.yourdepartment.org/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_prefer_server_ciphers off;
+
+    # No add_header here: the pages arrive with their security headers,
+    # Strict-Transport-Security included, and a second copy would double them.
+
+    location / {
+        limit_req zone=public_site_limit burst=60 nodelay;
+
+        proxy_pass http://logbook_public_site;
+        proxy_http_version 1.1;
+        proxy_set_header Connection "";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}

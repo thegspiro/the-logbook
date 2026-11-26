@@ -504,6 +504,7 @@ from app.models.public_portal import (
     PublicPortalConfig,
     PublicPortalDataWhitelist,
 )
+from app.models.public_site import PublicSiteSettings, PublicSiteTheme
 from app.models.qualification import MemberQualification
 from app.models.scheduling_module_config import SchedulingModuleConfig
 from app.models.security_alert import AlertType, SecurityAlertRecord, ThreatLevel
@@ -668,6 +669,9 @@ __all__ = [
     "PublicPortalAPIKey",
     "PublicPortalAccessLog",
     "PublicPortalDataWhitelist",
+    # Public Website models
+    "PublicSiteSettings",
+    "PublicSiteTheme",
     # Forms models
     "Form",
     "FormField",
