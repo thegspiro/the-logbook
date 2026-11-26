@@ -137,6 +137,8 @@ const DocumentsPage: React.FC = () => {
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [showCreateFolder, setShowCreateFolder] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  // Shown in the dialog: the page banner sits under its scrim (DOC2-9).
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const [managedFolder, setManagedFolder] = useState<DocFolder | null>(null);
   const [adminOnlyRefresh, setAdminOnlyRefresh] = useState(0);
 
@@ -175,7 +177,16 @@ const DocumentsPage: React.FC = () => {
       // asArray guard does not reach — and `folders` is mapped and measured
       // without checking, so an envelope missing the key crashes the page.
       if (generation !== levelGeneration.current) return false;
-      setFolders(asArray(response.folders));
+      const page = asArray(response.folders);
+      // A page past the end comes back empty (its last folder deleted or
+      // moved), and the pager hides once the level fits on one page — which
+      // left "No folders yet" with no way back. Step to the last page that has
+      // folders; the level effect fetches it (DOC2-10).
+      if (page.length === 0 && skip > 0 && response.total > 0) {
+        setFolderSkip(Math.floor((response.total - 1) / FOLDER_PAGE_SIZE) * FOLDER_PAGE_SIZE);
+        return true;
+      }
+      setFolders(page);
       // The server's count, not the page length: the page is capped at
       // FOLDER_PAGE_SIZE, so measuring it here would report a full page as the
       // whole level and hide every folder past the first page.
@@ -403,10 +414,16 @@ const DocumentsPage: React.FC = () => {
     fetchDocuments,
   ]);
 
+  const deleteTarget = deleteConfirm ? documents.find((doc) => doc.id === deleteConfirm) : undefined;
+  const closeDeleteDialog = () => {
+    setDeleteConfirm(null);
+    setDeleteError(null);
+  };
+
   const handleDeleteDocument = useCallback(
     async (documentId: string) => {
       setActionLoading(true);
-      setError(null);
+      setDeleteError(null);
       try {
         await documentsService.deleteDocument(documentId);
         setDeleteConfirm(null);
@@ -416,7 +433,7 @@ const DocumentsPage: React.FC = () => {
           await fetchDocuments(selectedFolder, debouncedSearch);
         }
       } catch (err: unknown) {
-        setError(getActionFailureMessage(err, 'delete the document'));
+        setDeleteError(getActionFailureMessage(err, 'delete the document'));
       } finally {
         setActionLoading(false);
       }
@@ -695,10 +712,11 @@ const DocumentsPage: React.FC = () => {
                       : 'Open a folder to search its documents...'
                 }
                 value={searchQuery}
-                onChange={(e) => {
-                  requestGeneration.current += 1;
-                  setSearchQuery(e.target.value);
-                }}
+                // No generation bump here: fetchDocuments takes its own when
+                // the settled search changes. A bump on a keystroke that left
+                // the trimmed query unchanged discarded the request in flight
+                // and started none, leaving the list loading for good (DOC2-8).
+                onChange={(e) => setSearchQuery(e.target.value)}
                 className="form-input placeholder-theme-text-muted pr-4 pl-10 focus:ring-amber-500"
               />
             </div>
@@ -1445,7 +1463,7 @@ const DocumentsPage: React.FC = () => {
           >
             <div className="flex min-h-screen items-center justify-center px-4">
               <div className="modal-overlay" aria-hidden="true" />
-              <DialogPanel onClose={() => setDeleteConfirm(null)} className="relative w-full max-w-sm">
+              <DialogPanel onClose={closeDeleteDialog} className="relative w-full max-w-sm">
                 <div className="px-6 pt-5 pb-4">
                   <div className="flex items-start space-x-3">
                     <div className="rounded-full bg-red-500/10 p-2">
@@ -1456,14 +1474,27 @@ const DocumentsPage: React.FC = () => {
                         Delete Document
                       </h3>
                       <p id="delete-document-body" className="text-theme-text-muted mt-1 text-sm">
-                        This permanently deletes the document and its file. You can&apos;t undo this.
+                        {deleteTarget ? (
+                          <>
+                            This permanently deletes the document{' '}
+                            <span className="text-theme-text-primary font-medium break-all">{deleteTarget.name}</span>{' '}
+                            and its file. You can&apos;t undo this.
+                          </>
+                        ) : (
+                          <>This permanently deletes the document and its file. You can&apos;t undo this.</>
+                        )}
                       </p>
+                      {deleteError && (
+                        <p role="alert" className="mt-2 text-sm text-red-700 dark:text-red-300">
+                          {deleteError}
+                        </p>
+                      )}
                     </div>
                   </div>
                 </div>
                 <div className="bg-theme-surface-secondary flex justify-end space-x-3 rounded-b-lg px-6 py-3">
                   <button
-                    onClick={() => setDeleteConfirm(null)}
+                    onClick={closeDeleteDialog}
                     className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover rounded-lg border px-4 py-2 transition-colors"
                   >
                     Cancel
