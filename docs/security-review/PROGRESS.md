@@ -16,7 +16,7 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR (this pass's own, number recorded in a follow-up commit) (branch
+**PR [#4713](https://github.com/thegspiro/the-logbook/pull/4713) (branch
 `claude/security-review-auth-session-p18`)**: Feature 01 (Auth & session
 lifecycle), pass 18 — watchdog pickup (the dedicated `/loop 30m
 /security-review` session remains unreachable).
