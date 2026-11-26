@@ -45,6 +45,7 @@ names it the way the **Role Management** screen lists it — for example
 7. [The Dashboard for Administrators](#the-dashboard-for-administrators)
 8. [QR Code Analytics](#qr-code-analytics)
 9. [Public Portal Configuration](#public-portal-configuration)
+   - [The Public Website](#the-public-website)
 10. [Integrations](#integrations)
 11. [Admin Hours](#admin-hours)
 12. [Notifications and Department Messages](#notifications-and-department-messages)
@@ -1328,6 +1329,60 @@ Only officers with **settings.manage** can change any of it.
 ![The Public Portal Statistics tab on a department whose portal has had no traffic: every count at zero and Error Rate reading No requests in 24h](./images/08-93-portal-statistics.png)
 
 ![The Public Portal Data Control tab: the Events, Organization and Stats fields all switched off, PII badges on phone, email and both addresses, and the Sensitive (PII) count at 0](./images/08-94-portal-data-control.png)
+
+### The Public Website
+
+_(2026-11-26)_ **Who can use it:** officers with **settings.manage**, with the
+**Public Information** module turned on.
+
+The Public Portal above feeds a website your department hosts somewhere else.
+The **Public Website** is different: The Logbook draws the pages itself and
+serves them for your community. The first version has three pages, **Home**,
+**About** and **Contact**. Events, recruitment, news, History, minutes and
+donations are planned but are not on it yet.
+
+Open **Administration > Organization Settings > Public Website**. Everything
+on the page is off until you turn it on.
+
+| Section                          | What it controls                                                                                                                                                  |
+| -------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Publish the website**          | The master switch. Until it is on, every page answers "Not found" and names nobody                                                                                |
+| **Look**                         | **Classic** (white pages under a deep red header), **Modern** (cool greys under a navy header) or **Heritage** (cream pages, serif headings, a dark green header) |
+| **Every page and the home page** | **Emergency notice** (a band at the top of every page, such as "In an emergency, call 911."), **Tagline** (one line under the name) and **Welcome text**          |
+| **About page**                   | **Show the About page**, and its text. The founding year and county from the department's record are shown above it                                               |
+| **Contact page**                 | **Show the Contact page**, and one switch each for **Phone number**, **Email address** and **Address**                                                            |
+| **Member sign-in link**          | A footer link to the address members sign in at. Leave it off to keep that address off the public website                                                         |
+
+Press **Save changes** when you are done. Turning **Publish the website** on
+asks **Publish the website?** first; turning it off asks **Take the website
+down?**, and **Take it down** stops every page at once. Your text and choices
+are kept either way. Each save is written to the audit log.
+
+**Contact details are not typed here.** They come from the department's own
+record under Organization Settings. Beside each switch the page shows what the
+record holds, or "Nothing on record, so nothing is shown".
+
+**All text is plain text.** Leave a blank line between paragraphs. Headings,
+links and bold are not available.
+
+**The website has its own address.** It is not served at the address members
+sign in at. Whoever runs the server points your public address (for example
+`www.yourdepartment.org`) at the installation's public website port. Ask them
+for the address once it is set up, and check the pages there: there is no
+preview inside The Logbook. The steps for the server are in
+[`docs/PUBLIC_WEBSITE.md`](../PUBLIC_WEBSITE.md).
+
+If the installation holds more than one department, the page says the website
+is not served for any of them.
+
+> **Screenshot needed** (`08-131-public-website-settings.png`):
+> **Administration > Organization Settings > Public Website** with **Publish
+> the website** off, the **Classic** look chosen, and the Contact page's three
+> switches showing the department's phone, email and address on record.
+
+> **Screenshot needed** (`08-132-public-website-home.png`): the published
+> Home page in the Classic look, opened at the public website's own address,
+> with an emergency notice band, a tagline and two paragraphs of welcome text.
 
 ---
 

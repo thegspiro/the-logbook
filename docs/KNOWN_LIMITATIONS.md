@@ -204,6 +204,24 @@ What it depends on and leaves open:
   fork when two migration branches merge close together, and Migration Chain
   reports it on the push to `main`.
 
+## Found by the November 25 – 26 Documentation Pass (2026-11-26)
+
+One gap the documentation pass found while checking the guides against the
+code. It is not a regression of the pass's own making and needs an owner's
+layout choice. The pass fixed the documentation it found wrong (listed in
+`docs/CHANGE_AUDIT_2026-11.md`) and changed no code.
+
+- **Inventory items cannot be sorted as cards on a tablet.** #4724 gave
+  medical supplies, the impact planner and grant applications a
+  `CardSortControl`, and named this one and left it: the item list's own sort
+  select (`InventoryItemsPage.tsx`, the `md:hidden` row) hides from 768px up,
+  while the page's `ItemTable`s (up to three: a pinned shortlist and the rest
+  of the shelf) use `rwd-table-xwide` and stay cards up to a 78rem card, so on
+  a tablet (or a laptop with the sidebar open) the headers are hidden and no
+  sort is offered. Pitfall #39 asks every sortable reflow table for a control
+  shown exactly while its headers are hidden. Fixing it means choosing one
+  control above the tables, or one per table. Open for that decision.
+
 ## Found by the November 24 – 25 Documentation Pass (2026-11-25)
 
 Two gaps the documentation pass found while checking the guides against the

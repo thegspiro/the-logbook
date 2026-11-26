@@ -1276,7 +1276,12 @@ event type is not on it.
 - **A page per request** _(2026-11-21)_ — a request opens at
   `/events/admin/requests/:requestId` rather than a side panel, so it can be
   linked, bookmarked, refreshed and left with the back button. On a phone the
-  next action stays in a bar at the bottom.
+  next action stays in a bar at the bottom. _(2026-11-26, #4721)_ It keeps a
+  lighter form of the hub's header: the trail ending on the request, the
+  Events section strip, the **Events Administration** title and the
+  **Community Outreach** page row with **Outreach Requests** selected, but not
+  the hub's metrics or area cards. The request's title is an `<h2>`; the
+  page's one `<h1>` is the admin header.
 - **Default coordinator assignment** — new requests auto-assign to a configured
   coordinator, who receives an email. Since 2026-11-19 (#4380, #4432) the
   default-coordinator and per-request coordinator pickers list current members
@@ -1367,8 +1372,8 @@ event type is not on it.
   Completed, the built-in Completed email links to the status page to ask for
   feedback while a feedback form is set and none has been sent (see
   Requester feedback under [Analytics](#analytics)). A template the
-  department attached to the Completed trigger is sent as written, without
-  it.
+  department attached to the Completed trigger carries the link only where it
+  uses `{{feedback_link}}` or `{{feedback_url}}` _(2026-11-26, #4717)_.
 - **Completion** _(2026-11-21)_ — finalizing the event's attendance completes
   a still-scheduled request and sends the completion email. **Mark
   completed** is offered, and accepted, only once the event's date has
@@ -1429,7 +1434,21 @@ resident's address, name, phone, email and the activity's notes are kept.
   (the Community Outreach Manager, the chiefs, the president and system
   administrators), and cleared
   by a daily task after the retention period. The ZIP code, city, state and
-  counts stay.
+  counts stay. _(2026-11-26, #4718)_ Each department's clearing commits with
+  its `crr.resident_details_cleared` audit row (before, the row was written
+  after the last commit and rolled back), one department's failure no longer
+  stops the sweep, notes are refused on a cleared activity, and a cleared
+  activity that holds text again is cleared again, keeping its first stamp.
+  Recording or changing an activity now writes the
+  `crr.resident_details_viewed` audit row for a `crr.view_contact` holder, as
+  a list or detail read does, and Outreach Impact no longer loads or decrypts
+  resident details it does not show.
+- _(2026-11-26, #4726)_ A member can be listed once and a deleted member not
+  at all; from an event, **When** defaults to the event's start. A changed ZIP
+  brings its own city and state. Changing an activity's counts keeps a count
+  whose measure has since been retired. Deleting a custom type that has
+  activities, and a goal save that races the duplicate check, are a 400 with a
+  sentence rather than a 500.
 
 **Reporting.** **Outreach Impact** adds a **Community risk reduction** section for the
 period: counts **By activity** (with the change since the same point last
