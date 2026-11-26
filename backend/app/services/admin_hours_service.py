@@ -9,7 +9,7 @@ from datetime import date, datetime, timedelta, timezone
 from typing import Any, AsyncIterator, Dict, List, Optional, Sequence, Tuple
 
 from loguru import logger
-from sqlalchemy import Select, and_, func, select
+from sqlalchemy import Select, and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased, selectinload
 
@@ -96,6 +96,38 @@ def mapping_effect(event_type: Optional[str]) -> Dict[str, Any]:
             "not_in_effect_reason": EVENT_TYPE_WITHOUT_ADMIN_HOURS_REASON,
         }
     return {"in_effect": True, "not_in_effect_reason": None}
+
+
+def _cap_over_limit(
+    entry: "AdminHoursEntry", max_hours: Optional[float], now: datetime
+) -> bool:
+    """Cap an open session that has run past its category's limit.
+
+    The one rule for both the stale-session sweep and a member's own clock-out,
+    so the two cannot drift (pitfall #29): the session ends at clock-in plus the
+    limit, is credited the limit, carries the note, and goes to review. Returns
+    whether it was capped.
+
+    A limit too large for a timedelta (the column takes any float) is no limit:
+    raising here took down the sweep for every department, every run.
+    """
+    if not max_hours:
+        return False
+    try:
+        max_duration = timedelta(hours=max_hours)
+    except OverflowError:
+        return False
+    clock_in = _ensure_utc(entry.clock_in_at)
+    if now - clock_in <= max_duration:
+        return False
+    entry.clock_out_at = clock_in + max_duration
+    entry.duration_minutes = int(max_hours * 60)
+    entry.description = (
+        f"{entry.description + ' — ' if entry.description else ''}"
+        f"Auto-closed: exceeded {max_hours}h session limit"
+    )
+    entry.status = AdminHoursEntryStatus.PENDING
+    return True
 
 
 class AdminHoursService:
@@ -358,25 +390,52 @@ class AdminHoursService:
         the gap on this query too, rather than leaving it as an implicit
         cross-method invariant.
         """
+        # Locked, and re-read: the stale-session sweep and an officer's force
+        # clock-out close the same row, and without the lock a clock-out that
+        # read it before their commit wrote the uncapped time and APPROVED
+        # back over the capped, pending result (pitfall #27).
         result = await self.db.execute(
-            select(AdminHoursEntry).where(
+            select(AdminHoursEntry)
+            .where(
                 AdminHoursEntry.id == entry_id,
                 AdminHoursEntry.user_id == user_id,
                 AdminHoursEntry.organization_id == str(organization_id),
                 AdminHoursEntry.status == AdminHoursEntryStatus.ACTIVE,
             )
+            .with_for_update()
+            .execution_options(populate_existing=True)
         )
         entry: Optional[AdminHoursEntry] = result.scalar_one_or_none()
         if not entry:
             raise ValueError("No active session found")
 
         now = datetime.now(timezone.utc)
+        category = await self.get_category(entry.category_id, entry.organization_id)
+        max_hours = category.max_hours_per_session if category else None
+
+        # A session past its category's limit gets exactly what the sweep would
+        # have given it, whichever reaches it first: capped at the limit and
+        # sent for review. Clocking out between the limit and the next sweep
+        # used to keep the whole session and, on a category that needs no
+        # approval, approve it.
+        if _cap_over_limit(entry, max_hours, now):
+            await self.db.flush()
+            await self._audit_auto_closed(
+                [(entry, float(max_hours or 0))], user_id, None, trigger="clock_out"
+            )
+            await self.db.refresh(entry, ["created_at", "updated_at"])
+            logger.info(
+                "User {} clocked out past the session limit: capped at {} minutes",
+                user_id,
+                entry.duration_minutes,
+            )
+            return entry
+
         entry.clock_out_at = now
         duration = now - _ensure_utc(entry.clock_in_at)
         entry.duration_minutes = int(duration.total_seconds() / 60)
 
         # Determine status based on category approval settings
-        category = await self.get_category(entry.category_id, entry.organization_id)
         entry.status = self._determine_post_clockout_status(
             category, entry.duration_minutes
         )
@@ -557,11 +616,14 @@ class AdminHoursService:
         goes to pending status for review since it was force-ended.
         """
         result = await self.db.execute(
-            select(AdminHoursEntry).where(
+            select(AdminHoursEntry)
+            .where(
                 AdminHoursEntry.id == entry_id,
                 AdminHoursEntry.organization_id == organization_id,
                 AdminHoursEntry.status == AdminHoursEntryStatus.ACTIVE,
             )
+            .with_for_update()
+            .execution_options(populate_existing=True)
         )
         entry: Optional[AdminHoursEntry] = result.scalar_one_or_none()
         if not entry:
@@ -1171,7 +1233,7 @@ class AdminHoursService:
 
         await self.db.flush()
         await self.db.refresh(entry, ["created_at", "updated_at"])
-        logger.info("Entry {} {}d by {}", entry_id, action, approver_id)
+        logger.info("Entry {} reviewed ({}) by {}", entry_id, action, approver_id)
         return entry
 
     # =========================================================================
@@ -1514,9 +1576,11 @@ class AdminHoursService:
                 # The export states the same figure the member read on the
                 # screen it came from, so a hand-off does not have to explain
                 # why one says 2.9 and the other 3.
+                # A 0-minute entry (the same QR scanned twice) is 0 hours, not
+                # a blank the reader takes for missing data.
                 duration_hours = (
                     hours_from_minutes(entry.duration_minutes)
-                    if entry.duration_minutes
+                    if entry.duration_minutes is not None
                     else ""
                 )
                 clock_in = (
@@ -1590,6 +1654,8 @@ class AdminHoursService:
                 AdminHoursEntry.status == AdminHoursEntryStatus.ACTIVE,
                 AdminHoursCategory.max_hours_per_session.isnot(None),
             )
+            .with_for_update()
+            .execution_options(populate_existing=True)
         )
         if organization_id is not None:
             query = query.where(AdminHoursEntry.organization_id == organization_id)
@@ -1601,16 +1667,7 @@ class AdminHoursService:
             if max_hours is None:
                 # Excluded by the query; the column itself is nullable.
                 continue
-            max_duration = timedelta(hours=max_hours)
-            if now - _ensure_utc(entry.clock_in_at) > max_duration:
-                entry.clock_out_at = _ensure_utc(entry.clock_in_at) + max_duration
-                entry.duration_minutes = int(max_hours * 60)
-                entry.description = (
-                    f"{entry.description + ' — ' if entry.description else ''}"
-                    f"Auto-closed: exceeded {max_hours}h session limit"
-                )
-                # Auto-closed entries go to pending for review
-                entry.status = AdminHoursEntryStatus.PENDING
+            if _cap_over_limit(entry, max_hours, now):
                 closed_entries.append((entry, max_hours))
                 logger.info(
                     "Auto-closed stale session {} for user {} ({}h limit)",
@@ -1629,8 +1686,9 @@ class AdminHoursService:
         closed_entries: List[Tuple[AdminHoursEntry, float]],
         actor_user_id: Optional[str],
         actor_username: Optional[str],
+        trigger: Optional[str] = None,
     ) -> None:
-        trigger = "manual" if actor_user_id else "scheduled"
+        trigger = trigger or ("manual" if actor_user_id else "scheduled")
         for entry, max_hours in closed_entries:
             await log_audit_event(
                 db=self.db,
@@ -1691,10 +1749,15 @@ class AdminHoursService:
             AdminHoursEntry.status.notin_(
                 [AdminHoursEntryStatus.REJECTED, AdminHoursEntryStatus.WITHDRAWN]
             ),
-            AdminHoursEntry.clock_out_at.isnot(None),
-            # Overlap: existing.start < new.end AND existing.end > new.start
+            # Overlap: existing.start < new.end AND existing.end > new.start.
+            # An open session has no end yet and claims everything from its
+            # start: skipping it let a member clocked in at 09:00 file 10-11
+            # by hand and then be credited the hour twice at clock-out.
             AdminHoursEntry.clock_in_at < clock_out_at,
-            AdminHoursEntry.clock_out_at > clock_in_at,
+            or_(
+                AdminHoursEntry.clock_out_at > clock_in_at,
+                AdminHoursEntry.clock_out_at.is_(None),
+            ),
         )
         if exclude_entry_id:
             query = query.where(AdminHoursEntry.id != exclude_entry_id)
@@ -2164,12 +2227,10 @@ class AdminHoursService:
             mappings = await self.get_mappings_for_event(
                 organization_id, event_type, custom_category
             )
-        if not mappings:
-            return 0
 
         # On a resync the event's type or custom category may have been
         # corrected while it was reopened, which points it at a different set
-        # of categories. Entries under the categories it no longer maps to are
+        # of categories (possibly none). Entries under the categories it no longer maps to are
         # stale derivatives of this RSVP, so they go — otherwise a correction
         # from category A to B leaves the member credited under both and their
         # total silently doubles.
@@ -2186,6 +2247,12 @@ class AdminHoursService:
             )
             for stale in stale_result.scalars().all():
                 await self.db.delete(stale)
+
+        # Checked after the cleanup, not before: an event corrected to a type
+        # that maps to nothing maps the member to no category at all, so every
+        # credit it made is stale, not kept.
+        if not mappings:
+            return 0
 
         # Read only when an approved entry actually grows, for the same reason.
         growth_percent: Optional[int] = None

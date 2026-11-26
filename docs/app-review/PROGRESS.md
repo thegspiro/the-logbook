@@ -53,7 +53,7 @@ from its open list.
 | B12 | integrations               | INT2   | ⬜     |
 | B13 | forms                      | FORM2  | ⬜     |
 | B14 | grants & fundraising       | GF2    | ⬜     |
-| B15 | admin-hours                | AH2    | ⬜     |
+| B15 | admin-hours                | AH2    | ✅     |
 | B16 | reports & analytics        | RPT2   | ⬜     |
 | B17 | events                     | EV2    | ⬜     |
 | B18 | training                   | TR2    | ⬜     |
@@ -3769,3 +3769,24 @@ secrets redacted for non-admins. See
   Thirteen LOW items are recorded as open. Gate clean; 1,736 backend and 539
   frontend tests pass. See meetings-minutes.md → Pass 6. Next: B7
   equipment-check.
+
+- **B15 admin-hours ✅ (pass 6).** Read clock-in and clock-out, the stale-session
+  sweep, event crediting, approval, the summaries, the export and the whole
+  frontend module. **12 fixes**, each test red first except row locks, an export
+  cell and a log line:
+  - Backend: AH2-6 (MED) clocking out past the session limit kept and often
+    approved the whole session; AH2-7 (MED) the overlap check ignored open
+    sessions; AH2-8 (MED) a re-crediting to an unmapped event type kept the old
+    credit; AH2-9 (MED) one oversized limit stopped the sweep for everyone;
+    AH2-10 locks on clock-out, force clock-out and the sweep; AH2-11 review
+    decisions are audited; AH2-12 a 0-minute export cell and a log typo.
+  - Frontend: AH2-13 (MED) "Requirement met" beside "At risk"; AH2-14 every
+    period end a day late; AH2-15 (MED) officers could not correct an entry in a
+    retired category; AH2-16 a refused clock-out left the card up; AH2-17 the
+    timer stopped while the phone slept.
+
+  **4 flagged** to KNOWN_LIMITATIONS: AH2-2 (MED) members can rewrite
+  system-closed entries; AH2-3 (MED) no-limit categories approve any length;
+  AH2-4 self-approval controls; AH2-5 no reactivation. Several LOW items are
+  recorded as open. Gate clean. See admin-hours.md → Pass 6. Next: B16 reports
+  & analytics.

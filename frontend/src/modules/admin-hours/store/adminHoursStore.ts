@@ -204,6 +204,10 @@ export const useAdminHoursStore = create<AdminHoursState>((set, get) => ({
       await get().fetchMyEntries();
     } catch (error) {
       set({ error: handleStoreError(error, 'Failed to clock out') });
+      // The session may already be over: an officer's force clock-out, the
+      // stale-session sweep or another device. Re-read it, or the card stays
+      // up and every tap fails the same way until the page is reloaded.
+      void get().fetchActiveSession();
       throw error;
     }
   },
