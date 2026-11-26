@@ -102,6 +102,18 @@ test.describe('Buttons side by side are one height', () => {
     expect(heights).toEqual(heights.map((h) => `${h.split(' ')[0]} ${secondary}`));
   });
 
+  test('an icon button beside a text button: the Forms header', async ({ page }) => {
+    // btn-icon is 36px with a mouse; beside a 42px "Create Form" the Refresh
+    // square sat 6px short. It now takes its row's height, and stays square.
+    await open(page, '/forms');
+    const refresh = page.getByRole('button', { name: 'Refresh forms' });
+    const create = page.getByRole('button', { name: 'Create Form' }).first();
+    await expect(create).toBeVisible();
+    const box = await refresh.boundingBox();
+    expect(Math.round(box?.height ?? -1)).toBe(await height(create));
+    expect(Math.round(box?.width ?? -1)).toBe(Math.round(box?.height ?? -2));
+  });
+
   test('Check-In QR Codes header', async ({ page }) => {
     await open(page, '/locations/qr-codes');
     const readers = page.getByRole('link', { name: 'Card Readers' });

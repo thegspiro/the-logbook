@@ -1037,6 +1037,25 @@ input:is(.form-checkbox, [class~='h-4']) {
   }
 }
 
+/* An icon button beside a text button in the same row matches its height.
+   btn-icon is 36px with a mouse, so a Refresh square beside a 42px "Create
+   Form" sat 6px short in every admin header. On a desktop it stretches to its
+   row's height, and takes the 42px of a standard button as its width:
+   aspect-ratio does not derive a width from a stretched height in either
+   engine.
+   Rows of icons alone, small-button rows, and column layouts (where stretching
+   widens instead) are left as they were. Phones and touch screens are already
+   44px for both. */
+@media (min-width: 768px) and (pointer: fine) {
+  :not(.flex-col):has(
+      > :is(.btn-primary, .btn-secondary, .btn-success, .btn-info, .btn-warning):not(.btn-icon, .btn-icon-sm, .btn-sm)
+    )
+    > :is(.btn-icon, .btn-icon-sm) {
+    align-self: stretch;
+    min-width: 42px;
+  }
+}
+
 @utility segmented-group {
   /* Segmented control / tab strip shell — the container behind an
      Upcoming|Past pair or a row of filter pills.
