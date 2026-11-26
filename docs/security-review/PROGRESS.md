@@ -16,9 +16,10 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR (this branch, `claude/security-review-users-organizations-p18`)**:
-Feature 07 (Users & organizations), pass 18 — watchdog pickup (the
-dedicated `/loop 30m /security-review` session remains unreachable).
+**PR [#4744](https://github.com/thegspiro/the-logbook/pull/4744) (branch
+`claude/security-review-users-organizations-p18`)**: Feature 07 (Users &
+organizations), pass 18 — watchdog pickup (the dedicated `/loop 30m
+/security-review` session remains unreachable).
 **Branch-name deviation note:** a stale, never-merged
 `claude/security-review-users-organizations-p14` branch exists from an
 earlier pass; this pass uses `-p18` rather than reuse it, per CLAUDE.md
