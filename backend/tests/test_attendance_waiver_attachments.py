@@ -624,10 +624,10 @@ class TestJpegAndPngAreStoredWithoutMetadata:
         (path,) = _files_on_disk(dept.uploads)
         stored = await file_storage_service.read_bytes(path)
         assert stored == strip_photo_metadata(original, mime)
-        assert b"GPS" in original
-        assert b"GPS" not in stored
         before = Image.open(io.BytesIO(original))
         after = Image.open(io.BytesIO(stored))
+        assert len(before.getexif().get_ifd(0x8825)) > 0
+        assert len(after.getexif().get_ifd(0x8825)) == 0
         assert after.tobytes() == before.tobytes()
         assert dict(after.getexif()) == {0x0112: 6}
         # The member's original is scanned first, then the file kept; the
