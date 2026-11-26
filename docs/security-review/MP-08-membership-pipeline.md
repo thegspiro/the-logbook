@@ -1,8 +1,135 @@
 # Security Review — Membership Pipeline
 
-**Prefix:** `MP` · **Iteration:** 9 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-02 (pass 4), 2026-09-02 (pass 4 round 2), 2026-09-02 (pass 4 round 3), 2026-09-02 (pass 4 round 4), 2026-09-08 (pass 5), 2026-09-14 (pass 6), 2026-09-16 (pass 7), 2026-10-05 (pass 8), 2026-10-13 (pass 9), 2026-10-15 (pass 10, PR [#3255](https://github.com/thegspiro/the-logbook/pull/3255) — corrected here from the "PR pending" placeholder pass 10's own write-up left unresolved after merge), 2026-10-18 (pass 11, PR [#3420](https://github.com/thegspiro/the-logbook/pull/3420)), 2026-10-23 (pass 12, PR [#3574](https://github.com/thegspiro/the-logbook/pull/3574)), 2026-10-25 (pass 13, PR [#3702](https://github.com/thegspiro/the-logbook/pull/3702) — not recorded here when pass 13 was written; added in pass 14's own commit), 2026-10-28 (pass 14, PR [#3811](https://github.com/thegspiro/the-logbook/pull/3811) — not recorded here when pass 14 was written; added in pass 15's own commit), 2026-11-01 (pass 15, PR [#3910](https://github.com/thegspiro/the-logbook/pull/3910) — not recorded here when pass 15 was written; added in pass 16's own commit), 2026-11-05 (pass 16, PR [#4087](https://github.com/thegspiro/the-logbook/pull/4087) — not recorded here when pass 16 was written; added in this pass's own commit), 2026-11-19 (pass 17, PR [#4438](https://github.com/thegspiro/the-logbook/pull/4438) — not recorded here when pass 17 was written; added in pass 18's own commit), 2026-11-24 (pass 18) · **PR:** [#1815](https://github.com/thegspiro/the-logbook/pull/1815) (pass 1), [#1950](https://github.com/thegspiro/the-logbook/pull/1950) (pass 2), [#2176](https://github.com/thegspiro/the-logbook/pull/2176) (pass 3), [#2177](https://github.com/thegspiro/the-logbook/pull/2177) (pass 4, pass 4 round 2, pass 4 round 3, and pass 4 round 4), [#2405](https://github.com/thegspiro/the-logbook/pull/2405) (pass 5, plus #2406/#2408/#2413 follow-ups), [#2555](https://github.com/thegspiro/the-logbook/pull/2555) (pass 6), [#2605](https://github.com/thegspiro/the-logbook/pull/2605) (pass 7), [#2955](https://github.com/thegspiro/the-logbook/pull/2955) (pass 8), [#3149](https://github.com/thegspiro/the-logbook/pull/3149) (pass 9), [#3255](https://github.com/thegspiro/the-logbook/pull/3255) (pass 10), [#3420](https://github.com/thegspiro/the-logbook/pull/3420) (pass 11), [#3574](https://github.com/thegspiro/the-logbook/pull/3574) (pass 12), [#3702](https://github.com/thegspiro/the-logbook/pull/3702) (pass 13), [#3811](https://github.com/thegspiro/the-logbook/pull/3811) (pass 14), [#3910](https://github.com/thegspiro/the-logbook/pull/3910) (pass 15), [#4087](https://github.com/thegspiro/the-logbook/pull/4087) (pass 16), [#4438](https://github.com/thegspiro/the-logbook/pull/4438) (pass 17)
+**Prefix:** `MP` · **Iteration:** 9 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-02 (pass 4), 2026-09-02 (pass 4 round 2), 2026-09-02 (pass 4 round 3), 2026-09-02 (pass 4 round 4), 2026-09-08 (pass 5), 2026-09-14 (pass 6), 2026-09-16 (pass 7), 2026-10-05 (pass 8), 2026-10-13 (pass 9), 2026-10-15 (pass 10, PR [#3255](https://github.com/thegspiro/the-logbook/pull/3255) — corrected here from the "PR pending" placeholder pass 10's own write-up left unresolved after merge), 2026-10-18 (pass 11, PR [#3420](https://github.com/thegspiro/the-logbook/pull/3420)), 2026-10-23 (pass 12, PR [#3574](https://github.com/thegspiro/the-logbook/pull/3574)), 2026-10-25 (pass 13, PR [#3702](https://github.com/thegspiro/the-logbook/pull/3702) — not recorded here when pass 13 was written; added in pass 14's own commit), 2026-10-28 (pass 14, PR [#3811](https://github.com/thegspiro/the-logbook/pull/3811) — not recorded here when pass 14 was written; added in pass 15's own commit), 2026-11-01 (pass 15, PR [#3910](https://github.com/thegspiro/the-logbook/pull/3910) — not recorded here when pass 15 was written; added in pass 16's own commit), 2026-11-05 (pass 16, PR [#4087](https://github.com/thegspiro/the-logbook/pull/4087) — not recorded here when pass 16 was written; added in this pass's own commit), 2026-11-19 (pass 17, PR [#4438](https://github.com/thegspiro/the-logbook/pull/4438) — not recorded here when pass 17 was written; added in pass 18's own commit), 2026-11-24 (pass 18, PR [#4664](https://github.com/thegspiro/the-logbook/pull/4664) — not recorded here when pass 18 was written; added in pass 19's own commit), 2026-11-26 (pass 19) · **PR:** [#1815](https://github.com/thegspiro/the-logbook/pull/1815) (pass 1), [#1950](https://github.com/thegspiro/the-logbook/pull/1950) (pass 2), [#2176](https://github.com/thegspiro/the-logbook/pull/2176) (pass 3), [#2177](https://github.com/thegspiro/the-logbook/pull/2177) (pass 4, pass 4 round 2, pass 4 round 3, and pass 4 round 4), [#2405](https://github.com/thegspiro/the-logbook/pull/2405) (pass 5, plus #2406/#2408/#2413 follow-ups), [#2555](https://github.com/thegspiro/the-logbook/pull/2555) (pass 6), [#2605](https://github.com/thegspiro/the-logbook/pull/2605) (pass 7), [#2955](https://github.com/thegspiro/the-logbook/pull/2955) (pass 8), [#3149](https://github.com/thegspiro/the-logbook/pull/3149) (pass 9), [#3255](https://github.com/thegspiro/the-logbook/pull/3255) (pass 10), [#3420](https://github.com/thegspiro/the-logbook/pull/3420) (pass 11), [#3574](https://github.com/thegspiro/the-logbook/pull/3574) (pass 12), [#3702](https://github.com/thegspiro/the-logbook/pull/3702) (pass 13), [#3811](https://github.com/thegspiro/the-logbook/pull/3811) (pass 14), [#3910](https://github.com/thegspiro/the-logbook/pull/3910) (pass 15), [#4087](https://github.com/thegspiro/the-logbook/pull/4087) (pass 16), [#4438](https://github.com/thegspiro/the-logbook/pull/4438) (pass 17), [#4664](https://github.com/thegspiro/the-logbook/pull/4664) (pass 18)
 
 ---
+
+## Pass 19 (2026-11-26, watchdog pickup) — real delta (two UI-only commits: a card-mode "Sort by" control added to the pipeline table, and an icon-centring fix on the refresh button), 0 fixed, 0 new findings; MP-10 (listing half) and MP-22 re-confirmed OPEN, unchanged
+
+**Step 0/1** confirmed fresh: PR #4744 (Feature 07, Users & organizations,
+pass 18) had merged (`6e7d71c9e`) before this iteration started, via a fresh
+`git fetch origin main && git checkout main && git pull --ff-only`, and a
+fresh `list_pull_requests` (state `open`, head `claude/security-review-`)
+returned empty. Row 07 was `✅` and row 08 (Membership pipeline) was
+confirmed the next `⬜` row on the freshly-pulled `main`. The dedicated
+`/loop 30m /security-review` session (`session_011T1ZyyLrD5HagusgK9uDw2`)
+remains unreachable; this is a watchdog pickup.
+
+**Scope:** unchanged from pass 18 — `models/membership_pipeline.py`,
+`schemas/membership_pipeline.py`, `app/services/prospect_access.py`,
+`app/api/prospect_access.py`, `app/api/prospect_privacy.py`,
+`app/services/prospect_assignment_service.py`,
+`app/api/public/follow_up_forms.py`, `app/services/follow_up_form_service.py`,
+`app/utils/prospect_fields.py`, `app/api/v1/endpoints/membership_pipeline.py`,
+`app/services/membership_pipeline_service.py`,
+`frontend/src/modules/prospective-members/`.
+
+**Branch-name note:** a stale, never-merged
+`claude/security-review-membership-pipeline` branch (no pass suffix) exists
+from an earlier pass; this pass uses `-p19` rather than reuse it, per
+CLAUDE.md Pitfall #24.
+
+**Last reviewed at:** `cb849db0b` (pass 18's merge, PR #4664), confirmed an
+ancestor of `main` via `git merge-base --is-ancestor`. `git diff --stat
+cb849db0b..HEAD -- <all declared files>`: exactly **2 files** changed
+(`frontend/src/modules/prospective-members/components/PipelineTable.tsx`,
+`+17/-0`; `.../pages/ProspectiveMembersPage.tsx`, `+1/-1`), out of 275
+commits (153 non-merge) in the full window. `git log --no-merges
+cb849db0b..HEAD -- <declared files>` confirms exactly **2** commits touch a
+declared file; both read in full via `git show`, not from their commit
+messages alone.
+
+**The delta, in full:**
+
+| Commit     | What                                                                                                                                          | Judgment                                                                                                                                                                                                                                          |
+| ---------- | --------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `258aca04` | `PipelineTable.tsx` gains a `CardSortControl` (card-mode "Sort by" select + direction button) inside its `rwd-table-container`, tier `"wide"` | Shared component (Pitfall #39's `CardSortControl`); wired to existing local `sortField`/`sortDirection`/`handleSort` state, confirmed by reading the hook — no new API call, purely client-side re-sort of the already-fetched `applicants` array |
+| `da910a4e` | `ProspectiveMembersPage.tsx`'s refresh icon button gains `inline-flex items-center justify-center` to its existing className                  | Pure CSS; same button, same handler (`refreshPipelineView`), icon re-centred only                                                                                                                                                                 |
+
+Neither commit touches an endpoint, a permission check, a query, a schema, or
+any data the client receives — confirmed by reading both diffs directly
+(above) and by grepping the full window's backend diff for this feature's
+declared backend files, which is empty (`git diff --stat
+cb849db0b..HEAD -- backend/app/**/membership_pipeline* backend/app/**/prospect*`
+returns nothing).
+
+**Route enumeration (checklist §1/§2), re-run fresh via AST, not diffed:**
+`membership_pipeline.py` still has **64 routes** — unchanged; the file has
+zero line changes in this window (`git diff --numstat cb849db0b..HEAD --
+backend/app/api/v1/endpoints/membership_pipeline.py` is empty).
+`scripts/check_route_permissions.py --strict` (whole app): **345 routes**, 0
+errors, 0 warnings (the app-wide count is up from pass 18's 339 due to
+unrelated features' concurrent work — confirmed none of the increase is in
+this feature's own endpoint file, which is byte-for-byte unchanged).
+
+**No new `.ilike()`/`.like()` without `escape=LIKE_ESCAPE_CHAR`, no raw
+`csv.writer`, no `window.confirm`/`alert`/`prompt`** in this window's two
+commits (both read in full above; neither touches backend code at all).
+
+### Standing items re-verified this pass
+
+- **MP-10 (listing half)** — `list_election_packages` does not appear in
+  this feature's scoped diff (`cb849db0b..HEAD`, filtered to this feature's
+  files). **Still OPEN**, unchanged; `docs/KNOWN_LIMITATIONS.md`'s entry
+  still matches (checked directly).
+- **MP-22** — `delete_prospect_document` and `_delete_inactive_prospects`
+  likewise do not appear in this feature's scoped diff. **Still OPEN**,
+  unchanged; owner-accepted tradeoff; `docs/KNOWN_LIMITATIONS.md`'s entry
+  still matches.
+
+Both re-confirmed by searching the actual diff text, scoped to this
+feature's own files (an unscoped search of the full 275-commit window's
+backend diff returns unrelated matches in other features' files, which is
+why the search is scoped).
+
+### Verified good ✅ (pass 19)
+
+- **Both commits in this window are UI-only** and were read in full, not
+  inferred from their commit messages: the new sort control reorders an
+  already-fetched client-side array with no new network call, and the
+  button fix changes only centring CSS on an existing handler.
+- **No regression on any previously-closed finding** (MP-1 through MP-34) —
+  none of their call sites appear in this pass's diff.
+
+### Schema & migration notes
+
+No migration touches this feature's scope since pass 18.
+`scripts/validate_migrations.py --strict` reports a single head
+`7c3a91e5b2d4` (845 revisions) after bringing this sandbox's database current
+with `alembic upgrade head` — it had been one migration behind (an unrelated
+public-website-settings migration, outside this feature's scope), the
+sandbox's own staleness, not an application defect.
+
+**Sandbox environment note:** the scoped pytest run initially failed
+collection on 31 unrelated test files with `ImportError: pi-heif is required
+to accept HEIC photos` — `pi-heif==1.4.0` is pinned in
+`backend/requirements.txt` (merged via PR #4720, outside this feature's
+scope) but was not yet installed in this sandbox. Installed it
+(`pip3.13 install pi-heif==1.4.0`, matching the pin) to unblock collection;
+this is sandbox staleness, not an application defect, and no application
+code changed.
+
+## Completion gate (pass 19)
+
+Run against CI's pinned toolchain (`flake8==7.5.0`, `black==26.10.1`,
+`isort==9.0.2`) under `python3.13`.
+
+| Check                                                                                        | Result                                                                                    |
+| -------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                                                | ✅ 0 violations                                                                           |
+| `black --check app/ tests/ alembic/`                                                         | ✅ 3557 files unchanged                                                                   |
+| `isort --check-only app/ tests/ alembic/`                                                    | ✅ clean                                                                                  |
+| `python3.13 scripts/validate_migrations.py --strict`                                         | ✅ single head `7c3a91e5b2d4`, 845 revisions                                              |
+| `python3 scripts/check_route_permissions.py --strict` (repo root)                            | ✅ 345 routes, 0 errors, 0 warnings                                                       |
+| `docs/DATABASE_SCHEMA.md` vs generator                                                       | ✅ already current                                                                        |
+| scoped backend pytest (`-k "membership or prospect or pipeline or follow_up or assignment"`) | ✅ 908 passed, 1 pre-existing environment-only skip (`py_vapid`) — see sandbox note above |
+| `cd frontend && npm run typecheck`                                                           | ✅ 0 errors                                                                               |
+| `cd frontend && npx eslint src/modules/prospective-members`                                  | ✅ 0 errors, 0 warnings                                                                   |
+| `cd frontend && npx vitest run src/modules/prospective-members`                              | ✅ 410 passed (45 files)                                                                  |
+
+No application source file changed this pass (0 fixes — both commits in the
+delta already landed on `main` independently, each with its own tests). Every
+check above verifies that the delta which landed since pass 18 is sound.
 
 ## Pass 18 (2026-11-24, watchdog pickup) — real delta (an applicant who edits their own email/name/date-of-birth through a follow-up form stops being matched to that record by those fields, ADV2-10), 0 fixed, 0 new findings; MP-10 (listing half) and MP-22 re-confirmed OPEN, unchanged
 

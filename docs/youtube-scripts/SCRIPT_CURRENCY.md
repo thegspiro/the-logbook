@@ -1,5 +1,38 @@
 # Script currency
 
+## 2026-11-26 pass
+
+**Edited:**
+
+- **07 Secretary, "Public Portal" beat.** The narration called the Public
+  Portal "your department's public-facing page" showing "recruitment
+  information, contact details". The portal is a keyed data feed for a website
+  hosted elsewhere, and since #4732 a separate **Public Website** is the page
+  The Logbook serves. The narration now tells the two apart, and a dated
+  production note asks for the beat to be re-recorded (about 15 seconds
+  longer) and warns against filming events, news or a Join us page, which are
+  not built yet.
+- **01 Installing, troubleshooting Issue #1.** Port conflicts now name 3002
+  and `PUBLIC_SITE_PORT` (7882 on Unraid), which the web container publishes
+  since #4732. Re-record that line.
+- **04 Fire Chief, Events Administration beat.** Production note: the Events
+  section row now sits above the Events Administration title (#4721); the
+  opening pan needs a re-shoot. Narration unchanged.
+
+**Flagged, not edited:** nothing they say is wrong.
+
+- **03 IT Manager.** The upgrade chapter could add the new public website
+  port and the `pi-heif` rebuild (#4732, #4720), and the Public Website
+  settings would fit the Organization Settings tour.
+- **05 Training Officer.** The waiver-request beat could say an iPhone photo
+  is now kept as a JPEG without its location (#4720).
+- **07 Secretary, Action Items beat.** Accurate as it stands. If extended:
+  bell reminders now follow adopted minutes only and include overdue items,
+  and adoption emails list only open items (#4728). The outreach beat could
+  show `{{feedback_link}}` in a department's own Completed email (#4717).
+- **08 Quick Tips.** A short on "Sort by" on a phone now covers medical
+  supplies, the impact planner and grant applications too (#4724).
+
 ## 2026-11-25 pass
 
 **Edited:**
