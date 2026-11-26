@@ -49,7 +49,12 @@ changed, each found by an independent review:
 import ast
 import asyncio
 import io
+import os
+import resource
+import signal
+import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 import pi_heif
@@ -298,3 +303,118 @@ def test_the_worker_runs_no_application_code():
             imported.add(node.module.split(".")[0])
     assert "pi_heif" in imported
     assert imported - set(sys.stdlib_module_names) <= {"pi_heif", "PIL"}
+
+
+# ---------------------------------------------------------------------------
+# Second review of #4720 (head e9974c70)
+# ---------------------------------------------------------------------------
+
+
+async def test_a_child_that_exits_at_the_deadline_is_not_a_500(tmp_path, monkeypatch):
+    # The child can exit in the same turn as the deadline; kill() then raises
+    # ProcessLookupError. Reproduced here by making kill() do exactly that
+    # after it has really killed the child.
+    real_spawn = asyncio.create_subprocess_exec
+
+    async def _spawn(*args, **kwargs):
+        process = await real_spawn(*args, **kwargs)
+        real_kill = process.kill
+
+        def _kill_then_vanish():
+            real_kill()
+            raise ProcessLookupError
+
+        process.kill = _kill_then_vanish
+        return process
+
+    monkeypatch.setattr(
+        converter, "WORKER", _worker(tmp_path, "import time\ntime.sleep(30)\n")
+    )
+    monkeypatch.setattr(converter.asyncio, "create_subprocess_exec", _spawn)
+    with pytest.raises(CodedHTTPException) as refused:
+        await heic_to_jpeg(HEIC, timeout=0.5)
+    assert refused.value.status_code == 400
+
+
+def test_the_worker_turns_off_core_dumps():
+    """A core dump of a crashed decoder holds the member's photo, outside the
+    encrypted store and outside retention."""
+    probe = subprocess.run(
+        [
+            sys.executable,
+            "-I",
+            "-c",
+            "import resource, runpy, sys\n"
+            # Start from dumps allowed, as under Docker's LimitCORE=infinity.
+            "hard = resource.getrlimit(resource.RLIMIT_CORE)[1]\n"
+            "resource.setrlimit(resource.RLIMIT_CORE, (hard, hard))\n"
+            "worker = runpy.run_path(sys.argv[1])\n"
+            "worker['_be_the_one_to_go'](640 * 1024 * 1024)\n"
+            "print(resource.getrlimit(resource.RLIMIT_CORE)[0])\n",
+            converter.WORKER,
+        ],
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=True,
+    )
+    assert probe.stdout.strip() == "0"
+
+
+def _allow_core_dumps():
+    _soft, hard = resource.getrlimit(resource.RLIMIT_CORE)
+    resource.setrlimit(resource.RLIMIT_CORE, (hard, hard))
+
+
+def test_a_decoder_crash_leaves_no_core_file(tmp_path):
+    # Run in a directory of our own, with core dumps allowed as Docker's
+    # LimitCORE=infinity allows them, so a dump written to the working
+    # directory would land here.
+    crashed = subprocess.run(
+        [sys.executable, "-I", converter.WORKER, "25000000", "0", str(640 << 20)],
+        input=CORRUPT["segfault"],
+        capture_output=True,
+        cwd=tmp_path,
+        preexec_fn=_allow_core_dumps,
+        timeout=30,
+    )
+    assert crashed.returncode == -signal.SIGSEGV
+    assert sorted(p.name for p in tmp_path.iterdir()) == []
+
+
+async def test_the_child_runs_outside_the_application_directory(tmp_path, monkeypatch):
+    seen = tmp_path / "cwd.txt"
+    worker = _worker(
+        tmp_path,
+        "import os, sys\n"
+        f"open({str(seen)!r}, 'w').write(os.getcwd())\n"
+        f"sys.stdout.buffer.write({TINY_JPEG})\n",
+    )
+    monkeypatch.setattr(converter, "WORKER", worker)
+    await heic_to_jpeg(HEIC)
+    assert os.path.realpath(seen.read_text()) == os.path.realpath(tempfile.gettempdir())
+
+
+def test_the_timeout_is_a_few_times_the_measured_conversion():
+    # A 24 MP photo converts in about 0.6 s; a crafted file that keeps the
+    # decoder busy for the whole timeout holds the only slot for that long.
+    assert converter.TIMEOUT_SECONDS <= 10
+
+
+async def test_a_conversion_that_cannot_get_a_slot_is_a_503(tmp_path, monkeypatch):
+    worker = _worker(
+        tmp_path,
+        "import sys, time\ntime.sleep(1.5)\n" f"sys.stdout.buffer.write({TINY_JPEG})\n",
+    )
+    monkeypatch.setattr(converter, "WORKER", worker)
+    monkeypatch.setattr(converter, "SLOT_WAIT_SECONDS", 0.3)
+    results = await asyncio.gather(
+        heic_to_jpeg(HEIC), heic_to_jpeg(HEIC), return_exceptions=True
+    )
+    assert results[0] == b"\xff\xd8\xff\xd9"
+    busy = results[1]
+    assert isinstance(busy, CodedHTTPException)
+    assert busy.status_code == 503
+    assert busy.headers is not None
+    assert busy.headers.get("Retry-After")
+    assert "try again" in busy.detail
