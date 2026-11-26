@@ -37,6 +37,7 @@
     Redis (optional but recommended for caching)
   </Requires>
   <Config Name="WebUI Port" Target="3000" Default="7880" Mode="tcp" Description="Port for the web interface. The API is served on the same port under /api; it has no port of its own." Type="Port" Display="always" Required="true" Mask="false">7880</Config>
+  <Config Name="Public Website Port" Target="8080" Default="7882" Mode="tcp" Description="Port for the department's public website. It answers 404 until the website is switched on in Administration; point your public hostname at this port." Type="Port" Display="always" Required="false" Mask="false">7882</Config>
   <Config Name="Uploads" Target="/app/uploads" Default="/mnt/user/appdata/the-logbook/uploads" Mode="rw" Description="User uploaded files directory" Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/the-logbook/uploads</Config>
   <Config Name="Backups" Target="/backups" Default="/mnt/user/backups/the-logbook" Mode="rw" Description="Backup files directory" Type="Path" Display="always" Required="true" Mask="false">/mnt/user/backups/the-logbook</Config>
   <Config Name="Logs" Target="/app/logs" Default="/mnt/user/appdata/the-logbook/logs" Mode="rw" Description="Application logs directory" Type="Path" Display="advanced" Required="true" Mask="false">/mnt/user/appdata/the-logbook/logs</Config>

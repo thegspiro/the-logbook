@@ -1,0 +1,367 @@
+/*
+ * The department public website's one stylesheet.
+ *
+ * A theme is a set of custom properties on <body class="theme-...">; nothing
+ * below the theme blocks names a colour. Every text/background pair a theme
+ * declares is held to 7:1 (WCAG AAA) by tests/test_public_site_themes.py,
+ * which reads the pairs out of this file, so a new theme is checked the day
+ * it is added.
+ *
+ * System fonts only: the site's Content-Security-Policy allows no font or
+ * script from anywhere else, and nothing here needs one.
+ */
+
+.theme-classic {
+  --page-bg: #ffffff;
+  --page-text: #1f2937;
+  --muted-text: #374151;
+  --surface-bg: #f3f4f6;
+  --surface-text: #1f2937;
+  --border: #9ca3af;
+  --header-bg: #7f1d1d;
+  --header-text: #ffffff;
+  --hero-bg: #991b1b;
+  --hero-text: #ffffff;
+  --accent: #991b1b;
+  --notice-bg: #fef3c7;
+  --notice-text: #451a03;
+  --heading-font: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --radius: 0.5rem;
+}
+
+.theme-modern {
+  --page-bg: #f8fafc;
+  --page-text: #0f172a;
+  --muted-text: #334155;
+  --surface-bg: #ffffff;
+  --surface-text: #0f172a;
+  --border: #94a3b8;
+  --header-bg: #0f172a;
+  --header-text: #ffffff;
+  --hero-bg: #1e3a8a;
+  --hero-text: #ffffff;
+  --accent: #1e40af;
+  --notice-bg: #fee2e2;
+  --notice-text: #450a0a;
+  --heading-font: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --radius: 0.875rem;
+}
+
+.theme-heritage {
+  --page-bg: #faf6ee;
+  --page-text: #292118;
+  --muted-text: #453a2c;
+  --surface-bg: #f1e9d8;
+  --surface-text: #292118;
+  --border: #a39274;
+  --header-bg: #14342b;
+  --header-text: #f8efd4;
+  --hero-bg: #1c4a3c;
+  --hero-text: #fdf8e8;
+  --accent: #14532d;
+  --notice-bg: #f8efd4;
+  --notice-text: #3b1d0b;
+  --heading-font: Georgia, "Times New Roman", Times, serif;
+  --radius: 0.125rem;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--page-bg);
+  color: var(--page-text);
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-size: 1.0625rem;
+  line-height: 1.6;
+}
+
+main {
+  flex: 1;
+}
+
+main:focus {
+  outline: none;
+}
+
+h1,
+h2 {
+  font-family: var(--heading-font);
+  line-height: 1.2;
+  margin: 0 0 0.75rem;
+}
+
+h1 {
+  font-size: clamp(1.75rem, 5vw, 2.5rem);
+}
+
+h2 {
+  font-size: 1.375rem;
+}
+
+p {
+  margin: 0 0 1rem;
+}
+
+a {
+  color: var(--accent);
+  text-underline-offset: 0.15em;
+}
+
+a:focus-visible {
+  outline: 3px solid currentColor;
+  outline-offset: 3px;
+  border-radius: 2px;
+}
+
+.wrap {
+  width: 100%;
+  max-width: 64rem;
+  margin: 0 auto;
+  padding: 0 1.25rem;
+}
+
+.skip-link {
+  position: absolute;
+  left: 0.5rem;
+  top: -4rem;
+  z-index: 10;
+  padding: 0.75rem 1rem;
+  background: var(--page-bg);
+  color: var(--page-text);
+  border: 2px solid currentColor;
+}
+
+.skip-link:focus {
+  top: 0.5rem;
+}
+
+.emergency {
+  margin: 0;
+  padding: 0.625rem 1.25rem;
+  background: var(--notice-bg);
+  color: var(--notice-text);
+  font-weight: 700;
+  text-align: center;
+}
+
+.site-header {
+  background: var(--header-bg);
+  color: var(--header-text);
+}
+
+.site-header a {
+  color: inherit;
+}
+
+.site-header-inner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 1.5rem;
+  padding-top: 0.75rem;
+  padding-bottom: 0.75rem;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-height: 2.75rem;
+  text-decoration: none;
+  font-family: var(--heading-font);
+  font-size: 1.25rem;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.brand-logo {
+  flex: none;
+  width: 3.5rem;
+  height: 3.5rem;
+  object-fit: contain;
+}
+
+.nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* 44px in both directions: these are the links a phone user taps most. */
+.nav a {
+  display: flex;
+  align-items: center;
+  min-height: 2.75rem;
+  min-width: 2.75rem;
+  padding: 0 0.875rem;
+  border-radius: var(--radius);
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.nav a:hover {
+  text-decoration: underline;
+}
+
+.nav a[aria-current="page"] {
+  box-shadow: inset 0 -3px 0 currentColor;
+}
+
+.hero {
+  background: var(--hero-bg);
+  color: var(--hero-text);
+  padding: clamp(2.5rem, 8vw, 5rem) 0;
+}
+
+.hero h1 {
+  font-size: clamp(2rem, 7vw, 3.25rem);
+  overflow-wrap: anywhere;
+}
+
+.hero-tagline {
+  max-width: 40rem;
+  margin: 0;
+  font-size: clamp(1.125rem, 3vw, 1.375rem);
+}
+
+.page {
+  padding-top: 2.5rem;
+  padding-bottom: 3.5rem;
+}
+
+.prose {
+  max-width: 42rem;
+}
+
+/* A line break the department typed inside a paragraph is kept. */
+.prose p {
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+
+.muted {
+  color: var(--muted-text);
+}
+
+.cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr));
+  gap: 1.25rem;
+  margin-top: 2rem;
+}
+
+.card {
+  padding: 1.5rem;
+  background: var(--surface-bg);
+  color: var(--surface-text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.card p:last-child,
+.card dl:last-child {
+  margin-bottom: 0;
+}
+
+.more {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.75rem;
+  font-weight: 600;
+}
+
+.details,
+.facts {
+  margin: 0 0 1.5rem;
+}
+
+.details > div {
+  margin-bottom: 1rem;
+}
+
+.details > div:last-child {
+  margin-bottom: 0;
+}
+
+.details dt,
+.facts dt {
+  font-size: 0.9375rem;
+  font-weight: 700;
+}
+
+.details dd,
+.facts dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.details dd a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.75rem;
+}
+
+.details address {
+  font-style: normal;
+}
+
+.details address span {
+  display: block;
+}
+
+.facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem 2.5rem;
+}
+
+.site-footer {
+  background: var(--header-bg);
+  color: var(--header-text);
+}
+
+.site-footer a {
+  color: inherit;
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.75rem;
+}
+
+.site-footer-inner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.25rem 1.5rem;
+  padding-top: 1.25rem;
+  padding-bottom: 1.25rem;
+}
+
+.site-footer p {
+  margin: 0;
+}
+
+@media print {
+  .site-header nav,
+  .skip-link,
+  .site-footer a {
+    display: none;
+  }
+}

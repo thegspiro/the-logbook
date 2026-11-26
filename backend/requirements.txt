@@ -90,6 +90,7 @@ reportlab==5.1.0
 pypdf==7.1.1  # 6.14.2 is vulnerable: CVE-2026-71852, CVE-2026-71870; 6.21.0 is vulnerable: CVE-2026-113786; 6.21.1 is vulnerable: CVE-2026-115572, CVE-2026-115580, CVE-2026-115585; 6.21.2 is vulnerable: CVE-2026-119206, CVE-2026-119207, CVE-2026-119208, CVE-2026-119209; 6.21.3 is vulnerable: CVE-2026-119203, CVE-2026-119204, CVE-2026-119205
 pypdfium2==5.15.2  # PDFium bindings: draws a History document's first page for its preview
 Pillow==13.0.0
+pi-heif==1.4.0  # Decode-only HEIC (libheif + libde265, LGPLv3): waiver photos to JPEG. Not pillow-heif, whose wheels are GPLv2
 defusedxml==0.7.1  # Safe XML parsing (blocks XXE / entity-expansion attacks)
 nh3==0.3.8  # Allowlist HTML sanitizer for rich-text minutes sections (app/utils/rich_text.py)
 markdown-it-py==4.3.0  # Markdown for history biographies (app/utils/markdown_render.py)

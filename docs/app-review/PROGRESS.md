@@ -45,7 +45,7 @@ from its open list.
 | B4  | facilities                 | FAC2   | ✅     |
 | B5  | elections                  | ELEC2  | ✅     |
 | B6  | meetings & minutes         | MM2    | ✅     |
-| B7  | equipment-check            | EC2    | ⬜     |
+| B7  | equipment-check            | EC2    | ✅     |
 | B8  | documents                  | DOC2   | ⬜     |
 | B9  | membership pipeline        | MP2    | ⬜     |
 | B10 | messaging & communications | MSG2   | ⬜     |
@@ -3769,6 +3769,32 @@ secrets redacted for non-admins. See
   Thirteen LOW items are recorded as open. Gate clean; 1,736 backend and 539
   frontend tests pass. See meetings-minutes.md → Pass 6. Next: B7
   equipment-check.
+
+- **B7 equipment-check ✅ (pass 6).** Read performing and filing a check:
+  submission and completion, expiry, the failure alert and deficiency flag,
+  standalone checks, the board's rules, the PDF and reminders, and the check
+  form, My Checklists, reports and settings screens. **10 fixes**, each test
+  red first.
+  - EC2-9 (MED-HIGH): an unchecked count was submitted as a recount and reset
+    the truck's total.
+  - EC2-10 (HIGH): continuing a check wiped the answers since its last save.
+  - EC2-11 (MED): settings could save defaults over real values after a failed
+    read.
+  - EC2-12, EC2-13 (LOW): an incomplete check read as Fail and as completed.
+  - EC2-14 (LOW): the PDF printed incomplete as FAIL.
+  - EC2-15 (MED): the server's expiry check ignored an expired lot still
+    aboard.
+  - EC2-16 (HIGH): finishing a draft never alerted or flagged the truck.
+  - EC2-17 (LOW-MED): a retried unscheduled check filed twice.
+  - EC2-18 (LOW): a saved draft silenced the end-of-shift reminder.
+
+  **6 flagged** to KNOWN_LIMITATIONS: EC2-19 (failures in an incomplete check
+  are silent), EC2-20 (any pass clears the deficiency flag), EC2-21 (completion
+  race, needs a migration), EC2-22 (history judged by today's checklists),
+  EC2-23 (required not enforced), EC2-24 (editing mid-shift refuses the crew).
+  Two MED engineering items (the lot-lock refresh, resuming an unscheduled
+  check) and nine LOW are recorded as open. Gate clean; 673 backend and 2,015
+  frontend tests pass. See equipment-check.md → Pass 6. Next: B8 documents.
 
 - **B12 integrations ✅ (pass 6).** Read the connectors' delivery and sync
   logic (calendar sync, chat and webhook announcements, accounting syncs,
