@@ -137,7 +137,7 @@ Nine backend findings were reproduced first against the real database. Every fix
 
 | Check                                        | Result                                                 |
 | -------------------------------------------- | ------------------------------------------------------ |
-| pipeline, prospect and membership tests      | ✅ see the PR description                              |
+| pipeline, prospect and membership tests      | ✅ **1,386 passed**, 1 skipped (optional `pywebpush`)  |
 | new tests                                    | ✅ 5 backend (real database), 5 frontend; failed first |
 | `flake8` / `black` / `isort` (changed files) | ✅ clean                                               |
 | mypy ratchet                                 | ✅ 0 errors, matching the baseline                     |
