@@ -16,11 +16,10 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR pending — branch `claude/security-review-storefront-payments-p18`**:
-Feature 04 (Storefront & payments), pass 18 — watchdog pickup (the
-dedicated `/loop 30m /security-review` session remains unreachable). This
-note will be updated with the PR number in a follow-up commit on this same
-branch once it is opened.
+**PR [#4716](https://github.com/thegspiro/the-logbook/pull/4716) (branch
+`claude/security-review-storefront-payments-p18`)**: Feature 04
+(Storefront & payments), pass 18 — watchdog pickup (the dedicated
+`/loop 30m /security-review` session remains unreachable).
 
 PR #4715 (Feature 03, Public surface & webhooks, pass 18) was confirmed
 merged (`424fa044e`) before this iteration started, via a fresh `git fetch
