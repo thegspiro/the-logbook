@@ -194,6 +194,7 @@ const PATH_LABELS: Record<string, string> = {
   'ip-security': 'IP Security',
   'my-requests': 'My Requests',
   'public-portal': 'Public Portal',
+  'public-website': 'Public Website',
   'platform-analytics': 'Platform Analytics',
   errors: 'Error Monitor',
   waivers: 'Waivers',

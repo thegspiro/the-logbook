@@ -100,7 +100,10 @@ render_site_config() {
 
 # Traditional mode only: the frontend container's own config, run on the host
 # so the built app is served on 127.0.0.1:3000 with the same caching, PWA and
-# branded-icon rules it has in Docker. Three adjustments beyond the addresses:
+# branded-icon rules it has in Docker. The department's public website, the
+# config's second listener, moves to 127.0.0.1:3002 the same way: on a host it
+# must not open a plaintext port on every interface, and the host's own nginx
+# is what faces the public. Three adjustments beyond the addresses:
 # the map variable is renamed so each site keeps its own definition rather
 # than both sharing the host config's name; the `main` log format exists in the nginx:alpine image but not in a
 # Debian/Ubuntu nginx, so the built-in `combined` is used; and it logs to its
@@ -108,6 +111,7 @@ render_site_config() {
 render_frontend_config() {
     local project_dir="$1"
     sed -e 's/^    listen 80;/    listen 127.0.0.1:3000;/' \
+        -e 's/^    listen 8080;/    listen 127.0.0.1:3002;/' \
         -e "s#root /usr/share/nginx/html;#root $project_dir/frontend/dist;#" \
         -e 's#http://backend:3001#http://127.0.0.1:3001#g' \
         -e 's/\$access_loggable/$frontend_access_loggable/g' \
