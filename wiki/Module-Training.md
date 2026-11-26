@@ -1577,9 +1577,14 @@ switch and the officer's duty-email setting).
   through the audited download route; JPEG/PNG open in a `Modal` from a
   `blob:` URL revoked on close, a PDF in a tab opened inside the click
   (`opener` cleared, closed again on failure), because the CSP has no
-  `frame-src blob:`. HEIC gets no View. HEIC-to-JPEG conversion is held:
-  `pillow-heif` wheels are GPLv2; `pi-heif` (LGPLv3, decode-only) is the
-  option recorded in `docs/KNOWN_LIMITATIONS.md` for the owner.
+  `frame-src blob:`. A HEIC stored before 2026-11-26 gets no View.
+- **HEIC stored as JPEG** _(owner decision 2026-11-26)_. `_as_stored` in
+  `attendance_waiver_attachments.py` decodes `image/heic` / `image/heif` with
+  `pi-heif` (decode-only, LGPLv3; not the GPLv2 `pillow-heif`) off the event
+  loop, then `store_bytes` checks, scans and records the JPEG under
+  `STORED_FILE_RULES`, which do not admit HEIC. No EXIF or XMP is written;
+  an undecodable photo is a 400; Pillow's pixel limit applies before decode.
+  Files stored earlier stay as filed.
 
 ## Former members in pickers _(2026-11-19, #4380, #4432)_
 

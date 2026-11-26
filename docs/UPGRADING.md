@@ -135,6 +135,23 @@ _is_ the upgrade. Before it:
 Newest first. Every entry here is a change that was safe on a fresh install
 and refused to boot an existing one.
 
+### The backend needs `pi-heif` (2026-11-26)
+
+A HEIC photo filed with a training waiver request is now stored as a JPEG,
+decoded with `pi-heif`, pinned in `backend/requirements.txt`. The waiver
+document service imports it, and the API's waiver routes load that service
+whether or not a department takes documents, so **a backend started without
+the package fails at import and never serves a request**. The wheel bundles
+libheif and libde265 and needs no system package, on amd64 or arm64.
+
+- **Docker (including Unraid Compose Manager and the single-image Unraid
+  template):** rebuild the backend image (`docker compose build backend` or
+  `--build`). The backend Dockerfile installs `requirements.txt`.
+- **Running from source:** run `pip install -r backend/requirements.txt`
+  before restarting.
+
+No data change: HEIC files already stored stay as they were filed.
+
 ### History articles, essential seats, double-credit flags and waiver retention counts (2026-11-25)
 
 Nothing blocks a restart. Five migrations that no other entry covers arrive

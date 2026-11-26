@@ -11741,22 +11741,33 @@ request, kept 365 days) shipped with these gaps, each the narrower choice:
   the reader now treats any stored value as `off` (the next save stores
   `off`). If the meeting workflow ever takes documents, lift the refusal and
   the read coercion together.
-- **HEIC is stored as filed, not converted** _(owner approved conversion
-  2026-11-23; held for a licence ruling)_. A decider on Windows may need the
-  HEIF extension to open an iPhone photo, and the page cannot show one.
-  Conversion to JPEG at upload was built-ready but not shipped, because the
-  library's licence needs the owner's ruling first:
-  - `pillow-heif` 1.8.1 bundles libheif, libde265 and x265 in its wheels
-    (only glibc/libstdc++ from the system, so no apt packages and the image
-    would build), but its own `LICENSES_bundled.txt` says the binary wheels
-    are **GPLv2** as a whole, because of x265. This project is MIT and is
-    shipped as Docker images, which would then redistribute GPLv2 binaries.
-  - `pi-heif` 1.4.0, the decode-only build from the same repository
-    (`bigcat88/pillow_heif`), bundles only libheif and libde265 and is
-    **LGPLv3**; decoding is all conversion needs. HEVC decoding may also
-    carry patent questions.
-    **For the owner:** approve `pi-heif` (or `pillow-heif` despite GPLv2), or
-    keep HEIC as filed.
+- ~~**HEIC is stored as filed, not converted.**~~ ✅ **Owner decision
+  2026-11-26: converted to JPEG at upload with `pi-heif` 1.4.0.** A HEIC or
+  HEIF photo filed with a waiver request is decoded, turned upright, and
+  stored as a JPEG with no EXIF or XMP, so the location an iPhone records is
+  never kept (`app/utils/heic_to_jpeg.py`). The malware scan, the storage
+  ledger and the attachment row all see the JPEG, and the page shows it like
+  any other. A photo that cannot be decoded is a 400 asking the member to
+  save it as JPEG; it is never stored as filed, and there is no fallback when
+  the dependency is missing. Pillow's pixel limit is checked on the declared
+  size before decoding.
+  - **Why `pi-heif`:** it is the decode-only build of `pillow-heif` from the
+    same repository (`bigcat88/pillow_heif`) and bundles only libheif and
+    libde265, under the **LGPLv3** (the Python binding is BSD-3-Clause).
+    `pillow-heif`'s binary wheels include the x265 encoder and are **GPLv2**
+    as a whole, which this MIT project cannot ship in its images. The wheels
+    need no apt packages. The repository keeps no third-party licence
+    notice file, so the LGPLv3 notice for libheif and libde265 is the one
+    each wheel carries in its own `.dist-info`; no file was invented for it.
+  - **Accepted risk — HEVC patents.** Decoding HEVC may fall under patent
+    pools whose terms are separate from any copyright licence. The owner
+    accepted this with the decision; nothing in the code addresses it.
+  - **HEIC files stored before 2026-11-26 stay as filed** (default taken).
+    They keep their `.heic` name and type, still download, and still have no
+    view in the page. Converting them would rewrite filed evidence and its
+    recorded SHA-256; retention removes them on its usual schedule.
+  - **The JPEG can be larger than the HEIC was.** Quality steps down from 85
+    to 55 until it fits the 10 MB limit; a photo that is still over is a 400.
 - ~~**There is no preview of a document in the page.**~~ ✅ Resolved
   2026-11-23 (owner decision): a JPEG or PNG opens in a dialog on the request
   page, and a PDF in a new tab under the browser's own viewer. Both are a
@@ -11767,7 +11778,8 @@ request, kept 365 days) shipped with these gaps, each the narrower choice:
   (`frame-src` falls back to `default-src 'self'`) nor objects
   (`object-src 'none'`). Showing one in the page needs either `frame-src
 blob:` in the backend middleware and every `nginx.conf` policy, or a PDF.js
-  dependency: both owner decisions. HEIC has no view.
+  dependency: both owner decisions. A HEIC filed before 2026-11-26, the only
+  kind still stored, has no view.
 
 ## Meetings — Business-Meeting Waiver Requests: Choices Made Without An Owner Ruling (2026-11-11)
 

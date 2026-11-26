@@ -3227,7 +3227,10 @@ Training**.
 **Supporting documents.** A request can carry up to three documents (PDF,
 JPEG, PNG or HEIC, 10 MB each), filed with the request or added while it is
 waiting. Only the member and the people who decide it can open them, and the
-file name is not kept. They are deleted when the **Keep documents for**
+file name is not kept. A HEIC photo (an iPhone's usual format) is kept as a
+JPEG _(2026-11-26)_, turned the right way up, and without the photo's hidden
+details such as where it was taken. If the photo cannot be read, the upload
+says _"We couldn't read this photo. Save it as a JPEG and try again"_. They are deleted when the **Keep documents for**
 period ends after the decision; the request itself is kept.
 
 - **Viewing a document** _(2026-11-23)_. On the request's page, under
@@ -3236,8 +3239,8 @@ period ends after the decision; the request itself is kept.
   new browser tab. Either way it is a copy fetched through the same protected,
   logged download as the **Download** button; nothing is published at a
   public address, and the copy is let go when you close the window. A HEIC
-  photo has no **View** button, because most browsers cannot show one:
-  download it instead. If your browser blocks the new tab, it says _"Allow
+  photo filed before 2026-11-26 was kept as filed and has no **View**
+  button, because most browsers cannot show one: download it instead. If your browser blocks the new tab, it says _"Allow
   pop-ups for this site to view the document, or download it."_
 - **Removing a document** _(2026-11-23)_. While your request is still
   waiting, each of your documents on its page has a **Remove** (bin) button.
