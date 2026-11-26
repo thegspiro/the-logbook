@@ -392,6 +392,20 @@ class MeetingsService:
                     "for approval and use Approve instead"
                 )
 
+            # MM6-15: nor can an edit take a meeting out of approved. Its
+            # attendance is the settled record the delete guard protects, and
+            # an edit to draft would keep the approval stamps and then let the
+            # meeting, with that attendance, be deleted.
+            if (
+                meeting.status == MeetingStatus.APPROVED
+                and "status" in update_data
+                and update_data["status"] != MeetingStatus.APPROVED.value
+            ):
+                return None, (
+                    "An approved meeting cannot be moved back by editing it; its "
+                    "attendance is the settled record"
+                )
+
             apply_updates(meeting, update_data, skip={"organization_id", "id"})
 
             await self.db.commit()
@@ -612,6 +626,9 @@ class MeetingsService:
                     and item.status != ActionItemStatus.COMPLETED
                 ):
                     item.completed_at = datetime.now(timezone.utc)
+                elif new_status != ActionItemStatus.COMPLETED.value:
+                    # A reopened item is no longer complete (MM6-17).
+                    item.completed_at = None
 
             apply_updates(
                 item, update_data, skip={"organization_id", "id", "meeting_id"}

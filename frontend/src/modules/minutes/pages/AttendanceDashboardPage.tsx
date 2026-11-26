@@ -8,7 +8,7 @@
  * so this screen displays them and derives nothing (CLAUDE.md pitfall #29).
  */
 
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState, useRef } from 'react';
 import { Link } from 'react-router';
 import { Loader2, Users } from 'lucide-react';
 import { GovernancePageHeader } from '../../../components/governance/GovernancePageHeader';
@@ -43,7 +43,12 @@ const AttendanceDashboardPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Only the newest request may write the table: a slower response for an
+  // earlier filter would otherwise land last and disagree with the selects (MM6-8).
+  const latestRequest = useRef(0);
+
   const load = useCallback(async () => {
+    const request = ++latestRequest.current;
     setLoading(true);
     setError(null);
     try {
@@ -51,11 +56,13 @@ const AttendanceDashboardPage: React.FC = () => {
         period_months: periodMonths,
         ...(meetingType ? { meeting_type: meetingType } : {}),
       });
-      setData(result);
+      if (request === latestRequest.current) setData(result);
     } catch (err: unknown) {
-      setError(getErrorMessage(err, 'Could not load the attendance dashboard'));
+      if (request === latestRequest.current) {
+        setError(getErrorMessage(err, 'Could not load the attendance dashboard'));
+      }
     } finally {
-      setLoading(false);
+      if (request === latestRequest.current) setLoading(false);
     }
   }, [periodMonths, meetingType]);
 

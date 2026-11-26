@@ -140,6 +140,19 @@ class TestCountQuorum:
         ).calculate_quorum("min-1", "org-1")
         assert (met, present, required) == (False, 5, 8)
 
+    async def test_a_fractional_count_rounds_up(self):
+        """MM6-10: "count" truncated its threshold, so 2.5 members needed 2
+        and 0.5 needed nobody. A head-count bar is met or exceeded, like the
+        percentage one, so it rounds up and never falls below one."""
+        for threshold, expected in ((2.5, 3), (0.5, 1), (3.0, 3)):
+            minutes = _minutes(
+                quorum_type="count", quorum_threshold=threshold, attendees=_attendees(2)
+            )
+            _, _, required, _ = await QuorumService(
+                _db([_one(minutes), _one(_ORG)])
+            ).calculate_quorum("min-1", "org-1")
+            assert required == expected, threshold
+
 
 class TestApprovedMinutesAreNotRecalculated:
     """MM-17: approved minutes keep the quorum result they were ratified

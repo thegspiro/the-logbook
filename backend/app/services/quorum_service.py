@@ -131,7 +131,9 @@ class QuorumService:
 
         # Calculate required count
         if q_type == "count":
-            required = int(q_threshold)
+            # A head-count bar is met or exceeded, like the percentage one, so
+            # a fractional threshold rounds up and never falls below one (MM6-10).
+            required = max(1, math.ceil(q_threshold - 1e-9))
             description = f"{required} members required"
         else:  # percentage
             total_active = await self.get_active_member_count(organization_id)

@@ -137,6 +137,32 @@ describe('CrrCatalogueSection', () => {
     expect(await within(smokeCard).findByRole('checkbox', { name: 'Older adults' })).toBeChecked();
   });
 
+  it('shows a retired default tag so it can be removed, but offers no retired tag to add', async () => {
+    const user = userEvent.setup();
+    const data = catalogue();
+    data.tags = data.tags.map((t) => (t.id === 'tag-fire' ? { ...t, is_active: false } : t));
+    data.tags.push({
+      id: 'tag-drown',
+      kind: 'risk',
+      code: 'drowning',
+      label: 'Drowning',
+      is_system: true,
+      is_active: false,
+      sort_order: 1,
+    });
+    getCatalogue.mockResolvedValue(data);
+    setTypeTags.mockResolvedValue({ ...smoke, tag_ids: [] });
+    renderWithRouter(<CrrCatalogueSection />);
+
+    const smokeCard = await card('Smoke alarm install');
+    const fire = within(smokeCard).getByRole('checkbox', { name: 'Fire (retired)' });
+    expect(fire).toBeChecked();
+    expect(within(smokeCard).queryByRole('checkbox', { name: /Drowning/ })).not.toBeInTheDocument();
+    await user.click(fire);
+
+    expect(setTypeTags).toHaveBeenCalledWith('t-smoke', []);
+  });
+
   it('shows its load error', async () => {
     getCatalogue.mockRejectedValue(new Error('The server is down'));
     renderWithRouter(<CrrCatalogueSection />);
@@ -163,6 +189,20 @@ describe('CrrCatalogueSection settings', () => {
     expect(updateType).toHaveBeenLastCalledWith('t-smoke', { admin_hours_category_id: 'cat-outreach' });
     await user.selectOptions(picker, '');
     expect(updateType).toHaveBeenLastCalledWith('t-smoke', { admin_hours_category_id: null });
+  });
+
+  it('says a deactivated Admin Hours category credits nothing, rather than showing the mapping', async () => {
+    const data = catalogue();
+    data.activity_types = data.activity_types.map((t) =>
+      t.id === 't-smoke' ? { ...t, admin_hours_category_id: 'cat-gone' } : t
+    );
+    getCatalogue.mockResolvedValue(data);
+    renderWithRouter(<CrrCatalogueSection />);
+
+    const smokeCard = await card('Smoke alarm install');
+    const picker = within(smokeCard).getByLabelText<HTMLSelectElement>('Admin Hours category');
+    expect(picker.value).toBe('cat-gone');
+    expect(picker.selectedOptions[0]?.textContent).toBe('A deactivated category (credits nothing)');
   });
 
   it('saves how long resident details are kept', async () => {

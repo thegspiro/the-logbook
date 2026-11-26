@@ -25,9 +25,15 @@ export const GOAL_STATUS_LABELS: Record<GoalStatus, string> = {
   behind: 'Behind pace',
 };
 
-/** Share of the target reached, 0–100, for the bar; past 100 reads as full. */
-export const goalPercent = (goal: OutreachGoalProgress): number =>
-  goal.target > 0 ? Math.min(100, Math.round((goal.actual / goal.target) * 100)) : 0;
+/**
+ * Share of the target reached, as a whole percent. Rounded down, so 199 of
+ * 200 reads 99% beside "Behind pace" rather than a contradictory 100%.
+ */
+export const reachedPercent = (goal: OutreachGoalProgress): number =>
+  goal.target > 0 ? Math.floor((goal.actual / goal.target) * 100) : 0;
+
+/** The same share for the bar, 0–100; past 100 reads as full. */
+export const goalPercent = (goal: OutreachGoalProgress): number => Math.min(100, reachedPercent(goal));
 
 /** Where the pace marker sits on the bar, 0–100. */
 export const pacePercent = (goal: OutreachGoalProgress): number =>

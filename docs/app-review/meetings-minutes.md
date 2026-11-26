@@ -2,7 +2,199 @@
 
 **Prefix:** `MM2` · **Iteration:** B6 · **Reviewed:** 2026-08-06 (pass 1),
 2026-08-06 (pass 2), 2026-08-09 (pass 3), 2026-08-09 (pass 4),
-2026-10-13 (pass 5)
+2026-10-13 (pass 5), 2026-11-26 (pass 6)
+
+---
+
+## Pass 6 (2026-11-26) — the lifecycle, the count and the screens: 17 fixed, 5 flagged
+
+### Scope, stated plainly
+
+Pass 5 read update payloads. This pass read the module for **business-logic
+correctness**: the minutes lifecycle (draft → submitted → approved → reopened),
+quorum, motions and roll calls, action items and their reminders, and meeting
+approval. It also read the frontend that pass 5 left unopened:
+
+- `MinutesPage`;
+- the rendering half of `MinutesDetailPage`;
+- `AttendanceDashboardPage`;
+- `ActionItemsPage`;
+- `MeetingAttendance`.
+
+Six backend findings were reproduced by a probe against the real service
+classes before any test was written. Every fix below has a test that failed on
+the unfixed code.
+
+**Not read:**
+
+- Backend: most of `minutes_record_service` (attendance suggestions, election
+  capture, attachments, closed sessions), `minutes_print_data`,
+  `attendance_waiver_service`, and the meetings waiver and dashboard routes.
+- Frontend: the signatures, revisions, outline-editor, agenda-editor,
+  carry-forward, adopt and publishing-settings components, and the waiver
+  queue pages.
+
+### Frontend
+
+**MM6-1 — MED — The meeting waivers list showed a user id and never the reason — ✅ FIXED**
+
+- `MinutesPage` read `user_name` and `reason`. `GET /meetings/{id}/attendance-waivers` returns `member_name` and `waiver_reason`.
+- So a clerk saw a raw id in place of the member's name, and the reason never appeared.
+- The response was typed `Record<string, unknown>`, which is why this compiled. It now has a `MeetingAttendanceWaiver` type.
+
+**MM6-2 — MED — Meeting controls were gated on the wrong permission — ✅ FIXED**
+
+- These controls are `/meetings` endpoints gated on `meetings.manage`:
+  - Record Minutes (create a meeting);
+  - edit agenda;
+  - delete meeting;
+  - the waivers list;
+  - the empty-state prompt.
+- The page offered them on `minutes.manage`, so a custom position holding only one of the two was offered controls that 403, or denied ones it could use.
+- Opening or creating a meeting's minutes stays on `minutes.manage`, as its endpoint is.
+
+**MM6-3 — MED — Every change on the detail page unmounted it — ✅ FIXED**
+
+- Recording a motion, changing an action item, applying a suggestion, deleting or publishing all reloaded through `fetchMinutes`. That swaps the whole page for "Loading minutes...".
+- So every panel lost its own state: a motion half-typed in another section, decisions in the suggestions panel, the scroll position.
+- They now reload in place (`reloadAfterChange`). A reload failing after a successful change is reported as that, not as the change failing.
+
+**MM6-4 — LOW — The last record's state carried over when the id changed — ✅ FIXED**
+
+- A load error was never cleared, so after one failed load the next record still read "Failed to load minutes".
+- Importable ballots, an open editor and a pending reject reason carried over too.
+- The page is now keyed by the minutes id.
+
+**MM6-5 — LOW — An overdue item's status select read "Pending" — ✅ FIXED**
+
+- Choosing Pending then fired no change. The select now shows Overdue while the item is overdue.
+
+**MM6-6 — LOW — "Return for Changes" could be sent twice — ✅ FIXED**
+
+- A double click sent two reject requests. It now goes through `useSubmitGuard`, like the other workflow actions.
+
+**MM6-7 — MED — The meetings search refetched on every keystroke, and a late response could win — ✅ FIXED**
+
+- Each letter fetched four endpoints. A slower response for an earlier prefix or filter could land last.
+- The search now settles first (350 ms, as `ArchiveSearchResults` already did), and a response that is no longer the latest is dropped.
+
+**MM6-8 — LOW — The attendance dashboard could show an earlier filter's figures — ✅ FIXED**
+
+- This is the same race as MM6-7, with the same guard.
+
+### Backend
+
+**MM6-9 — MED — Three section rewrites did not move `edit_version` — ✅ FIXED**
+
+- Agenda sync, applying an outline and applying a suggestion all rewrite `sections`.
+- An editor holding the older version could still save, writing back the sections those changes had just replaced. That bypasses MM5-4's conflict guard.
+- Each writer now bumps the version SQL-side.
+
+**MM6-10 — MED — A "count" quorum truncated its threshold — ✅ FIXED**
+
+- 2.5 members needed 2, and 0.5 needed nobody. It now rounds up and never falls below one, like the percentage rule.
+
+**MM6-11 — MED — A motion's totals could contradict its roll call — ✅ FIXED**
+
+- Totals sent without a roll call were written beside the old one: the roll read 2 yes, the totals 0 / 3.
+- `_vote_record` says the two can never disagree.
+- Totals sent on their own are a vote taken by count, which is what the page's count mode sends. So the roll call they replace is now cleared.
+
+**MM6-12 — MED — Submit, recall, reject and a content save checked status without the row lock — ✅ FIXED**
+
+- Two racing requests could each pass a status check the other was about to falsify:
+  - a save landing in minutes already circulated to members;
+  - a reject overwriting an approval and keeping its stamps.
+- Each now locks the row before reading the status, as approve and reopen do (pitfall #27).
+- Motion and action-item edits still check status before the lock. That is recorded as open below.
+
+**MM6-13 — LOW — Re-approval emailed assignees about finished items — ✅ FIXED**
+
+- Approving reopened minutes emailed every assignee about every item again, completed and cancelled ones included.
+- It now emails only open items (pending, in progress, overdue).
+
+**MM6-14 — MED-LOW — The action-item bell ignored the module's own rules — ✅ FIXED**
+
+- Bells went out for items on draft and circulated minutes, which `/action-items` and the email reminders both leave out.
+- Items marked overdue were skipped, although the email reminders count them as open.
+- Bells now cover approved minutes only, and include overdue items.
+- The bells have no re-run guard. That is flagged as MM6-22.
+
+**MM6-15 — MED — A PATCH could un-approve a meeting, which reopened the delete guard — ✅ FIXED**
+
+- MM-9 refused a PATCH _into_ approved. `PATCH {"status": "draft"}` on an approved meeting succeeded and kept the approval stamps.
+- `delete_meeting` then deleted it, and the attendance (membership-tier credit) went with it.
+- A PATCH now cannot move a meeting out of approved. No screen sends a meeting status, so this touches API callers only.
+- Whether a meeting should be un-approvable at all is MM6-19.
+
+**MM6-16 — LOW — The reopen endpoint logged the free-text reason — ✅ FIXED**
+
+- The reason can name a member, and the audit event already records it. The log line now carries ids only (pitfall #33).
+
+**MM6-17 — LOW — Reopening a meeting action item kept its completion time — ✅ FIXED**
+
+- `completed_at` is now cleared when the item leaves completed, as the minutes action items already do.
+
+### Flagged for the owner (in `docs/KNOWN_LIMITATIONS.md`)
+
+- **MM6-18 (MED) — Action items can be added to approved minutes.**
+  - `add_action_item` has no status guard, and the approved snapshot includes action items. So adding one makes the adopted version fail its own integrity check (`changed: action_items`).
+  - A `KNOWN_LIMITATIONS` passage said the call was refused, and is corrected.
+  - Decide: refuse it (a correction goes through reopen), or keep later items out of the snapshot.
+- **MM6-19 (MED) — An approved meeting's attendance can still change.**
+  - Attendees can be added or removed one at a time, while deleting the meeting is refused because its attendance is the settled record.
+  - With MM6-15 there is also no way to un-approve a meeting.
+  - Decide what correction path an approved meeting has.
+- **MM6-20 (MED) — The stored quorum result is refreshed only on request.**
+  - It is updated only by `GET /quorum`, and approval freezes whatever is there. The page's refresh after saving the roll is fire-and-forget.
+  - `MinutesCreate`/`MinutesUpdate` accept `quorum_met`/`quorum_count` from the client.
+  - For approved minutes, the quorum endpoint reports the stored result beside a live "required" (met with 6 of 10 required).
+  - Decide whether approval recomputes it, and whether a manual override stays.
+- **MM6-21 (LOW-MED) — Carrying an item forward hides it from its assignee for a month.**
+  - The copy sits in draft minutes, which the member's list and reminders do not show. Meanwhile the manager's count includes it.
+- **MM6-22 (LOW) — Reminder bells have no re-run guard.**
+  - A manual run or a re-run duplicates every bell (pitfall #36).
+  - Re-approval after a reopen re-sends the assignee email for items still open.
+  - Both need a stamp column.
+
+### Open, LOW (not flagged)
+
+- Motion and action-item edits check the minutes' status before the row lock (MM6-12 covers status changes and content saves).
+- `create_minutes`' inline motions skip the motion-result check and drop `section_key` and `acceptance`.
+- `create_from_meeting` has no duplicate check, so a double click makes two sets of minutes.
+- `update_action_item` with `assignee_id: null` leaves the old `assignee_name`.
+- `suggested_status` under `majority_present` with no roll passes on any yes vote.
+- `settle_roll_call` keys by name, so two members sharing a name collide.
+- Changing a default outline's meeting type can leave two defaults.
+- `create_from_event` records a "not going" RSVP as excused.
+- `MeetingAttendance` re-derives its "% present", which can exceed 100% for a member made inactive since. It also carries an `exhaustive-deps` suppression.
+- The detail page hides the assignee's status control, which the backend and `ActionItemsPage` allow.
+- Waivers are cached per meeting for the life of the page.
+- Meeting-item rows on `ActionItemsPage` link to `/minutes`, not to their meeting.
+- The Open Action Items stat is not refreshed after `MyActionItemsPanel` completes an item.
+
+### Mechanical checks
+
+- **Route gating:** 49 routes.
+  - `minutes.py` (32): 23 `minutes.manage`, 7 `minutes.view`, 1 minutes-or-meetings manage, and 1 sign-in only. That one is the assignee self-service action-item update (W52-7, by design).
+  - `meetings.py` (17): 13 `meetings.manage` and 4 meetings-or-minutes view.
+- **Status filters:** no `== UserStatus.ACTIVE` gates.
+- **Search:** every `LIKE` passes `escape=`.
+
+### Completion gate (pass 6)
+
+| Check                                                    | Result                                                      |
+| -------------------------------------------------------- | ----------------------------------------------------------- |
+| meetings / minutes / quorum / action-item / agenda tests | ✅ **1,736 passed**, 1 skipped (optional `pywebpush`)       |
+| new and extended tests                                   | ✅ 15 backend, 10 frontend; each seen to fail first         |
+| `flake8` / `black` / `isort` (changed files)             | ✅ clean                                                    |
+| mypy ratchet                                             | ✅ 0 errors, matching the baseline                          |
+| marker routing                                           | ✅ the new DB test is collected only by the integration job |
+| minutes frontend tests                                   | ✅ 539 passed (69 files)                                    |
+| `npm run typecheck` / `npm run lint`                     | ✅ 0 errors / 0 warnings                                    |
+
+Two existing reminder tests now create their minutes as approved. They built
+draft minutes by default, which MM6-14 rightly stops reminding about.
 
 ---
 
