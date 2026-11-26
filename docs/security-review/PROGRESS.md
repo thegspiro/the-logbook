@@ -16,6 +16,53 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR #pending (branch `claude/security-review-permissions-roles-p18`)**:
+Feature 02 (Permissions & roles), pass 18 — watchdog pickup (the dedicated
+`/loop 30m /security-review` session remains unreachable). PR number to be
+recorded here in a follow-up commit once opened.
+
+PR #4713 (Feature 01, Auth & session lifecycle, pass 18) was confirmed
+merged (`f26f1a8b3`) before this iteration started, via a fresh
+`git fetch origin && git checkout main && git pull --ff-only` (3 commits
+fast-forwarded) rather than trusting a stale local checkout, and a fresh
+`list_pull_requests` (state=open) returned 0 results. The baseline commit
+was re-derived from scratch with `git log --all --oneline --grep
+"security(permissions" -i` against the fresh pull rather than trusted from a
+stale note; `3cf4df9e5` (pass 17's own commit) was still the newest hit and
+confirmed an ancestor of `main`. Row 01 was `✅` and row 02 (Permissions &
+roles) was confirmed the next `⬜` row on the freshly-pulled `main`.
+
+Baseline `3cf4df9e5` (pass 17's own commit). **28 routes, unchanged** across
+`roles.py`/`operational_ranks.py`/`officers.py`/`org_chart.py` (all four
+byte-identical to pass 17). Only `core/permissions.py` (+37) and `users.py`
+(+73/-1) carry a diff among this feature's tracked files. The real delta:
+two new permissions, `crr.record` and `crr.view_contact`, seeded into
+`DEFAULT_POSITIONS`/`OPERATIONAL_RANKS` for the new Community Risk Reduction
+module (owner decision 2026-11-22) — checked directly as this feature's own
+Pitfall #23 concern even though CRR's endpoint itself belongs to another
+feature's territory. A fresh script-import check (using `permission_matches`
+so wildcard/`events.*` holders count) found the pairing invariant holds with
+0 mismatches: every `events.manage` holder also holds `crr.record`,
+`crr.view_contact` is strictly narrower (exactly the 3 chief ranks plus
+`public_outreach`/`president`), and `community_outreach_team`'s extra
+`crr.record` slug-grant is the one documented exception. Migration
+`5c2e8a417d90` carries both grants to stored `is_system` positions,
+idempotently, guarded on table existence (Pitfall #26), with its own test
+exercising the backfill against rows present (Pitfall #35).
+`tests/test_crr_grants.py` (15 tests) pins all of this plus the exact
+permission set the owning CRR endpoint's routes require. `users.py`'s diff
+is LIFE-11 erasure machinery (Feature 07/10 territory) with 0 touches to
+this feature's own rank/role grant-ceiling surface, confirmed by grep.
+**0 fixed, 0 new findings.** Full write-up:
+`docs/security-review/PERM-02-permissions-roles.md`'s **Pass 18** section.
+
+Row 02 → ✅ (pending this PR's merge); next is Feature 03 (Public surface &
+webhooks) — re-check `list_pull_requests` fresh rather than trusting this
+note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 01, Auth & session lifecycle, pass 18, PR #4713, merged), preserved for history</summary>
+
 **PR [#4713](https://github.com/thegspiro/the-logbook/pull/4713) (branch
 `claude/security-review-auth-session-p18`)**: Feature 01 (Auth & session
 lifecycle), pass 18 — watchdog pickup (the dedicated `/loop 30m
@@ -44,6 +91,8 @@ open. **0 fixed, 0 new findings.** Full write-up:
 
 Row 01 → ✅ (pending this PR's merge); next is Feature 02 (Permissions &
 roles) — re-check `list_pull_requests` fresh rather than trusting this note.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 00, Cross-cutting baseline, pass 19, PR #4712, merged), preserved for history</summary>
@@ -29018,7 +29067,7 @@ commit" rule.
 | --- | ------------------------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
 | 00  | Cross-cutting baseline    | SEC    | whole-codebase sweeps; see `SEC-00-cross-cutting-baseline.md`                                                                                                                                                                                                                         | ✅     |
 | 01  | Auth & session lifecycle  | AUTH   | `endpoints/auth.py`, `auth_service.py`, `mfa_service.py`, `oauth_service.py`                                                                                                                                                                                                          | ✅     |
-| 02  | Permissions & roles       | PERM   | `dependencies.py`, `core/permissions.py`, `roles.py`, `operational_ranks.py`, `officers.py`, `org_chart.py`                                                                                                                                                                           | ⬜     |
+| 02  | Permissions & roles       | PERM   | `dependencies.py`, `core/permissions.py`, `roles.py`, `operational_ranks.py`, `officers.py`, `org_chart.py`                                                                                                                                                                           | ✅     |
 | 03  | Public surface & webhooks | PUB    | `api/public/*` (51 unauth routes, added pass 16), `paypal_webhook.py`, `integrations_webhook.py`, `salesforce_webhook.py`, `zeffy_webhook.py`, `shift_evaluations.py` (added pass 16)                                                                                                 | ⬜     |
 | 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                                                                                                                                                                    | ⬜     |
 | 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`, `endpoints/quickbooks_online.py` (8 routes; corrected from `services/quickbooks_online.py`, pass 16), `services/quickbooks_online_client.py`, `services/quickbooks_sync_service.py` (both added pass 16) | ⬜     |
@@ -29258,6 +29307,95 @@ errors. `npm run lint` — 0 errors, 0 warnings.
 
 Row 01 → ✅ (pending this PR's merge); next is Feature 02 (Permissions &
 roles) — re-check `list_pull_requests` fresh rather than trusting this note.
+
+### 2026-11-26 — Feature 01 (Auth & session lifecycle, pass 18) merged (PR #4713); Feature 02 (Permissions & roles, pass 18): watchdog pickup, CRR grant seeding verified sound, 0 fixed, 0 new findings
+
+Watchdog pickup — the dedicated `/loop 30m /security-review` session remains
+unreachable. `git fetch origin && git checkout main && git pull --ff-only`
+fast-forwarded 3 commits to `f26f1a8b3` (PR #4713's merge) before anything
+was read or trusted, per this lap's own warning about a stale checkout's
+view of this file. A fresh `list_pull_requests` (state=open) returned 0
+results. Row 01 was `✅` and row 02 (Permissions & roles) was confirmed the
+next `⬜` row on the freshly-pulled `main`, by direct read of the rotation
+table rather than inferred from narrative. The baseline commit was
+re-derived from scratch with `git log --all --oneline --grep
+"security(permissions" -i` rather than trusted from a stale note: `3cf4df9e5`
+(pass 17's own commit, "0 fixed, 0 new findings") was still the newest hit,
+confirmed an ancestor of `main` via `git merge-base --is-ancestor`.
+
+**Baseline** `3cf4df9e5` (pass 17's own commit) to **head** `f26f1a8b3`.
+Route inventory re-enumerated by grep, not diffed: **28 routes, unchanged**
+across `roles.py` (13), `operational_ranks.py` (7), `officers.py` (3),
+`org_chart.py` (5) — all four byte-identical to pass 17 (confirmed by
+`git diff --stat`, empty), as are `role_service.py`,
+`operational_rank_service.py`, `officer_service.py`, `org_chart_service.py`,
+`admin_continuity_service.py`, `dependencies.py`, and every model/schema this
+feature's registry touches. Only `core/permissions.py` (+37) and `users.py`
+(+73/-1) carry a diff.
+
+**`core/permissions.py` — two new permissions seeded (owner decision,
+2026-11-22): `crr.record` and `crr.view_contact`**, for the new Community
+Risk Reduction module (`endpoints/crr.py`, Events/Admin-Hours territory, not
+this feature's own surface, already read in full at `SEC-00`'s **Pass 19**
+and documented in `docs/KNOWN_LIMITATIONS.md`'s "CRR Activity Tracking —
+Owner Decisions (2026-11-22)"). Seeding a new permission into
+`DEFAULT_POSITIONS`/`OPERATIONAL_RANKS` is squarely this feature's own
+cross-cutting concern (CLAUDE.md Pitfall #23), so it was checked directly. A
+fresh script import of both registries (using `permission_matches` so a
+wildcard `"*"` or `events.*` holder counts, and checking both the
+`permissions` and `default_permissions` keys — an initial pass checking only
+`permissions` wrongly reported the three chief ranks as holding neither
+grant) found the pairing invariant holds with **0 mismatches**: every
+`events.manage` holder also holds `crr.record`; `crr.view_contact` is
+strictly narrower everywhere (0 cases of the contact grant without the
+record grant), and its holder set is exactly `{public_outreach, fire_chief,
+deputy_chief, assistant_chief, president}`, matching both the code comment
+and the recorded owner decision; `community_outreach_team`'s extra
+`crr.record` slug-grant (without `events.manage`) is the one documented
+exception. `member`/`firefighter` hold neither grant. Migration
+`5c2e8a417d90` carries both grants to stored `is_system` positions by the
+same evidence/slug rule, guarded on `_has_table("positions")` (Pitfall #26),
+idempotent, with its evidence/slug tuples frozen locally rather than
+imported from the registry (Pitfall #20), and its own test
+(`tests/test_crr_grants.py`, 15 tests) exercises the grant, the idempotency,
+the `is_system` scoping, and the downgrade against a real SQLite table with
+rows present (Pitfall #35) — plus pins the exact permission set the owning
+CRR endpoint's own routes require, closing the gap between "the grant is
+seeded correctly" and "the endpoint that consumes it still asks for the
+right thing". The owning endpoint's own OR-gate
+(`require_permission("crr.record", "events.manage")`) was spot-checked:
+`events.manage` is not seeded to `member`/`firefighter`, so the second
+alternative does not open the surface to the whole department (checklist
+item 2).
+
+**`users.py`'s diff is LIFE-11 erasure machinery (Feature 07/10 territory),
+not this feature's surface** — `delete_user`'s hard-delete path and
+`anonymize_member` gained calls to `erase_member_documents` and
+`replace_instructor_name` (owner decision, 2026-11-23). Checked for any
+touch of this feature's own ceiling surface
+(`_enforce_role_grant_ceiling`, `_enforce_rank_grant_ceiling`,
+`assign_user_roles`, `add_role_to_user`, `remove_role_from_user`) — 0 hits
+in the diff.
+
+**0 new findings.** PERM-1 through PERM-12 remain closed: every file that
+carried one of them is byte-identical to pass 17, so nothing could have
+regressed.
+
+**Completion gate:** `flake8`/`black --check`/`isort --check-only` (CI's
+exact pins, 7.4.1/26.10.1/9.0.2, installed under `/usr/local/bin/python3.13`
+since the bare `python3` on this sandbox is 3.11.18 with no linters) on
+`app/ tests/ alembic/` — all clean, 3541 files unchanged by black.
+`validate_migrations.py --strict` — single head `e9cf8ab7e4e4`, 844
+revisions. `check_route_permissions.py --strict` (repo root) — 344 routes,
+0 errors/warnings. `tests/test_crr_grants.py` — 15 passed. Scoped backend
+pytest (`-k "permission or role or operational_rank or officer or org_chart
+or baseline_member_grant or account_status_gate"`) — 1775 passed, 1
+pre-existing environment-only skip (`py_vapid`), 0 failures. `npm run
+typecheck` — 0 errors. `npm run lint` — 0 errors, 0 warnings.
+
+Row 02 → ✅ (pending this PR's merge). Next is Feature 03 (Public surface &
+webhooks) — re-check `list_pull_requests` fresh rather than trusting this
+note.
 
 ### 2026-11-25 — Feature 34 (Frontend shared, pass 17) merged (PR #4711), closing the lap at every row ✅; Feature 00 (Cross-cutting baseline, pass 19): lap reset + own review, 0 fixed, 0 new findings
 
