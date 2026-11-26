@@ -2060,6 +2060,14 @@ inside the requirement's own period, with training waivers and leave applied.
 Hours on a shift not yet closed out stop counting there until it is closed
 out.
 
+_(2026-11-26)_ Once the box is ticked, **Only time in this seat** can limit
+the requirement to one seat, such as **Driver/Operator** for "24 driver hours
+a year". Only shifts the member held that seat on count, on Shift Compliance
+and, for a Shifts requirement, on every compliance screen. Shifts with no seat
+recorded, and time on another agency's apparatus, carry no seat and do not
+count toward one. Leave it on **Any seat** to count every shift. One seat per
+requirement: make a second requirement for a second seat.
+
 See [Shifts & Scheduling](./03-scheduling.md#compliance-report).
 
 ![Shift Credit on an Hours requirement: Shift attendance satisfies this requirement, unticked, with its help text](./images/02-115-shift-credit-box.png)
