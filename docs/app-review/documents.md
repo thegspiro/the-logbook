@@ -2,7 +2,123 @@
 
 **Prefix:** `DOC2` · **Iteration:** B8 · **Reviewed:** 2026-08-06 (pass 1),
 2026-08-06 (pass 2), 2026-08-09 (pass 3), 2026-08-09 (pass 4),
-2026-10-14 (pass 5)
+2026-10-14 (pass 5), 2026-11-26 (pass 6)
+
+---
+
+## Pass 6 (2026-11-26) — the folder tree's lifecycle, and the Documents screen: 5 fixed, 4 flagged
+
+### Scope, stated plainly
+
+Pass 5 read the update paths. This pass read the module for business logic and
+data lifecycle:
+
+- deleting folders and documents, and what happens to their files;
+- folder access across moves and deletes;
+- republishing minutes into Documents;
+- the admin-only folder digest;
+- the printed station documents;
+- the rendering, navigation, search and delete flows of `DocumentsPage.tsx`, which pass 5 read only for uploads.
+
+Two of the backend findings were reproduced against the real database with two
+independently committing sessions before any fix.
+
+**Not read:** the `ensure_*` folder creators, upload scanning and
+`store_upload`, remote storage and encryption, the equipment-check builder of
+the print service, the frontend tests' harness internals. Nothing was measured
+in a browser.
+
+### Frontend
+
+**DOC2-8 — MED — A keystroke could leave the document list loading forever — ✅ FIXED**
+
+- Every keystroke in the search box discarded the request in flight.
+- When the trimmed query ended up unchanged (a space, or a letter typed and deleted inside the 300 ms debounce), nothing fetched again, and the discarded request's own cleanup was skipped.
+- "Loading documents..." stayed for good, or "Load more" stayed disabled.
+- The keystroke no longer touches the request generation; the fetch takes its own.
+
+**DOC2-9 — MED-LOW — A refused delete showed its reason behind the dialog — ✅ FIXED**
+
+- The reason went to the page banner, under the scrim, and the dialog stayed open, so pressing Delete appeared to do nothing.
+- This is a real path: a document attached to a facility record is refused to a manager without facility delete rights.
+- The reason now appears in the dialog, and the dialog names the document.
+
+**DOC2-10 — MED — The folder list could be left empty with no way back — ✅ FIXED**
+
+- A page of folders whose last folder was deleted or moved kept its offset. The server answers a page past the end with nothing, and the pager hides once the level fits on one page.
+- At the root the screen read "No folders yet" with no control to recover, until a reload.
+- An empty page now steps back to the last one that has folders.
+
+### Backend
+
+**DOC2-11 — MED — A folder moved in while its new parent was being deleted left its documents open to everyone — ✅ FIXED**
+
+- `_delete_folder_subtree` walked the subtree with plain SELECTs, which answer from the snapshot the request took at its first read, and then locked only what that walk had found.
+- A folder moved under the target after that snapshot was missed. The database's `parent_id` cascade deleted it anyway, its documents' `folder_id` went NULL, and their files stayed on disk.
+- `can_access_document` treats a folder-less document as readable by every `documents.view` holder, so a document that sat under a restricted folder became open to the department.
+- The walk is now a locking read, starting with a lock on the target itself. It sees what has committed, and its locks keep a folder from being moved in after it. The lock order is target folder, then descendants, then documents, matching FAC-34/35.
+- Reproduced with two real sessions; `test_documents_folder_delete_snapshot.py` failed before the fix. The FAC-34/35 lock-order tests still pass.
+
+**DOC2-12 — LOW-MED — Sending the admin-only folder digest undid settings saved meanwhile — ✅ FIXED**
+
+- The scheduled task loads every organization at start, and its session keeps them past each commit.
+- `_record_digest` deep-copied that copy of `settings` (right for pitfall #12) and wrote the whole column back after the emails. A change an administrator saved in between, such as enabled modules, was reverted.
+- The stamp now re-reads the row under a lock first.
+- Reproduced with two real sessions: the probe showed the admin's change reverted. The regression test drives the new signature.
+- The same shape remains in three other digests, recorded as open below.
+
+### Flagged for the owner (in `docs/KNOWN_LIMITATIONS.md`)
+
+- **DOC2-13 (MED) — A document with no folder is readable by every member.**
+  - `can_access_document` and the list predicate admit a NULL `folder_id`.
+  - The code says such rows should not exist, but `ON DELETE SET NULL` on `Document.folder_id` still produces them.
+  - DOC2-11 closes the race that produced them; the access rule is the decision. Options: fail closed, or treat them as General Documents.
+- **DOC2-14 (LOW) — Minutes reopened and then deleted leave their library copy behind.**
+  - The copy stays readable in Meeting Minutes, marked "under correction" for good, with its attachments route returning 404.
+  - Options: refuse to delete minutes that were ever approved or published, or remove or mark the copy with them.
+- **DOC2-15 (LOW) — The upload dialog offers only some folders.**
+  - It offers the default folder, the current folder and the current page of its subfolders, with the default listed twice at the root.
+  - It also offers History folders and read-only folders the server then refuses.
+  - What the picker should offer is a product choice.
+- **DOC2-16 (LOW) — An owner-only folder's access can never be changed, even by a full administrator.**
+  - A deleted owner leaves a folder only full administrators can open, permanently.
+
+### Open (not flagged)
+
+- **LOW-MED — Two simultaneous publishes of the same minutes file two library copies.** `publish_minutes` reads `published_document_id` without locking the minutes row. The orphan copy keeps the superseded text. The fix (lock the minutes row at the top) needs its lock order checked against the copy-delete path's NOWAIT locks, with a two-session test.
+- **LOW — The printed shift roster counts pending assignments and ignores the apparatus minimum,** so its crew line disagrees with the scheduling screen (pitfall #29).
+- **LOW — Deleting a document or folder removes its file after the commit, best-effort.** A crash or unreachable store leaves an untracked file. Nothing queues it in `pending_file_deletions`.
+- **LOW — Three other digests write a stale copy of organization settings back:** `security_weekly_report`, `google_workspace_attention_digest` and `minutes_reminder_service` (the DOC2-12 shape).
+- **LOW — Other backend items:**
+  - `create_folder` and `update_folder` can put a folder under the History root.
+  - An upload name has no length limit, so a name over 255 characters gets a generic 400.
+  - The upload failure log line formats the exception into an f-string.
+- **LOW — Frontend:**
+  - An upload, delete or create that finishes after the user has opened another folder can show the first folder's contents under the second.
+  - The list-view table needs a container tier and a table-fit spec (pitfall #39); long names have no `title`.
+  - The download ignores the server's filename.
+  - A temporary failure is described as the folder being deleted.
+  - Manage folder discards edits without asking, and its Move browser shows only the first 100 folders.
+  - A delete resets "Load more".
+
+### Mechanical checks
+
+- **Route gating:** 19 routes.
+  - `documents.py` (17): 8 `documents.view` and 9 `documents.manage`.
+  - `station_documents.py` (2): each checks the document's own permissions in the handler.
+- **Search:** `LIKE` passes `escape=`.
+- **Response casing:** no `alias_generator` in `schemas/documents.py`, so snake_case, matching the frontend types.
+
+### Completion gate (pass 6)
+
+| Check                                         | Result                                                     |
+| --------------------------------------------- | ---------------------------------------------------------- |
+| documents, folder and facility-document tests | ✅ **819 passed**, 1 skipped (optional `pywebpush`)        |
+| new tests                                     | ✅ 2 backend (two real sessions), 4 frontend; failed first |
+| `flake8` / `black` / `isort` (changed files)  | ✅ clean                                                   |
+| mypy ratchet                                  | ✅ 0 errors, matching the baseline                         |
+| documents frontend tests                      | ✅ 49 passed (5 files)                                     |
+| `npm run typecheck` / `npm run lint`          | ✅ 0 errors / 0 warnings                                   |
 
 ---
 
