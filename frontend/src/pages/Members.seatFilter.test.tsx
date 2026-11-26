@@ -37,8 +37,8 @@ vi.mock('../services/memberDirectoryService', () => ({
   },
 }));
 
-vi.mock('../modules/scheduling/services/api', () => ({
-  schedulingService: {
+vi.mock('../services/seatHoursService', () => ({
+  seatHoursService: {
     getSeatHours: (...args: unknown[]) => mockSeatHours(...args) as unknown,
   },
 }));

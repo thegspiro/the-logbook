@@ -43,7 +43,7 @@ import { useMembershipTierOptions } from '../hooks/useMembershipTierOptions';
 import { buildCsv, downloadCsv } from '../utils/csv';
 import { displayNameOf } from '../utils/memberName';
 import { StatGrid } from '@/components/ux/StatGrid';
-import { schedulingService, type SeatHoursMember } from '../modules/scheduling/services/api';
+import { seatHoursService, type SeatHoursMember } from '../services/seatHoursService';
 import { RosterSeatFilter } from './members/RosterSeatFilter';
 import { SeatPeriod, seatPeriodDates } from './members/rosterSeatPeriod';
 
@@ -250,7 +250,7 @@ const Members: React.FC = () => {
     }
     let cancelled = false;
     const thisYear = Number(getTodayLocalDate(tz).slice(0, 4));
-    schedulingService
+    seatHoursService
       .getSeatHours({ position: seatFilter.position, ...seatPeriodDates(seatFilter.period, thisYear) })
       .then((result) => {
         if (!cancelled) setSeatHours(new Map(result.members.map((m) => [m.user_id, m])));

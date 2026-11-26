@@ -401,22 +401,6 @@ export interface MemberPositionTotals {
   calls: number;
 }
 
-/** One member's credited shifts in the seat asked about. */
-export interface SeatHoursMember {
-  user_id: string;
-  shifts: number;
-  hours: number;
-  calls: number;
-}
-
-/** Every member's time in one seat over a period (needs `scheduling.report`). */
-export interface SeatHours {
-  position: string;
-  start_date?: string | null;
-  end_date?: string | null;
-  members: SeatHoursMember[];
-}
-
 export interface MemberHoursHistory {
   year: number;
   /** Earliest year the member has any attendance in; null when they have none. */
@@ -1159,11 +1143,6 @@ export const schedulingService = {
       { params: year ? { year } : {} }
     );
     return response.data;
-  },
-  /** Every member's credited hours, shifts and calls in one seat; open dates mean all time. */
-  async getSeatHours(params: { position: string; start_date?: string; end_date?: string }): Promise<SeatHours> {
-    const response = await api.get<SeatHours>('/scheduling/seat-hours', { params });
-    return { ...response.data, members: expectArray(response.data?.members, 'seat hours') };
   },
   /** The caller's own shifts in one year, the department's and other departments'. */
   async getMyShiftHistory(year?: number): Promise<MemberShiftHistory> {
