@@ -553,6 +553,9 @@ class StandaloneEquipmentCheckCreate(BaseModel):
     seals: List[CheckSealSubmit] = Field(default_factory=list)
     notes: Optional[str] = None
     signature_data: Optional[str] = None
+    # One per submission attempt, as on a shift check: a retry after a lost
+    # response returns the check already filed instead of a second (EC2-17).
+    client_submission_id: Optional[str] = Field(None, min_length=1, max_length=100)
 
 
 class EquipmentCheckCompleteItems(BaseModel):

@@ -800,6 +800,69 @@ class TestEndOfShiftChecklistReminderDedupFlag:
         ).scalar_one()
         assert (shift.activities or {}).get("eos_checklist_reminder_sent") is True
 
+    async def test_a_saved_draft_still_gets_its_reminder(
+        self,
+        db_session: AsyncSession,
+    ):
+        """EC2-18: any check row counted as done, so a crew that saved the
+        end-of-shift check part-way was never reminded to finish it — while
+        is_check_completed, which the shift screens use, calls a draft still
+        outstanding."""
+        from app.models.apparatus import EquipmentCheckTemplate
+        from app.models.training import ShiftEquipmentCheck
+        from app.services.scheduled_tasks import run_end_of_shift_checklist_reminders
+
+        org_id = await _insert_org(db_session)
+        active_user = await _insert_user(db_session, org_id=org_id)
+        shift_id, _, _ = await _insert_shift(
+            db_session,
+            org_id=org_id,
+            start_offset_minutes=-650,
+            duration_minutes=680,
+            apparatus_id="apparatus-fixture-3",
+        )
+        await _insert_assignment(
+            db_session, org_id=org_id, shift_id=shift_id, user_id=active_user
+        )
+        template_id = _uid()
+        db_session.add(
+            EquipmentCheckTemplate(
+                id=template_id,
+                organization_id=org_id,
+                apparatus_id=None,
+                check_timing="end_of_shift",
+                name="End of Shift Check",
+                is_active=True,
+            )
+        )
+        db_session.add(
+            ShiftEquipmentCheck(
+                id=_uid(),
+                organization_id=org_id,
+                shift_id=shift_id,
+                template_id=template_id,
+                check_timing="end_of_shift",
+                overall_status="incomplete",
+            )
+        )
+        await db_session.flush()
+
+        await run_end_of_shift_checklist_reminders(db_session)
+
+        notifs = (
+            (
+                await db_session.execute(
+                    select(NotificationLog).where(
+                        NotificationLog.organization_id == org_id,
+                        NotificationLog.recipient_id == active_user,
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        assert len(notifs) == 1
+
 
 # ── _maybe_alert_training_officers ───────────────────────────────────
 
