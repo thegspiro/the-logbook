@@ -3245,7 +3245,13 @@ refused with _"This photo is too large to accept. Save a smaller copy as a
 JPEG and try again"_; the iPhone's default 24 MP photo is accepted. If
 several members are uploading photos at once, an upload can say _"Photos are
 being converted for other uploads. Please try again in a moment."_: send it
-again. They are deleted when the **Keep documents for**
+again. A JPEG or PNG photo is kept without its hidden details too
+_(2026-11-26)_: where it was taken, the camera, any embedded preview and
+comments are removed, while the picture itself is not re-compressed and
+still shows the right way up. If such a photo cannot be read, the upload says
+_"We couldn't read this photo. Save it again and retry."_ Photos filed
+before 2026-11-26 were kept as filed, and a PDF is always kept as filed.
+They are deleted when the **Keep documents for**
 period ends after the decision; the request itself is kept.
 
 - **Viewing a document** _(2026-11-23)_. On the request's page, under
