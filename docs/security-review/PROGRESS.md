@@ -16,10 +16,10 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR #pending (branch `claude/security-review-permissions-roles-p18`)**:
-Feature 02 (Permissions & roles), pass 18 — watchdog pickup (the dedicated
-`/loop 30m /security-review` session remains unreachable). PR number to be
-recorded here in a follow-up commit once opened.
+**PR [#4714](https://github.com/thegspiro/the-logbook/pull/4714) (branch
+`claude/security-review-permissions-roles-p18`)**: Feature 02 (Permissions &
+roles), pass 18 — watchdog pickup (the dedicated `/loop 30m
+/security-review` session remains unreachable).
 
 PR #4713 (Feature 01, Auth & session lifecycle, pass 18) was confirmed
 merged (`f26f1a8b3`) before this iteration started, via a fresh
