@@ -42,11 +42,23 @@ QUALITIES = (85, 60)
 
 
 def _be_the_one_to_go(max_address_space: int) -> None:
-    """Ask the kernel to pick this process first when memory runs out, and
-    cap its address space as a backstop. An unprivileged process may raise
-    its own OOM score; neither step needs root, and a refusal is ignored:
-    the pixel cap is the control, these only decide who pays if it is not
-    enough."""
+    """Leave no core dump, ask the kernel to pick this process first when
+    memory runs out, and cap its address space as a backstop.
+
+    A core dump of this process holds the member's photo in plaintext, and
+    Docker's own units set ``LimitCORE=infinity``: with the kernel's default
+    ``core_pattern`` a crash would leave it in the working directory, and with
+    systemd-coredump on the host. Both honour a limit of zero, and lowering a
+    limit needs no privilege. (``prctl(PR_SET_DUMPABLE, 0)`` is not used: it
+    makes ``/proc/self`` root-owned, which breaks the OOM score write.)
+
+    An unprivileged process may raise its own OOM score; no step needs root,
+    and a refusal is ignored: the pixel cap is the control, the rest only
+    decides who pays if it is not enough."""
+    try:
+        resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
+    except (ValueError, OSError):
+        pass
     try:
         with open("/proc/self/oom_score_adj", "w", encoding="ascii") as fh:
             fh.write("1000")

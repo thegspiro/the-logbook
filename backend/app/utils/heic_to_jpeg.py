@@ -26,7 +26,13 @@ and the server carries on.
 * **The child is the one to go.** It raises its own OOM score, so if memory
   runs out the kernel kills the conversion rather than the server, and caps
   its address space as a backstop.
-* **One conversion at a time** per server process, and a wall-clock limit.
+* **One conversion at a time** per server process, a 10-second wall-clock
+  limit, and a bounded wait for the slot (a 503 with ``Retry-After`` after
+  15 seconds), so a request is answered inside the proxy's 60-second timeout.
+* **No core dump.** A crashed decoder's core holds the member's photo in
+  plaintext, outside the encrypted store and outside retention: the worker
+  sets ``RLIMIT_CORE`` to zero, and runs in the temp directory rather than the
+  application's.
 
 Missing dependency: this module refuses to import without pi-heif, so the
 backend does not start without it (``docs/UPGRADING.md``). The dependency is
@@ -37,6 +43,7 @@ import asyncio
 import importlib.util
 import os
 import sys
+import tempfile
 import weakref
 from pathlib import Path
 from typing import Optional
@@ -59,8 +66,14 @@ MAX_PIXELS = 25_000_000
 #: The child's address-space backstop: about twice its measured virtual peak
 #: (300 MB) at the pixel cap.
 MAX_ADDRESS_SPACE = 640 * 1024 * 1024
-#: Measured at under a second for 24 MP; generous for a slow NAS CPU.
-TIMEOUT_SECONDS = 30.0
+#: A 24 MP photo was measured at about 0.6 s, so this is over fifteen times
+#: that, for a slow NAS CPU. It is also how long a crafted file that keeps the
+#: decoder busy holds the only conversion slot, so it is kept short.
+TIMEOUT_SECONDS = 10.0
+#: How long a request waits for the slot before it is told to retry. With the
+#: timeout, a conversion is answered within 25 s, well inside the proxy's 60 s
+#: read timeout, even behind a photo that runs to the limit.
+SLOT_WAIT_SECONDS = 15.0
 
 # The worker's exit statuses (heic_decode_worker.py).
 EXIT_OK = 0
@@ -74,8 +87,9 @@ UNREADABLE = (
     "(on an iPhone, choose Most Compatible under Settings, Camera, Formats)."
 )
 TOO_MANY_PIXELS = (
-    "This photo is too large to accept. Save a smaller copy as a JPEG " "and try again."
+    "This photo is too large to accept. Save a smaller copy as a JPEG and try again."
 )
+BUSY = "Photos are being converted for other uploads. Please try again in a moment."
 
 # One semaphore per event loop: an asyncio.Semaphore binds to the loop it
 # first waits on, and the test suite runs a loop per test.
@@ -125,20 +139,48 @@ async def _run(
         # The decoder's messages describe the member's file; not kept.
         stderr=asyncio.subprocess.DEVNULL,
         env=_child_environment(),
+        # Not the application directory, which the backend's user can write:
+        # wherever the kernel's core_pattern puts a dump by default, it is not
+        # among the application's files. The worker turns dumps off as well.
+        cwd=tempfile.gettempdir(),
     )
     try:
         out, _ = await asyncio.wait_for(process.communicate(content), timeout)
     except asyncio.TimeoutError:
-        process.kill()
-        await process.wait()
+        await _stop(process)
         return None, b""
     except BaseException:
         # Cancelled (the client went away): do not leave the child running.
-        if process.returncode is None:
-            process.kill()
-            await process.wait()
+        await _stop(process)
         raise
     return process.returncode, out
+
+
+async def _stop(process: asyncio.subprocess.Process) -> None:
+    """Kill and reap the child. It may exit on its own in the same turn as
+    the deadline, and kill() then raises ProcessLookupError; that is the
+    outcome wanted, not an error."""
+    if process.returncode is None:
+        try:
+            process.kill()
+        except ProcessLookupError:
+            pass
+    await process.wait()
+
+
+async def _acquire(slot: asyncio.Semaphore) -> None:
+    """Wait a bounded time for the slot, or answer 503: an unbounded queue
+    behind a slow conversion outlives the proxy's timeout, and a request
+    filed after its client saw a 504 is worse than one refused."""
+    try:
+        await asyncio.wait_for(slot.acquire(), SLOT_WAIT_SECONDS)
+    except asyncio.TimeoutError:
+        raise CodedHTTPException(
+            status_code=503,
+            detail=BUSY,
+            error_code=ErrorCode.UPLD_VALIDATION_UNAVAILABLE,
+            headers={"Retry-After": str(int(SLOT_WAIT_SECONDS))},
+        )
 
 
 async def heic_to_jpeg(
@@ -150,9 +192,14 @@ async def heic_to_jpeg(
 ) -> bytes:
     """The photo in *content* as JPEG bytes, or a refusal: 400 when it cannot
     be read, has more than *max_pixels* pixels, or cannot be brought under
-    *max_bytes*; 503 when the decoder is missing from the server."""
-    async with _slot():
+    *max_bytes*; 503 when the decoder is missing from the server or the
+    conversion slot stays busy for ``SLOT_WAIT_SECONDS``."""
+    slot = _slot()
+    await _acquire(slot)
+    try:
         status, jpeg = await _run(content, max_bytes or 0, max_pixels, timeout)
+    finally:
+        slot.release()
     if status == EXIT_OK and jpeg.startswith(b"\xff\xd8"):
         return jpeg
     if status == EXIT_TOO_MANY_PIXELS:
