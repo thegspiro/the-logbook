@@ -154,10 +154,27 @@ or arm64.
   package installed.
 - **Running from source:** run `pip install -r backend/requirements.txt`
   before restarting.
+- **Native systemd install (`install.sh --traditional`):** also add
+  `OOMPolicy=continue` to the backend's unit, which new installs write. The
+  decoder runs in a child Python process that makes itself the kernel's first
+  choice when memory runs out; under systemd's default `OOMPolicy=stop`, that
+  kill stops the whole backend service until it restarts. Without the line
+  the backend still boots, so this does not stop an upgrade; it stops the
+  service later, on the first such kill:
+
+  ```sh
+  sudo systemctl edit logbook-backend
+  # in the editor, add:
+  #   [Service]
+  #   OOMPolicy=continue
+  sudo systemctl daemon-reload
+  sudo systemctl restart logbook-backend
+  ```
 
 The decoder runs in a child Python process the backend starts per photo
-(`python -I`). It needs no extra permission, port or volume, and nothing to
-configure; it uses the same interpreter as the backend.
+(`python -I`), with the same interpreter, in the temp directory. It needs no
+extra port, volume or setting under Docker; a native systemd install needs
+the `OOMPolicy` line above.
 
 No data change: HEIC files already stored stay as they were filed.
 

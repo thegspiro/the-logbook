@@ -3233,7 +3233,10 @@ details such as where it was taken. If the photo cannot be read, the upload
 says _"We couldn't read this photo. Save it as a JPEG and try again"_. A
 photo over 25 megapixels (an iPhone's optional 48 MP setting, for example) is
 refused with _"This photo is too large to accept. Save a smaller copy as a
-JPEG and try again"_; the iPhone's default 24 MP photo is accepted. They are deleted when the **Keep documents for**
+JPEG and try again"_; the iPhone's default 24 MP photo is accepted. If
+several members are uploading photos at once, an upload can say _"Photos are
+being converted for other uploads. Please try again in a moment."_: send it
+again. They are deleted when the **Keep documents for**
 period ends after the decision; the request itself is kept.
 
 - **Viewing a document** _(2026-11-23)_. On the request's page, under

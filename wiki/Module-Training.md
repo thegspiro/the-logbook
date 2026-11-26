@@ -1587,7 +1587,10 @@ switch and the officer's duty-email setting).
   records the JPEG under `STORED_FILE_RULES`, which do not admit HEIC. No
   EXIF or XMP is written; every failure in the child is a 400 (a missing
   decoder a 503); a 25 MP cap applies before decode; one conversion at a
-  time, 30-second timeout. Files stored earlier stay as filed.
+  time, a 15-second wait for the slot (then a 503 with `Retry-After`), a
+  10-second timeout, no core dumps, and the child runs in the temp
+  directory. Native installs need `OOMPolicy=continue` on the backend unit.
+  Files stored earlier stay as filed.
 
 ## Former members in pickers _(2026-11-19, #4380, #4432)_
 

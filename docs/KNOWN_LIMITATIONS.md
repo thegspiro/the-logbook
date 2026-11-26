@@ -11756,11 +11756,33 @@ request, kept 365 days) shipped with these gaps, each the narrower choice:
     environment). An independent review found that a one-byte change to a
     valid photo segfaults `pi_heif.open_heif`; in the server's process that
     took the backend down for every user, and a thread does not prevent it.
-    Now a crash, an exception, a 30-second timeout or exhausted memory ends
+    Now a crash, an exception, a 10-second timeout or exhausted memory ends
     the child and gives the member a 400. The child raises its own OOM score
     so the kernel kills it before the server, caps its address space at
-    640 MiB, and one conversion runs at a time. Whether to report the crash
-    to the pi-heif maintainers is with the owner.
+    640 MiB, turns core dumps off (a dump would hold the photo in plaintext,
+    outside the encrypted store and retention) and runs in the temp
+    directory, not the application's. Whether to report the crash to the
+    pi-heif maintainers is with the owner.
+  - **One conversion at a time per backend process; a request waits at most
+    15 seconds for its turn** _(default taken)_, then gets a 503 _"Photos are
+    being converted for other uploads. Please try again in a moment."_ with
+    `Retry-After`. A crafted photo can keep the decoder busy for the whole
+    10-second timeout, and an unbounded queue behind three of them ran past
+    nginx's 60-second read timeout: the member saw a 504 while the request
+    was still filed. A request with several photos waits for each in turn.
+  - **A request waiting on a conversion keeps its database connection**
+    _(not changed)_. The upload reads the policy and the request before the
+    files are converted, so the session's transaction is open while the
+    child runs. Ending it early would mean committing mid-request in a
+    service whose callers own the transaction, and was not attempted; the
+    bounded wait and timeout limit how long a connection is held (25 seconds
+    per photo at most).
+  - **Native installs need `OOMPolicy=continue`** on the backend's systemd
+    unit. Without it systemd stops the whole service when the kernel kills
+    the decoder child, which is the outcome this design relies on;
+    `install.sh --traditional` writes it from 2026-11-26, and
+    `docs/UPGRADING.md` says how to add it to an existing unit. Docker
+    deployments are not affected.
   - **Photos over 25 megapixels are refused** _(default taken)_, with "This
     photo is too large to accept. Save a smaller copy as a JPEG and try
     again." The cap is checked on the declared size before decoding. The
