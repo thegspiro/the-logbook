@@ -64,8 +64,10 @@ def test_the_photo_comes_out_upright():
     assert image.size == (16, 32)
     top = image.getpixel((8, 4))
     bottom = image.getpixel((8, 27))
-    assert top[0] > 200 and top[2] < 60, top
-    assert bottom[2] > 200 and bottom[0] < 60, bottom
+    assert top[0] > 200, top
+    assert top[2] < 60, top
+    assert bottom[2] > 200, bottom
+    assert bottom[0] < 60, bottom
 
 
 def test_no_location_or_other_metadata_is_kept():
@@ -103,4 +105,3 @@ def test_a_photo_over_the_pixel_limit_is_refused(monkeypatch):
         heic_to_jpeg(HEIC)
     assert refused.value.status_code == 400
     assert "too large" in refused.value.detail
-

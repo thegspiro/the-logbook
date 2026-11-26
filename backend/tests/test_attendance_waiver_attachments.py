@@ -240,7 +240,7 @@ class TestSubmitting:
             as_user,
             dept.member,
             dept.drill,
-            [_pdf(), ("files", ("IMG_0001.HEIC", HEIC, "image/heic"))],
+            [_pdf(), ("files", ("IMG_0001.HEIC", PHOTO, "image/heic"))],
             reason="Back injury",
         )
         assert resp.status_code == 201, resp.text
@@ -249,7 +249,7 @@ class TestSubmitting:
             (a["ordinal"], a["filename"], a["mime_type"]) for a in body["attachments"]
         ] == [
             (1, "waiver-attachment-1.pdf", "application/pdf"),
-            (2, "waiver-attachment-2.heic", "image/heic"),
+            (2, "waiver-attachment-2.jpg", "image/jpeg"),
         ]
         assert body["can_attach"] is True
         on_disk = _files_on_disk(dept.uploads)
@@ -470,8 +470,8 @@ class TestHeicIsStoredAsJpeg:
         ] == [("waiver-attachment-1.jpg", "image/jpeg")]
         (path,) = _files_on_disk(dept.uploads)
         assert path.endswith(".jpg")
-        with open(path, "rb") as fh:
-            stored = fh.read()
+        # Read back through the store: the file on disk is encrypted at rest.
+        stored = await file_storage_service.read_bytes(path)
         assert detect_mime_type(stored) == "image/jpeg"
         image = Image.open(io.BytesIO(stored))
         assert image.size == (16, 32)

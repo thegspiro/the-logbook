@@ -9,6 +9,11 @@ decisions, 2026-11-10):
   The type is the one libmagic detects, never the name or the browser's
   claim, through ``FileStorageService``; HEIC is accepted here and nowhere
   else in the application.
+- **A HEIC photo is stored as a JPEG** (owner decision 2026-11-26), upright
+  and with no EXIF, so the location an iPhone records is never kept
+  (``app/utils/heic_to_jpeg.py``). The malware scan, the storage ledger and
+  the row all see the JPEG. A photo that cannot be decoded is refused, never
+  stored as filed. HEIC files stored before that decision stay as they are.
 - **Filed by the member**, with the request or while it is pending. Once it is
   decided, withdrawn or voided nothing more can be added. While it is pending
   the member may also remove one (owner decision 2026-11-23), except the last
@@ -25,6 +30,7 @@ uploader's filename is not kept: a download is always
 ``waiver-attachment-<n>.<ext>``.
 """
 
+import asyncio
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from datetime import timezone as dt_timezone
@@ -59,6 +65,7 @@ from app.services.file_storage_service import (
     StorageArea,
     StoredFile,
 )
+from app.utils.heic_to_jpeg import heic_to_jpeg
 
 AREA = StorageArea.ATTENDANCE_WAIVERS
 UPLOAD_KIND = "attendance_waiver_attachment"
@@ -78,6 +85,21 @@ ATTACHMENT_FILE_RULES = FileRules(
     },
     max_bytes=MAX_ATTACHMENT_BYTES,
     description="PDF, JPEG, PNG or HEIC",
+)
+
+#: Converted to JPEG before anything is stored.
+HEIC_TYPES = frozenset({"image/heic", "image/heif"})
+
+#: What may be written: the accepted types less HEIC. Storing under these
+#: rules means a HEIC that somehow skipped conversion is refused, not kept.
+STORED_FILE_RULES = FileRules(
+    allowed_types={
+        mime: ext
+        for mime, ext in ATTACHMENT_FILE_RULES.allowed_types.items()
+        if mime not in HEIC_TYPES
+    },
+    max_bytes=MAX_ATTACHMENT_BYTES,
+    description=ATTACHMENT_FILE_RULES.description,
 )
 
 
@@ -133,11 +155,11 @@ class AttendanceWaiverAttachmentService:
             for upload in pending:
                 stored.append(
                     await self.storage.store_bytes(
-                        upload.content,
+                        await self._as_stored(upload),
                         original_name=upload.filename,
                         organization_id=org_id,
                         area=AREA,
-                        rules=ATTACHMENT_FILE_RULES,
+                        rules=STORED_FILE_RULES,
                         user=member,
                         record_id=request_id,
                         upload_kind=UPLOAD_KIND,
@@ -147,6 +169,21 @@ class AttendanceWaiverAttachmentService:
             await _remove_files([f.path for f in stored])
             raise
         return stored
+
+    async def _as_stored(self, upload: PendingUpload) -> bytes:
+        """The bytes to store: a HEIC photo converted to JPEG, anything else
+        as filed. Converted before ``store_bytes``, so its type check, the
+        malware scan and the storage ledger all see the file that is kept."""
+        detected, _ = self.storage.inspect(
+            upload.content, upload.filename, ATTACHMENT_FILE_RULES
+        )
+        if detected not in HEIC_TYPES:
+            return upload.content
+        # Decoding is CPU-bound; off the event loop so a 10 MB photo does not
+        # stall every other request this worker is serving.
+        return await asyncio.to_thread(
+            heic_to_jpeg, upload.content, MAX_ATTACHMENT_BYTES
+        )
 
     async def _abandon(
         self, org_id: str, request_id: str, stored: Sequence[StoredFile]
