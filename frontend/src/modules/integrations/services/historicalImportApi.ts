@@ -22,6 +22,9 @@ import type {
   DrillPreview,
   StaffingCommitPreview,
   StaffingFileKind,
+  StaffingLeftoversQuery,
+  StaffingLeftoversUpdate,
+  StaffingLeftoversView,
   StaffingMappingList,
   StaffingMappingView,
   StaffingPreview,
@@ -282,6 +285,20 @@ export const historicalImportService = {
       { params: { offset: params.offset ?? 0, limit: params.limit ?? 50 }, timeout: 0 }
     );
     return response.data;
+  },
+
+  /** Every seat or hours entry the pairing leaves unpaired, filtered. */
+  async getStaffingLeftovers(importId: string, query: StaffingLeftoversQuery): Promise<StaffingLeftoversView> {
+    const response = await api.get<StaffingLeftoversView>(`${BASE}/${importId}/staffing/leftovers`, {
+      params: { offset: 0, limit: 50, ...query },
+      timeout: 0,
+    });
+    return response.data;
+  },
+
+  /** Pair seats with hours by hand, unpair them, or mark leftovers reviewed. */
+  async updateStaffingLeftovers(importId: string, update: StaffingLeftoversUpdate): Promise<void> {
+    await api.patch(`${BASE}/${importId}/staffing/leftovers`, update, { timeout: 0 });
   },
 
   /** Write the roster; safe to run again. */

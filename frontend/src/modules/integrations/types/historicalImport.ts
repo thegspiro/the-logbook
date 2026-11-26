@@ -435,6 +435,11 @@ export interface StaffingHoursMatch {
   matched: number;
   signups_without_hours: number;
   hours_without_signup: number;
+  /** Of `matched`: paired by the reviewer. Absent from older responses. */
+  paired_by_reviewer?: number;
+  /** Of each unpaired count: the ones accepted as unpaired. */
+  signups_reviewed?: number;
+  hours_reviewed?: number;
   /** The first of each; the counts above are whole. */
   signups_without_hours_examples: StaffingSignupWithoutHours[];
   hours_without_signup_examples: StaffingHoursWithoutSignup[];
@@ -520,4 +525,73 @@ export interface UndoResult {
   members_removed: number;
   members_kept: number;
   preview: UndoPreview;
+}
+
+/** Which side of the pairing a leftovers list shows. */
+export const StaffingLeftoverKind = {
+  SIGNUPS: 'signups',
+  HOURS: 'hours',
+} as const;
+export type StaffingLeftoverKind = (typeof StaffingLeftoverKind)[keyof typeof StaffingLeftoverKind];
+
+/** Open, accepted as unpaired, or (a seat only) paired by the reviewer. */
+export const StaffingLeftoverState = {
+  OPEN: 'open',
+  REVIEWED: 'reviewed',
+  PAIRED: 'paired',
+} as const;
+export type StaffingLeftoverState = (typeof StaffingLeftoverState)[keyof typeof StaffingLeftoverState];
+
+/** Names a leftover in a reviewed mark: `signup:<seat key>` or `hours:<attendance id>`. */
+export const STAFFING_LEFTOVER_PREFIX: Record<StaffingLeftoverKind, string> = {
+  signups: 'signup:',
+  hours: 'hours:',
+};
+
+export interface StaffingLeftoverHours {
+  attendance_id: string;
+  date?: string | null;
+  start: string;
+  end: string;
+}
+
+export interface StaffingLeftover {
+  key: string;
+  state: StaffingLeftoverState;
+  date?: string | null;
+  member_id: string;
+  member: string;
+  /** A seat: */
+  activity?: string | null;
+  title?: string | null;
+  paired_with?: StaffingLeftoverHours | null;
+  candidates?: StaffingLeftoverHours[];
+  /** An hours entry: */
+  attendance_id?: string | null;
+  start?: string | null;
+  end?: string | null;
+}
+
+export interface StaffingLeftoversView {
+  kind: StaffingLeftoverKind;
+  items: StaffingLeftover[];
+  total: number;
+  members: { id: string; name: string }[];
+}
+
+export interface StaffingLeftoversQuery {
+  kind: StaffingLeftoverKind;
+  member_id?: string | undefined;
+  date_from?: string | undefined;
+  date_to?: string | undefined;
+  show_resolved?: boolean | undefined;
+  offset?: number | undefined;
+  limit?: number | undefined;
+}
+
+export interface StaffingLeftoversUpdate {
+  /** Seat key to attendance id; null unpairs. */
+  pairs?: Record<string, string | null>;
+  /** `signup:<key>` or `hours:<id>` to whether it is reviewed. */
+  reviewed?: Record<string, boolean>;
 }
