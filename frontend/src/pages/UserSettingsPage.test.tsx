@@ -439,6 +439,26 @@ describe('UserSettingsPage', () => {
         expect.objectContaining({ preferred_name: null })
       );
     });
+
+    // App-review ORU6-F6: every other optional box went out as '' and was
+    // stored as an empty string rather than cleared.
+    it('sends null for a phone number the member cleared', async () => {
+      vi.mocked(userService.getUserWithRoles).mockResolvedValue({
+        ...defaultProfile,
+        phone: '555-0100',
+      } as never);
+      const user = userEvent.setup();
+      renderWithRouter(<UserSettingsPage />);
+
+      const input = await screen.findByDisplayValue('555-0100');
+      await user.clear(input);
+      await user.click(screen.getByRole('button', { name: 'Save Profile' }));
+
+      await waitFor(() => expect(userService.updateUserProfile).toHaveBeenCalledTimes(1));
+      expect(vi.mocked(userService.updateUserProfile).mock.calls[0]?.[1]).toEqual(
+        expect.objectContaining({ phone: null })
+      );
+    });
   });
 
   // Forms review F-2/F-7/F-9: a value the server refuses lands on its field;
