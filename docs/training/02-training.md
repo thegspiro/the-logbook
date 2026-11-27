@@ -2060,6 +2060,14 @@ inside the requirement's own period, with training waivers and leave applied.
 Hours on a shift not yet closed out stop counting there until it is closed
 out.
 
+_(2026-11-26)_ Once the box is ticked, **Only time in this seat** can limit
+the requirement to one seat, such as **Driver/Operator** for "24 driver hours
+a year". Only shifts the member held that seat on count, on Shift Compliance
+and, for a Shifts requirement, on every compliance screen. Shifts with no seat
+recorded, and time on another agency's apparatus, carry no seat and do not
+count toward one. Leave it on **Any seat** to count every shift. One seat per
+requirement: make a second requirement for a second seat.
+
 See [Shifts & Scheduling](./03-scheduling.md#compliance-report).
 
 ![Shift Credit on an Hours requirement: Shift attendance satisfies this requirement, unticked, with its help text](./images/02-115-shift-credit-box.png)
@@ -3237,7 +3245,13 @@ refused with _"This photo is too large to accept. Save a smaller copy as a
 JPEG and try again"_; the iPhone's default 24 MP photo is accepted. If
 several members are uploading photos at once, an upload can say _"Photos are
 being converted for other uploads. Please try again in a moment."_: send it
-again. They are deleted when the **Keep documents for**
+again. A JPEG or PNG photo is kept without its hidden details too
+_(2026-11-26)_: where it was taken, the camera, any embedded preview and
+comments are removed, while the picture itself is not re-compressed and
+still shows the right way up. If such a photo cannot be read, the upload says
+_"We couldn't read this photo. Save it again and retry."_ Photos filed
+before 2026-11-26 were kept as filed, and a PDF is always kept as filed.
+They are deleted when the **Keep documents for**
 period ends after the decision; the request itself is kept.
 
 - **Viewing a document** _(2026-11-23)_. On the request's page, under
