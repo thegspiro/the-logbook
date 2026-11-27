@@ -1,5 +1,29 @@
 # Screenshot currency
 
+## Queued by the November 25 – 26 documentation pass
+
+Source: [CHANGE_AUDIT_2026-11](../CHANGE_AUDIT_2026-11.md#change-audit-november-25--26-2026).
+Nothing was captured by this pass. Every new id below has a placeholder in
+its guide. The ids continue after the ones the November 24 – 25 pass
+reserved (`04-120`, `08-130`); check them against `images/` before saving.
+
+| Guide | Screen | Action |
+| --- | --- | --- |
+| 08 | **Administration > Organization Settings > Public Website**: **Publish the website** off, **Classic** chosen, the Contact page's three switches with the department's phone, email and address beside them | Create `08-131-public-website-settings` |
+| 08 | The published Home page in the Classic look at the public website port (3002 in the demo stack): emergency notice band, tagline, two welcome paragraphs | Create `08-132-public-website-home` (needs the demo department's website published and the port reachable from the capture browser) |
+| 04 | One outreach request on a phone: the trail ending on the request, the Events section row, **Events Administration**, the **Community Outreach** row with **Outreach Requests** selected | Create `04-121-outreach-request-header` |
+| 04 | `04-102-event-request-page`: the Events Administration header and the Community Outreach page row now sit above the request (#4721) | **Replace** |
+| 04 | `04-05`, `04-20`, `04-37`, `04-91`, `04-98`, `04-100`: full-page shots of Events Administration, which now has the Events section row between the trail and the title | **Replace** |
+| 04 | `04-08-event-analytics`, `04-09-event-templates`, `04-47-template-reminder-audience`: the Events row is unchanged, but the trail no longer passes through Events Administration | **Replace** |
+| 00 | `00-16-sidebar-admin`: if **Organization Settings** is shown open, it now lists **Public Website** under **Public Portal** (only with the Public Information module on) | Check |
+| 04 | Any shot of a minutes action item that is overdue: the status select now reads **Overdue** (MM6-5) | Check |
+| 05 | Medical Supplies and Impact Planner at phone width, if any were taken: a **Sort by** list now sits above the cards | Check |
+| 12 | Grant applications **Table** view at phone or tablet width, if taken: **Sort by** above the cards, with no **Default order** | Check |
+
+**Made wrong by this range:** `04-05`, `04-08`, `04-09`, `04-20`, `04-37`,
+`04-47`, `04-91`, `04-98`, `04-100`, `04-102`. Each is captured by the
+manifest at full page or from the top of the page, so the header is in frame.
+
 ## Queued by the November 24 – 25 documentation pass
 
 Source: [CHANGE_AUDIT_2026-11](../CHANGE_AUDIT_2026-11.md#change-audit-november-24--25-2026).
