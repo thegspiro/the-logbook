@@ -156,6 +156,20 @@ def test_a_waiver_heic_is_scanned_before_it_is_decoded():
     assert first.value.func.attr == "_as_stored"
 
 
+def test_a_waiver_jpeg_or_png_is_scanned_before_its_metadata_is_removed():
+    """Owner decision 2026-11-26: the metadata goes before a JPEG or PNG is
+    stored, and a signature hidden in it must still be seen. The member's
+    original is scanned first; the stripped file again when it is stored."""
+    service = attendance_waiver_attachments.AttendanceWaiverAttachmentService
+    source = inspect.getsource(service._as_stored)
+    # On a worker thread: a crafted file can take the walk a while, and on
+    # the event loop that stalls every request the worker is serving.
+    call = "asyncio.to_thread(strip_photo_metadata,"
+    assert source.count("strip_photo_metadata") == 1
+    assert source.count(call) == 1
+    assert source.index("self.storage.check(") < source.index(call)
+
+
 def test_the_history_media_entry_point_routes_through_the_scanning_service():
     """The history media entry above is trusted only while this holds."""
     source = inspect.getsource(HistoryMediaService.store_media_upload)
