@@ -433,30 +433,39 @@ const FormBuilder = ({
       width: field.width,
       is_sensitive: field.is_sensitive ?? false,
       applicant_field: field.applicant_field ?? undefined,
-      sort_order: field.sort_order + 1,
     };
-
-    // Bump sort_order on all fields after the duplicated one
-    const reindexed = fields.map((f) => (f.sort_order > field.sort_order ? { ...f, sort_order: f.sort_order + 1 } : f));
 
     if (isConnected) {
       try {
         setSaving(true);
-        await formsService.addField(formId, fieldData);
+        // Added at the end, then moved to sit under its original: a guessed
+        // sort_order ties with the next field (the server does not reindex
+        // after a delete), and tied fields order unpredictably and cannot be
+        // moved past each other.
+        const created = await formsService.addField(formId, fieldData);
+        const order = [...fields].sort((a, b) => a.sort_order - b.sort_order).map((f) => f.id);
+        order.splice(order.indexOf(field.id) + 1, 0, created.id);
+        await formsService.reorderFields(formId, order);
         await loadFields();
       } catch {
+        // The copy may have been added before the move failed; show it.
+        await loadFields();
         setError('Failed to duplicate field.');
       } finally {
         setSaving(false);
       }
     } else {
+      // Bump sort_order on all fields after the duplicated one
+      const reindexed = fields.map((f) =>
+        f.sort_order > field.sort_order ? { ...f, sort_order: f.sort_order + 1 } : f
+      );
       const newField: FieldDefinition = {
         id: `local-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
         ...fieldData,
         label: fieldData.label,
         field_type: fieldData.field_type,
         required: fieldData.required ?? false,
-        sort_order: fieldData.sort_order ?? fields.length,
+        sort_order: field.sort_order + 1,
         width: fieldData.width || 'full',
       };
       const updated = [...reindexed, newField];
@@ -475,8 +484,12 @@ const FormBuilder = ({
         if (editingFieldId) {
           await formsService.updateField(formId, editingFieldId, toFieldUpdate(fieldData));
         } else {
-          fieldData.sort_order = fields.length;
-          await formsService.addField(formId, fieldData);
+          // No sort_order: the server appends after the highest one. The
+          // field count collides with an existing order once a field has
+          // been deleted, since deleting does not reindex.
+          const payload = { ...fieldData };
+          delete payload.sort_order;
+          await formsService.addField(formId, payload);
         }
         await loadFields();
       } catch (err: unknown) {
@@ -564,30 +577,17 @@ const FormBuilder = ({
     }
   };
 
-  const handleReorder = useCallback(
-    async (fieldId: string, direction: 'up' | 'down') => {
-      const sorted = [...fields].sort((a, b) => a.sort_order - b.sort_order);
-      const idx = sorted.findIndex((f) => f.id === fieldId);
-      if (idx < 0) return;
-
-      const swapIdx = direction === 'up' ? idx - 1 : idx + 1;
-      if (swapIdx < 0 || swapIdx >= sorted.length) return;
-
-      // Swap sort_orders
-      const fieldA = sorted[idx];
-      const fieldB = sorted[swapIdx];
-      if (!fieldA || !fieldB) return;
-      const tempOrder = fieldA.sort_order;
-      fieldA.sort_order = fieldB.sort_order;
-      fieldB.sort_order = tempOrder;
-
+  // Both reorders build a new list rather than writing sort_order onto the
+  // objects held in state, so a refused save leaves nothing moved on screen.
+  // Orders are positions, not
+  // swapped values: two fields can share a sort_order, and swapping equal
+  // values moved nothing.
+  const applyOrder = useCallback(
+    async (orderedIds: string[]) => {
       if (isConnected) {
         try {
           setSaving(true);
-          await Promise.all([
-            formsService.updateField(formId, fieldA.id, { sort_order: fieldA.sort_order }),
-            formsService.updateField(formId, fieldB.id, { sort_order: fieldB.sort_order }),
-          ]);
+          await formsService.reorderFields(formId, orderedIds);
           await loadFields();
         } catch {
           setError('Failed to reorder fields.');
@@ -595,11 +595,32 @@ const FormBuilder = ({
           setSaving(false);
         }
       } else {
-        setFields([...sorted]);
-        onFieldsChange?.([...sorted] as FieldDefinition[]);
+        const byId = new Map(fields.map((f) => [f.id, f]));
+        const reordered = orderedIds.flatMap((id, i) => {
+          const f = byId.get(id);
+          return f ? [{ ...f, sort_order: i }] : [];
+        });
+        setFields(reordered);
+        onFieldsChange?.(reordered);
       }
     },
     [fields, formId, isConnected, onFieldsChange] // eslint-disable-line react-hooks/exhaustive-deps
+  );
+
+  const handleReorder = useCallback(
+    async (fieldId: string, direction: 'up' | 'down') => {
+      const order = [...fields].sort((a, b) => a.sort_order - b.sort_order).map((f) => f.id);
+      const idx = order.indexOf(fieldId);
+      if (idx < 0) return;
+
+      const swapIdx = direction === 'up' ? idx - 1 : idx + 1;
+      if (swapIdx < 0 || swapIdx >= order.length) return;
+
+      order[idx] = order[swapIdx] ?? fieldId;
+      order[swapIdx] = fieldId;
+      await applyOrder(order);
+    },
+    [fields, applyOrder]
   );
 
   const handleDragEnd = useCallback(
@@ -607,36 +628,17 @@ const FormBuilder = ({
       const { active, over } = event;
       if (!over || active.id === over.id) return;
 
-      const sorted = [...fields].sort((a, b) => a.sort_order - b.sort_order);
-      const oldIndex = sorted.findIndex((f) => f.id === active.id);
-      const newIndex = sorted.findIndex((f) => f.id === over.id);
+      const order = [...fields].sort((a, b) => a.sort_order - b.sort_order).map((f) => f.id);
+      const oldIndex = order.indexOf(String(active.id));
+      const newIndex = order.indexOf(String(over.id));
       if (oldIndex < 0 || newIndex < 0) return;
 
-      // Reorder the array and reassign sort_order values
-      const [moved] = sorted.splice(oldIndex, 1);
+      const [moved] = order.splice(oldIndex, 1);
       if (!moved) return;
-      sorted.splice(newIndex, 0, moved);
-      sorted.forEach((f, i) => {
-        f.sort_order = i;
-      });
-
-      if (isConnected) {
-        try {
-          setSaving(true);
-          const fieldIds = sorted.map((f) => f.id);
-          await formsService.reorderFields(formId, fieldIds);
-          await loadFields();
-        } catch {
-          setError('Failed to reorder fields.');
-        } finally {
-          setSaving(false);
-        }
-      } else {
-        setFields([...sorted]);
-        onFieldsChange?.([...sorted] as FieldDefinition[]);
-      }
+      order.splice(newIndex, 0, moved);
+      await applyOrder(order);
     },
-    [fields, formId, isConnected, onFieldsChange] // eslint-disable-line react-hooks/exhaustive-deps
+    [fields, applyOrder]
   );
 
   // Loading

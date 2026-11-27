@@ -1943,9 +1943,9 @@ the **Period** you choose:
 
 **Who can do this:** officers who can manage events.
 
-On an event's page, the **Notifications** panel sends a message about that
-event. Choose a **Notification Type**, the audience, and an optional message,
-then send. It arrives in each member's Notifications inbox in The Logbook and
+On an event's page, the **Notifications** line opens the panel that sends a
+message about that event: select **Write a notification**. Choose a
+**Notification Type**, the audience, and an optional message, then send. It arrives in each member's Notifications inbox in The Logbook and
 by email.
 
 Whether a member gets the email depends on the type:
@@ -3780,8 +3780,10 @@ in a table with its **Target**, what it **Reached** and its **Status**.
 #### Recording a guest headcount
 
 For an event where guests did not sign in one by one — an assembly, a block
-party — open the event and enter the number in **Guest headcount** →
-**Guests counted**, then select **Save headcount**. **Clear** removes it.
+party — open the event, select **Record headcount** on the **Guest
+headcount** line, enter the number in **Guests counted**, then select **Save
+headcount**. **Clear** removes it. Once a headcount is saved the card shows in
+full.
 
 ![The Guest headcount card on an event's page: the Guests counted box holding 22, with the Save headcount and Clear buttons](./images/04-101-guest-headcount.png)
 
@@ -3807,7 +3809,8 @@ preferences; the notification still arrives.
 #### Recording how it went _(2026-11-21)_
 
 Beside **Guest headcount**, an outreach event that has started carries a
-**How it went** card, for the same officers. Fill in what you know and select
+**How it went** line, for the same officers. Select **Write it up** to open
+the card (it shows in full once something is saved), fill in what you know and select
 **Save close-out**; you can come back and change it later, after the event's
 attendance is finalized included.
 
@@ -3875,12 +3878,9 @@ stop the email under **Event officer duties** in their notification
 preferences; the bell still arrives. To stop it for the whole department, or
 reword it, edit **Requester Feedback Received** under **Email Templates**.
 
-> **Screenshots needed:** (`04-114-feedback-form-setting.png`) **Settings →
-> Public Requests → Handling**, the **Feedback From Requesters** block with the
-> starter form chosen as **Feedback form** and **How did the visit go?** as
-> **Rating question**; (`04-115-requester-feedback.png`) a completed request's
-> page showing the **Requester feedback** section with a rating and the two
-> written answers.
+![The Feedback From Requesters block in Request Handling: Outreach feedback chosen as the Feedback form and How did the visit go? as the Rating question, with the link to Forms where the questions and their branches are built](./images/04-114-feedback-form-setting.png)
+
+![A completed request's page with its Requester feedback section: rated 3, when it was sent and on which form, and the answers to What went well? and What could we do better?](./images/04-115-requester-feedback.png)
 
 ### Public Request Form
 
