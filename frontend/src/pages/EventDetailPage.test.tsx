@@ -205,6 +205,12 @@ const mockRSVPs: RSVP[] = [
   },
 ];
 
+// The page's cards sit in sections; anything outside Overview is behind its
+// tab, as it is for the person using the page.
+const openTab = async (name: RegExp) => {
+  await userEvent.setup().click(await screen.findByRole('tab', { name }));
+};
+
 describe('EventDetailPage', () => {
   const { eventService, userService } = apiModule;
 
@@ -227,6 +233,8 @@ describe('EventDetailPage', () => {
     vi.mocked(eventService.getAttendancePetitions).mockResolvedValue([]);
     vi.mocked(electionService.getElectionsByEvent).mockReset();
     vi.mocked(electionService.getElectionsByEvent).mockResolvedValue([]);
+    // The selected section lives in ?tab=, and the address outlives a test.
+    window.history.replaceState({}, '', '/');
     // Set per test where it matters; reset here so one that turns the module
     // off cannot leave it off for the blocks after it.
     mockModules.on = true;
@@ -481,6 +489,7 @@ describe('EventDetailPage', () => {
 
       const user = userEvent.setup();
       renderWithRouter(<EventDetailPage />);
+      await openTab(/^Attendance/);
 
       await waitFor(() => {
         const editButtons = screen.getAllByRole('button', { name: /edit/i });
@@ -509,6 +518,7 @@ describe('EventDetailPage', () => {
       vi.mocked(eventService.getEventStats).mockResolvedValue(mockStats);
       const user = userEvent.setup();
       renderWithRouter(<EventDetailPage />);
+      await openTab(/^Attendance/);
 
       await user.click(await screen.findByRole('button', { name: 'Export CSV' }));
 
@@ -653,6 +663,7 @@ describe('EventDetailPage', () => {
       it('keeps the roster readable and exportable', async () => {
         renderFinalized();
         await screen.findByText('Attendance finalized');
+        await openTab(/^Attendance/);
 
         expect(screen.getByText('Jane Smith')).toBeVisible();
         expect(screen.getByRole('button', { name: /export csv/i })).toBeVisible();
@@ -769,6 +780,7 @@ describe('EventDetailPage', () => {
       vi.mocked(eventService.getEventStats).mockResolvedValue(mockStats);
 
       renderWithRouter(<EventDetailPage />);
+      await openTab(/^Attendance/);
 
       await waitFor(() => {
         // John Doe is going but not checked in - should have Check In button
@@ -841,6 +853,7 @@ describe('EventDetailPage', () => {
 
     it('shows the organizer the roster and a Check In button, but not the manager controls', async () => {
       renderWithRouter(<EventDetailPage />);
+      await openTab(/^Attendance/);
 
       expect(await screen.findByText('John Doe')).toBeInTheDocument();
       expect(eventService.getEventRSVPs).toHaveBeenCalledWith('evt-1');
@@ -860,6 +873,7 @@ describe('EventDetailPage', () => {
       renderWithRouter(<EventDetailPage />);
 
       const user = userEvent.setup();
+      await openTab(/^Attendance/);
       expect(await screen.findByText('Olive Organizer')).toBeInTheDocument();
       // Three rows, two of them writable: the row menu is where a row's
       // actions live, and the organizer's own row has none to open.
@@ -882,6 +896,7 @@ describe('EventDetailPage', () => {
       renderWithRouter(<EventDetailPage />);
 
       const user = userEvent.setup();
+      await openTab(/^Attendance/);
       expect(await screen.findByText('John Doe')).toBeInTheDocument();
       await user.click(screen.getByRole('button', { name: 'Actions for John Doe' }));
 
@@ -2537,16 +2552,15 @@ describe('EventDetailPage', () => {
       expect(screen.queryByRole('button', { name: 'Attach file' })).not.toBeInTheDocument();
     });
 
-    it('folds the notification composer until it is asked for', async () => {
+    it('keeps the notification composer on its own Messages tab', async () => {
       vi.mocked(eventService.getEvent).mockResolvedValue(mockEvent);
 
-      const user = userEvent.setup();
       renderWithRouter(<EventDetailPage />);
 
-      const folded = await screen.findByRole('region', { name: 'Notifications' });
+      await screen.findByRole('tab', { name: 'Messages' });
       expect(screen.queryByRole('button', { name: /send notification/i })).not.toBeInTheDocument();
 
-      await user.click(within(folded).getByRole('button', { name: 'Write a notification' }));
+      await openTab(/^Messages$/);
       expect(screen.getByRole('button', { name: /send notification/i })).toBeInTheDocument();
     });
 
@@ -2561,6 +2575,7 @@ describe('EventDetailPage', () => {
       });
 
       renderWithRouter(<EventDetailPage />);
+      await openTab(/^Staffing & outreach$/);
 
       expect(await screen.findByRole('button', { name: 'Record headcount' })).toBeInTheDocument();
       expect(screen.getByRole('region', { name: 'Guest headcount' })).toHaveTextContent('Not recorded');
@@ -2662,6 +2677,52 @@ describe('EventDetailPage', () => {
       await user.click(await screen.findByRole('button', { name: 'More' }));
       expect(screen.getByRole('button', { name: 'Duplicate Event' })).toBeInTheDocument();
       expect(screen.queryByRole('button', { name: /View QR Code/ })).not.toBeInTheDocument();
+    });
+  });
+
+  describe('Sections', () => {
+    beforeEach(() => {
+      mockAuthState.checkPermission = mockCheckPermission;
+      vi.mocked(eventService.getEvent).mockReset();
+      vi.mocked(eventService.getEvent).mockResolvedValue(mockEvent);
+      vi.mocked(eventService.getEventRSVPs).mockReset();
+      vi.mocked(eventService.getEventRSVPs).mockResolvedValue(mockRSVPs);
+      vi.mocked(eventService.getEventStats).mockReset();
+      vi.mocked(eventService.getEventStats).mockResolvedValue(mockStats);
+    });
+
+    it('gives a manager Overview, Attendance and Messages, and no tab for a section with nothing in it', async () => {
+      mockCheckPermission.mockReturnValue(true);
+      mockAuthState.user = { id: 'admin-1', permissions: ['events.manage'] } as CurrentUser;
+
+      renderWithRouter(<EventDetailPage />);
+
+      expect(await screen.findByRole('tab', { name: 'Attendance (2)' })).toBeInTheDocument();
+      expect(screen.getByRole('tab', { name: 'Overview' })).toHaveAttribute('aria-selected', 'true');
+      expect(screen.getByRole('tab', { name: 'Messages' })).toBeInTheDocument();
+      expect(screen.queryByRole('tab', { name: 'Staffing & outreach' })).not.toBeInTheDocument();
+    });
+
+    it('gives a member on an ordinary event one page and no tab bar', async () => {
+      mockCheckPermission.mockReturnValue(false);
+      mockAuthState.user = { id: 'member-1', permissions: [] } as unknown as CurrentUser;
+      vi.mocked(eventService.getEvent).mockResolvedValue({ ...mockEvent, attendance_access: null });
+
+      renderWithRouter(<EventDetailPage />);
+
+      expect(await screen.findByText('Event Details')).toBeVisible();
+      expect(screen.queryByRole('tablist')).not.toBeInTheDocument();
+    });
+
+    it('opens on the roster when the address names Attendance', async () => {
+      mockCheckPermission.mockReturnValue(true);
+      mockAuthState.user = { id: 'admin-1', permissions: ['events.manage'] } as CurrentUser;
+      window.history.replaceState({}, '', '/?tab=attendance');
+
+      renderWithRouter(<EventDetailPage />);
+
+      expect(await screen.findByRole('button', { name: 'Actions for John Doe' })).toBeVisible();
+      expect(screen.getByRole('tab', { name: 'Attendance (2)' })).toHaveAttribute('aria-selected', 'true');
     });
   });
 

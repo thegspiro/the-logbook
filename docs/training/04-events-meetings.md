@@ -151,8 +151,15 @@ Select any event to open its page. It shows:
   none of these apply, the strip is left out;
 - your own response, under **Your RSVP**.
 
-Officers who manage events also see the full attendee list, the tools to check
-people in, and two more figures in the summary strip: **Responses** (how many
+Officers and organizers see the page in sections, as tabs under the summary
+strip: **Overview** (the details above), **Attendance** (the attendee list and
+check-in tools), **Staffing & outreach** (volunteers, guests and the outreach
+records, on events that have any) and **Messages** (notifications, for those
+who manage events). A section with nothing in it has no tab, so most members
+see one page with no tabs at all. The address keeps the open tab, so a link or
+a refresh returns to it.
+
+Officers who manage events also see two more figures in the summary strip: **Responses** (how many
 are going, with any "not going" and "maybe" answers beside it) and **Checked
 In**, which appears once the event starts or the first person is checked in. Other members may see a **Who's
 going** list, if the department shares it (see
@@ -3867,6 +3874,12 @@ link yourself: `{{feedback_link}}` puts in a sentence inviting feedback with the
 link, and `{{feedback_url}}` the bare link, for wording of your own. Both stay
 empty unless a feedback form is chosen and the requester has not answered yet,
 so a template can carry them on any request.
+
+A requester who has not answered three days after the request was completed
+gets one reminder with the link, and never another. It goes only while a
+feedback form is chosen and only for requests completed in the last two
+weeks. To reword or stop it, edit **Requester Feedback Reminder** under
+**Email Templates**.
 
 When a requester sends feedback, the request's coordinator gets an email and a
 bell notification linking to the request. If the request has no coordinator,
