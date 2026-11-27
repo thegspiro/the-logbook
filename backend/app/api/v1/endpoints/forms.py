@@ -887,3 +887,15 @@ async def delete_submission(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=error,
         )
+
+    # Every other destructive forms action is audited, and a submission can
+    # hold sealed sensitive answers; ids only, never the answers.
+    await log_audit_event(
+        db=db,
+        event_type="form_submission_deleted",
+        event_category="forms",
+        severity="warning",
+        event_data={"form_id": str(form_id), "submission_id": str(submission_id)},
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )

@@ -390,7 +390,11 @@ class TestDrafting:
             "2026-01-30",
             "2026-02-27",
         ]
-        assert detail["data"]["training.hours"] == {"available": True, "value": 11.5}
+        assert detail["data"]["training.hours"] == {
+            "available": True,
+            "value": 11.5,
+            "breakdown": "2 training records: Continuing Education 11.5 h",
+        }
         assert [s["key"] for s in detail["sources"]] == [
             "training.hours",
             "events.meeting_attendance_pct",
