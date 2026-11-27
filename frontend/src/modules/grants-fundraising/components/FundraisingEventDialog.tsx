@@ -200,10 +200,18 @@ export const FundraisingEventDialog: React.FC<FundraisingEventDialogProps> = ({
           description: blankToNull(description),
           notes: blankToNull(notes),
           status: status as FundraisingEventStatus,
-          actualRevenue: actualRevenue.trim() || '0',
-          expenses: expenses.trim() || '0',
-          currentAttendees: Number(currentAttendees || 0),
         };
+        // Money raised and attendance are also moved on the server, by each
+        // Zeffy payment the sync applies. Echoing the values this dialog
+        // loaded wrote back totals from before any sync since, erasing those
+        // payments, so each is sent only when it was changed here (as the
+        // pledge dialog does for the amount received).
+        const changed = (typed: string, loaded: number | string | null | undefined) =>
+          Number(typed.trim() || 0).toFixed(2) !== Number(loaded ?? 0).toFixed(2);
+        if (changed(actualRevenue, event.actualRevenue)) payload.actualRevenue = actualRevenue.trim() || '0';
+        if (changed(expenses, event.expenses)) payload.expenses = expenses.trim() || '0';
+        const attendees = Number(currentAttendees || 0);
+        if (attendees !== Number(event.currentAttendees ?? 0)) payload.currentAttendees = attendees;
         let refused: Partial<Record<EventField, string>> = {};
         try {
           await fundraisingService.updateFundraisingEvent(event.id, payload);

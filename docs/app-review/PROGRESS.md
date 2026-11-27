@@ -52,7 +52,7 @@ from its open list.
 | B11 | notifications              | NOTIF2 | ✅     |
 | B12 | integrations               | INT2   | ✅     |
 | B13 | forms                      | FORM2  | ✅     |
-| B14 | grants & fundraising       | GF2    | ⬜     |
+| B14 | grants & fundraising       | GF2    | ✅     |
 | B15 | admin-hours                | AH2    | ⬜     |
 | B16 | reports & analytics        | RPT2   | ✅     |
 | B17 | events                     | EV2    | ⬜     |
@@ -3853,6 +3853,30 @@ secrets redacted for non-admins. See
   down), NOTIF2-13 (alerts ignore renewals), NOTIF2-14 (push coverage),
   NOTIF2-15 (pinned past page one), NOTIF2-16 (push after sign-out). See
   notifications.md → Pass 6. Next: B12 integrations.
+
+- **B14 grants & fundraising ✅ (pass 6).** Read what pass 5 left: the rest of
+  both services, the reminder job and the whole frontend module. **13 fixes**,
+  each test red first except one row lock:
+  - Backend: GF2-9 (MED) Outstanding Pledges dropped overdue pledges and could
+    go negative; GF2-10 (MED) a pledge's amount change never re-settled its
+    status; GF2-11 year-to-date totals used UTC midnight; GF2-12 report due
+    dates drifted to the 28th; GF2-13 (MED) tasks marked Overdue vanished from
+    the dashboard; GF2-14 a budget line's remaining amount was null or stale;
+    GF2-15 `update_pledge` now locks the row.
+  - Frontend: GF2-16 (HIGH) the Opportunities page crashed on search; GF2-17
+    (MED-HIGH) editing an event erased Zeffy-synced totals; GF2-18 (MED) the
+    detail page could show the previous grant while writing to the new one;
+    GF2-19 (MED) the Donations total counted refunded gifts; GF2-20 (MED) the
+    application form stayed editable after a failed load; GF2-21 "New
+    Application" showed to view-only members.
+
+  **6 flagged** to KNOWN_LIMITATIONS: GF2-3 (MED) compliance tasks never
+  generated for grants created as Awarded or awarded before their dates; GF2-4
+  what "overdue" means in the report; GF2-5 the fixed closeout deadline; GF2-6
+  the report's unassigned spending; GF2-7 a pledge's donor change locks its
+  gifts; GF2-8 (MED) the Budget tab versus the overspend banner. One MEDIUM and
+  several LOW items are recorded as open. Gate clean. See grants-fundraising.md
+  → Pass 6. Next: B15 admin-hours.
 
 - **B16 reports & analytics ✅ (pass 6).** Read the report builders, the export
   and schedule services, the reports screens and the analytics dashboard. **13
