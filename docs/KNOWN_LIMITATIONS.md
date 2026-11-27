@@ -12929,6 +12929,75 @@ members too.
 **The decision:** which definition of "total" is authoritative, and whether the
 roster gets a Dropped tile or filter.
 
+## Finance — Decisions From App Review B20 Pass 6 (2026-11-26)
+
+Details in `docs/app-review/finance.md` → Pass 6.
+
+### FIN2-3 — A request can charge another fiscal year's budget line
+
+Nothing checks that a request's budget line belongs to the request's own fiscal year.
+The picker filters by year, but the API does not. A FY2026 purchase request charged
+to a line in locked FY2025 was approved and encumbered $300 on the locked line, which
+a direct edit of that line refuses (reproduced). Paying it would move the locked
+year's actuals.
+
+**The decision:** refuse a line from another year at create, update and submit
+(expense lines too), or allow it for open years only and refuse locked ones.
+
+### FIN2-4 — Dues can be stored twice for one member and schedule
+
+`member_dues` has no unique key on schedule and member. Generation is now
+serialized, but a key would make a duplicate impossible rather than unlikely.
+Adding one needs a migration that settles any duplicates already stored (pitfall
+35), and duplicates that carry payments must be merged by a rule.
+
+**The decision:** whether to add the key, and how to merge existing duplicates.
+
+### FIN2-5 — Waiving paid dues, and what the collection rate measures
+
+A record already paid in full can be waived. The collection rate divides money
+collected by money expected, including what was waived. So a fully settled schedule
+can read 70% collected, and the dashboard repeats that figure.
+
+**The decision:** refuse waiving a paid record, and choose whether waived money
+leaves the collection rate's denominator.
+
+### FIN2-6 — When dues become overdue
+
+The due date is stored as the start of the due day. Dues therefore read Overdue from
+its first minute, the overdue email can go out that day, and a zero-grace late fee
+lands on it. A 30-day grace period ends at the start of the 30th day. The training
+guide says dues show as Overdue the day after the due date (reproduced).
+
+**The decision:** measure "past due" from the end of the due day, which matches the
+guide and moves when late fees are charged by a day, or change the guide.
+
+### FIN2-7 — Mark Paid has no ceiling over the approved estimate
+
+A payment above the estimate is checked only against a restricted fund, or the
+budget line's ceiling when there is a line. With no line, a request approved at $50
+was marked paid at $49,999 (reproduced). The approval chain's ranges,
+auto-approve-under and the dual-approval threshold were all judged on the estimate.
+
+**The decision:** cap the overrun (a percentage or dollar tolerance), or send a
+payment above the estimate (or past the next approval boundary) back for approval.
+
+### FIN2-8 — Overlapping fiscal years
+
+Two fiscal years whose dates overlap are both accepted. An end date before the start
+is now refused.
+
+**The decision:** whether overlapping years should be refused.
+
+### FIN2-9 — The dues summary shows viewers the whole department
+
+`GET /finance/dues/summary` needs only `finance.view` and returns department-wide
+totals. `GET /finance/dues` limits a non-manager to their own rows, so such a
+viewer sees department totals beside a list of their own dues.
+
+**The decision:** limit the summary to what the viewer's list shows, or accept
+department totals as visible to `finance.view`.
+
 ## Documents — Decisions From App Review B8 Pass 6 (2026-11-26)
 
 Recorded rather than changed. Details in `docs/app-review/documents.md` →
