@@ -34,6 +34,7 @@ import {
   formatForDateTimeInput,
   localToUTC,
 } from '../utils/dateFormatting';
+import { useEnabledModules } from '../hooks/useEnabledModules';
 import { useTimezone } from '../hooks/useTimezone';
 import { useRSVPForm } from '../hooks/useRSVPForm';
 import { useEventNotifications } from '../hooks/useEventNotifications';
@@ -69,6 +70,7 @@ import { errorTracker } from '../services/errorTracking';
 import { getErrorDetail, getErrorMessage } from '../utils/errorHandling';
 import { EventRSVPSection } from '../components/event-detail/EventRSVPSection';
 import { EventAttendeesCard } from '../components/event-detail/EventAttendeesCard';
+import { EventDetailTabs } from '../components/event-detail/EventDetailTabs';
 import { EventSummaryStrip } from '../components/event-detail/EventSummaryStrip';
 import { FoldedCard } from '../components/event-detail/FoldedCard';
 import EventRSVPModal from '../components/event-detail/EventRSVPModal';
@@ -354,10 +356,31 @@ export const EventDetailPage: React.FC = () => {
   useEffect(() => {
     if (eventId) {
       void fetchEvent();
-      void fetchLinkedElections();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [eventId]);
+
+  // The elections list answers 403 to anyone without elections.view, and to
+  // everyone while the Elections module is off. Asked unconditionally it
+  // failed on every load of every event for most departments, so it waits for
+  // both answers.
+  const { isModuleOn, isLoading: modulesLoading } = useEnabledModules();
+  const canListElections = !modulesLoading && isModuleOn('elections') && checkPermission('elections.view');
+  useEffect(() => {
+    if (!eventId || !canListElections) return;
+    let cancelled = false;
+    electionService
+      .getElectionsByEvent(eventId)
+      .then((elections) => {
+        if (!cancelled) setLinkedElections(elections);
+      })
+      .catch(() => {
+        if (!cancelled) setLinkedElections([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [eventId, canListElections]);
 
   // Separate from the event fetch: an organizer's access is only known once
   // the event arrives, and refetching the event when it does would loop.
@@ -433,16 +456,6 @@ export const EventDetailPage: React.FC = () => {
       toast.success('Attachment removed');
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'The attachment could not be removed'));
-    }
-  };
-
-  const fetchLinkedElections = async () => {
-    if (!eventId) return;
-    try {
-      const elections = await electionService.getElectionsByEvent(eventId);
-      setLinkedElections(elections);
-    } catch {
-      setLinkedElections([]);
     }
   };
 
@@ -1011,6 +1024,7 @@ export const EventDetailPage: React.FC = () => {
   // Seats taken, which is what max_attendees caps. Falls back to the member
   // count for payloads predating the aggregate.
   const occupiedSeats = event.occupied_seats ?? event.going_count ?? 0;
+  const attendanceTabLabel = canManageAttendance && rsvps.length > 0 ? `Attendance (${rsvps.length})` : 'Attendance';
   // Folded to one line until somebody has written something in it.
   const hasOutreachCloseout =
     Boolean(event.outreach_outcome_note) ||
@@ -1041,8 +1055,14 @@ export const EventDetailPage: React.FC = () => {
   // The QR page is the code put on display at the event, for members to scan.
   // A member shown it on their own phone has nothing to scan it with, so it
   // goes to whoever runs the event; members get Check In below instead.
+  // Nor on a draft: the API serves no QR payload for one, so the page the
+  // button opens could only show an error.
   const showCheckInQrCode =
-    (canManage || canManageOrganizers) && !event.is_cancelled && !isAttendanceFinalized && !checkInClosed;
+    (canManage || canManageOrganizers) &&
+    !event.is_cancelled &&
+    !event.is_draft &&
+    !isAttendanceFinalized &&
+    !checkInClosed;
   // The same window the list card reads, so the page offers Check In exactly
   // when the "happening now" card does. A payload without the field never
   // offers it rather than guessing at the window.
@@ -1583,555 +1603,605 @@ export const EventDetailPage: React.FC = () => {
           timezone={tz}
         />
 
-        <div className="space-y-6">
-          {/* Event Details */}
-          <div className="card p-6">
-            <h2 className="text-theme-text-primary mb-4 text-lg font-medium">Event Details</h2>
+        <EventDetailTabs
+          tabs={[
+            {
+              id: 'overview',
+              label: 'Overview',
+              content: (
+                <>
+                  {/* Event Details */}
+                  <div className="card p-6">
+                    <h2 className="text-theme-text-primary mb-4 text-lg font-medium">Event Details</h2>
 
-            {event.is_cancelled && (
-              <div className="mb-4 rounded-lg border border-red-500/30 bg-red-500/10 p-4">
-                <p className="text-sm font-medium text-red-700 dark:text-red-300">This event has been cancelled</p>
-                {event.cancellation_reason && (
-                  <p className="mt-1 text-sm text-red-600 dark:text-red-400">Reason: {event.cancellation_reason}</p>
-                )}
-              </div>
-            )}
-
-            {isAttendanceFinalized && (
-              <div className="border-theme-surface-border bg-theme-surface-hover mb-4 rounded-lg border p-4">
-                <div className="flex items-start gap-3">
-                  <Lock className="text-theme-text-muted mt-0.5 h-5 w-5 shrink-0" aria-hidden="true" />
-                  <div>
-                    <p className="text-theme-text-primary text-sm font-medium">Attendance finalized</p>
-                    <p className="text-theme-text-secondary mt-1 text-sm">
-                      {event.attendance_finalized_by_name
-                        ? `Closed by ${event.attendance_finalized_by_name}`
-                        : 'Closed'}
-                      {event.attendance_finalized_at ? ` on ${formatDateTime(event.attendance_finalized_at, tz)}` : ''}
-                      {isTrainingEvent
-                        ? '. Members\u2019 training records are written from this attendance, and attendance can no longer be changed.'
-                        : '. Credited hours are recorded, and attendance can no longer be changed.'}
-                    </p>
-                    {canReopenAttendance && (
-                      <p className="text-theme-text-muted mt-1 text-sm">
-                        {isTrainingEvent
-                          ? 'Use Reopen Attendance to correct times or training details, then finalize again \u2014 members\u2019 training records are updated rather than added to.'
-                          : 'Use Reopen Attendance to make a correction, then finalize again.'}
-                      </p>
+                    {event.is_cancelled && (
+                      <div className="mb-4 rounded-lg border border-red-500/30 bg-red-500/10 p-4">
+                        <p className="text-sm font-medium text-red-700 dark:text-red-300">
+                          This event has been cancelled
+                        </p>
+                        {event.cancellation_reason && (
+                          <p className="mt-1 text-sm text-red-600 dark:text-red-400">
+                            Reason: {event.cancellation_reason}
+                          </p>
+                        )}
+                      </div>
                     )}
+
+                    {isAttendanceFinalized && (
+                      <div className="border-theme-surface-border bg-theme-surface-hover mb-4 rounded-lg border p-4">
+                        <div className="flex items-start gap-3">
+                          <Lock className="text-theme-text-muted mt-0.5 h-5 w-5 shrink-0" aria-hidden="true" />
+                          <div>
+                            <p className="text-theme-text-primary text-sm font-medium">Attendance finalized</p>
+                            <p className="text-theme-text-secondary mt-1 text-sm">
+                              {event.attendance_finalized_by_name
+                                ? `Closed by ${event.attendance_finalized_by_name}`
+                                : 'Closed'}
+                              {event.attendance_finalized_at
+                                ? ` on ${formatDateTime(event.attendance_finalized_at, tz)}`
+                                : ''}
+                              {isTrainingEvent
+                                ? '. Members\u2019 training records are written from this attendance, and attendance can no longer be changed.'
+                                : '. Credited hours are recorded, and attendance can no longer be changed.'}
+                            </p>
+                            {canReopenAttendance && (
+                              <p className="text-theme-text-muted mt-1 text-sm">
+                                {isTrainingEvent
+                                  ? 'Use Reopen Attendance to correct times or training details, then finalize again \u2014 members\u2019 training records are updated rather than added to.'
+                                  : 'Use Reopen Attendance to make a correction, then finalize again.'}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {event.description && (
+                      <div className="mb-4">
+                        <h3 className="text-theme-text-secondary mb-1 text-sm font-medium">Description</h3>
+                        <SimpleMarkdown text={event.description} className="text-theme-text-secondary prose-sm" />
+                      </div>
+                    )}
+
+                    <div className="space-y-3">
+                      <div className="flex items-start">
+                        <Calendar className="text-theme-text-muted mr-3 h-5 w-5 shrink-0" aria-hidden="true" />
+                        <div>
+                          <p className="text-theme-text-secondary text-sm font-medium">Date & Time</p>
+                          <p className="text-theme-text-secondary text-sm">
+                            {formatDateTime(event.start_datetime, tz)}
+                          </p>
+                          <p className="text-theme-text-secondary text-sm">to {formatTime(event.end_datetime, tz)}</p>
+                          {event.postponed_from_start && (
+                            <p className="text-theme-text-muted mt-1 text-xs">
+                              Postponed from {formatDateTime(event.postponed_from_start, tz)}
+                              {event.postponement_reason ? ` — ${event.postponement_reason}` : ''}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+
+                      {event.credited_hours != null && (
+                        <div className="flex items-start">
+                          <ClipboardCheck className="text-theme-text-muted mr-3 h-5 w-5 shrink-0" aria-hidden="true" />
+                          <div>
+                            <p className="text-theme-text-secondary text-sm font-medium">Credit</p>
+                            <p className="text-theme-text-secondary text-sm">
+                              Up to <span className="font-mono">{formatHoursExact(event.credited_hours)}</span>{' '}
+                              {event.hour_category_label ? `${event.hour_category_label} hours` : 'hours'}
+                            </p>
+                            <p className="text-theme-text-muted mt-1 text-xs">{CREDITED_HOURS_BASIS}</p>
+                          </div>
+                        </div>
+                      )}
+
+                      {(event.location_name || event.location) && (
+                        <div className="flex items-start">
+                          <MapPin className="text-theme-text-muted mr-3 h-5 w-5 shrink-0" aria-hidden="true" />
+                          <div>
+                            <p className="text-theme-text-secondary text-sm font-medium">Location</p>
+                            <p className="text-theme-text-secondary text-sm">{event.location_name || event.location}</p>
+                            {event.location_details && (
+                              <p className="text-theme-text-muted mt-1 text-sm">{event.location_details}</p>
+                            )}
+                            <a
+                              href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(event.location_name || event.location || '')}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="touch:min-h-11 mt-1 inline-flex items-center gap-1 text-sm text-red-600 hover:text-red-700 dark:text-red-400"
+                            >
+                              <MapPin className="h-3.5 w-3.5" />
+                              Get Directions
+                            </a>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Who to hand a discrepancy back to, and the way to hand the
+                          event itself to someone else. Any officer holding
+                          events.manage can close an event, but its organizer is the
+                          one who reconciles its attendance, and nothing else on this
+                          page says who that is.
+
+                          The server names the pair only to a caller who may transfer
+                          the event — its organizer, its alternate or an events
+                          manager — so this row is gated on its answer, not on a
+                          permission re-derived here. */}
+                      {canManageOrganizers && (
+                        <div className="flex items-start">
+                          <UserRound className="text-theme-text-muted mr-3 h-5 w-5 shrink-0" aria-hidden="true" />
+                          <div className="min-w-0 flex-1">
+                            <p className="text-theme-text-secondary text-sm font-medium">Organized by</p>
+                            <p className="text-theme-text-secondary text-sm">
+                              {event.organizer_name ?? 'No organizer set'}
+                            </p>
+                            {event.alternate_organizer_name && (
+                              <p className="text-theme-text-muted text-sm">
+                                Alternate: {event.alternate_organizer_name}
+                              </p>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => setShowTransferModal(true)}
+                              className="mt-1 text-sm font-medium text-blue-700 underline hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
+                            >
+                              Transfer event
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   </div>
-                </div>
-              </div>
-            )}
 
-            {event.description && (
-              <div className="mb-4">
-                <h3 className="text-theme-text-secondary mb-1 text-sm font-medium">Description</h3>
-                <SimpleMarkdown text={event.description} className="text-theme-text-secondary prose-sm" />
-              </div>
-            )}
+                  {/* Custom Fields / Training Session Details.
+                      Gated on there being something *visible* to show. Keying it on
+                      the column being non-empty drew an empty purple card for any
+                      event the scheduler had touched, since its bookkeeping keys
+                      count towards the length but never render. */}
+                  {event.custom_fields && hasVisibleCustomFields(event, trainingSessionReported) && (
+                    <div className="card p-6">
+                      <div className="mb-4 flex items-center">
+                        <BookOpen className="mr-2 h-5 w-5" aria-hidden="true" />
+                        <h2 className="text-theme-text-primary text-lg font-medium">
+                          {event.event_type === EventTypeEnum.TRAINING ? 'Training Session Details' : 'Event Details'}
+                        </h2>
+                      </div>
 
-            <div className="space-y-3">
-              <div className="flex items-start">
-                <Calendar className="text-theme-text-muted mr-3 h-5 w-5 shrink-0" aria-hidden="true" />
-                <div>
-                  <p className="text-theme-text-secondary text-sm font-medium">Date & Time</p>
-                  <p className="text-theme-text-secondary text-sm">{formatDateTime(event.start_datetime, tz)}</p>
-                  <p className="text-theme-text-secondary text-sm">to {formatTime(event.end_datetime, tz)}</p>
-                  {event.postponed_from_start && (
-                    <p className="text-theme-text-muted mt-1 text-xs">
-                      Postponed from {formatDateTime(event.postponed_from_start, tz)}
-                      {event.postponement_reason ? ` — ${event.postponement_reason}` : ''}
-                    </p>
+                      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                        {event.event_type === EventTypeEnum.TRAINING && (
+                          <>
+                            {!trainingSessionReported && event.custom_fields.course_name && (
+                              <div>
+                                <p className="text-theme-text-secondary text-sm font-medium">Course Name</p>
+                                <p className="text-theme-text-primary text-sm">{event.custom_fields.course_name}</p>
+                              </div>
+                            )}
+
+                            {!trainingSessionReported && event.custom_fields.course_code && (
+                              <div>
+                                <p className="text-theme-text-secondary text-sm font-medium">Course Code</p>
+                                <p className="text-theme-text-primary text-sm">{event.custom_fields.course_code}</p>
+                              </div>
+                            )}
+
+                            {!trainingSessionReported && event.custom_fields.credit_hours && (
+                              <div>
+                                <p className="text-theme-text-secondary text-sm font-medium">Credit Hours</p>
+                                <p className="text-theme-text-primary text-sm">
+                                  {event.custom_fields.credit_hours} hours
+                                </p>
+                              </div>
+                            )}
+
+                            {!trainingSessionReported && event.custom_fields.training_type && (
+                              <div>
+                                <p className="text-theme-text-secondary text-sm font-medium">Training Type</p>
+                                <p className="text-theme-text-primary text-sm capitalize">
+                                  {typeof event.custom_fields.training_type === 'string'
+                                    ? event.custom_fields.training_type.replace('_', ' ')
+                                    : event.custom_fields.training_type}
+                                </p>
+                              </div>
+                            )}
+
+                            {!trainingSessionReported && event.custom_fields.instructor && (
+                              <div>
+                                <p className="text-theme-text-secondary text-sm font-medium">Instructor</p>
+                                <p className="text-theme-text-primary text-sm">{event.custom_fields.instructor}</p>
+                              </div>
+                            )}
+
+                            {!trainingSessionReported && event.custom_fields.issuing_agency && (
+                              <div>
+                                <p className="text-theme-text-secondary text-sm font-medium">Issuing Agency</p>
+                                <p className="text-theme-text-primary text-sm">{event.custom_fields.issuing_agency}</p>
+                              </div>
+                            )}
+
+                            {!trainingSessionReported && event.custom_fields.expiration_months && (
+                              <div>
+                                <p className="text-theme-text-secondary text-sm font-medium">Certification Valid For</p>
+                                <p className="text-theme-text-primary text-sm">
+                                  {event.custom_fields.expiration_months} months
+                                </p>
+                              </div>
+                            )}
+
+                            {!trainingSessionReported && event.custom_fields.issues_certification && (
+                              <div className="sm:col-span-2">
+                                <div className="flex items-center rounded-lg border border-green-200 bg-green-50 p-3 dark:border-green-500/30 dark:bg-green-500/10">
+                                  <CheckCircle
+                                    className="mr-2 h-5 w-5 text-green-700 dark:text-green-600"
+                                    aria-hidden="true"
+                                  />
+                                  <span className="text-sm font-medium text-green-800 dark:text-green-400">
+                                    This training issues a certification upon completion
+                                  </span>
+                                </div>
+                              </div>
+                            )}
+
+                            {!trainingSessionReported && event.custom_fields.auto_create_records && (
+                              <div className="sm:col-span-2">
+                                <div className="flex items-center rounded-lg border border-blue-200 bg-blue-50 p-3 dark:border-blue-500/30 dark:bg-blue-500/10">
+                                  <Zap className="mr-2 h-5 w-5 text-blue-600" aria-hidden="true" />
+                                  <span className="text-sm font-medium text-blue-800 dark:text-blue-400">
+                                    Credited to members&apos; training records when attendance is finalized
+                                  </span>
+                                </div>
+                              </div>
+                            )}
+                          </>
+                        )}
+
+                        {/* Generic custom fields (excludes training-specific keys) */}
+                        {Object.entries(event.custom_fields)
+                          .filter(([key]) => !HIDDEN_CUSTOM_FIELD_KEYS.has(key))
+                          .map(([key, value]) => (
+                            <div key={key}>
+                              <p className="text-theme-text-secondary text-sm font-medium">
+                                {key.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())}
+                              </p>
+                              <p className="text-theme-text-primary text-sm">{String(value)}</p>
+                            </div>
+                          ))}
+                      </div>
+                    </div>
                   )}
-                </div>
-              </div>
 
-              {event.credited_hours != null && (
-                <div className="flex items-start">
-                  <ClipboardCheck className="text-theme-text-muted mr-3 h-5 w-5 shrink-0" aria-hidden="true" />
-                  <div>
-                    <p className="text-theme-text-secondary text-sm font-medium">Credit</p>
-                    <p className="text-theme-text-secondary text-sm">
-                      Up to <span className="font-mono">{formatHoursExact(event.credited_hours)}</span>{' '}
-                      {event.hour_category_label ? `${event.hour_category_label} hours` : 'hours'}
-                    </p>
-                    <p className="text-theme-text-muted mt-1 text-xs">{CREDITED_HOURS_BASIS}</p>
-                  </div>
-                </div>
-              )}
+                  {/* Whether the session counts against this member is the server's
+                      answer; the card renders nothing when it does not. */}
+                  {isTrainingEvent && (
+                    <AttendanceWaiverCard eventId={event.id} eventTitle={event.title} timezone={tz} />
+                  )}
+                  {event.event_type === EventTypeEnum.BUSINESS_MEETING && (
+                    <AttendanceWaiverCard
+                      eventId={event.id}
+                      eventTitle={event.title}
+                      timezone={tz}
+                      workflow={MEETING_WAIVER_WORKFLOW}
+                    />
+                  )}
 
-              {(event.location_name || event.location) && (
-                <div className="flex items-start">
-                  <MapPin className="text-theme-text-muted mr-3 h-5 w-5 shrink-0" aria-hidden="true" />
-                  <div>
-                    <p className="text-theme-text-secondary text-sm font-medium">Location</p>
-                    <p className="text-theme-text-secondary text-sm">{event.location_name || event.location}</p>
-                    {event.location_details && (
-                      <p className="text-theme-text-muted mt-1 text-sm">{event.location_details}</p>
-                    )}
-                    <a
-                      href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(event.location_name || event.location || '')}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="touch:min-h-11 mt-1 inline-flex items-center gap-1 text-sm text-red-600 hover:text-red-700 dark:text-red-400"
-                    >
-                      <MapPin className="h-3.5 w-3.5" />
-                      Get Directions
-                    </a>
-                  </div>
-                </div>
-              )}
+                  {attendancePetitionsOpen && <EventAttendancePetitionPrompt eventId={event.id} timezone={tz} />}
 
-              {/* Who to hand a discrepancy back to, and the way to hand the
-                    event itself to someone else. Any officer holding
-                    events.manage can close an event, but its organizer is the
-                    one who reconciles its attendance, and nothing else on this
-                    page says who that is.
-
-                    The server names the pair only to a caller who may transfer
-                    the event — its organizer, its alternate or an events
-                    manager — so this row is gated on its answer, not on a
-                    permission re-derived here. */}
-              {canManageOrganizers && (
-                <div className="flex items-start">
-                  <UserRound className="text-theme-text-muted mr-3 h-5 w-5 shrink-0" aria-hidden="true" />
-                  <div className="min-w-0 flex-1">
-                    <p className="text-theme-text-secondary text-sm font-medium">Organized by</p>
-                    <p className="text-theme-text-secondary text-sm">{event.organizer_name ?? 'No organizer set'}</p>
-                    {event.alternate_organizer_name && (
-                      <p className="text-theme-text-muted text-sm">Alternate: {event.alternate_organizer_name}</p>
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => setShowTransferModal(true)}
-                      className="mt-1 text-sm font-medium text-blue-700 underline hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
-                    >
-                      Transfer event
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Custom Fields / Training Session Details.
-                Gated on there being something *visible* to show. Keying it on
-                the column being non-empty drew an empty purple card for any
-                event the scheduler had touched, since its bookkeeping keys
-                count towards the length but never render. */}
-          {event.custom_fields && hasVisibleCustomFields(event, trainingSessionReported) && (
-            <div className="card p-6">
-              <div className="mb-4 flex items-center">
-                <BookOpen className="mr-2 h-5 w-5" aria-hidden="true" />
-                <h2 className="text-theme-text-primary text-lg font-medium">
-                  {event.event_type === EventTypeEnum.TRAINING ? 'Training Session Details' : 'Event Details'}
-                </h2>
-              </div>
-
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                {event.event_type === EventTypeEnum.TRAINING && (
-                  <>
-                    {!trainingSessionReported && event.custom_fields.course_name && (
-                      <div>
-                        <p className="text-theme-text-secondary text-sm font-medium">Course Name</p>
-                        <p className="text-theme-text-primary text-sm">{event.custom_fields.course_name}</p>
-                      </div>
-                    )}
-
-                    {!trainingSessionReported && event.custom_fields.course_code && (
-                      <div>
-                        <p className="text-theme-text-secondary text-sm font-medium">Course Code</p>
-                        <p className="text-theme-text-primary text-sm">{event.custom_fields.course_code}</p>
-                      </div>
-                    )}
-
-                    {!trainingSessionReported && event.custom_fields.credit_hours && (
-                      <div>
-                        <p className="text-theme-text-secondary text-sm font-medium">Credit Hours</p>
-                        <p className="text-theme-text-primary text-sm">{event.custom_fields.credit_hours} hours</p>
-                      </div>
-                    )}
-
-                    {!trainingSessionReported && event.custom_fields.training_type && (
-                      <div>
-                        <p className="text-theme-text-secondary text-sm font-medium">Training Type</p>
-                        <p className="text-theme-text-primary text-sm capitalize">
-                          {typeof event.custom_fields.training_type === 'string'
-                            ? event.custom_fields.training_type.replace('_', ' ')
-                            : event.custom_fields.training_type}
-                        </p>
-                      </div>
-                    )}
-
-                    {!trainingSessionReported && event.custom_fields.instructor && (
-                      <div>
-                        <p className="text-theme-text-secondary text-sm font-medium">Instructor</p>
-                        <p className="text-theme-text-primary text-sm">{event.custom_fields.instructor}</p>
-                      </div>
-                    )}
-
-                    {!trainingSessionReported && event.custom_fields.issuing_agency && (
-                      <div>
-                        <p className="text-theme-text-secondary text-sm font-medium">Issuing Agency</p>
-                        <p className="text-theme-text-primary text-sm">{event.custom_fields.issuing_agency}</p>
-                      </div>
-                    )}
-
-                    {!trainingSessionReported && event.custom_fields.expiration_months && (
-                      <div>
-                        <p className="text-theme-text-secondary text-sm font-medium">Certification Valid For</p>
-                        <p className="text-theme-text-primary text-sm">
-                          {event.custom_fields.expiration_months} months
-                        </p>
-                      </div>
-                    )}
-
-                    {!trainingSessionReported && event.custom_fields.issues_certification && (
-                      <div className="sm:col-span-2">
-                        <div className="flex items-center rounded-lg border border-green-200 bg-green-50 p-3 dark:border-green-500/30 dark:bg-green-500/10">
-                          <CheckCircle className="mr-2 h-5 w-5 text-green-700 dark:text-green-600" aria-hidden="true" />
-                          <span className="text-sm font-medium text-green-800 dark:text-green-400">
-                            This training issues a certification upon completion
-                          </span>
-                        </div>
-                      </div>
-                    )}
-
-                    {!trainingSessionReported && event.custom_fields.auto_create_records && (
-                      <div className="sm:col-span-2">
-                        <div className="flex items-center rounded-lg border border-blue-200 bg-blue-50 p-3 dark:border-blue-500/30 dark:bg-blue-500/10">
-                          <Zap className="mr-2 h-5 w-5 text-blue-600" aria-hidden="true" />
-                          <span className="text-sm font-medium text-blue-800 dark:text-blue-400">
-                            Credited to members&apos; training records when attendance is finalized
-                          </span>
-                        </div>
-                      </div>
-                    )}
-                  </>
-                )}
-
-                {/* Generic custom fields (excludes training-specific keys) */}
-                {Object.entries(event.custom_fields)
-                  .filter(([key]) => !HIDDEN_CUSTOM_FIELD_KEYS.has(key))
-                  .map(([key, value]) => (
-                    <div key={key}>
-                      <p className="text-theme-text-secondary text-sm font-medium">
-                        {key.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())}
-                      </p>
-                      <p className="text-theme-text-primary text-sm">{String(value)}</p>
-                    </div>
-                  ))}
-              </div>
-            </div>
-          )}
-
-          {/* Whether the session counts against this member is the server's
-                answer; the card renders nothing when it does not. */}
-          {isTrainingEvent && <AttendanceWaiverCard eventId={event.id} eventTitle={event.title} timezone={tz} />}
-          {event.event_type === EventTypeEnum.BUSINESS_MEETING && (
-            <AttendanceWaiverCard
-              eventId={event.id}
-              eventTitle={event.title}
-              timezone={tz}
-              workflow={MEETING_WAIVER_WORKFLOW}
-            />
-          )}
-
-          {attendancePetitionsOpen && <EventAttendancePetitionPrompt eventId={event.id} timezone={tz} />}
-
-          {attendancePetitionsOpen && canReviewAttendancePetitions && (
-            <EventAttendancePetitionsCard
-              eventId={event.id}
-              defaultCheckIn={event.actual_start_time ?? event.start_datetime}
-              defaultCheckOut={event.actual_end_time ?? event.end_datetime}
-              attendanceFinalized={isAttendanceFinalized}
-              timezone={tz}
-              onApproved={() => {
-                void fetchAttendees();
-                if (canManageAttendance) {
-                  void fetchRSVPs();
-                  void fetchStats();
-                }
-              }}
-            />
-          )}
-
-          {/* The training details the credit is filed under, and the approval
-                it waits on. With no session it says what the credit falls back
-                to, to those who can change that or approve it. */}
-          {isTrainingEvent && (
-            <TrainingSessionLinkageCard
-              eventId={event.id}
-              eventTitle={event.title}
-              canManage={canManage}
-              canApprove={canApproveTraining}
-              attendanceFinalized={isAttendanceFinalized}
-              refreshKey={trainingRefreshKey}
-              onSessionChange={setTrainingSession}
-              customFields={event.custom_fields}
-            />
-          )}
-
-          {/* Pipeline meeting stages can also link prospects to ordinary
-                business events, so this is intentionally not type-gated. */}
-          <EventProspectsCard eventId={event.id} createsProspects={event.guest_check_in_creates_prospect ?? false} />
-
-          {/* The seats on an apparatus night (Santamobile, a parade). Renders
-                nothing on an ordinary event; asked only of someone who could
-                take or assign a seat. */}
-          {(checkPermission('apparatus_events.signup') || checkPermission('apparatus_events.manage')) && (
-            <EventApparatusCrewCard eventId={event.id} timezone={tz} />
-          )}
-          {/* Volunteers for an outreach event: its own signup sheet, or the
-                request's when it was scheduled from one. */}
-          {event.can_staff_event ? (
-            <EventStaffingCard eventId={event.id} isPast={isPastEvent} />
-          ) : (
-            event.volunteer_signup && <EventVolunteerSignupCard eventId={event.id} isPast={isPastEvent} />
-          )}
-
-          {/* Community risk reduction done at this outreach event. */}
-          {event.can_record_crr && (
-            <EventCrrActivitiesCard
-              eventId={event.id}
-              eventTitle={event.title}
-              eventStartsAt={event.start_datetime}
-              timezone={tz}
-            />
-          )}
-
-          {/* The headcount for an outreach event nobody signed in at.
-                Merged rather than replaced: the save answers with a plain
-                event, which lacks the detail-only fields this page shows. */}
-          {event.can_record_guest_headcount && (
-            <FoldedCard
-              title="Guest headcount"
-              summary="Not recorded"
-              actionLabel="Record headcount"
-              startFolded={event.guest_headcount == null}
-            >
-              <EventGuestHeadcountCard
-                event={event}
-                onSaved={(updated) =>
-                  setEvent((prev) => (prev ? { ...prev, guest_headcount: updated.guest_headcount ?? null } : prev))
-                }
-              />
-            </FoldedCard>
-          )}
-
-          {/* What happened, on the same rule as the headcount: an outreach
-                event that has started, for someone with events.manage. */}
-          {event.can_record_guest_headcount && (
-            <FoldedCard
-              title="How it went"
-              summary="Not written up"
-              actionLabel="Write it up"
-              startFolded={!hasOutreachCloseout}
-            >
-              <EventOutreachCloseoutCard
-                event={event}
-                onSaved={(updated) =>
-                  setEvent((prev) =>
-                    prev
-                      ? {
-                          ...prev,
-                          outreach_outcome_note: updated.outreach_outcome_note ?? null,
-                          outreach_apparatus_ids: updated.outreach_apparatus_ids ?? null,
-                          outreach_materials: updated.outreach_materials ?? null,
-                          outreach_photos: updated.outreach_photos ?? null,
+                  {attendancePetitionsOpen && canReviewAttendancePetitions && (
+                    <EventAttendancePetitionsCard
+                      eventId={event.id}
+                      defaultCheckIn={event.actual_start_time ?? event.start_datetime}
+                      defaultCheckOut={event.actual_end_time ?? event.end_datetime}
+                      attendanceFinalized={isAttendanceFinalized}
+                      timezone={tz}
+                      onApproved={() => {
+                        void fetchAttendees();
+                        if (canManageAttendance) {
+                          void fetchRSVPs();
+                          void fetchStats();
                         }
-                      : prev
-                  )
-                }
-              />
-            </FoldedCard>
-          )}
-          {/* Guests are listed apart from member attendance and never
-                counted in it (W23-2). */}
-          <EventGuestsCard
-            eventId={event.id}
-            canManage={canManage}
-            allowsGuestCheckIn={event.allow_guest_check_in ?? false}
-            addsGuestsToPipeline={event.guest_check_in_creates_prospect ?? false}
-          />
+                      }}
+                    />
+                  )}
 
-          {/* The code visitors scan to sign themselves in, for an event held
-                where there is no room kiosk. Renders only for events.manage,
-                and only while guest check-in is on. A cancelled event refuses
-                every guest sign-in, so it offers no code to put up. */}
-          {!event.is_cancelled && (
-            <GuestCheckInQRCard
-              eventId={event.id}
-              eventName={event.title}
-              allowGuestCheckIn={event.allow_guest_check_in ?? false}
-              isDraft={event.is_draft ?? false}
-              showFullPageLink
-            />
-          )}
+                  {/* The training details the credit is filed under, and the approval
+                      it waits on. With no session it says what the credit falls back
+                      to, to those who can change that or approve it. */}
+                  {isTrainingEvent && (
+                    <TrainingSessionLinkageCard
+                      eventId={event.id}
+                      eventTitle={event.title}
+                      canManage={canManage}
+                      canApprove={canApproveTraining}
+                      attendanceFinalized={isAttendanceFinalized}
+                      refreshKey={trainingRefreshKey}
+                      onSessionChange={setTrainingSession}
+                      customFields={event.custom_fields}
+                    />
+                  )}
 
-          {/* Attachments. Shown empty to someone who manages events, who
-                can attach the first file from here. */}
-          {((event.attachments?.length ?? 0) > 0 || canManage) && (
-            <FoldedCard
-              title="Attachments"
-              summary="None yet"
-              actionLabel="Attach file"
-              startFolded={(event.attachments?.length ?? 0) === 0}
-            >
-              <EventAttachmentsList
-                attachments={event.attachments ?? []}
-                eventId={event.id}
-                getAttachmentDownloadUrl={(eid, aid) => eventService.getAttachmentDownloadUrl(eid, aid)}
-                onUpload={canManage ? handleAttachmentUpload : undefined}
-                onDelete={canManage ? handleAttachmentDelete : undefined}
-              />
-            </FoldedCard>
-          )}
-
-          {/* Linked Elections */}
-          {linkedElections.length > 0 && (
-            <div className="card p-6">
-              <h2 className="text-theme-text-primary mb-4 text-lg font-medium">Linked Elections</h2>
-              <div className="space-y-3">
-                {linkedElections.map((election) => (
-                  <Link
-                    key={election.id}
-                    to={`/elections/${election.id}`}
-                    className="border-theme-surface-border hover:bg-theme-surface-hover flex items-center justify-between rounded-lg border p-3 transition-colors"
-                  >
-                    <div className="min-w-0 flex-1">
-                      <p className="text-theme-text-primary truncate text-sm font-medium">{election.title}</p>
-                      <p className="text-theme-text-muted mt-0.5 text-xs">
-                        {election.election_type.replace(/_/g, ' ')}
-                        {election.positions && election.positions.length > 0
-                          ? ` · ${election.positions.join(', ')}`
-                          : ''}
-                      </p>
-                    </div>
-                    <span
-                      className={`ml-3 inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-xs font-medium ${getStatusBadgeClass(election.status)}`}
+                  {/* Attachments. Shown empty to someone who manages events, who
+                      can attach the first file from here. */}
+                  {((event.attachments?.length ?? 0) > 0 || canManage) && (
+                    <FoldedCard
+                      title="Attachments"
+                      summary="None yet"
+                      actionLabel="Attach file"
+                      startFolded={(event.attachments?.length ?? 0) === 0}
                     >
-                      {election.status}
-                    </span>
-                  </Link>
-                ))}
-              </div>
-            </div>
-          )}
+                      <EventAttachmentsList
+                        attachments={event.attachments ?? []}
+                        eventId={event.id}
+                        getAttachmentDownloadUrl={(eid, aid) => eventService.getAttachmentDownloadUrl(eid, aid)}
+                        onUpload={canManage ? handleAttachmentUpload : undefined}
+                        onDelete={canManage ? handleAttachmentDelete : undefined}
+                      />
+                    </FoldedCard>
+                  )}
 
-          {/* User's RSVP Status */}
-          {event.user_rsvp_status && (
-            <div className="card p-6">
-              <h2 className="text-theme-text-primary mb-4 text-lg font-medium">Your RSVP</h2>
-              <div className="flex items-center space-x-4">
-                <RSVPStatusBadge status={event.user_rsvp_status} />
-                {canRSVP && (
-                  <button
-                    onClick={rsvpForm.openModal}
-                    className="touch:min-h-11 text-sm text-red-700 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300"
-                  >
-                    Change RSVP
-                  </button>
-                )}
-              </div>
-              {event.user_rsvp_status === RSVPStatusEnum.WAITLISTED &&
-                (event.user_waitlist_exceeds_capacity ? (
-                  /* Promotion passes this party over, so promising them a
-                       spot would be a promise the server will never keep.
-                       Arises when an organizer lowers the cap below a party
-                       that had already queued. */
-                  <p className="mt-3 text-sm text-amber-700 dark:text-amber-400">
-                    Your party is larger than this event can hold, so it can&apos;t move off the waitlist. Reduce your
-                    guest count or contact the event organizer.
-                  </p>
-                ) : (
-                  <p className="mt-3 text-sm text-purple-600 dark:text-purple-400">
-                    {/* The position is what the member actually wants to know.
-                          It is 1-based over responded_at, the same order the
-                          server promotes in, so "you're next" means it. */}
-                    {event.user_waitlist_position != null
-                      ? `You're #${event.user_waitlist_position} of ${event.waitlist_count ?? event.user_waitlist_position} on the waitlist. `
-                      : "You're on the waitlist. "}
-                    You&apos;ll be automatically moved to &quot;Going&quot; if a spot opens up.
-                  </p>
-                ))}
-              {rsvpCountdown && (
-                <div className={`mt-3 flex items-center gap-1.5 text-sm ${rsvpCountdown.color}`}>
-                  <Clock className="h-4 w-4" />
-                  <span>{rsvpCountdown.text}</span>
-                </div>
-              )}
-            </div>
-          )}
+                  {/* Linked Elections */}
+                  {linkedElections.length > 0 && (
+                    <div className="card p-6">
+                      <h2 className="text-theme-text-primary mb-4 text-lg font-medium">Linked Elections</h2>
+                      <div className="space-y-3">
+                        {linkedElections.map((election) => (
+                          <Link
+                            key={election.id}
+                            to={`/elections/${election.id}`}
+                            className="border-theme-surface-border hover:bg-theme-surface-hover flex items-center justify-between rounded-lg border p-3 transition-colors"
+                          >
+                            <div className="min-w-0 flex-1">
+                              <p className="text-theme-text-primary truncate text-sm font-medium">{election.title}</p>
+                              <p className="text-theme-text-muted mt-0.5 text-xs">
+                                {election.election_type.replace(/_/g, ' ')}
+                                {election.positions && election.positions.length > 0
+                                  ? ` · ${election.positions.join(', ')}`
+                                  : ''}
+                              </p>
+                            </div>
+                            <span
+                              className={`ml-3 inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-xs font-medium ${getStatusBadgeClass(election.status)}`}
+                            >
+                              {election.status}
+                            </span>
+                          </Link>
+                        ))}
+                      </div>
+                    </div>
+                  )}
 
-          {/* RSVPs List & RSVP Activity (for whoever runs attendance) */}
-          {canManageAttendance && (
-            <EventRSVPSection
-              rsvps={rsvps}
-              rsvpHistory={rsvpHistory}
-              timezone={tz}
-              removeConfirmUserId={removeConfirmUserId}
-              onSetRemoveConfirmUserId={setRemoveConfirmUserId}
-              onCheckIn={(userId) => {
-                void handleCheckIn(userId);
-              }}
-              onOpenOverrideModal={override.openModal}
-              onRemoveAttendee={(userId) => {
-                void handleRemoveAttendee(userId);
-              }}
-              onPrintRoster={printRoster}
-              onExportCSV={exportAttendanceCSV}
-              attendanceFinalized={isAttendanceFinalized}
-              canCorrectTimes={canCorrectAttendanceTimes}
-              readOnlyUserId={readOnlyAttendeeId}
-            />
-          )}
-          {canManage && eventId && (
-            <EventCardTapsCard
-              eventId={eventId}
-              tz={tz}
-              cardsEnabled={isIntegrationConnected(NFC_ID_CARDS_INTEGRATION)}
-            />
-          )}
-          {/* The member-facing counterpart. Managers are excluded rather
-                than shown both: EventRSVPSection above is strictly richer, and
-                two rosters on one page reads as a bug. The card is hidden
-                entirely when the API returned nothing, which is also what a
-                403 looks like — a member who may not see the list is not told
-                there is a list. */}
-          {!canManageAttendance && !attendeesFailed && attendees.length > 0 && (
-            <EventAttendeesCard
-              attendees={attendees}
-              loading={attendeesLoading}
-              goingCount={event.going_count ?? undefined}
-            />
-          )}
-          {/* Notifications Panel (for managers) */}
-          {canManage && !event.is_cancelled && !isAttendanceFinalized && (
-            <FoldedCard
-              title="Notifications"
-              summary="Message this event's members"
-              actionLabel="Write a notification"
-              startFolded
-            >
-              <EventNotificationPanel
-                notificationType={notifications.notificationType}
-                onNotificationTypeChange={notifications.setNotificationType}
-                notificationTarget={notifications.notificationTarget}
-                onNotificationTargetChange={notifications.setNotificationTarget}
-                notificationMessage={notifications.notificationMessage}
-                onNotificationMessageChange={notifications.setNotificationMessage}
-                sendingNotification={notifications.sendingNotification}
-                showNotifyConfirm={notifications.showNotifyConfirm}
-                onShowNotifyConfirm={notifications.setShowNotifyConfirm}
-                onSendNotification={() => void notifications.handleSendNotification()}
-                lastNotification={notifications.lastNotification}
-                timezone={tz}
-              />
-            </FoldedCard>
-          )}
-        </div>
+                  {/* User's RSVP Status */}
+                  {event.user_rsvp_status && (
+                    <div className="card p-6">
+                      <h2 className="text-theme-text-primary mb-4 text-lg font-medium">Your RSVP</h2>
+                      <div className="flex items-center space-x-4">
+                        <RSVPStatusBadge status={event.user_rsvp_status} />
+                        {canRSVP && (
+                          <button
+                            onClick={rsvpForm.openModal}
+                            className="touch:min-h-11 text-sm text-red-700 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300"
+                          >
+                            Change RSVP
+                          </button>
+                        )}
+                      </div>
+                      {event.user_rsvp_status === RSVPStatusEnum.WAITLISTED &&
+                        (event.user_waitlist_exceeds_capacity ? (
+                          /* Promotion passes this party over, so promising them a
+                             spot would be a promise the server will never keep.
+                             Arises when an organizer lowers the cap below a party
+                             that had already queued. */
+                          <p className="mt-3 text-sm text-amber-700 dark:text-amber-400">
+                            Your party is larger than this event can hold, so it can&apos;t move off the waitlist.
+                            Reduce your guest count or contact the event organizer.
+                          </p>
+                        ) : (
+                          <p className="mt-3 text-sm text-purple-600 dark:text-purple-400">
+                            {/* The position is what the member actually wants to know.
+                                It is 1-based over responded_at, the same order the
+                                server promotes in, so "you're next" means it. */}
+                            {event.user_waitlist_position != null
+                              ? `You're #${event.user_waitlist_position} of ${event.waitlist_count ?? event.user_waitlist_position} on the waitlist. `
+                              : "You're on the waitlist. "}
+                            You&apos;ll be automatically moved to &quot;Going&quot; if a spot opens up.
+                          </p>
+                        ))}
+                      {rsvpCountdown && (
+                        <div className={`mt-3 flex items-center gap-1.5 text-sm ${rsvpCountdown.color}`}>
+                          <Clock className="h-4 w-4" />
+                          <span>{rsvpCountdown.text}</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* The member-facing counterpart. Managers are excluded rather
+                      than shown both: EventRSVPSection above is strictly richer, and
+                      two rosters on one page reads as a bug. The card is hidden
+                      entirely when the API returned nothing, which is also what a
+                      403 looks like — a member who may not see the list is not told
+                      there is a list. */}
+                  {!canManageAttendance && !attendeesFailed && attendees.length > 0 && (
+                    <EventAttendeesCard
+                      attendees={attendees}
+                      loading={attendeesLoading}
+                      goingCount={event.going_count ?? undefined}
+                    />
+                  )}
+                </>
+              ),
+            },
+            {
+              id: 'attendance',
+              label: attendanceTabLabel,
+              content: (
+                <>
+                  {/* RSVPs List & RSVP Activity (for whoever runs attendance) */}
+                  {canManageAttendance && (
+                    <EventRSVPSection
+                      rsvps={rsvps}
+                      rsvpHistory={rsvpHistory}
+                      timezone={tz}
+                      removeConfirmUserId={removeConfirmUserId}
+                      onSetRemoveConfirmUserId={setRemoveConfirmUserId}
+                      onCheckIn={(userId) => {
+                        void handleCheckIn(userId);
+                      }}
+                      onOpenOverrideModal={override.openModal}
+                      onRemoveAttendee={(userId) => {
+                        void handleRemoveAttendee(userId);
+                      }}
+                      onPrintRoster={printRoster}
+                      onExportCSV={exportAttendanceCSV}
+                      attendanceFinalized={isAttendanceFinalized}
+                      canCorrectTimes={canCorrectAttendanceTimes}
+                      readOnlyUserId={readOnlyAttendeeId}
+                    />
+                  )}
+                  {canManage && eventId && (
+                    <EventCardTapsCard
+                      eventId={eventId}
+                      tz={tz}
+                      cardsEnabled={isIntegrationConnected(NFC_ID_CARDS_INTEGRATION)}
+                    />
+                  )}
+                </>
+              ),
+            },
+            {
+              id: 'staffing',
+              label: 'Staffing & outreach',
+              content: (
+                <>
+                  {/* Pipeline meeting stages can also link prospects to ordinary
+                      business events, so this is intentionally not type-gated. */}
+                  <EventProspectsCard
+                    eventId={event.id}
+                    createsProspects={event.guest_check_in_creates_prospect ?? false}
+                  />
+
+                  {/* The seats on an apparatus night (Santamobile, a parade). Renders
+                      nothing on an ordinary event; asked only of someone who could
+                      take or assign a seat. */}
+                  {(checkPermission('apparatus_events.signup') || checkPermission('apparatus_events.manage')) && (
+                    <EventApparatusCrewCard eventId={event.id} timezone={tz} />
+                  )}
+                  {/* Volunteers for an outreach event: its own signup sheet, or the
+                      request's when it was scheduled from one. */}
+                  {event.can_staff_event ? (
+                    <EventStaffingCard eventId={event.id} isPast={isPastEvent} />
+                  ) : (
+                    event.volunteer_signup && <EventVolunteerSignupCard eventId={event.id} isPast={isPastEvent} />
+                  )}
+
+                  {/* Community risk reduction done at this outreach event. */}
+                  {event.can_record_crr && (
+                    <EventCrrActivitiesCard
+                      eventId={event.id}
+                      eventTitle={event.title}
+                      eventStartsAt={event.start_datetime}
+                      timezone={tz}
+                    />
+                  )}
+
+                  {/* The headcount for an outreach event nobody signed in at.
+                      Merged rather than replaced: the save answers with a plain
+                      event, which lacks the detail-only fields this page shows. */}
+                  {event.can_record_guest_headcount && (
+                    <FoldedCard
+                      title="Guest headcount"
+                      summary="Not recorded"
+                      actionLabel="Record headcount"
+                      startFolded={event.guest_headcount == null}
+                    >
+                      <EventGuestHeadcountCard
+                        event={event}
+                        onSaved={(updated) =>
+                          setEvent((prev) =>
+                            prev ? { ...prev, guest_headcount: updated.guest_headcount ?? null } : prev
+                          )
+                        }
+                      />
+                    </FoldedCard>
+                  )}
+
+                  {/* What happened, on the same rule as the headcount: an outreach
+                      event that has started, for someone with events.manage. */}
+                  {event.can_record_guest_headcount && (
+                    <FoldedCard
+                      title="How it went"
+                      summary="Not written up"
+                      actionLabel="Write it up"
+                      startFolded={!hasOutreachCloseout}
+                    >
+                      <EventOutreachCloseoutCard
+                        event={event}
+                        onSaved={(updated) =>
+                          setEvent((prev) =>
+                            prev
+                              ? {
+                                  ...prev,
+                                  outreach_outcome_note: updated.outreach_outcome_note ?? null,
+                                  outreach_apparatus_ids: updated.outreach_apparatus_ids ?? null,
+                                  outreach_materials: updated.outreach_materials ?? null,
+                                  outreach_photos: updated.outreach_photos ?? null,
+                                }
+                              : prev
+                          )
+                        }
+                      />
+                    </FoldedCard>
+                  )}
+                  {/* Guests are listed apart from member attendance and never
+                      counted in it (W23-2). */}
+                  <EventGuestsCard
+                    eventId={event.id}
+                    canManage={canManage}
+                    allowsGuestCheckIn={event.allow_guest_check_in ?? false}
+                    addsGuestsToPipeline={event.guest_check_in_creates_prospect ?? false}
+                  />
+
+                  {/* The code visitors scan to sign themselves in, for an event held
+                      where there is no room kiosk. Renders only for events.manage,
+                      and only while guest check-in is on. A cancelled event refuses
+                      every guest sign-in, so it offers no code to put up. */}
+                  {!event.is_cancelled && (
+                    <GuestCheckInQRCard
+                      eventId={event.id}
+                      eventName={event.title}
+                      allowGuestCheckIn={event.allow_guest_check_in ?? false}
+                      isDraft={event.is_draft ?? false}
+                      showFullPageLink
+                    />
+                  )}
+                </>
+              ),
+            },
+            {
+              id: 'messages',
+              label: 'Messages',
+              content: (
+                <>
+                  {/* Notifications Panel (for managers) */}
+                  {canManage && !event.is_cancelled && !isAttendanceFinalized && (
+                    <EventNotificationPanel
+                      notificationType={notifications.notificationType}
+                      onNotificationTypeChange={notifications.setNotificationType}
+                      notificationTarget={notifications.notificationTarget}
+                      onNotificationTargetChange={notifications.setNotificationTarget}
+                      notificationMessage={notifications.notificationMessage}
+                      onNotificationMessageChange={notifications.setNotificationMessage}
+                      sendingNotification={notifications.sendingNotification}
+                      showNotifyConfirm={notifications.showNotifyConfirm}
+                      onShowNotifyConfirm={notifications.setShowNotifyConfirm}
+                      onSendNotification={() => void notifications.handleSendNotification()}
+                      lastNotification={notifications.lastNotification}
+                      timezone={tz}
+                    />
+                  )}
+                </>
+              ),
+            },
+          ]}
+        />
 
         {rsvpForm.showRSVPModal && (
           <EventRSVPModal
