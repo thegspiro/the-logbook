@@ -58,7 +58,7 @@ from its open list.
 | B17 | events                     | EV2    | ⬜     |
 | B18 | training                   | TR2    | ⬜     |
 | B19 | scheduling                 | SCH2   | ⬜     |
-| B20 | finance                    | FIN2   | ⬜     |
+| B20 | finance                    | FIN2   | ✅     |
 | B21 | orgs, roles & users        | ORU2   | ✅     |
 | B22 | compliance & skills        | CS2    | ⬜     |
 | B23 | security, audit & IP       | SEC2   | ⬜     |
@@ -3912,6 +3912,41 @@ secrets redacted for non-admins. See
   Five items are recorded as open. Gate clean; 9,614 backend and 240
   frontend member tests pass. See orgs-roles-users.md → Pass 6. **This ends
   the Tier B rotation's sixth pass** (B7–B21 this run; B1–B6 earlier).
+
+- **B20 finance ✅ (pass 6).** Earlier passes covered scoping and update
+  payloads. This one asked whether the money is right: budget totals through
+  every request type, dues generation, payments, waivers and overdue rules,
+  fiscal years, concurrency, and the finance screens. **14 fixes**, each test
+  red first except where noted.
+  - Backend:
+    - FIN2-11: concurrent dues generation billed twice.
+    - FIN2-12: waivers took outstanding totals negative.
+    - FIN2-13: backwards fiscal years.
+    - FIN2-14: unlocked waiver reversal (no race test).
+    - FIN2-15: duplicate payment audited; reference logged.
+    - FIN2-16: unlocked expense line add (no race test).
+  - Frontend:
+    - FIN2-17: a refused submit said "submitted for approval".
+    - FIN2-18: a detail page showed the previous record under a new id.
+    - FIN2-19: the store survived sign-out.
+    - FIN2-20: lists silently capped at 100.
+    - FIN2-21: list and dues-total races.
+    - FIN2-22: double taps on five actions.
+    - FIN2-23: empty states beside load errors.
+    - FIN2-24: dashboard links to Access Denied.
+
+  **7 flagged** to KNOWN_LIMITATIONS:
+  - FIN2-3: cross-year and locked-year budget lines (reproduced).
+  - FIN2-4: unique key on dues.
+  - FIN2-5: waiving paid dues and the collection rate.
+  - FIN2-6: dues overdue on the due day itself (reproduced).
+  - FIN2-7: Mark Paid uncapped over the estimate: $50 approved, $49,999 paid.
+  - FIN2-8: overlapping fiscal years.
+  - FIN2-9: department dues totals for viewers.
+
+  Seven items are recorded as open. Gate clean; 2,341 backend and 903
+  frontend finance tests pass. See finance.md → Pass 6. Next: B21 orgs, roles &
+  users.
 
 - **B15 admin-hours ✅ (pass 6).** Read clock-in and clock-out, the stale-session
   sweep, event crediting, approval, the summaries, the export and the whole

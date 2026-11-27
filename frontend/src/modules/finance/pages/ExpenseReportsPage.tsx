@@ -156,7 +156,7 @@ const ExpenseReportsPage: React.FC = () => {
       </div>
 
       {/* Table */}
-      {filteredReports.length === 0 ? (
+      {filteredReports.length === 0 && error ? null : filteredReports.length === 0 ? (
         <EmptyState
           icon={Receipt}
           title="No expense reports found"
