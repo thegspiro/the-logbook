@@ -46,16 +46,20 @@ export const DeleteMemberModal: React.FC<DeleteMemberModalProps> = ({
     }
   }, []);
 
+  // Keyed on the id, not the object: the roster builds a new `member` on
+  // every render, so any re-render mid-delete reset the dialog, re-enabling
+  // its buttons and wiping the typed name (app-review ORU6-F5).
+  const memberId = member?.id;
   useEffect(() => {
-    if (isOpen && member) {
+    if (isOpen && memberId) {
       setActiveTab('soft');
       setConfirmName('');
       setDeleting(false);
       setImpact(null);
       setImpactError(null);
-      void fetchImpact(member.id);
+      void fetchImpact(memberId);
     }
-  }, [isOpen, member, fetchImpact]);
+  }, [isOpen, memberId, fetchImpact]);
 
   const handleSoftDelete = async () => {
     if (!member) return;

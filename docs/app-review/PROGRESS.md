@@ -59,7 +59,7 @@ from its open list.
 | B18 | training                   | TR2    | ⬜     |
 | B19 | scheduling                 | SCH2   | ⬜     |
 | B20 | finance                    | FIN2   | ⬜     |
-| B21 | orgs, roles & users        | ORU2   | ⬜     |
+| B21 | orgs, roles & users        | ORU2   | ✅     |
 | B22 | compliance & skills        | CS2    | ⬜     |
 | B23 | security, audit & IP       | SEC2   | ⬜     |
 | B24 | core infra                 | CI2    | ⬜     |
@@ -3877,6 +3877,41 @@ secrets redacted for non-admins. See
   gifts; GF2-8 (MED) the Budget tab versus the overspend banner. One MEDIUM and
   several LOW items are recorded as open. Gate clean. See grants-fundraising.md
   → Pass 6. Next: B15 admin-hours.
+
+- **B21 orgs, roles & users ✅ (pass 6).** Read the member lifecycle,
+  leaves, the tier ladder, the last-administrator guards, settings writes and
+  member numbers, then the roster, profile, account and role screens. **14
+  fixes**, each test red first except where noted.
+  - Backend:
+    - ORU2-11: clearing the sole admin's rank removed the last
+      administrator.
+    - ORU2-12: general settings rewrote the tier ladder past its guards.
+    - ORU2-13: settings saves could revert a concurrent change.
+    - ORU2-14: a leave extended by edit left the member rostered.
+    - ORU2-15: probationary refused for the sole admin.
+    - ORU2-16: a blank member number 500.
+    - ORU2-17: unlocked archiving (no race test).
+    - ORU2-18: escalation attempts never audited.
+  - Frontend:
+    - ORU2-19: address and photo errors never shown.
+    - ORU2-20: a refused row action blanked Members Admin.
+    - ORU2-21: profile ignored the department's module switches.
+    - ORU2-22: delete dialog reset mid-delete.
+    - ORU2-23: account fields stored as empty strings.
+    - ORU2-24: role delete double tap.
+
+  **6 flagged** to KNOWN_LIMITATIONS:
+  - ORU2-5: undo-drop and reactivate skip the account ceiling (reproduced);
+    the recommended fix awaits sign-off.
+  - ORU2-6: two definitions of "on leave".
+  - ORU2-7: overlapping leaves.
+  - ORU2-8: undo-drop launders a suspension.
+  - ORU2-9: position counts include deleted members.
+  - ORU2-10: two member totals.
+
+  Five items are recorded as open. Gate clean; 9,614 backend and 240
+  frontend member tests pass. See orgs-roles-users.md → Pass 6. **This ends
+  the Tier B rotation's sixth pass** (B7–B21 this run; B1–B6 earlier).
 
 - **B10 messaging & communications ✅ (pass 6).** Read the business logic of
   44 commits no pass had (audience and recipient rows, scheduled publishing,

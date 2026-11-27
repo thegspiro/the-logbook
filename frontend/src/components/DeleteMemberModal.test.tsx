@@ -128,4 +128,21 @@ describe('DeleteMemberModal', () => {
 
     expect(await screen.findByText(/taken off any shifts that have not started yet/)).toBeInTheDocument();
   });
+
+  // App-review ORU6-F5: the roster passes a new member object on each
+  // render, and the dialog reset on the object, so a re-render mid-delete
+  // wiped the typed name and fetched the impact again.
+  it('keeps what was typed when the page re-renders with the same member', async () => {
+    const user = userEvent.setup();
+    const props = { isOpen: true, onClose, onSoftDelete, onHardDelete };
+    const { rerender } = render(<DeleteMemberModal {...props} member={{ ...MEMBER }} />);
+    await user.click(await screen.findByRole('tab', { name: 'Permanently Delete' }));
+    const input = await screen.findByRole('textbox');
+    await user.type(input, 'Jane Smith');
+
+    rerender(<DeleteMemberModal {...props} member={{ ...MEMBER }} />);
+
+    expect(screen.getByRole('textbox')).toHaveValue('Jane Smith');
+    expect(mockGetDeletionImpact).toHaveBeenCalledTimes(1);
+  });
 });

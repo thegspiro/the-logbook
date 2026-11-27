@@ -155,12 +155,17 @@ class OrganizationService:
         self.db = db
 
     async def get_organization(
-        self, organization_id: UUID | str
+        self, organization_id: UUID | str, for_update: bool = False
     ) -> Optional[Organization]:
-        """Get an organization by ID"""
-        result = await self.db.execute(
-            select(Organization).where(Organization.id == str(organization_id))
-        )
+        """Get an organization by ID.
+
+        ``for_update`` locks the row and re-reads it under the lock, for a
+        caller about to rewrite the settings JSON it read.
+        """
+        query = select(Organization).where(Organization.id == str(organization_id))
+        if for_update:
+            query = query.with_for_update().execution_options(populate_existing=True)
+        result = await self.db.execute(query)
         organization: Optional[Organization] = result.scalar_one_or_none()
         return organization
 
@@ -513,7 +518,10 @@ class OrganizationService:
         Returns:
             Updated OrganizationSettings
         """
-        org = await self.get_organization(organization_id)
+        # Locked: the whole settings JSON is written back, so an unlocked read
+        # reverted a concurrent locked writer's change (the tier ladder, a
+        # membership-type change, the member-number counter) (app-review ORU6-4).
+        org = await self.get_organization(organization_id, for_update=True)
         if not org:
             raise ValueError("Organization not found")
 
@@ -528,6 +536,12 @@ class OrganizationService:
             k: v
             for k, v in settings_update.items()
             if k not in ("email_link_domain", FILE_STORAGE_ACTIVATION_KEY)
+            # The tier ladder has its own endpoint (members.manage), which
+            # refuses removing an occupied tier, a ladder whose years fall as
+            # it rises, and duplicate ids. Written here, a settings.manage
+            # holder skipped all three and could drop members out of the
+            # operational body and the electorate (app-review ORU6-3).
+            and k != "membership_tiers"
         }
         # Likewise the waiver policies, training and business meeting: each
         # has its own endpoint, which requires training.manage or
@@ -772,7 +786,7 @@ class OrganizationService:
         Returns:
             Updated EnabledModulesResponse
         """
-        org = await self.get_organization(organization_id)
+        org = await self.get_organization(organization_id, for_update=True)
         if not org:
             raise ValueError("Organization not found")
 
