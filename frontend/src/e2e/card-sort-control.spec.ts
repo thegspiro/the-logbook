@@ -541,3 +541,91 @@ test.describe('Grant applications sort in card mode', () => {
     await expect(sortBy(page)).toBeHidden();
   });
 });
+
+// ── Inventory items ─────────────────────────────────────────────────────────
+// Its own "Sort:" control sits above up to three xwide-tier tables (Pinned,
+// Available, Unavailable) and drives the server's sort. It must show wherever
+// those tables are cards: on a phone, and on a tablet or a laptop with the
+// side navigation open, where their card is under 78rem.
+const INVENTORY_ITEMS = ['Radio', 'Helmet', 'Thermal camera'].map((name, i) => ({
+  id: `item-${i}`,
+  organization_id: 'org-1',
+  category_id: 'cat-1',
+  name,
+  manufacturer: null,
+  model_number: null,
+  serial_number: `SN-${i}`,
+  asset_tag: `AT-${i}`,
+  barcode: null,
+  purchase_price: null,
+  storage_location: 'Station 14',
+  size: null,
+  color: null,
+  style: null,
+  condition: 'good',
+  status: 'available',
+  tracking_type: 'individual',
+  quantity: 1,
+  quantity_issued: 0,
+  unit_of_measure: 'each',
+  reorder_point: null,
+  pin_position: null,
+  created_at: '2026-01-01T00:00:00Z',
+  updated_at: '2026-01-01T00:00:00Z',
+}));
+
+async function openInventory(page: Page) {
+  await signIn(page, { permissions: [...TEST_USER.permissions, 'inventory.view', 'inventory.manage'] });
+  await page.route(
+    '**/api/v1/inventory/items?**',
+    (route) => void route.fulfill(json({ items: INVENTORY_ITEMS, total: INVENTORY_ITEMS.length, skip: 0, limit: 50 }))
+  );
+  await page.route(
+    '**/api/v1/inventory/categories**',
+    (route) =>
+      void route.fulfill(
+        json([
+          {
+            id: 'cat-1',
+            organization_id: 'org-1',
+            name: 'Equipment',
+            item_type: 'equipment',
+            is_active: true,
+            created_at: '2026-01-01T00:00:00Z',
+            updated_at: '2026-01-01T00:00:00Z',
+          },
+        ])
+      )
+  );
+  await page.goto('/inventory/admin/items');
+  await page.getByRole('table', { name: 'Available' }).waitFor();
+}
+
+const inventorySort = (page: Page) => page.getByRole('combobox', { name: 'Sort:' });
+
+test.describe('Inventory items sort in card mode', () => {
+  for (const viewport of [PHONE, TABLET, { name: 'iPad Pro portrait 1024x1366', width: 1024, height: 1366 }]) {
+    test(`/inventory/admin/items — ${viewport.name}`, async ({ page }) => {
+      await page.setViewportSize(viewport);
+      await openInventory(page);
+      const sorted = page.waitForRequest((request) => {
+        const url = new URL(request.url());
+        return (
+          url.pathname === '/api/v1/inventory/items' &&
+          url.searchParams.get('sort_by') === 'condition' &&
+          url.searchParams.get('sort_order') === 'desc'
+        );
+      });
+      await inventorySort(page).selectOption({ label: 'Condition' });
+      await page.getByRole('button', { name: 'Sort descending' }).click();
+      await sorted;
+    });
+  }
+
+  test(`/inventory/admin/items — ${DESKTOP.name} keeps sorting in the headers`, async ({ page }) => {
+    await page.setViewportSize(DESKTOP);
+    await openInventory(page);
+    await expect(page.getByRole('table', { name: 'Available' }).locator('thead')).toBeVisible();
+    await expect(inventorySort(page)).toBeHidden();
+  });
+});

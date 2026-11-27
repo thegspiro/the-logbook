@@ -59,6 +59,7 @@ from app.utils.org_timezone import (
     resolve_org_today,
     resolve_scheduling_timezone,
 )
+from app.utils.shift_seats import SeatedDate, dates_in_seat, member_seat_on_shift
 from app.utils.sql_search import LIKE_ESCAPE_CHAR, like_pattern
 from app.utils.training_match_key import training_match_key
 
@@ -691,7 +692,11 @@ def _require_shift_dates(req, shift_dates: Optional[Sequence[date]]):
             f"Requirement {getattr(req, 'id', '?')} counts shifts worked; "
             "pass the member's shift_dates (load_credited_shift_dates)"
         )
-    return shift_dates
+    # Every reader of a member's shifts for one requirement comes through
+    # here, so this is where a requirement limited to one seat drops the
+    # shifts worked in any other seat, with no seat recorded, or on another
+    # agency's apparatus (owner decisions, 2026-11-26).
+    return dates_in_seat(list(shift_dates), getattr(req, "credited_seat", None))
 
 
 # A member's shift-evaluation credit, by requirement id: one (shift date,
@@ -1992,7 +1997,7 @@ async def load_credited_shift_dates(
         ExternalShiftHours,
         ExternalShiftHoursStatus,
     )
-    from app.models.training import Shift, ShiftAttendance
+    from app.models.training import Shift, ShiftAssignment, ShiftAttendance
 
     counted = [r for r in requirements if counts_shift_attendance(r)]
     if not counted or not member_ids:
@@ -2026,13 +2031,24 @@ async def load_credited_shift_dates(
 
     ids = [str(m) for m in member_ids]
     by_user: Dict[str, List[date]] = {}
+    # Each date carries the seat held that shift (SeatedDate), for a
+    # requirement limited to one seat; every other reader sees plain dates.
+    seats = member_seat_on_shift(ShiftAssignment.user_id.in_(ids))
     attendance = await db.execute(
         select(
             ShiftAttendance.user_id,
             Shift.shift_date,
+            seats.c.position,
             func.count(ShiftAttendance.id),
         )
         .join(Shift, ShiftAttendance.shift_id == Shift.id)
+        .outerjoin(
+            seats,
+            and_(
+                seats.c.shift_id == Shift.id,
+                seats.c.user_id == ShiftAttendance.user_id,
+            ),
+        )
         .where(
             Shift.organization_id == str(org_id),
             Shift.is_finalized.is_(True),
@@ -2041,7 +2057,7 @@ async def load_credited_shift_dates(
             ShiftAttendance.user_id.in_(ids),
             *_dated(Shift.shift_date),
         )
-        .group_by(ShiftAttendance.user_id, Shift.shift_date)
+        .group_by(ShiftAttendance.user_id, Shift.shift_date, seats.c.position)
     )
     external = await db.execute(
         select(
@@ -2057,8 +2073,15 @@ async def load_credited_shift_dates(
         )
         .group_by(ExternalShiftHours.user_id, ExternalShiftHours.shift_date)
     )
-    for user_id, shift_date, n in [*attendance.all(), *external.all()]:
-        by_user.setdefault(str(user_id), []).extend([shift_date] * int(n or 0))
+    for user_id, shift_date, seat, n in attendance.all():
+        by_user.setdefault(str(user_id), []).extend(
+            [SeatedDate(shift_date, seat)] * int(n or 0)
+        )
+    # Another agency's apparatus: a shift worked, in no seat of ours.
+    for user_id, shift_date, n in external.all():
+        by_user.setdefault(str(user_id), []).extend(
+            [SeatedDate(shift_date, None)] * int(n or 0)
+        )
     for dates in by_user.values():
         dates.sort()
     return by_user
