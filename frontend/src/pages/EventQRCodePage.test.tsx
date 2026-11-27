@@ -399,8 +399,11 @@ describe('EventQRCodePage', () => {
 
       renderWithRouter(<EventQRCodePage />);
 
+      // The header, crumbs included, draws while the code is still loading,
+      // with "Event" standing in for the name until the fetch resolves; wait
+      // for the named link rather than for the trail that first holds it.
       const trail = await screen.findByRole('navigation', { name: /breadcrumb/i });
-      expect(within(trail).getByRole('link', { name: 'Test Event' })).toHaveAttribute('href', '/events/1');
+      expect(await within(trail).findByRole('link', { name: 'Test Event' })).toHaveAttribute('href', '/events/1');
     });
   });
 
