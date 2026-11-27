@@ -632,7 +632,10 @@ def directory_for(integration: "Integration") -> Microsoft365Directory:
     config = integration.config or {}
     secret = integration.get_secret("client_secret")
     tenant_id = config.get("tenant_id")
-    client_id = config.get("client_id")
+    # Connecting stores client_id encrypted (SECRET_CONFIG_KEYS); a row set up
+    # before that keeps it in public config. Reading only the config made a
+    # directory connected through the screen unusable (INT2-10).
+    client_id = integration.get_secret("client_id") or config.get("client_id")
     if not (
         secret
         and isinstance(tenant_id, str)
