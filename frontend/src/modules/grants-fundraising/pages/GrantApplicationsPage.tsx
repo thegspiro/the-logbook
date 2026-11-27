@@ -43,6 +43,7 @@ import { CardSortControl } from '@/components/ux/CardSortControl';
 import type { SortDirection } from '@/components/ux/SortableHeader';
 import { DEFAULT_PAGE_SIZE } from '@/constants/config';
 import { useMemberNames } from '../hooks/useMemberNames';
+import { useAuthStore } from '../../../stores/authStore';
 import type { MemberNames } from '../hooks/useMemberNames';
 
 // =============================================================================
@@ -587,6 +588,7 @@ const ApplicationsTable: React.FC<ApplicationsTableProps> = ({ filters, timezone
 // =============================================================================
 
 export const GrantApplicationsPage: React.FC = () => {
+  const canManage = useAuthStore((s) => s.checkPermission('fundraising.manage'));
   const tz = useTimezone();
   const { nameOf } = useMemberNames();
   const [searchParams] = useSearchParams();
@@ -632,7 +634,7 @@ export const GrantApplicationsPage: React.FC = () => {
       <p className="text-theme-text-secondary mt-1 text-sm">
         {hasFilters ? 'Try a different search or clear the filters.' : 'Add an application to start tracking a grant.'}
       </p>
-      {!hasFilters && (
+      {!hasFilters && canManage && (
         <Link
           to="/grants/applications/new"
           className="mt-4 inline-flex items-center gap-2 rounded-lg bg-red-800 px-4 py-2 text-sm font-medium text-white hover:bg-red-900"
@@ -686,11 +688,13 @@ export const GrantApplicationsPage: React.FC = () => {
               </button>
             </div>
 
-            {/* New Application */}
-            <Link to="/grants/applications/new" className="btn-primary inline-flex items-center gap-2 text-sm">
-              <Plus className="h-4 w-4" />
-              New Application
-            </Link>
+            {/* New Application: the route and the create both need fundraising.manage. */}
+            {canManage && (
+              <Link to="/grants/applications/new" className="btn-primary inline-flex items-center gap-2 text-sm">
+                <Plus className="h-4 w-4" />
+                New Application
+              </Link>
+            )}
           </div>
         </div>
 
