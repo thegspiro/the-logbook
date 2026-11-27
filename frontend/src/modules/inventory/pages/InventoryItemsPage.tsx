@@ -2488,39 +2488,43 @@ const InventoryItemsPage: React.FC = () => {
         </div>
       )}
 
-      {/* Mobile sort controls — the table's header-sort buttons are hidden
-          when rows reflow into cards on mobile, so expose sorting here. */}
+      {/* Items — single responsive tables split by availability (a table
+          where their card is at least 78rem wide, stacked cards below it). */}
       {!loading && items.length > 0 && (
-        <div className="mb-3 flex items-center gap-2 md:hidden">
-          <label htmlFor="inventory-mobile-sort" className="text-theme-text-muted shrink-0 text-xs">
-            Sort:
-          </label>
-          <select
-            id="inventory-mobile-sort"
-            className="form-input flex-1 py-1.5 text-xs"
-            value={sortBy}
-            onChange={(e) => setSortBy(e.target.value as SortKey)}
-          >
-            {SORT_COLS.map((c) => (
-              <option key={c.key} value={c.key}>
-                {c.label}
-              </option>
-            ))}
-          </select>
-          <button
-            onClick={() => setSortOrd((p) => (p === 'asc' ? 'desc' : 'asc'))}
-            className="border-theme-surface-border text-theme-text-muted hover:text-theme-text-primary active:bg-theme-surface-hover touch-target-phone rounded border p-2"
-            aria-label={`Sort ${sortOrd === 'asc' ? 'descending' : 'ascending'}`}
-          >
-            {sortOrd === 'asc' ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-          </button>
-        </div>
-      )}
+        // A container too, so the one sort control above the tables shows
+        // exactly while they are cards: below 768px, and on a tablet or a
+        // laptop with the side navigation open, where this wrapper is under
+        // the tables' 78rem xwide tier (`.rwd-card-sort` in index.css). Each
+        // table's own container is 2px narrower (its border), so in a 2px
+        // band of widths the tables are cards a moment before this shows.
+        <div className="rwd-table-container space-y-6">
+          {/* The tables' header-sort buttons are hidden while their rows are
+              cards, so sorting is exposed here, driving the same state. */}
+          <div className="rwd-card-sort rwd-card-sort-xwide items-center gap-2">
+            <label htmlFor="inventory-mobile-sort" className="text-theme-text-muted shrink-0 text-xs">
+              Sort:
+            </label>
+            <select
+              id="inventory-mobile-sort"
+              className="form-input flex-1 py-1.5 text-xs"
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value as SortKey)}
+            >
+              {SORT_COLS.map((c) => (
+                <option key={c.key} value={c.key}>
+                  {c.label}
+                </option>
+              ))}
+            </select>
+            <button
+              onClick={() => setSortOrd((p) => (p === 'asc' ? 'desc' : 'asc'))}
+              className="border-theme-surface-border text-theme-text-muted hover:text-theme-text-primary active:bg-theme-surface-hover touch-target-phone rounded border p-2"
+              aria-label={`Sort ${sortOrd === 'asc' ? 'descending' : 'ascending'}`}
+            >
+              {sortOrd === 'asc' ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+            </button>
+          </div>
 
-      {/* Items — single responsive tables split by availability (a table on
-          >=md, stacked cards below). */}
-      {!loading && items.length > 0 && (
-        <div className="space-y-6">
           {/* Pinned first, and with Status shown: a pinned item that has gone
               into maintenance is exactly what its owner needs to see. */}
           <ItemTable
