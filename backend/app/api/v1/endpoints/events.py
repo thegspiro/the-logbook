@@ -917,7 +917,12 @@ def _announce_new_event(
 ) -> None:
     """Fan a new event out to the org's chat integrations (Slack/Discord/
     Teams) and webhooks after the response — best-effort, in its own DB
-    session. A series is announced once, by its first occurrence."""
+    session. A series is announced once, by its first occurrence.
+
+    A draft is not announced: it is announced when published (INT2-11).
+    """
+    if getattr(event, "is_draft", False):
+        return
     event_type_value = (
         event.event_type.value
         if hasattr(event.event_type, "value")
@@ -990,6 +995,7 @@ async def create_event(
 @router.post("/{event_id}/publish", response_model=EventResponse)
 async def publish_event(
     event_id: UUID,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("events.manage")),
 ):
@@ -1024,6 +1030,9 @@ async def publish_event(
             user_id=str(current_user.id),
             username=current_user.username,
         )
+
+        # A draft was not announced when it was created; it is now.
+        _announce_new_event(background_tasks, current_user.organization_id, event)
 
         return _build_event_response(event)
     except ValueError as e:
