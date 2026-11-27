@@ -4,10 +4,15 @@
  * Renders the attendance list (for managers) with per-attendee actions such as
  * check-in, edit times, and remove. Also shows the collapsible RSVP Activity
  * history feed.
+ *
+ * Each attendee is one line. A row used to carry its email and two or three
+ * always-visible actions, which made a 14-person meeting 42 buttons tall; the
+ * one action a row is opened for, Check In, stays on the row and the rest sit
+ * behind its menu with the email.
  */
 
-import React, { useState } from 'react';
-import { Printer, Download, History as HistoryIcon, Users } from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
+import { Printer, Download, History as HistoryIcon, MoreVertical, Users } from 'lucide-react';
 import { getRSVPStatusLabel, getRSVPStatusColor } from '../../utils/eventHelpers';
 import { formatTime, formatDateTime } from '../../utils/dateFormatting';
 import { RSVPStatus as RSVPStatusEnum } from '../../constants/enums';
@@ -31,6 +36,14 @@ function rsvpStatusText(status: string | null): string {
 }
 
 const PAGE_SIZE = 25;
+/** Below this a roster is read at a glance and a search box is only clutter. */
+const SEARCH_THRESHOLD = 8;
+
+const ROSTER_FILTERS = ['all', 'checked_in', 'not_checked_in'] as const;
+type RosterFilter = (typeof ROSTER_FILTERS)[number];
+
+const menuItemClass =
+  'touch-target-phone text-theme-text-secondary hover:bg-theme-surface-hover w-full justify-start px-4 py-2 text-left text-sm';
 
 export interface EventRSVPSectionProps {
   rsvps: RSVP[];
@@ -78,15 +91,55 @@ export const EventRSVPSection: React.FC<EventRSVPSectionProps> = ({
   readOnlyUserId,
 }) => {
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+  const [query, setQuery] = useState('');
+  const [filter, setFilter] = useState<RosterFilter>('all');
+  const [openMenuUserId, setOpenMenuUserId] = useState<string | null>(null);
+  const openMenuRef = useRef<HTMLDivElement>(null);
 
-  const visibleRsvps = rsvps.slice(0, visibleCount);
-  const hasMore = visibleCount < rsvps.length;
+  useEffect(() => {
+    if (openMenuUserId === null) return undefined;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (openMenuRef.current && !openMenuRef.current.contains(e.target as Node)) {
+        setOpenMenuUserId(null);
+      }
+    };
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpenMenuUserId(null);
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('keydown', handleEscape);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleEscape);
+    };
+  }, [openMenuUserId]);
+
+  const checkedInCount = rsvps.filter((r) => r.checked_in).length;
+  const filterLabels: Record<RosterFilter, string> = {
+    all: `All (${rsvps.length})`,
+    checked_in: `Checked in (${checkedInCount})`,
+    not_checked_in: `Not checked in (${rsvps.length - checkedInCount})`,
+  };
+  const showSearch = rsvps.length > SEARCH_THRESHOLD;
+  // With nobody checked in the three filters name the same list twice and an
+  // empty one, so they wait for the first check-in.
+  const showFilters = checkedInCount > 0;
+
+  const needle = query.trim().toLowerCase();
+  const matchingRsvps = rsvps.filter((r) => {
+    if (filter === 'checked_in' && !r.checked_in) return false;
+    if (filter === 'not_checked_in' && r.checked_in) return false;
+    if (!needle) return true;
+    return r.user_name?.toLowerCase().includes(needle) || r.user_email?.toLowerCase().includes(needle);
+  });
+  const visibleRsvps = matchingRsvps.slice(0, visibleCount);
+  const hasMore = visibleCount < matchingRsvps.length;
 
   return (
     <>
       {/* Attendance List */}
       <div className="card p-6">
-        <div className="mb-4 flex items-center justify-between">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-theme-text-primary text-lg font-medium">Attendance ({rsvps.length})</h2>
           {rsvps.length > 0 && (
             <div className="flex items-center gap-2">
@@ -117,126 +170,197 @@ export const EventRSVPSection: React.FC<EventRSVPSectionProps> = ({
           />
         ) : (
           <>
-            <div className="space-y-3">
+            {(showSearch || showFilters) && (
+              <div className="mb-3 flex flex-wrap items-center gap-2">
+                {showSearch && (
+                  <input
+                    type="search"
+                    value={query}
+                    onChange={(e) => {
+                      setQuery(e.target.value);
+                      setVisibleCount(PAGE_SIZE);
+                    }}
+                    placeholder="Search attendees"
+                    aria-label="Search attendees"
+                    className="form-input w-full sm:w-64"
+                  />
+                )}
+                {showFilters &&
+                  ROSTER_FILTERS.map((value) => (
+                    <button
+                      key={value}
+                      type="button"
+                      aria-pressed={filter === value}
+                      onClick={() => {
+                        setFilter(value);
+                        setVisibleCount(PAGE_SIZE);
+                      }}
+                      className={`touch-target-phone rounded-full border px-3 py-1 text-xs font-medium ${
+                        filter === value
+                          ? 'border-theme-text-primary bg-theme-surface-secondary text-theme-text-primary'
+                          : 'border-theme-surface-border text-theme-text-secondary hover:text-theme-text-primary'
+                      }`}
+                    >
+                      {filterLabels[value]}
+                    </button>
+                  ))}
+              </div>
+            )}
+            {matchingRsvps.length === 0 && (
+              <p className="text-theme-text-muted py-4 text-center text-sm">No attendees match.</p>
+            )}
+            <ul className="divide-theme-surface-border divide-y">
               {visibleRsvps.map((rsvp) => {
                 const effectiveCheckIn = rsvp.override_check_in_at || rsvp.checked_in_at;
                 const effectiveCheckOut = rsvp.override_check_out_at || rsvp.checked_out_at;
                 const effectiveDuration = rsvp.override_duration_minutes ?? rsvp.attendance_duration_minutes;
                 const isRemoving = removeConfirmUserId === rsvp.user_id;
                 const canWriteRow = !attendanceFinalized && rsvp.user_id !== readOnlyUserId;
+                const isMenuOpen = openMenuUserId === rsvp.user_id;
+                const hasMenu = canWriteRow || Boolean(rsvp.user_email);
+                // Checked In says everything Going does, so it takes its place
+                // rather than sitting beside it. Any other answer keeps its
+                // badge: a "Maybe" who turned up is worth seeing as one.
+                const showStatus = !(rsvp.checked_in && rsvp.status === RSVPStatusEnum.GOING);
 
                 return (
-                  <div key={rsvp.id} className="bg-theme-surface-secondary rounded-lg p-3">
-                    <div className="flex items-center justify-between">
-                      <div className="min-w-0 flex-1">
-                        <p className="text-theme-text-primary text-sm font-medium">{rsvp.user_name}</p>
-                        {rsvp.user_email && <p className="text-theme-text-muted text-xs">{rsvp.user_email}</p>}
+                  <li key={rsvp.id} className="py-2">
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                      <p className="text-theme-text-primary min-w-0 flex-1 text-sm font-medium break-words">
+                        {rsvp.user_name}
                         {rsvp.guest_count > 0 && (
-                          <p className="text-theme-text-muted mt-0.5 text-xs">
+                          <span className="text-theme-text-muted ml-2 text-xs font-normal">
                             +{rsvp.guest_count} guest{rsvp.guest_count > 1 ? 's' : ''}
-                          </p>
+                          </span>
                         )}
-                      </div>
-                      <div className="flex items-center space-x-2">
+                      </p>
+
+                      {/* Last on a phone, where it takes a line of its own
+                          under the name; in the row from sm up. */}
+                      {rsvp.checked_in && (
+                        <div className="text-theme-text-muted order-last flex basis-full flex-wrap items-center gap-x-3 gap-y-1 text-xs sm:order-none sm:basis-auto">
+                          {effectiveCheckIn && <span>In: {formatTime(effectiveCheckIn, timezone)}</span>}
+                          {effectiveCheckOut && <span>Out: {formatTime(effectiveCheckOut, timezone)}</span>}
+                          {effectiveDuration != null && <span>Duration: {effectiveDuration} min</span>}
+                          {rsvp.override_check_in_at && (
+                            <span className="text-[10px] text-amber-500">(times edited)</span>
+                          )}
+                          {/* Their credited time already starts at the event's
+                              scheduled start, so this is not a correction to
+                              make — it is here so an organizer can spot the
+                              member who really was working beforehand and edit
+                              their times to credit it. */}
+                          {!rsvp.override_check_in_at &&
+                            rsvp.early_check_in_minutes != null &&
+                            rsvp.early_check_in_minutes > 0 && (
+                              <span
+                                className="text-[10px] text-yellow-700 dark:text-yellow-400"
+                                title="Credited from the event's scheduled start. Edit times if this member was working before then."
+                              >
+                                (tapped in {rsvp.early_check_in_minutes} min early)
+                              </span>
+                            )}
+                        </div>
+                      )}
+
+                      {showStatus && (
                         <span
                           className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${getRSVPStatusColor(rsvp.status)}`}
                         >
                           {getRSVPStatusLabel(rsvp.status)}
                         </span>
-                        {rsvp.status === RSVPStatusEnum.GOING && !rsvp.checked_in && canWriteRow && (
+                      )}
+                      {rsvp.checked_in && (
+                        <span className="inline-flex items-center rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-800 dark:bg-green-500/20 dark:text-green-400">
+                          Checked In
+                        </span>
+                      )}
+                      {rsvp.status === RSVPStatusEnum.GOING && !rsvp.checked_in && canWriteRow && (
+                        <button
+                          onClick={() => {
+                            onCheckIn(rsvp.user_id);
+                          }}
+                          className="touch-target-phone text-xs text-red-700 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300"
+                        >
+                          Check In
+                        </button>
+                      )}
+
+                      {hasMenu && (
+                        <div className="relative" ref={isMenuOpen ? openMenuRef : undefined}>
                           <button
-                            onClick={() => {
-                              onCheckIn(rsvp.user_id);
-                            }}
-                            className="touch-target-phone text-xs text-red-700 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300"
+                            type="button"
+                            aria-label={`Actions for ${rsvp.user_name ?? 'attendee'}`}
+                            aria-expanded={isMenuOpen}
+                            onClick={() => setOpenMenuUserId(isMenuOpen ? null : rsvp.user_id)}
+                            className="btn-icon text-theme-text-secondary hover:text-theme-text-primary hover:bg-theme-surface-hover"
                           >
-                            Check In
+                            <MoreVertical className="h-4 w-4" aria-hidden="true" />
                           </button>
-                        )}
-                        {rsvp.checked_in && (
-                          <span className="inline-flex items-center rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-800 dark:bg-green-500/20 dark:text-green-400">
-                            Checked In
-                          </span>
-                        )}
-                      </div>
+                          {isMenuOpen && (
+                            <div className="popover-panel absolute top-full right-0 z-20 mt-1 w-64 py-1">
+                              {rsvp.user_email && (
+                                <p className="text-theme-text-muted px-4 py-2 text-xs break-all">{rsvp.user_email}</p>
+                              )}
+                              {canWriteRow && canCorrectTimes && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setOpenMenuUserId(null);
+                                    onOpenOverrideModal(rsvp);
+                                  }}
+                                  className={menuItemClass}
+                                >
+                                  Edit Times
+                                </button>
+                              )}
+                              {canWriteRow && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setOpenMenuUserId(null);
+                                    onSetRemoveConfirmUserId(rsvp.user_id);
+                                  }}
+                                  className={`${menuItemClass} text-red-700 dark:text-red-400`}
+                                >
+                                  Remove
+                                </button>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
 
-                    {/* Attendance times */}
-                    {rsvp.checked_in && (
-                      <div className="text-theme-text-muted mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
-                        {effectiveCheckIn && <span>In: {formatTime(effectiveCheckIn, timezone)}</span>}
-                        {effectiveCheckOut && <span>Out: {formatTime(effectiveCheckOut, timezone)}</span>}
-                        {effectiveDuration != null && <span>Duration: {effectiveDuration} min</span>}
-                        {rsvp.override_check_in_at && (
-                          <span className="text-[10px] text-amber-500">(times edited)</span>
-                        )}
-                        {/* Their credited time already starts at the event's
-                            scheduled start, so this is not a correction to
-                            make — it is here so an organizer can spot the
-                            member who really was working beforehand and edit
-                            their times to credit it. */}
-                        {!rsvp.override_check_in_at &&
-                          rsvp.early_check_in_minutes != null &&
-                          rsvp.early_check_in_minutes > 0 && (
-                            <span
-                              className="text-[10px] text-yellow-700 dark:text-yellow-400"
-                              title="Credited from the event's scheduled start. Edit times if this member was working before then."
-                            >
-                              (tapped in {rsvp.early_check_in_minutes} min early)
-                            </span>
-                          )}
+                    {canWriteRow && isRemoving && (
+                      <div className="mt-1 flex items-center gap-3">
+                        <span className="text-theme-text-secondary text-xs">Remove {rsvp.user_name}?</span>
+                        <button
+                          onClick={() => {
+                            onRemoveAttendee(rsvp.user_id);
+                          }}
+                          className="touch-target-phone text-xs font-medium text-red-700 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300"
+                        >
+                          Yes
+                        </button>
+                        <button
+                          onClick={() => onSetRemoveConfirmUserId(null)}
+                          className="touch-target-phone text-theme-text-muted hover:text-theme-text-secondary text-xs"
+                        >
+                          No
+                        </button>
                       </div>
                     )}
-
-                    {/* Action buttons */}
-                    {canWriteRow && (
-                      <div className="mt-2 flex items-center gap-3">
-                        {canCorrectTimes && (
-                          <button
-                            onClick={() => onOpenOverrideModal(rsvp)}
-                            className="touch-target-phone text-xs text-blue-700 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
-                          >
-                            Edit Times
-                          </button>
-                        )}
-                        {!isRemoving ? (
-                          <button
-                            onClick={() => onSetRemoveConfirmUserId(rsvp.user_id)}
-                            className="touch-target-phone text-xs text-red-700 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300"
-                          >
-                            Remove
-                          </button>
-                        ) : (
-                          <span className="flex items-center gap-2">
-                            <span className="text-theme-text-muted text-xs">Remove?</span>
-                            <button
-                              onClick={() => {
-                                onRemoveAttendee(rsvp.user_id);
-                              }}
-                              className="touch-target-phone text-xs font-medium text-red-700 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300"
-                            >
-                              Yes
-                            </button>
-                            <button
-                              onClick={() => onSetRemoveConfirmUserId(null)}
-                              className="touch-target-phone text-theme-text-muted hover:text-theme-text-secondary text-xs"
-                            >
-                              No
-                            </button>
-                          </span>
-                        )}
-                      </div>
-                    )}
-                  </div>
+                  </li>
                 );
               })}
-            </div>
+            </ul>
             {hasMore && (
               <button
                 onClick={() => setVisibleCount((c) => c + PAGE_SIZE)}
                 className="mt-3 w-full py-2 text-center text-sm text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
               >
-                Show more ({rsvps.length - visibleCount} remaining)
+                Show more ({matchingRsvps.length - visibleCount} remaining)
               </button>
             )}
           </>

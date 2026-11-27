@@ -751,6 +751,13 @@ class TrainingRequirement(Base):
         server_default="0",
     )
 
+    # The one seat a shift-credited HOURS or SHIFTS requirement counts time
+    # in ("24 hours a year as Driver/Operator"); NULL counts every shift.
+    # Stored as ``canonical_position`` settles it. A shift with no seat
+    # recorded, and time on another agency's apparatus, carry no seat and so
+    # never count toward one (owner decisions, 2026-11-26).
+    credited_seat: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+
     # Requirement Quantities (based on requirement_type)
     required_hours: Mapped[Optional[float]] = mapped_column(Float)  # For HOURS type
     required_courses: Mapped[Optional[list[str]]] = mapped_column(

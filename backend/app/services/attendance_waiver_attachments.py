@@ -17,6 +17,15 @@ decisions, 2026-11-10):
   the row describe the file kept. A photo that cannot be decoded, or is over
   25 megapixels, is refused, never stored as filed. HEIC files stored before
   that decision stay as they are.
+- **A JPEG or PNG photo is stored without its metadata** (owner decision
+  2026-11-26): its EXIF, GPS, XMP, IPTC, comments, thumbnails and anything
+  after the image are removed, losslessly, without re-compressing a pixel
+  (``app/utils/photo_metadata.py``). The colour profile, a CMYK file's Adobe
+  segment and the orientation are kept. As with HEIC, the member's original
+  is malware-scanned first, so a signature hidden in the metadata is still
+  seen, and the stripped file again as it is stored. A photo that cannot be
+  read is refused, never stored as filed. JPEGs and PNGs stored before that
+  decision stay as they are, and a PDF is stored as filed.
 - **Filed by the member**, with the request or while it is pending. Once it is
   decided, withdrawn or voided nothing more can be added. While it is pending
   the member may also remove one (owner decision 2026-11-23), except the last
@@ -33,6 +42,7 @@ uploader's filename is not kept: a download is always
 ``waiver-attachment-<n>.<ext>``.
 """
 
+import asyncio
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from datetime import timezone as dt_timezone
@@ -68,6 +78,7 @@ from app.services.file_storage_service import (
     StoredFile,
 )
 from app.utils.heic_to_jpeg import heic_to_jpeg
+from app.utils.photo_metadata import STRIPPABLE_TYPES, strip_photo_metadata
 
 AREA = StorageArea.ATTENDANCE_WAIVERS
 UPLOAD_KIND = "attendance_waiver_attachment"
@@ -173,15 +184,17 @@ class AttendanceWaiverAttachmentService:
         return stored
 
     async def _as_stored(self, upload: PendingUpload, member: User) -> bytes:
-        """The bytes to store: a HEIC photo converted to JPEG, anything else
-        as filed. The member's original HEIC is malware-scanned before the
-        decoder reads a byte of it (with no scanner reachable, that is a 503
-        and nothing is decoded); the JPEG is checked and scanned again by
-        ``store_bytes``, so the ledger and the row describe the file kept."""
+        """The bytes to store: a HEIC photo converted to JPEG, a JPEG or PNG
+        without its metadata, and a PDF as filed. The member's original
+        photo is malware-scanned before it is decoded or stripped (with no
+        scanner reachable, that is a 503 and nothing is stored), so a
+        signature in the metadata is still seen; the result is checked and
+        scanned again by ``store_bytes``, so the ledger and the row describe
+        the file kept."""
         detected, _ = self.storage.inspect(
             upload.content, upload.filename, ATTACHMENT_FILE_RULES
         )
-        if detected not in HEIC_TYPES:
+        if detected not in HEIC_TYPES and detected not in STRIPPABLE_TYPES:
             return upload.content
         await self.storage.check(
             upload.content,
@@ -190,8 +203,13 @@ class AttendanceWaiverAttachmentService:
             upload_kind=UPLOAD_KIND,
             user=member,
         )
-        # In a child process: libheif is native code a crafted file can crash.
-        return await heic_to_jpeg(upload.content, MAX_ATTACHMENT_BYTES)
+        if detected in HEIC_TYPES:
+            # In a child process: libheif is native code a crafted file can
+            # crash.
+            return await heic_to_jpeg(upload.content, MAX_ATTACHMENT_BYTES)
+        # In-process (it parses nothing native) but off the event loop: a
+        # crafted 10 MB file still takes the walk tens of milliseconds.
+        return await asyncio.to_thread(strip_photo_metadata, upload.content, detected)
 
     async def _abandon(
         self, org_id: str, request_id: str, stored: Sequence[StoredFile]

@@ -110,12 +110,12 @@ from app.utils.org_timezone import resolve_org_today, resolve_scheduling_timezon
 from app.utils.positions import (
     CANONICAL_POSITIONS,
     UnknownSeatError,
-    canonical_position,
     normalize_stored_positions,
     position_label,
     resolve_department_seat,
     resolve_seat,
 )
+from app.utils.shift_seats import member_seat_on_shift, seat_key, seat_matches
 
 
 def sunday_week_start(day: date) -> date:
@@ -10223,13 +10223,7 @@ class SchedulingService:
         and turned into hours once.
         """
 
-        def _key(value: Any) -> Optional[str]:
-            raw = str(getattr(value, "value", value) or "").strip()
-            if not raw:
-                return None
-            return canonical_position(raw).casefold() or None
-
-        wanted = _key(position)
+        wanted = seat_key(position)
         if wanted is None:
             return []
         totals = await self.get_department_position_totals(
@@ -10256,7 +10250,7 @@ class SchedulingService:
                 continue
             raw = {"shifts": 0, "minutes": 0, "calls": 0}
             for seat, cell in by_seat.items():
-                if _key(seat) == wanted:
+                if seat_key(seat) == wanted:
                     for name in raw:
                         raw[name] += cell[name]
             if raw["shifts"] or raw["minutes"]:
@@ -10289,21 +10283,10 @@ class SchedulingService:
         that shift, None when no seat was recorded; a member seated twice on
         one shift is read once, so a shift is never counted twice.
 
-        The seat is an outer-joined derived table of one row per shift and
-        member rather than a correlated subquery: MySQL 8's
-        ONLY_FULL_GROUP_BY rejects grouping on a subquery that reads
-        ``shifts.id`` (error 1055), which MariaDB's default mode lets through.
+        The seat is :func:`member_seat_on_shift`, the one definition every
+        reader that cuts shift credit by seat shares.
         """
-        seats = (
-            select(
-                ShiftAssignment.shift_id.label("shift_id"),
-                ShiftAssignment.user_id.label("user_id"),
-                func.min(ShiftAssignment.position).label("position"),
-            )
-            .where(*seat_filters)
-            .group_by(ShiftAssignment.shift_id, ShiftAssignment.user_id)
-            .subquery()
-        )
+        seats = member_seat_on_shift(*seat_filters)
         seat = seats.c.position
         year_col = func.year(Shift.shift_date)
         found: Dict[Any, Dict[Optional[str], Dict[str, int]]] = {}
@@ -11058,6 +11041,7 @@ class SchedulingService:
         start: date,
         end: date,
         user_ids: Sequence[str],
+        seat: Optional[str] = None,
     ) -> Dict[str, List[CreditedHours]]:
         """Each member's credited shift hours by date, for HOURS grading.
 
@@ -11066,6 +11050,10 @@ class SchedulingService:
         on this department's shifts, counted external shifts, and approved
         pre-shift work on finalized shifts. Minutes are kept raw, so a
         shortfall is never rounded away.
+
+        With ``seat``, only shifts the member held that seat on count, read
+        through :func:`member_seat_on_shift`; external shifts carry no seat
+        of ours and drop out (owner decisions, 2026-11-26).
         """
         from app.services.pre_shift_work_service import approved_pre_work_minutes
 
@@ -11078,7 +11066,8 @@ class SchedulingService:
             per_day = minutes.setdefault(str(user_id), {})
             per_day[when] = per_day.get(when, 0) + int(value or 0)
 
-        attendance = await self.db.execute(
+        seats = member_seat_on_shift(ShiftAssignment.user_id.in_(ids))
+        attendance_query = (
             select(
                 ShiftAttendance.user_id,
                 Shift.shift_date,
@@ -11093,26 +11082,51 @@ class SchedulingService:
             .where(ShiftAttendance.user_id.in_(ids))
             .group_by(ShiftAttendance.user_id, Shift.shift_date)
         )
-        for user_id, when, value in attendance.all():
-            _add(user_id, when, value)
-
-        for row in await approved_pre_work_minutes(
-            self.db,
+        pre_work_filters: List[Any] = [
             Shift.organization_id == organization_id,
             Shift.shift_date >= start,
             Shift.shift_date <= end,
             Shift.is_finalized.is_(True),
             ShiftPreWorkSession.user_id.in_(ids),
+        ]
+        pre_work_joins: List[Tuple[Any, Any]] = []
+        if seat:
+            attendance_query = attendance_query.join(
+                seats,
+                and_(
+                    seats.c.shift_id == Shift.id,
+                    seats.c.user_id == ShiftAttendance.user_id,
+                ),
+            ).where(seat_matches(seats.c.position, seat))
+            pre_work_joins.append(
+                (
+                    seats,
+                    and_(
+                        seats.c.shift_id == Shift.id,
+                        seats.c.user_id == ShiftPreWorkSession.user_id,
+                    ),
+                )
+            )
+            pre_work_filters.append(seat_matches(seats.c.position, seat))
+
+        for user_id, when, value in (await self.db.execute(attendance_query)).all():
+            _add(user_id, when, value)
+
+        for row in await approved_pre_work_minutes(
+            self.db,
+            *pre_work_filters,
             group_by=[ShiftPreWorkSession.user_id, Shift.shift_date],
+            outer_joins=pre_work_joins,
         ):
             _add(row[0], row[1], row.minutes)
 
-        external = await ExternalShiftHoursService(
-            self.db
-        ).counted_minutes_by_user_and_date(organization_id, start, end, ids)
-        for user_id, per_day in external.items():
-            for when, value in per_day.items():
-                _add(user_id, when, value)
+        if not seat:
+            external = await ExternalShiftHoursService(
+                self.db
+            ).counted_minutes_by_user_and_date(organization_id, start, end, ids)
+            for user_id, per_day in external.items():
+                for when, value in per_day.items():
+                    _add(user_id, when, value)
 
         return {
             user_id: [
@@ -11405,7 +11419,11 @@ class SchedulingService:
             # My Hours credit them: pending, member-controlled attendance is
             # not credit until an officer closes the shift out.
             user_ids = [u.id for u in applicable_users]
-            att_result = await self.db.execute(
+            # A requirement limited to one seat counts, and shows, only the
+            # shifts held in that seat; outside-agency time carries no seat of
+            # ours (owner decisions, 2026-11-26).
+            seat = req.credited_seat or None
+            att_query = (
                 select(
                     ShiftAttendance.user_id,
                     func.count(ShiftAttendance.id).label("shift_count"),
@@ -11422,6 +11440,18 @@ class SchedulingService:
                 .where(ShiftAttendance.user_id.in_(user_ids))
                 .group_by(ShiftAttendance.user_id)
             )
+            if seat:
+                seated = member_seat_on_shift(
+                    ShiftAssignment.user_id.in_([str(u) for u in user_ids])
+                )
+                att_query = att_query.join(
+                    seated,
+                    and_(
+                        seated.c.shift_id == Shift.id,
+                        seated.c.user_id == ShiftAttendance.user_id,
+                    ),
+                ).where(seat_matches(seated.c.position, seat))
+            att_result = await self.db.execute(att_query)
             attendance_map: Dict[str, Dict] = {}
             for row in att_result.all():
                 attendance_map[row.user_id] = {
@@ -11433,33 +11463,59 @@ class SchedulingService:
             # Approved pre-shift work adds hours under the same finalized rule
             # as the attendance above, and never a shift.
             from app.services.pre_shift_work_service import (
+                approved_pre_work_minutes,
                 approved_pre_work_minutes_by_user,
             )
 
-            prep_map = await approved_pre_work_minutes_by_user(
-                self.db,
-                organization_id,
-                period_start,
-                period_end,
-                finalized_only=True,
-                user_ids=[str(u) for u in user_ids],
-            )
-
-            # Shifts worked on another jurisdiction's apparatus count toward
-            # the requirement the same way a shift here does: one entry is
-            # one shift, and its minutes are hours on duty.
-            external_map = await ExternalShiftHoursService(
-                self.db
-            ).counted_totals_by_user(
-                str(organization_id), period_start, period_end, user_ids
-            )
+            prep_map: Dict[str, int] = {}
+            external_map: Dict[str, Dict[str, int]] = {}
+            if seat:
+                prep_map = {
+                    str(row[0]): int(row.minutes or 0)
+                    for row in await approved_pre_work_minutes(
+                        self.db,
+                        Shift.organization_id == str(organization_id),
+                        Shift.shift_date >= period_start,
+                        Shift.shift_date <= period_end,
+                        Shift.is_finalized.is_(True),
+                        ShiftPreWorkSession.user_id.in_([str(u) for u in user_ids]),
+                        seat_matches(seated.c.position, seat),
+                        group_by=[ShiftPreWorkSession.user_id],
+                        outer_joins=[
+                            (
+                                seated,
+                                and_(
+                                    seated.c.shift_id == Shift.id,
+                                    seated.c.user_id == ShiftPreWorkSession.user_id,
+                                ),
+                            )
+                        ],
+                    )
+                }
+            else:
+                prep_map = await approved_pre_work_minutes_by_user(
+                    self.db,
+                    organization_id,
+                    period_start,
+                    period_end,
+                    finalized_only=True,
+                    user_ids=[str(u) for u in user_ids],
+                )
+                # Shifts worked on another jurisdiction's apparatus count
+                # toward the requirement the same way a shift here does: one
+                # entry is one shift, and its minutes are hours on duty.
+                external_map = await ExternalShiftHoursService(
+                    self.db
+                ).counted_totals_by_user(
+                    str(organization_id), period_start, period_end, user_ids
+                )
 
             # The same hours again, dated, for the grader: a waived month or
             # a freshness cut-off needs to know when they fell.
             hours_by_user: Dict[str, List[CreditedHours]] = {}
             if not is_shifts:
                 hours_by_user = await self._credited_shift_hours(
-                    str(organization_id), period_start, period_end, user_ids
+                    str(organization_id), period_start, period_end, user_ids, seat
                 )
 
             # Build member compliance list

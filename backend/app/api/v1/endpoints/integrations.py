@@ -607,13 +607,25 @@ def _stored_config_for_validation(integration: Integration) -> dict[str, Any]:
     return stored
 
 
+# Named like a secret, stored in public config, and safe to echo.
+_NOT_SECRET_CONFIG_KEYS = frozenset({"client_secret_expires_on"})
+
+
 def _sanitize_config(config: dict[str, Any] | None) -> dict[str, Any]:
     """Replace secret values with a redacted placeholder."""
     if not config:
         return {}
     sanitized: dict[str, Any] = {}
     for k, v in config.items():
-        if _SECRET_KEY_PATTERN.search(k) and v:
+        # The name pattern is a backstop, and it matches settings that are not
+        # secrets. A boolean is never one, and the client secret's expiry is
+        # a date the administrator typed. Masking them made the settings form
+        # open them wrong and send the bullets back: Claude settings turned
+        # member sign-in off, and Microsoft 365 settings could not be saved
+        # (INT2-9).
+        if isinstance(v, bool) or k in _NOT_SECRET_CONFIG_KEYS:
+            sanitized[k] = v
+        elif _SECRET_KEY_PATTERN.search(k) and v:
             sanitized[k] = "\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022"
         else:
             sanitized[k] = v
