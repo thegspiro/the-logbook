@@ -763,6 +763,8 @@ export interface TrainingRequirement {
   // this requirement by category? Off by default — in-house delivery only.
   allows_external_credit?: boolean;
   shift_credited?: boolean;
+  /** The one seat a shift-credited Hours or Shifts requirement counts; null counts every shift. */
+  credited_seat?: string | null;
   training_type?: TrainingType;
   // Requirement quantities (field used depends on requirement_type)
   required_hours?: number;
@@ -833,6 +835,8 @@ export interface TrainingRequirementCreate {
   allows_external_credit?: boolean | undefined;
   /** May shift attendance satisfy it on the Shift Compliance report? Omitted on create, the type decides. */
   shift_credited?: boolean | undefined;
+  /** Count only shifts held in this seat; `null` counts every shift. */
+  credited_seat?: string | null | undefined;
   /** `null` means every training type counts. */
   training_type?: TrainingType | null | undefined;
   required_hours?: number | null | undefined;
@@ -889,6 +893,8 @@ export interface TrainingRequirementUpdate {
   allows_external_credit?: boolean | undefined;
   /** May shift attendance satisfy it on the Shift Compliance report? Omitted on create, the type decides. */
   shift_credited?: boolean | undefined;
+  /** Count only shifts held in this seat; `null` counts every shift. */
+  credited_seat?: string | null | undefined;
   /** `null` means every training type counts. */
   training_type?: TrainingType | null | undefined;
   required_hours?: number | null | undefined;

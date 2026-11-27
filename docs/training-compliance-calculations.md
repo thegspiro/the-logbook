@@ -446,9 +446,23 @@ attendance on shifts not yet finalized, used its own period, and applied a
 leave-only adjustment to rolling requirements only. The training screens still
 grade an hours requirement from training records.
 
+**A requirement limited to one seat** _(2026-11-26)_ — `credited_seat` on a
+shift-credited `hours` or `shifts` requirement — counts only the shifts the
+member held that seat on. The seat is `member_seat_on_shift`
+(`app/utils/shift_seats.py`), the member's own `ShiftAssignment` on the shift,
+the same derived table Hours by Position reads. `load_credited_shift_dates`
+returns each date as a `SeatedDate` carrying that seat, and
+`_require_shift_dates` — which every reader of a member's shifts for one
+requirement goes through — keeps only the dates in the requirement's seat.
+`_credited_shift_hours` takes the seat for an `hours` row. Shifts with no seat
+recorded and counted external shifts carry no seat and never count toward
+one. Seats compare after `canonical_position`, case-folded, so a legacy `EMT`
+assignment counts toward the `ems` seat.
+
 ```
 shifts (shift_credited):
   count = shifts worked inside completion_window(requirement, as_of)
+          [held in credited_seat, when one is set]
 shifts (not shift_credited), calls:
   count = COUNT(records matching requirement filters within period)
 required = requirement.required_shifts OR requirement.required_calls
