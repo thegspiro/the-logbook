@@ -2,7 +2,147 @@
 
 **Prefix:** `FIN2` · **Iteration:** B20 · **Reviewed:** 2026-08-06 (pass 1),
 2026-08-08 (pass 2), 2026-08-09 (pass 3), 2026-08-09 (pass 4),
-2026-10-25 (pass 5)
+2026-10-25 (pass 5), 2026-11-26 (pass 6)
+
+---
+
+## Pass 6 (2026-11-26) — dues totals, generation, payments and the finance screens (14 fixed, 7 flagged)
+
+Earlier passes covered scoping, permissions and the update payloads. This pass asked
+whether the money is right and the workflows hold. It covered:
+
+- budget totals through every request type
+- dues generation, payments, waivers and overdue rules
+- fiscal-year boundaries and concurrency
+- the dashboard, list, detail and dues screens
+
+Backend candidates were reproduced against the real test database first. Every fix
+has a test that failed on the unfixed code, except FIN2-14 and FIN2-16, whose races
+need two connections.
+
+### Flagged (in `docs/KNOWN_LIMITATIONS.md` → "Finance — Decisions From App Review B20 Pass 6")
+
+| Id     | Severity | Finding                                                                                                                                                     |
+| ------ | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| FIN2-3 | MEDIUM   | A request can charge a budget line in another fiscal year, including a locked one; approval encumbered a locked year's line (reproduced).                   |
+| FIN2-4 | MEDIUM   | `member_dues` has no unique key on schedule and member; duplicates already stored need settling before one can be added.                                    |
+| FIN2-5 | MEDIUM   | A fully paid record can be waived, and the collection rate counts waived money as uncollected (reproduced).                                                 |
+| FIN2-6 | MEDIUM   | Dues read Overdue from the first minute of the due day, against the training guide; the overdue email and a zero-grace late fee land that day (reproduced). |
+| FIN2-7 | MEDIUM   | Mark Paid accepts any amount above the approved estimate when there is no budget line: $50 approved, $49,999 paid (reproduced).                             |
+| FIN2-8 | LOW      | Overlapping fiscal years are accepted.                                                                                                                      |
+| FIN2-9 | LOW      | `GET /finance/dues/summary` gives a `finance.view` holder department-wide totals beside a list of their own dues.                                           |
+
+### Fixed — backend
+
+- **FIN2-11 (MED): two "Generate dues" runs at once billed every member twice**
+  (reproduced). Generation now locks the schedule row and reads the billed set with
+  a locking read (pitfall 27).
+- **FIN2-12 (MED): a waiver counted the whole amount due.** A member who paid $40 of
+  $100 and was then waived took the outstanding total $40 below zero (reproduced).
+  The dues summary and the delinquency report now count only the unpaid part as
+  waived, through one helper.
+- **FIN2-13 (LOW): a fiscal year could end before it started** (reproduced). Create
+  and update refuse it.
+- **FIN2-14 (LOW): reversing a waiver read the record unlocked.** It is locked, as the
+  waive and the payment paths already were.
+- **FIN2-15 (LOW): a resubmitted dues payment reference was audited as a payment.**
+  The service now reports the duplicate and the endpoint skips the audit event. The
+  log line carries the record id instead of the member-typed reference (pitfall 33).
+- **FIN2-16 (LOW): adding an expense line did not lock the report.** A line could
+  land beside a concurrent submit after the approval chain was chosen. The report is
+  now locked first, as `_draft_line` already does.
+
+### Fixed — frontend
+
+- **FIN2-17 (HIGH): a refused submit said "submitted for approval".** The store
+  swallowed the error, so the page showed the success toast beside the error banner
+  while the request stayed a draft. Purchase, expense and check submits now rethrow.
+- **FIN2-18 (MED/HIGH): a detail page showed the previous record under a new id.**
+  Request A's number, amount and buttons showed under B's URL, and the buttons acted
+  on B. A slower answer for A could land over B. Every load failure read "not found
+  … removed". The store now drops another record's copy at once and ignores stale
+  answers, and a failure says why, with Retry.
+- **FIN2-19 (MED): the finance store survived sign-out.** On a shared station the
+  next member saw the treasurer's every-member dues list until their own fetch landed.
+  The store empties when the signed-in user changes. It subscribes to the auth store
+  rather than being reset by it, which would have put finance code in the first load.
+- **FIN2-20 (MED): the dues, request and budget lists stopped at 100 rows** with
+  nothing to say so, and the request search searched only those. They now ask for up
+  to the API's 1000 (see Open).
+- **FIN2-21 (MED): quick filter or fiscal-year switches showed one filter's rows or
+  dues totals under another.** Each list keeps only its newest answer, and a failure
+  empties it.
+- **FIN2-22 (LOW): Mark Ordered, Mark Received and Cancel on a purchase request, and
+  Cancel and Void on a check, could each be sent twice.** They run through the page's
+  submit guard.
+- **FIN2-23 (LOW): failed loads showed "create your first…" empty states** beside the
+  error, including a Create Fiscal Year button. Those are now suppressed on error.
+- **FIN2-24 (LOW): the dashboard linked every viewer to Settings, QuickBooks Export
+  and Approval Chains**, which open Access Denied without `finance.manage` or
+  `finance.configure_approvals`. Those links now follow the grants.
+
+### Open (recorded here only)
+
+- The Budgets page sums its own list for the four total cards, while the dashboard
+  uses `get_budget_summary` (pitfall 29). They disagree past the list limit.
+  `fetchBudgetSummary` exists and no page calls it.
+- The lists still have no real paging. FIN2-20 raised the cap to 1000; paging changes
+  the response shape.
+- Expense line dates are stored two ways: the report form sends a bare date, while
+  the line dialog and reimbursement claim send local noon. West of UTC, an edited line
+  shows the previous day.
+- The expense form's amount box erases a leading "0" and rounds a third decimal
+  instead of refusing it.
+- `get_budget_summary`'s `percent_used` is spent ÷ budgeted where other screens use
+  (spent + committed) ÷ budgeted, and its `category_breakdown` is always empty. No
+  screen renders either today.
+- A requester can set `actual_amount` on a draft, and it then shows in open items.
+  Mark Paid does not trust it.
+- `approve_step` and `cancel_purchase_request` take their locks in opposite orders, a
+  possible deadlock (not reproduced).
+
+### Verified good ✅ (this pass)
+
+- `_mutate_budget` is org-scoped, locked and holds the ceiling.
+- Purchase, expense and check requests encumber, spend and release in single locked
+  changes, and reverse on cancel, void and denial.
+- Budget amounts and amendments refuse a figure below spent plus committed, and any
+  change in a locked year.
+- Dues payments and the late-fee task are idempotent; overpayments go to donations;
+  generation honours membership types.
+- Money columns use Decimal throughout; exports go through `SafeCsvWriter`.
+- The frontend wire casing is camelCase throughout and matches. Update payloads send
+  nulls. Dues excess is computed in cents.
+
+### Not read (scope, stated plainly)
+
+These parts of `finance_service.py` were not read:
+
+- amendment listings
+- chain configuration
+- approval emails and approval by token
+- the pending-approvals queue
+- route preview and step advance
+- shared receipts
+- cash advances
+- most of the QuickBooks export internals
+
+Also not read: most of `endpoints/finance.py`, `finance_budget_request_service`,
+`restricted_funds`, `quickbooks_sync_service`, and these frontend pages: budget
+requests, My Budgets, approval chain settings, QuickBooks, the check request form,
+the advance panel and the report sub-pages.
+
+### Completion gate (pass 6)
+
+| Check                                                   | Result                                                                                                              |
+| ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `flake8` / `black` / `isort` (changed files)            | ✅ clean                                                                                                            |
+| mypy ratchet                                            | ✅ 0 errors, matching the baseline                                                                                  |
+| `check_endpoint_permissions.py --strict`                | ✅ 0 warnings                                                                                                       |
+| new backend tests                                       | ✅ 4, each failed on the unfixed code                                                                               |
+| finance backend tests                                   | ✅ 2,341 passed, 2 skipped                                                                                          |
+| `npm run typecheck` / ESLint (changed files) / Prettier | ✅ clean                                                                                                            |
+| finance frontend tests                                  | ✅ 903 passed in 73 files; 17 new tests (13 failed first, 4 are guards that held) and 3 changed, which failed first |
 
 ---
 

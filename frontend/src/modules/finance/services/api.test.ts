@@ -19,7 +19,17 @@ vi.mock('../../../utils/createApiClient', () => ({
 }));
 
 // Import AFTER mocks are in place
-import { approvalChainService, approvalService, budgetRequestService, fiscalYearService } from './api';
+import {
+  approvalChainService,
+  approvalService,
+  budgetRequestService,
+  budgetService,
+  checkRequestService,
+  duesService,
+  expenseReportService,
+  fiscalYearService,
+  purchaseRequestService,
+} from './api';
 import { ApprovalEntityType } from '../types';
 
 describe('approvalService manual approval', () => {
@@ -188,5 +198,26 @@ describe('next-year planning calls', () => {
     });
     await budgetRequestService.delete('br-1');
     expect(mockDelete).toHaveBeenCalledWith('/finance/budget-requests/br-1');
+  });
+});
+
+// App-review FIN6-F4: the API pages at 100, newest first, and these lists
+// asked for no more, so older dues and requests vanished without a word.
+describe('the finance lists', () => {
+  beforeEach(() => {
+    mockGet.mockReset();
+    mockGet.mockResolvedValue({ data: [] });
+  });
+
+  it.each([
+    ['/finance/dues', () => duesService.listMemberDues({ scheduleId: 's1' })],
+    ['/finance/purchase-requests', () => purchaseRequestService.list()],
+    ['/finance/expense-reports', () => expenseReportService.list()],
+    ['/finance/check-requests', () => checkRequestService.list()],
+    ['/finance/budgets', () => budgetService.list({ fiscalYearId: 'fy-1' })],
+  ])('ask %s for up to the API ceiling', async (url, call) => {
+    await call();
+
+    expect(mockGet).toHaveBeenCalledWith(url, { params: expect.objectContaining({ limit: 1000 }) as unknown });
   });
 });

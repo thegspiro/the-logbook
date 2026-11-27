@@ -32,17 +32,21 @@ vi.mock('@/stores/authStore', () => ({
 }));
 
 const mockCancel = vi.fn();
+const mockMarkOrdered = vi.fn();
 vi.mock('../services/api', () => ({
   approvalService: { manualApprove: vi.fn(), manualDeny: vi.fn() },
   functionalClassService: {},
-  purchaseRequestService: { cancel: (...args: unknown[]) => mockCancel(...args) as unknown },
+  purchaseRequestService: {
+    cancel: (...args: unknown[]) => mockCancel(...args) as unknown,
+    markOrdered: (...args: unknown[]) => mockMarkOrdered(...args) as unknown,
+  },
 }));
 
 import PurchaseRequestDetailPage from './PurchaseRequestDetailPage';
 
 const fetchPurchaseRequest = vi.fn();
 
-const renderPage = () => {
+const renderPage = (status = 'pending_approval') => {
   storeState = {
     selectedPurchaseRequest: {
       id: 'pr-1',
@@ -53,7 +57,7 @@ const renderPage = () => {
       requestedBy: 'u-2',
       estimatedAmount: '1250.00',
       priority: 'medium',
-      status: 'pending_approval',
+      status,
       approvalSteps: [],
       createdAt: '2026-09-20T15:00:00Z',
       updatedAt: '2026-09-20T15:00:00Z',
@@ -123,5 +127,33 @@ describe('cancelling a purchase request', () => {
     await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Cancel request' }));
 
     await waitFor(() => expect(mockToastError).toHaveBeenCalledWith('Paid requests cannot be cancelled'));
+  });
+});
+
+// App-review FIN6-F9: Mark Ordered ran outside the page's submit guard, so a
+// double tap sent it twice and the second answered with an error toast.
+describe('marking a purchase request ordered', () => {
+  beforeEach(() => {
+    mockMarkOrdered.mockReset();
+    mockToastSuccess.mockReset();
+    mockToastError.mockReset();
+    fetchPurchaseRequest.mockReset();
+    mockCheckPermission.mockReset();
+    mockCheckPermission.mockImplementation((p: string) => p === 'finance.manage');
+  });
+
+  it('sends it once however fast it is tapped', async () => {
+    let finish: () => void = () => {};
+    mockMarkOrdered.mockImplementation(() => new Promise<void>((resolve) => (finish = resolve)));
+    const user = userEvent.setup();
+    renderPage('approved');
+    const button = await screen.findByRole('button', { name: /Mark Ordered/ });
+
+    await user.click(button);
+    await user.click(button);
+    finish();
+
+    await waitFor(() => expect(mockToastSuccess).toHaveBeenCalledWith('Marked as ordered'));
+    expect(mockMarkOrdered).toHaveBeenCalledTimes(1);
   });
 });
