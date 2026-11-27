@@ -4,18 +4,30 @@
  * the evaluator's form or the member's self-evaluation.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen, waitFor } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../../../../test/utils';
-import type { PreviewOptions, TemplateDefinition, TemplatePreview } from '../../types/evaluations';
+import type { PreviewOptions, TemplateDefinition, TemplatePreview, TemplateWorkflow } from '../../types/evaluations';
 
 const previewOptions = vi.fn();
 const preview = vi.fn();
+const previewPdf = vi.fn();
 vi.mock('../../services/evaluationsApi', () => ({
   evaluationTemplatesService: {
     previewOptions: (...a: unknown[]) => previewOptions(...a) as unknown,
     preview: (...a: unknown[]) => preview(...a) as unknown,
+    previewPdf: (...a: unknown[]) => previewPdf(...a) as unknown,
   },
+}));
+
+const saveBlob = vi.fn();
+vi.mock('../../../../utils/saveBlob', () => ({
+  saveBlob: (...a: unknown[]) => saveBlob(...a) as unknown,
+}));
+
+const toastError = vi.fn();
+vi.mock('react-hot-toast', () => ({
+  default: { error: (...a: unknown[]) => toastError(...a) as unknown },
 }));
 
 import { TemplatePreviewPanel } from './TemplatePreviewPanel';
@@ -72,6 +84,23 @@ const definition: TemplateDefinition = {
   ],
 };
 
+const workflow: TemplateWorkflow = {
+  steps: [
+    {
+      key: 'ack',
+      type: 'member_acknowledgement',
+      label: 'Member acknowledgement',
+      actor: { kind: 'member', position_id: null },
+      due_days: 58,
+    },
+  ],
+  reminder_days_before: 3,
+  evaluator_may_proceed_without_self_evaluation: true,
+  response_window_days: 30,
+};
+
+const panel = <TemplatePreviewPanel definition={definition} workflow={workflow} templateName="Operational Annual" />;
+
 const OPTIONS: PreviewOptions = {
   can_use_member_data: false,
   members: [],
@@ -108,16 +137,22 @@ function result(overrides: Partial<TemplatePreview> = {}): TemplatePreview {
   };
 }
 
+const PDF = new Blob(['%PDF-'], { type: 'application/pdf' });
+
 describe('TemplatePreviewPanel', () => {
   beforeEach(() => {
     previewOptions.mockReset();
     preview.mockReset();
+    previewPdf.mockReset();
+    saveBlob.mockReset();
+    toastError.mockReset();
     previewOptions.mockResolvedValue(OPTIONS);
     preview.mockResolvedValue(result());
+    previewPdf.mockResolvedValue(PDF);
   });
 
   it('shows the unsaved form with sample figures over the latest period', async () => {
-    renderWithRouter(<TemplatePreviewPanel definition={definition} />);
+    renderWithRouter(panel);
 
     expect(await screen.findByText('36 h')).toBeInTheDocument();
     expect(screen.getByText('Suggested: Level 4')).toBeInTheDocument();
@@ -133,7 +168,7 @@ describe('TemplatePreviewPanel', () => {
       members: [{ id: 'm1', name: 'Pat Member' }],
     });
     const user = userEvent.setup();
-    renderWithRouter(<TemplatePreviewPanel definition={definition} />);
+    renderWithRouter(panel);
     await screen.findByText('36 h');
 
     preview.mockResolvedValue(
@@ -158,7 +193,7 @@ describe('TemplatePreviewPanel', () => {
 
   it("shows only the self-evaluation's items, without a suggested rating, as the member", async () => {
     const user = userEvent.setup();
-    renderWithRouter(<TemplatePreviewPanel definition={definition} />);
+    renderWithRouter(panel);
     await screen.findByText('Scene performance');
 
     await user.selectOptions(screen.getByLabelText('Show the form as'), 'self_evaluation');
@@ -170,8 +205,84 @@ describe('TemplatePreviewPanel', () => {
 
   it('says what went wrong when the preview fails', async () => {
     preview.mockRejectedValue(new Error('Review period not found.'));
-    renderWithRouter(<TemplatePreviewPanel definition={definition} />);
+    renderWithRouter(panel);
 
     expect(await screen.findByText('Review period not found.')).toBeInTheDocument();
+  });
+
+  describe('downloading the PDF', () => {
+    it('sends the form, workflow and choices on screen, and saves the file under the template name', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(panel);
+      await screen.findByText('36 h');
+      await user.selectOptions(screen.getByLabelText('Show the form as'), 'self_evaluation');
+
+      await user.click(screen.getByRole('button', { name: 'Download PDF' }));
+
+      await waitFor(() => expect(saveBlob).toHaveBeenCalledWith(PDF, 'Operational Annual - preview.pdf'));
+      expect(previewPdf).toHaveBeenCalledWith({
+        definition,
+        workflow,
+        name: 'Operational Annual',
+        part: 'self_evaluation',
+        memberId: '',
+        periodId: 'p1',
+      });
+      // Sample figures identify nobody, so nothing is asked first.
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    });
+
+    it("asks before a member's figures leave the Logbook, and sends nothing when declined", async () => {
+      previewOptions.mockResolvedValue({
+        ...OPTIONS,
+        can_use_member_data: true,
+        members: [{ id: 'm1', name: 'Pat Member' }],
+      });
+      preview.mockResolvedValue(result({ sample: false, member_name: 'Pat Member', note: null }));
+      const user = userEvent.setup();
+      renderWithRouter(panel);
+      await screen.findByText('36 h');
+      await user.selectOptions(screen.getByLabelText('Figures from'), 'm1');
+      await screen.findByText(/Pat Member's figures/);
+
+      await user.click(screen.getByRole('button', { name: 'Download PDF' }));
+      const dialog = await screen.findByRole('dialog');
+      expect(dialog).toHaveTextContent('This PDF will show Pat Member’s figures');
+      await user.click(screen.getByRole('button', { name: 'Go back' }));
+
+      await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+      expect(previewPdf).not.toHaveBeenCalled();
+
+      await user.click(screen.getByRole('button', { name: 'Download PDF' }));
+      await user.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Download PDF' }));
+
+      await waitFor(() => expect(saveBlob).toHaveBeenCalledWith(PDF, 'Operational Annual - preview.pdf'));
+      expect(previewPdf).toHaveBeenCalledWith(expect.objectContaining({ memberId: 'm1', part: 'evaluator' }));
+    });
+
+    it('says why when the PDF cannot be made, and saves nothing', async () => {
+      previewPdf.mockRejectedValue(new Error('Review period not found.'));
+      const user = userEvent.setup();
+      renderWithRouter(panel);
+      await screen.findByText('36 h');
+
+      await user.click(screen.getByRole('button', { name: 'Download PDF' }));
+
+      await waitFor(() => expect(toastError).toHaveBeenCalledWith('Review period not found.'));
+      expect(saveBlob).not.toHaveBeenCalled();
+    });
+
+    it('offers no PDF of a form with nothing in it', async () => {
+      renderWithRouter(
+        <TemplatePreviewPanel
+          definition={{ ...definition, sections: [] }}
+          workflow={workflow}
+          templateName="Operational Annual"
+        />
+      );
+
+      await screen.findByText(/Add a section on the Sections/);
+      expect(screen.getByRole('button', { name: 'Download PDF' })).toBeDisabled();
+    });
   });
 });

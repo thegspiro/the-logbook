@@ -45,14 +45,17 @@ from app.models.evaluation import (
     EvaluationStepStatus,
     EvaluationStepType,
 )
-from app.models.user import Organization, User
+from app.models.user import Organization, Position, User
 from app.schemas.evaluation import (
     OVERALL_LEVELS,
     EvaluationTool,
     GoalResult,
     ItemAnswer,
     PartContent,
+    TemplateDefinition,
     TemplateItem,
+    TemplateWorkflow,
+    WorkflowStep,
 )
 from app.services import file_storage_service as file_storage
 from app.services.evaluation_data_sources import DATA_SOURCES
@@ -60,6 +63,7 @@ from app.services.evaluation_grading import describe_calculated, grade_content
 from app.services.evaluation_service import (
     EvaluationService,
     content_hash,
+    form_definition,
     form_items,
     goals_under_review,
     weighted_overall,
@@ -70,7 +74,10 @@ from app.services.file_storage_service import (
     StorageArea,
 )
 from app.utils.election_pdf_style import department_identity
-from app.utils.evaluation_pdf import render_evaluation_pdf
+from app.utils.evaluation_pdf import (
+    render_evaluation_pdf,
+    render_evaluation_preview_pdf,
+)
 from app.utils.org_timezone import resolve_scheduling_timezone
 
 PDF_RULES = FileRules(
@@ -173,21 +180,21 @@ def figure_detail(key: str, entry: Optional[Dict[str, Any]]) -> Optional[str]:
                     "department's call log"
                 )
             return text
+    breakdown = entry.get("breakdown")
+    made_of = breakdown if isinstance(breakdown, str) and breakdown else None
+    left_out = None
     if key == "shifts.hours":
         external = num("external_hours")
         if external:
-            return f"Not included: {external:g} h for other agencies"
+            left_out = f"Not included: {external:g} h for other agencies"
     if key == "shifts.count":
         external = num("external_shifts")
         if external:
-            return (
+            left_out = (
                 "Not included: "
                 f"{_plural(external, 'shift', 'shifts')} for other agencies"
             )
-    breakdown = entry.get("breakdown")
-    if isinstance(breakdown, str) and breakdown:
-        return breakdown
-    return None
+    return ". ".join(part for part in (made_of, left_out) if part) or None
 
 
 _GOAL_RESULTS = {
@@ -273,6 +280,64 @@ def _answer(
     if evaluator and answer.justification:
         notes.append(("Why the rating differs from the figures", answer.justification))
     return {"answer": text, "notes": notes}
+
+
+_UNANSWERED = "—"
+_SIGNED_STEPS = (
+    EvaluationStepType.APPROVAL,
+    EvaluationStepType.MEMBER_ACKNOWLEDGEMENT,
+)
+
+
+def _preview_answer(
+    item: TemplateItem,
+    figure: Optional[str],
+    suggested: Optional[int],
+    evaluator: bool,
+) -> Dict[str, Any]:
+    """An item nobody has answered, as a preview prints it: the answer left
+    blank, and under it what the form will ask for — the guidance, the
+    choices, the figure shown beside it and what the figure suggests."""
+    notes: List[Tuple[str, str]] = []
+    if item.help_text:
+        notes.append(("Guidance", item.help_text))
+    levels: Dict[int, str] = {}
+    if item.tool == EvaluationTool.MEETS:
+        levels = {1: "Meets", 0: "Does not meet"}
+    elif item.tool in (EvaluationTool.LABELED_SCALE, EvaluationTool.NUMERIC_SCALE):
+        levels = {level.value: level.label for level in item.levels}
+    if levels:
+        choices = list(levels.values())
+        if item.allow_na:
+            choices.append("Not applicable")
+        notes.append(("Rated", " · ".join(choices)))
+    elif item.tool == EvaluationTool.CHECKLIST:
+        notes.append(("Checked from", " · ".join(item.checklist_options) or "—"))
+    elif item.tool == EvaluationTool.NARRATIVE:
+        notes.append(("Answered", "In writing"))
+    elif item.tool == EvaluationTool.GOALS:
+        notes.append(
+            ("Answered", "As a list of goals, each with an optional target date")
+        )
+    elif item.tool == EvaluationTool.GOAL_REVIEW:
+        notes.append(
+            (
+                "Answered",
+                "Each goal the member's previous review set is rated "
+                + " · ".join(_GOAL_RESULTS.values()),
+            )
+        )
+    if figure is not None:
+        notes.append(("Figure shown", figure))
+    if evaluator and suggested is not None and suggested in levels:
+        notes.append(("The figure suggests", levels[suggested]))
+    if levels and item.require_example_for:
+        required = [levels[v] for v in item.require_example_for if v in levels]
+        if required:
+            notes.append(("Example required when rated", " · ".join(required)))
+    if levels and item.comment != "none":
+        notes.append(("Comment", item.comment.capitalize()))
+    return {"answer": _UNANSWERED, "notes": notes}
 
 
 class EvaluationDocumentService:
@@ -457,6 +522,201 @@ class EvaluationDocumentService:
             ),
             media_type="application/pdf",
         )
+
+    async def preview_pdf(
+        self,
+        organization_id: str,
+        definition: TemplateDefinition,
+        workflow: TemplateWorkflow,
+        member_id: Optional[str],
+        period_id: Optional[str],
+        part: str,
+        title: str,
+    ) -> bytes:
+        """A builder's form, unsaved edits included, as the PDF a finalized
+        evaluation drafted from it would produce, with every answer blank.
+
+        The figures, the period and whether officer-only sections apply are
+        ``preview_template``'s, so the PDF and the builder's Preview tab
+        cannot disagree (CLAUDE.md pitfall #29). Nothing is stored. The
+        caller decides who may pass a member.
+        """
+        preview = await self.evaluations.preview_template(
+            organization_id, definition, member_id, period_id
+        )
+        tz = await resolve_scheduling_timezone(self.db, organization_id)
+        organization = await self.db.get(Organization, organization_id)
+        evaluator = part == EvaluationPartKind.EVALUATOR.value
+        shown = form_definition(definition, preview["includes_officer_sections"])
+        asked = form_items(shown, part)
+        units = {source["key"]: source for source in preview["sources"]}
+        values = preview["data"]
+        suggested = preview["suggested_scores"] if evaluator else {}
+
+        def figure(key: str) -> str:
+            text = format_figure(values.get(key), units[key]["unit"])
+            detail = figure_detail(key, values.get(key))
+            return f"{text} · {detail}" if detail else text
+
+        sections = []
+        used: List[str] = []
+        for block in shown.sections:
+            items = []
+            for item in block.items:
+                if item.key not in asked:
+                    continue
+                source = item.data_block.source if item.data_block else None
+                if source is not None and source not in used:
+                    used.append(source)
+                answer = _preview_answer(
+                    item,
+                    (
+                        f"{units[source]['label']}: {figure(source)}"
+                        if source is not None
+                        else None
+                    ),
+                    suggested.get(item.key),
+                    evaluator,
+                )
+                items.append(
+                    {
+                        "label": item.label,
+                        "evaluator": answer if evaluator else None,
+                        "self": None if evaluator else answer,
+                    }
+                )
+            # A self-evaluation shows only the sections it asks something in.
+            if not items and not evaluator:
+                continue
+            sections.append(
+                {
+                    "title": block.title
+                    + (" (officers only)" if block.officer_only else ""),
+                    "description": block.description,
+                    "items": items,
+                    "grade": None,
+                }
+            )
+
+        overall: Optional[str] = None
+        grade_rows: List[Tuple[str, str, str]] = []
+        if evaluator:
+            grades = grade_content(shown, PartContent())
+            if grades is not None:
+                overall = "Calculated from the section grades by their weights"
+                grade_rows = [
+                    (g["title"], f"{g['weight']}%", describe_calculated(g))
+                    for g in grades["sections"]
+                ]
+            elif definition.overall_mode == "weighted":
+                overall = "A weighted percentage of the ratings"
+            elif definition.overall_mode == "evaluator":
+                overall = "Chosen by the evaluator: " + " · ".join(
+                    level.label for level in OVERALL_LEVELS
+                )
+
+        has_self_step = any(
+            ws.type == EvaluationStepType.SELF_EVALUATION for ws in workflow.steps
+        )
+        if not evaluator:
+            self_status = "This preview is the member's own form"
+        elif has_self_step:
+            self_status = "Part of this form; the member's answers print beside these"
+        else:
+            self_status = "Not part of this form"
+
+        period = (
+            f"{preview['period_name'] + ' · ' if preview.get('period_name') else ''}"
+            f"{_day(preview['period_start'])} – {_day(preview['period_end'])}"
+        )
+        coverage: Optional[str]
+        if preview["sample"]:
+            coverage = "Sample figures, not a member's"
+        elif preview.get("coverage_start") and preview.get("coverage_end"):
+            coverage = (
+                f"{_day(preview['coverage_start'])} – {_day(preview['coverage_end'])}"
+            )
+        else:
+            coverage = preview.get("note")
+
+        record = {
+            "org_name": organization.name if organization else None,
+            "logo": organization.logo if organization else None,
+            "identity": department_identity(organization) or None,
+            "title": title,
+            "member_name": (
+                "Sample member" if preview["sample"] else preview["member_name"]
+            ),
+            "evaluator_name": None,
+            "period": period,
+            "coverage": coverage,
+            "excluded": [],
+            "figures": [(units[key]["label"], figure(key)) for key in used],
+            "sections": sections,
+            "overall": overall,
+            "overall_override": None,
+            "grade_rows": grade_rows,
+            "overall_comment": None,
+            "self_status": self_status,
+            "self_comment": None,
+            "signatures": (
+                await self._preview_signatures(organization_id, workflow)
+                if evaluator
+                else None
+            ),
+            "amendments": [],
+            "response": None,
+            "content_hash": None,
+            "generated_at": _moment(datetime.now(timezone.utc), tz),
+            "preview": {
+                "form": (
+                    "the evaluator's form" if evaluator else "the self-evaluation form"
+                )
+            },
+        }
+        return render_evaluation_preview_pdf(record)
+
+    async def _preview_signatures(
+        self, organization_id: str, workflow: TemplateWorkflow
+    ) -> List[Dict[str, Any]]:
+        """The signatures the workflow will collect, unsigned, each naming
+        who gives it."""
+        steps = [ws for ws in workflow.steps if ws.type in _SIGNED_STEPS]
+        position_ids = {
+            ws.actor.position_id for ws in steps if ws.actor.position_id is not None
+        }
+        names: Dict[str, str] = {}
+        if position_ids:
+            rows = await self.db.execute(
+                select(Position.id, Position.name).where(
+                    Position.id.in_(position_ids),
+                    Position.organization_id == organization_id,
+                )
+            )
+            names = {row.id: row.name for row in rows}
+
+        def signer(ws: WorkflowStep) -> str:
+            if ws.actor.kind == "member":
+                return "The member"
+            if ws.actor.kind == "evaluator":
+                return "The evaluator"
+            if ws.actor.kind == "position":
+                # A position of another department, or one since deleted, is
+                # not named.
+                name = names.get(ws.actor.position_id or "")
+                return name if name else "A position holder"
+            return "A reviewer of all evaluations"
+
+        return [
+            {
+                "label": ws.label,
+                "name": signer(ws),
+                "disposition": "Not signed",
+                "comment": None,
+                "signed_at": _UNANSWERED,
+            }
+            for ws in steps
+        ]
 
     async def _record(
         self,

@@ -215,6 +215,7 @@ const FieldRenderer = ({
   const [memberResults, setMemberResults] = useState<MemberLookupResult[]>([]);
   const [memberQuery, setMemberQuery] = useState('');
   const [searchingMembers, setSearchingMembers] = useState(false);
+  const latestMemberSearch = useRef(0);
 
   const isDark = theme === 'dark';
   const errorId = `field-error-${field.id}`;
@@ -243,18 +244,25 @@ const FieldRenderer = ({
 
   const handleMemberSearch = async (query: string) => {
     setMemberQuery(query);
+    // Editing the name after choosing a member un-chooses them: otherwise the
+    // box reads "Jane" while the answer sent is still John's id.
+    if (value) onChange(field.id, '');
+    const request = ++latestMemberSearch.current;
     if (query.length < 2) {
       setMemberResults([]);
+      setSearchingMembers(false);
       return;
     }
     try {
       setSearchingMembers(true);
       const result = await formsService.memberLookup(query);
+      if (request !== latestMemberSearch.current) return;
       setMemberResults(result.members);
     } catch {
+      if (request !== latestMemberSearch.current) return;
       setMemberResults([]);
     } finally {
-      setSearchingMembers(false);
+      if (request === latestMemberSearch.current) setSearchingMembers(false);
     }
   };
 
