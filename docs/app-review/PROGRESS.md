@@ -49,7 +49,7 @@ from its open list.
 | B8  | documents                  | DOC2   | ⬜     |
 | B9  | membership pipeline        | MP2    | ✅     |
 | B10 | messaging & communications | MSG2   | ⬜     |
-| B11 | notifications              | NOTIF2 | ⬜     |
+| B11 | notifications              | NOTIF2 | ✅     |
 | B12 | integrations               | INT2   | ✅     |
 | B13 | forms                      | FORM2  | ✅     |
 | B14 | grants & fundraising       | GF2    | ⬜     |
@@ -3840,6 +3840,19 @@ secrets redacted for non-admins. See
   answers, FORM2-9 equipment forms need no inventory permission. Eight LOW
   items are recorded as open. Gate clean. See forms.md → Pass 6. Next: B14
   grants & fundraising.
+
+- **B11 notifications ✅ (pass 6).** Read the enforced senders' own delivery
+  logic (cert alerts, event reminders, screening, push) and the bell, inbox,
+  preferences and push screens. **4 fixes**, each test red first.
+  - NOTIF2-8: certification alerts linked to a page that does not exist.
+  - NOTIF2-9: a failed preferences load let Save turn texts back on.
+  - NOTIF2-10: certification alerts went to departed members.
+  - NOTIF2-11: "going" event reminders reached departed members.
+
+  **5 flagged** to KNOWN_LIMITATIONS: NOTIF2-12 (daily repeat while email is
+  down), NOTIF2-13 (alerts ignore renewals), NOTIF2-14 (push coverage),
+  NOTIF2-15 (pinned past page one), NOTIF2-16 (push after sign-out). See
+  notifications.md → Pass 6. Next: B12 integrations.
 
 - **B9 membership pipeline ✅ (pass 6).** Read the lifecycle pass 5 left
   unread (gates, auto-advance, conversion, the inactivity sweep, the status

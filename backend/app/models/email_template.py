@@ -145,6 +145,9 @@ class EmailTemplateType(str, enum.Enum):
     # A requester sent feedback on a completed outreach request; see
     # email_templates_outreach.py.
     OUTREACH_FEEDBACK_RECEIVED = "outreach_feedback_received"
+    # The one reminder to a requester who has not answered the feedback form;
+    # see email_templates_outreach.py.
+    OUTREACH_FEEDBACK_REMINDER = "outreach_feedback_reminder"
     # A correction took a member below a program requirement they had
     # completed; see email_templates_program_progress.py.
     PROGRAM_REQUIREMENT_REOPENED = "program_requirement_reopened"
