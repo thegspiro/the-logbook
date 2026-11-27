@@ -83,6 +83,12 @@ vi.mock('../modules/prospective-members/services/api', () => ({
 }));
 // Tested on its own (EventGuestsCard.test.tsx); its request is not under test here.
 vi.mock('../components/event-detail/EventGuestsCard', () => ({ default: () => null }));
+// The page reads the module switch to decide whether to ask for linked
+// elections; left real, it calls organizationService, which this file's
+// services/api mock does not serve.
+vi.mock('../hooks/useEnabledModules', () => ({
+  useEnabledModules: () => ({ isModuleOn: () => true, enabledModules: null, isLoading: false }),
+}));
 // Tested on its own (EventApparatusCrewCard.test.tsx); its request is not under test here.
 vi.mock('../components/event-detail/EventApparatusCrewCard', () => ({ default: () => null }));
 // The card-taps section has its own tests (EventCardCheckinsTab.test.tsx);

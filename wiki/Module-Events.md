@@ -1221,6 +1221,12 @@ opt-out applies. `GET /member-audience/options` and `POST
   link), filled by `render_request_template` only while `feedback_link()`
   offers one and empty otherwise. The template's plain-text part is now filled
   with every placeholder too; it was sent with them unreplaced.
+  The daily `outreach_feedback_reminders` task (10:10) emails a requester
+  once, through the **Requester Feedback Reminder** template
+  (`outreach_feedback_reminder`, public footer), three days after the
+  request's move to Completed and within 14 days of it, while a form is set and
+  no feedback has arrived; `event_requests.feedback_reminder_sent_at` is
+  stamped after each send (send, then stamp).
 
 ---
 

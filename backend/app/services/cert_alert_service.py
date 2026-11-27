@@ -66,6 +66,12 @@ ALERT_TIERS = [
 ]
 
 
+# The member's own training page. Every alert here goes to the member whose
+# certification it is; /training/records is an API path, not a page, and
+# linking it opened the Not Found page (NOTIF2-8).
+MY_TRAINING_PATH = "/training/my-training"
+
+
 def _expires_when(days_until: int) -> str:
     """How soon a certificate expires, as it reads in a sentence.
 
@@ -364,7 +370,13 @@ class CertAlertService:
 
                 # Get the member
                 member_result = await self.db.execute(
-                    select(User).where(User.id == record.user_id)
+                    select(User).where(
+                        User.id == record.user_id,
+                        # Current members only, probationary included; a
+                        # departed member is not alerted (NOTIF2-10).
+                        User.status.in_(ACTIVE_ACCOUNT_STATUSES),
+                        User.deleted_at.is_(None),
+                    )
                 )
                 member = member_result.scalar_one_or_none()
                 if not member:
@@ -385,7 +397,7 @@ class CertAlertService:
                         recipient_id=str(member.id),
                         subject=subject,
                         message=message,
-                        action_url=f"/training/records?user_id={member.id}",
+                        action_url=MY_TRAINING_PATH,
                     )
                     in_app_sent += 1
 
@@ -474,7 +486,7 @@ class CertAlertService:
                                 "days_unit": "day" if days_until == 1 else "days",
                                 "expires_when": _expires_when(days_until),
                                 "renewal_url": (
-                                    f"{settings.FRONTEND_URL}/training/records"
+                                    f"{settings.FRONTEND_URL}{MY_TRAINING_PATH}"
                                 ),
                             },
                             appendix_html=extra_html or None,
@@ -516,7 +528,13 @@ class CertAlertService:
 
         for record in expired:
             member_result = await self.db.execute(
-                select(User).where(User.id == record.user_id)
+                select(User).where(
+                    User.id == record.user_id,
+                    # Current members only, probationary included; a
+                    # departed member is not alerted (NOTIF2-10).
+                    User.status.in_(ACTIVE_ACCOUNT_STATUSES),
+                    User.deleted_at.is_(None),
+                )
             )
             member = member_result.scalar_one_or_none()
             # get_expired_certifications selects only dated records.
@@ -541,7 +559,7 @@ class CertAlertService:
                     recipient_id=str(member.id),
                     subject=subject,
                     message=message,
-                    action_url=f"/training/records?user_id={member.id}",
+                    action_url=MY_TRAINING_PATH,
                 )
                 in_app_sent += 1
 

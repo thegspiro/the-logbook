@@ -2,7 +2,109 @@
 
 **Prefix:** `NOTIF2` · **Iteration:** B11 · **Reviewed:** 2026-08-06 (pass 1),
 2026-08-08 (pass 2), 2026-08-09 (pass 3), 2026-08-09 (pass 4),
-2026-10-15 (pass 5)
+2026-10-15 (pass 5), 2026-11-26 (pass 6)
+
+---
+
+## Pass 6 (2026-11-26) — the senders' own delivery logic, and the bell and settings screens: 4 fixed, 5 flagged
+
+### Scope, stated plainly
+
+Pass 5 checked that each enforced trigger's sender calls the rule resolver.
+This pass read the senders' own delivery logic:
+
+- certification alerts;
+- event reminders;
+- screening reminders;
+- equipment requests;
+- suggestions;
+- push delivery.
+
+It also read the bell and inbox, unread counts, mark-read, notification preferences and push opt-in on the frontend. The backend findings were reproduced first against the real database. Every fix has a test that failed on the unfixed code.
+
+**Not read:**
+
+- most of the 20 `log_notification` callers and the 55 direct `NotificationLog` writers;
+- whether medical, waiver or skills senders put PHI in push titles;
+- `NotificationStack` internals;
+- the storefront's notification settings.
+
+### Fixed
+
+**NOTIF2-8 — MED — Certification-expiry alerts opened the Not Found page — ✅ FIXED**
+
+- The in-app alert and the escalation linked to `/training/records?user_id=…`, which is an API path, not a page. The expiry email's renewal link did the same.
+- "View Training" on the alert most likely to matter opened Not Found.
+- All three now point at the member's own training page.
+
+**NOTIF2-9 — MED — A failed preferences load let Save overwrite the member's choices — ✅ FIXED**
+
+- `UserSettingsPage` kept both switches on after a failed read, and Save sent them.
+- So a member who had muted texts, and still holds SMS consent, started receiving texts again.
+- A failed load now says so and Save is disabled.
+
+**NOTIF2-10 — MED-LOW — Certification alerts went to departed members — ✅ FIXED**
+
+- The member was looked up by id with no status filter. A retired or inactive member kept getting every tier's email and in-app alert, pushed to their phone, and officers were copied.
+- Alerts now go to current members only, probationary included (pitfall #32).
+
+**NOTIF2-11 — MED-LOW — "Going" event reminders reached departed members — ✅ FIXED**
+
+- The RSVP'd members were loaded with no active filter, unlike the "all" audience, and leaving never removes an RSVP.
+- They are now filtered the way the "all" audience is.
+
+### Flagged for the owner (in `docs/KNOWN_LIMITATIONS.md`)
+
+- **NOTIF2-12 (MED) — An expired-certification escalation repeats daily while email cannot be sent.**
+  - The escalation is stamped only when an email goes out. With email off or failing, the member and every escalation officer get a new "EXPIRED Certification" alert, and push, every day.
+  - Decide whether the in-app escalation is stamped on its own, and whether a failed email is retried.
+- **NOTIF2-13 (MED) — Certification alerts ignore renewals.**
+  - Each record is judged alone. A renewed certificate's old record still escalates "EXPIRED … may need to be taken out of service" to the chief, and an early renewal still gets the 30-day warning.
+  - The compliance screens already treat a renewal as replacing the old certificate (pitfall #29).
+  - Decide how two records are matched as the same certificate.
+- **NOTIF2-14 (LOW) — Web push covers a minority of in-app notifications.**
+  - Only `log_notification` and two senders push. The 55 direct inserts do not, including event reminders, scheduling, elections, waivers and training submissions.
+  - The settings copy implies full coverage.
+- **NOTIF2-15 (LOW) — "Pinned ones stay at the top" is true only on the first page.**
+  - The server orders by time, and the client sorts what it has loaded.
+- **NOTIF2-16 (LOW) — Push survives sign-out.**
+  - It is released only when a different member signs in, so a shared station device can show the previous member's alerts in between. This is deliberate in the code; the owner should confirm it.
+
+### Open (not flagged)
+
+- **LOW-MED — Pushes still reach deactivated members' devices.** `send_to_user` never checks the member is active, and nothing removes their subscriptions. The fix is a join, but the push tests do not run without the optional `pywebpush` dependency, so it was not made untested.
+- **LOW — Event reminders:**
+  - Every due interval is sent at once (an event created three hours ahead sends "starts in 2 hours" twice).
+  - One failing event rolls back the organization's stamps after their emails went out, so the whole organization is re-emailed every 30 minutes.
+- **LOW — `log_notification` commits or rolls back the caller's session.** A rollback there throws away a cert tier stamp, so the alert repeats the next day.
+- **LOW — Frontend:**
+  - A failed inbox fetch reads "You're all caught up" beside an unread badge.
+  - The scheduling notifications panel saves defaults over a section after a failed load.
+  - The inbox list does not refresh while the badge moves, and its filter toggle and load-more can land stale pages.
+  - The unread count is not reset on sign-out.
+  - Unread cards and send-log status are shown by colour and icon only.
+
+### Mechanical checks
+
+- **Route gating:** 20 routes.
+  - 3 `notifications.view` and 5 `notifications.manage`.
+  - 12 scoped to the caller by sign-in: their own inbox, counts, marks, pins and push subscription.
+  - The organization-wide log and its read-all check `notifications.manage` in `_resolve_log_scope`.
+- **Senders:**
+  - Email-first holds (pitfall #18): no SMS outside `resolve_sms_targets`.
+  - A disabled rule stops all five enforced senders.
+  - Absent rules keep the built-in defaults (pitfall #19).
+
+### Completion gate (pass 6)
+
+| Check                                                | Result                                                   |
+| ---------------------------------------------------- | -------------------------------------------------------- |
+| cert-alert, event-reminder, notification, task tests | ✅ **561 passed**, 1 skipped (optional `pywebpush`)      |
+| new tests                                            | ✅ 3 backend (2 real database), 1 frontend; failed first |
+| `flake8` / `black` / `isort` (changed files)         | ✅ clean                                                 |
+| mypy ratchet                                         | ✅ 0 errors, matching the baseline                       |
+| `UserSettingsPage` tests                             | ✅ 52 passed                                             |
+| `npm run typecheck` / `npm run lint`                 | ✅ 0 errors / 0 warnings                                 |
 
 ---
 
