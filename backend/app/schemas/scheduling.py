@@ -1293,8 +1293,10 @@ class ShiftPatternCreate(BaseModel):
     pattern_type: PatternType
     template_id: Optional[UUID] = None
     rotation_days: Optional[int] = Field(None, ge=INT32_MIN, le=INT32_MAX)
-    days_on: Optional[int] = Field(None, ge=INT32_MIN, le=INT32_MAX)
-    days_off: Optional[int] = Field(None, ge=INT32_MIN, le=INT32_MAX)
+    # Not negative: 2 on and -2 off made the cycle zero days long, and
+    # generation divided by it.
+    days_on: Optional[int] = Field(None, ge=0, le=INT32_MAX)
+    days_off: Optional[int] = Field(None, ge=0, le=INT32_MAX)
     schedule_config: Optional[Any] = None
     start_date: date
     end_date: Optional[date] = None
@@ -1309,8 +1311,10 @@ class ShiftPatternUpdate(BaseModel):
     pattern_type: Optional[PatternType] = None
     template_id: Optional[UUID] = None
     rotation_days: Optional[int] = Field(None, ge=INT32_MIN, le=INT32_MAX)
-    days_on: Optional[int] = Field(None, ge=INT32_MIN, le=INT32_MAX)
-    days_off: Optional[int] = Field(None, ge=INT32_MIN, le=INT32_MAX)
+    # Not negative: 2 on and -2 off made the cycle zero days long, and
+    # generation divided by it.
+    days_on: Optional[int] = Field(None, ge=0, le=INT32_MAX)
+    days_off: Optional[int] = Field(None, ge=0, le=INT32_MAX)
     schedule_config: Optional[Any] = None
     start_date: Optional[date] = None
     end_date: Optional[date] = None

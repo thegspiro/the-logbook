@@ -104,6 +104,14 @@ interface SchedulingState {
    */
   invalidateSettings: () => void;
   /**
+   * Drop the cached template list so the next `loadTemplates` refetches it.
+   *
+   * For the templates page: a template created, edited, deactivated or
+   * deleted there was otherwise missing from (or still offered by) Create
+   * Shift until a full reload, and the server then refused the stale one.
+   */
+  invalidateTemplates: () => void;
+  /**
    * Drop everything this store holds for the current organization.
    *
    * Distinct from `invalidateSettings`, which says "one of these values is
@@ -157,6 +165,12 @@ let settingsGeneration = 0;
  * stale", which is no reason to discard a roster already on its way.
  */
 let accountGeneration = 0;
+
+/**
+ * Bumped by `invalidateTemplates`, so a template request already in flight
+ * when the list changed does not land and mark the stale list loaded.
+ */
+let templatesGeneration = 0;
 
 export const useSchedulingStore = create<SchedulingState>((set, get) => ({
   // ─── Initial State ──────────────────────────────────────────────────────
@@ -247,6 +261,11 @@ export const useSchedulingStore = create<SchedulingState>((set, get) => ({
     set({ settingsLoaded: false });
   },
 
+  invalidateTemplates: () => {
+    templatesGeneration += 1;
+    set({ templatesLoaded: false, templatesLoading: false });
+  },
+
   resetSettings: () => {
     // Bumps both: the settings counter for the same reason
     // `invalidateSettings` does, and the account counter so every other
@@ -308,21 +327,23 @@ export const useSchedulingStore = create<SchedulingState>((set, get) => ({
   loadTemplates: async () => {
     if (get().templatesLoaded || get().templatesLoading) return;
     const generation = accountGeneration;
+    const listGeneration = templatesGeneration;
+    const current = () => generation === accountGeneration && listGeneration === templatesGeneration;
     set({ templatesLoading: true });
     try {
       const templates = await schedulingService.getTemplates({
         active_only: true,
       });
-      if (generation !== accountGeneration) return;
+      if (!current()) return;
       // No array guard needed here: schedulingService normalizes every
       // array-returning method at the boundary (see asArray there).
       set({ templates, templatesLoaded: true });
     } catch {
       // Mark loaded even on error to prevent a retry loop — but not against
       // an account that has since changed.
-      if (generation === accountGeneration) set({ templatesLoaded: true });
+      if (current()) set({ templatesLoaded: true });
     } finally {
-      if (generation === accountGeneration) set({ templatesLoading: false });
+      if (current()) set({ templatesLoading: false });
     }
   },
 

@@ -16,6 +16,7 @@ import {
   RotateCcw,
 } from 'lucide-react';
 import { normalizePositions, schedulingService } from '../modules/scheduling/services/api';
+import { useSchedulingStore } from '../modules/scheduling/store/schedulingStore';
 import type { ApparatusOption } from '../modules/scheduling/services/api';
 import type { ShiftTemplateCreate } from '../modules/scheduling/types';
 import { formatTimeOfDay } from '../utils/dateFormatting';
@@ -94,14 +95,27 @@ export const ShiftTemplatesPage: React.FC = () => {
   const [apparatusOptions, setApparatusOptions] = useState<ApparatusOption[]>([]);
   const [apparatusSource, setApparatusSource] = useState<'apparatus' | 'basic' | 'default'>('default');
 
+  // A failed load is shown as one, not as "No Templates Yet": that invited an
+  // admin to recreate templates the department already has.
+  const [loadError, setLoadError] = useState<string | null>(null);
+
   const loadTemplates = useCallback(async () => {
     try {
       const data = await schedulingService.getTemplates({ active_only: false });
       setTemplates(data as unknown as ShiftTemplate[]);
+      setLoadError(null);
     } catch (err) {
-      toast.error(getErrorMessage(err, 'Failed to load templates'));
+      const message = getErrorMessage(err, 'Failed to load templates');
+      setLoadError(message);
+      toast.error(message);
     }
   }, []);
+
+  // Create Shift reads the store's cached list; drop it on every change here.
+  const templatesChanged = useCallback(() => {
+    useSchedulingStore.getState().invalidateTemplates();
+    return loadTemplates();
+  }, [loadTemplates]);
 
   const loadApparatusOptions = useCallback(async () => {
     try {
@@ -127,13 +141,13 @@ export const ShiftTemplatesPage: React.FC = () => {
   const handleCreateTemplate = async (data: Record<string, unknown>) => {
     await schedulingService.createTemplate(data as unknown as ShiftTemplateCreate);
     toast.success('Template created');
-    void loadTemplates();
+    void templatesChanged();
   };
 
   const handleUpdateTemplate = async (data: Record<string, unknown>, options?: { keepOpen?: boolean }) => {
     if (!editingTemplate) return;
     await schedulingService.updateTemplate(editingTemplate.id, data);
-    void loadTemplates();
+    void templatesChanged();
     // A save that kept a refused field back leaves the dialog open with that
     // field flagged (owner rule, 2026-11-05); the list behind it still refreshes.
     if (options?.keepOpen) return;
@@ -162,7 +176,7 @@ export const ShiftTemplatesPage: React.FC = () => {
           ? `"${template?.name ?? 'The template'}" is still used by shifts or patterns, so it was deactivated instead of deleted. Patterns using it no longer generate shifts.`
           : 'Template deleted'
       );
-      void loadTemplates();
+      void templatesChanged();
     } catch (err) {
       toast.error(getErrorMessage(err, 'Failed to delete template'));
     } finally {
@@ -175,7 +189,7 @@ export const ShiftTemplatesPage: React.FC = () => {
     try {
       await schedulingService.updateTemplate(template.id, { is_active: true });
       toast.success(`"${template.name}" is active again. Patterns using it generate shifts again.`);
-      await loadTemplates();
+      await templatesChanged();
     } catch (err) {
       toast.error(getErrorMessage(err, 'Failed to reactivate template'));
     } finally {
@@ -267,7 +281,14 @@ export const ShiftTemplatesPage: React.FC = () => {
               })}
             </div>
           )}
-          {templates.length === 0 ? (
+          {templates.length === 0 && loadError ? (
+            <div className="alert-danger flex flex-wrap items-center justify-between gap-3" role="alert">
+              <span>{loadError}</span>
+              <button type="button" onClick={() => void loadTemplates()} className="btn-secondary">
+                Retry
+              </button>
+            </div>
+          ) : templates.length === 0 ? (
             <div className="card-secondary px-4 py-12 text-center">
               <LayoutTemplate className="text-theme-text-muted mx-auto mb-4 h-12 w-12" aria-hidden="true" />
               <h3 className="text-theme-text-primary mb-2 text-lg font-semibold">No Templates Yet</h3>

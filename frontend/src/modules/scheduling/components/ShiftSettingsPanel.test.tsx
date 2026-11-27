@@ -28,10 +28,11 @@ const storeState = {
 
 // setState too: a feature save mirrors its answer into the store, and without
 // it every successful save in this file threw after the request had gone out.
+const mockStoreSetState = vi.fn();
 vi.mock('../store/schedulingStore', () => ({
   useSchedulingStore: Object.assign(
     (selector?: (s: typeof storeState) => unknown) => (selector ? selector(storeState) : storeState),
-    { setState: vi.fn() }
+    { setState: (...a: unknown[]) => mockStoreSetState(...a) as unknown }
   ),
 }));
 
@@ -430,6 +431,21 @@ describe('ShiftSettingsPanel call-tracking mode preserves the configured call ty
         call_tracking: { mode: 'off', call_types: TYPES },
       })
     );
+  });
+
+  // App-review SCH3-F4: only the labels were mirrored, so the call-type
+  // pickers elsewhere kept the old list for the rest of the session.
+  it('mirrors the saved type list into the store the pickers read', async () => {
+    const saved = [...TYPES, { slug: 'rescue', label: 'Rescue', active: true }];
+    mockUpdateFeatureSettings.mockResolvedValue({ call_tracking: { mode: 'off', call_types: saved } });
+    mockStoreSetState.mockReset();
+    const user = userEvent.setup();
+    renderPanel('general');
+    await screen.findByRole('switch', { name: 'Enforce EVOC for drivers' });
+
+    await user.click(screen.getByRole('radio', { name: /Don.t track calls/ }));
+
+    await waitFor(() => expect(mockStoreSetState).toHaveBeenCalledWith(expect.objectContaining({ callTypes: saved })));
   });
 });
 
