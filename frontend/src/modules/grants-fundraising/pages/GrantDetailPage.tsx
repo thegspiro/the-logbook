@@ -809,7 +809,7 @@ export const GrantDetailPage: React.FC = () => {
     );
   }
 
-  if (!application) {
+  if (!application || application.id !== id) {
     return (
       <div className="flex min-h-screen items-center justify-center">
         <div className="text-center">
