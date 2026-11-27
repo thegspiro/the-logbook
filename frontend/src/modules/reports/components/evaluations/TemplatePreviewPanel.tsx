@@ -11,19 +11,29 @@
  * A real member's figures are offered only to a builder who also holds
  * `evaluations.view_all` (owner decision 2026-11-03); the server enforces it
  * and audits each such preview. Everyone else previews with sample figures.
+ *
+ * The same form can be downloaded as a PDF to pass round for review: laid out
+ * as a finalized evaluation, every answer blank, every page marked a preview.
+ * It follows the choices made here, and a PDF of a real member's figures is
+ * confirmed first, because that file leaves the Logbook.
  */
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { RefreshCw } from 'lucide-react';
+import { FileDown, RefreshCw } from 'lucide-react';
+import toast from 'react-hot-toast';
+import { useConfirm } from '../../../../contexts/ConfirmContext';
 import { formatCalendarDate } from '../../../../utils/dateFormatting';
 import { getErrorMessage } from '../../../../utils/errorHandling';
+import { saveBlob } from '../../../../utils/saveBlob';
 import { evaluationTemplatesService } from '../../services/evaluationsApi';
 import {
   EvaluationPartKind,
   type GoalsUnderReview,
   type PartContent,
   type PreviewOptions,
+  type PreviewPart,
   type TemplateDefinition,
   type TemplatePreview,
+  type TemplateWorkflow,
 } from '../../types/evaluations';
 import { useLiveGrades } from '../../hooks/useLiveGrades';
 import { emptyContent } from '../../utils/evaluationRecord';
@@ -31,9 +41,11 @@ import { EvaluationForm } from './EvaluationForm';
 
 interface TemplatePreviewPanelProps {
   definition: TemplateDefinition;
+  /** The workflow as it stands in the builder: the PDF lists the signatures it collects. */
+  workflow: TemplateWorkflow;
+  /** Printed as the PDF's title. */
+  templateName: string;
 }
-
-type PreviewPart = typeof EvaluationPartKind.EVALUATOR | typeof EvaluationPartKind.SELF_EVALUATION;
 
 // A goal-review item rates the goals of the member's previous review, which a
 // preview has none of; one example goal shows the builder what is asked.
@@ -51,7 +63,9 @@ const PREVIEW_GOALS: GoalsUnderReview = {
   ],
 };
 
-export const TemplatePreviewPanel: React.FC<TemplatePreviewPanelProps> = ({ definition }) => {
+export const TemplatePreviewPanel: React.FC<TemplatePreviewPanelProps> = ({ definition, workflow, templateName }) => {
+  const { confirm } = useConfirm();
+  const [downloading, setDownloading] = useState(false);
   const [options, setOptions] = useState<PreviewOptions | null>(null);
   const [memberId, setMemberId] = useState('');
   const [periodId, setPeriodId] = useState('');
@@ -100,6 +114,36 @@ export const TemplatePreviewPanel: React.FC<TemplatePreviewPanelProps> = ({ defi
     if (options === null) return;
     void run(memberId, periodId);
   }, [options, memberId, periodId, run]);
+
+  const downloadPdf = async () => {
+    if (!preview) return;
+    if (!preview.sample) {
+      const ok = await confirm({
+        title: 'Download with a member’s figures?',
+        message: `This PDF will show ${preview.member_name ?? 'this member'}’s figures. Once downloaded it is outside the Logbook, and the download is recorded in the audit log. Choose Sample figures for a copy that is safe to pass round.`,
+        confirmLabel: 'Download PDF',
+        cancelLabel: 'Go back',
+        variant: 'warning',
+      });
+      if (!ok) return;
+    }
+    setDownloading(true);
+    try {
+      const pdf = await evaluationTemplatesService.previewPdf({
+        definition,
+        workflow,
+        name: templateName,
+        part,
+        memberId,
+        periodId,
+      });
+      saveBlob(pdf, `${templateName} - preview.pdf`);
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Could not create the preview PDF.'));
+    } finally {
+      setDownloading(false);
+    }
+  };
 
   const includesOfficerSections = preview?.includes_officer_sections ?? false;
   // Memoized because the live grades refetch whenever the definition they are
@@ -206,16 +250,31 @@ export const TemplatePreviewPanel: React.FC<TemplatePreviewPanelProps> = ({ defi
                   ].join(' · ')
                 : ''}
           </p>
-          <button
-            type="button"
-            className="btn-secondary btn-sm inline-flex items-center gap-1"
-            disabled={loading || options === null}
-            onClick={() => void run(memberId, periodId)}
-          >
-            <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
-            Measure again
-          </button>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              className="btn-secondary btn-sm inline-flex items-center gap-1"
+              disabled={loading || options === null}
+              onClick={() => void run(memberId, periodId)}
+            >
+              <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
+              Measure again
+            </button>
+            <button
+              type="button"
+              className="btn-secondary btn-sm inline-flex items-center gap-1"
+              disabled={loading || downloading || preview === null || shown.sections.length === 0}
+              onClick={() => void downloadPdf()}
+            >
+              <FileDown className="h-3.5 w-3.5" aria-hidden="true" />
+              {downloading ? 'Preparing PDF…' : 'Download PDF'}
+            </button>
+          </div>
         </div>
+        <p className="text-theme-text-muted mt-2 text-xs">
+          The PDF is laid out like a finalized evaluation, with every answer left blank and each page marked as a
+          preview, so it can be passed round for review before the form is published.
+        </p>
         {preview?.note && <p className="text-theme-text-muted mt-2 text-sm">{preview.note}</p>}
         {hiddenOfficerSections > 0 && (
           <p className="text-theme-text-muted mt-2 text-sm">

@@ -91,15 +91,18 @@ export function figureDetail(key: string, entry: DataEntry | undefined): string 
       return text;
     }
   }
+  const madeOf = typeof entry.breakdown === 'string' && entry.breakdown ? entry.breakdown : null;
+  let leftOut: string | null = null;
   if (key === 'shifts.hours') {
     const external = num(entry.external_hours);
-    if (external) return `Not included: ${formatNumber(external, { maximumFractionDigits: 2 })} h for other agencies`;
+    if (external)
+      leftOut = `Not included: ${formatNumber(external, { maximumFractionDigits: 2 })} h for other agencies`;
   }
   if (key === 'shifts.count') {
     const external = num(entry.external_shifts);
-    if (external) return `Not included: ${count(external, 'shift', 'shifts')} for other agencies`;
+    if (external) leftOut = `Not included: ${count(external, 'shift', 'shifts')} for other agencies`;
   }
-  return typeof entry.breakdown === 'string' && entry.breakdown ? entry.breakdown : null;
+  return [madeOf, leftOut].filter(Boolean).join('. ') || null;
 }
 
 /** The items a part answers: a self-evaluation answers only the items its

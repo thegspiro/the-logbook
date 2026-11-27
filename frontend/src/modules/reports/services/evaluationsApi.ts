@@ -35,6 +35,7 @@ import type {
   EvaluationTemplateUpdate,
   PreviewOptions,
   PublishResult,
+  PreviewPart,
   TemplateDefinition,
   TemplatePreview,
   TemplateWorkflow,
@@ -120,6 +121,33 @@ export const evaluationTemplatesService = {
       member_id: memberId || undefined,
       period_id: periodId || undefined,
     });
+    return response.data;
+  },
+
+  /**
+   * The same form as a PDF laid out like a finalized evaluation, every answer
+   * blank and every page marked a preview. Nothing is stored.
+   */
+  async previewPdf(request: {
+    definition: TemplateDefinition;
+    workflow: TemplateWorkflow;
+    name: string;
+    part: PreviewPart;
+    memberId?: string;
+    periodId?: string;
+  }): Promise<Blob> {
+    const response = await api.post<Blob>(
+      '/evaluations/templates/preview-pdf',
+      {
+        definition: request.definition,
+        workflow: request.workflow,
+        name: request.name,
+        part: request.part,
+        member_id: request.memberId || undefined,
+        period_id: request.periodId || undefined,
+      },
+      { responseType: 'blob' }
+    );
     return response.data;
   },
 };

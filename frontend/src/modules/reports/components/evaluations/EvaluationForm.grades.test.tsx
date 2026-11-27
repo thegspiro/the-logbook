@@ -140,6 +140,20 @@ describe('EvaluationForm grades', () => {
     expect(screen.queryByLabelText(/Why is this/)).not.toBeInTheDocument();
   });
 
+  it('shows the calculated grade by name as the choice already made', async () => {
+    const user = userEvent.setup();
+    render(<Editable initial={{ answers: { scene: { rating: 3 } } }} onSave={vi.fn()} />);
+    const select = screen.getByLabelText('Your grade', { selector: '#evaluator-ops-grade' });
+
+    expect(select).toHaveDisplayValue('Meets expectations (calculated)');
+    expect(within(select).queryByRole('option', { name: 'Use the calculated grade' })).not.toBeInTheDocument();
+
+    await user.selectOptions(select, '5');
+    expect(select).toHaveDisplayValue('Outstanding');
+    await user.selectOptions(select, '3');
+    expect(select).toHaveDisplayValue('Meets expectations (calculated)');
+  });
+
   it("shows a reader the evaluator's grade and why beside the calculated one", () => {
     render(
       <EvaluationForm
