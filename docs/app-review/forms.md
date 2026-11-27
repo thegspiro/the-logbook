@@ -2,7 +2,7 @@
 
 **Prefix:** `FORM2` · **Iteration:** B13 · **Reviewed:** 2026-08-06 (pass 1),
 2026-08-08 (pass 2), 2026-08-09 (pass 3), 2026-08-09 (pass 4),
-2026-10-16 (pass 5)
+2026-10-16 (pass 5), 2026-11-26 (pass 6)
 
 **Backend:** `endpoints/forms.py` (752 L, 21 endpoints), `public/forms.py` (209 L),
 `services/forms_service.py` (2,290 L), models `models/forms.py`
@@ -23,6 +23,161 @@ not a security one, but it closes BXC-1 as a side effect: the dangling/
 foreign-reference case these notes reasoned about can no longer occur. See
 the security-review pass 5 entry for the full re-verification. Left in place
 below as the historical record of what was true through pass 4.
+
+---
+
+## Pass 6 (2026-11-26) — the submission pipeline, the integrations and the forms screens (17 fixed, 7 flagged)
+
+Pass 5 left three things unread: the submission pipeline, the integration
+processors and the `modules/forms` frontend. This pass read them. Backend
+candidates were reproduced against the real test database before anything was
+changed. Every fix below has a test that failed on the unfixed code.
+
+### Flagged (in `docs/KNOWN_LIMITATIONS.md` → "Forms — Decisions and Open Defects From App Review B13 Pass 6")
+
+| Id      | Severity | Finding                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| ------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| FORM2-3 | HIGH     | **Open defect.** `_process_event_registration` (`forms_service.py`) writes the RSVP itself and skips every rule `EventService.create_or_update_rsvp` applies: cancelled, draft and ended events, the deadline, capacity and the waitlist, and the phase gate. Reproduced: a one-seat event took two, a waitlisted member jumped the queue. Not fixed here because that method commits mid-submission; the phase-gate override is the decision inside it. |
+| FORM2-4 | MEDIUM   | File and signature answers are stored as base64 text and refused by the 5,000-character cap (reproduced: a 19,870-character signature, an 8 KB file). The public page shows them as text boxes. Storage design decision.                                                                                                                                                                                                                                 |
+| FORM2-5 | MEDIUM   | Answers are stored HTML-escaped and shown escaped in the submissions view, CSV and results; an option containing `&` is counted apart from its own option.                                                                                                                                                                                                                                                                                               |
+| FORM2-6 | MEDIUM   | Starter templates (`formConstants.tsx`) create required select/radio questions with no options, which can never be answered, and publishing does not stop them.                                                                                                                                                                                                                                                                                          |
+| FORM2-7 | LOW      | `notify_on_submission` / `notification_emails` are stored and returned, and nothing reads them (Pitfall 19).                                                                                                                                                                                                                                                                                                                                             |
+| FORM2-8 | LOW      | A repeat public application with an existing applicant's email replaces the answers on that applicant's stage. Read, not reproduced.                                                                                                                                                                                                                                                                                                                     |
+| FORM2-9 | LOW      | An equipment-assignment form is an inventory write with no `inventory.*` permission (by design of the integration; stated for the owner).                                                                                                                                                                                                                                                                                                                |
+
+### Fixed — backend
+
+- **FORM2-10 (MED): reprocessing an event-request submission filed another
+  request and resent both emails.** The event-request processor had no lookup
+  by `form_submission_id`, unlike the membership processor. Reproduced: one
+  submit and two reprocesses made three requests and three notification sends.
+  A reprocess now returns the request the submission already filed (Pitfall
+  36); a first submission makes no extra read. A
+  unique index would need a migration that settles existing duplicates
+  (Pitfall 35), so it was not added.
+- **FORM2-11 (LOW-MED): length limits counted the escaped text.** The value was
+  `html.escape`d before the `max_length` check, so `'` counted as six
+  characters: "O'Brien's" (9) was refused by a field the browser lets hold 10.
+  The limit now measures what was typed.
+- **FORM2-12 (LOW): the server accepted answers the browser refuses.**
+  `min_length` was enforced only on required fields, and `float()` accepted
+  `nan` (which passes every bound) and `inf`. `min_length` now applies to any
+  non-empty answer, and a number must be finite. (`as_plain_number` was not
+  used: it refuses `1e3`, which a number input sends.)
+- **FORM2-13 (LOW): a required Member Lookup made a public form unsubmittable.**
+  The public view leaves member lookups out, and the required check still
+  demanded them. The public submit path now excuses the field types the public
+  view hides (`PUBLIC_HIDDEN_FIELD_TYPES`).
+- **FORM2-14 (LOW): an equipment-assignment form could assign gear to a former
+  member** (Pitfall 32). The assignee must now hold a current account status.
+- **FORM2-15 (LOW): deleting a submission was not audited.** Every other
+  destructive forms action is. It is now audited with ids only.
+- **FORM2-16 (LOW): a duplicate application logged the applicant's email**
+  (Pitfall 33). It now logs the submission and prospect ids. No test: the change
+  is to a log line's content only.
+
+### Fixed — frontend
+
+- **FORM2-17 (MED): switching forms on the Submissions tab kept the previous
+  form's labels and page.** The viewer stays mounted; with fields already
+  loaded it never fetched the new form's, so every answer was labelled with a
+  field id, and page 3 of one form requested page 3 of the next. It now starts
+  each form at page one with its own fields, and drops late responses.
+- **FORM2-18 (MED): the Results view could show the form just left.** Its
+  multi-page load had no stale guard; a late response for form A painted A's
+  charts under B's heading.
+- **FORM2-19 (LOW): "Recent answers" were the oldest.** Submissions arrive
+  newest first and the panel took the last five.
+- **FORM2-20 (MED): public forms had no multi-select control.** It fell through
+  to a text box the server refused unless the exact option values were typed.
+  It now renders checkboxes, as in the signed-in renderer.
+- **FORM2-21 (MED): the Integrations dialog failed silently and carried
+  mappings between forms.** Its errors went to the page banner behind the
+  dialog, and its target, type and field mappings survived into the next form's
+  dialog, where another form's field ids would be stored. Errors now show in the
+  dialog, and it opens fresh each time.
+- **FORM2-22 (LOW-MED): Member Lookup kept a member the user had typed over.**
+  Editing the name after choosing kept the old member's id as the answer, and a
+  slow search for an earlier prefix could replace newer results.
+- **FORM2-23 (LOW-MED): new and duplicated fields collided on `sort_order`.**
+  Deleting a field does not reindex, so `fields.length` was often an order in
+  use, and a duplicate took its original's order plus one. Tied fields order
+  unpredictably and Move up/down swapped two equal values, doing nothing. A new
+  field now lets the server append it; a duplicate is moved under its original
+  with `reorderFields`; moves work by position.
+- **FORM2-24 (LOW): a refused reorder still showed the new order.** The builder
+  wrote `sort_order` onto the objects held in state before saving. It now builds
+  a new list, so a refusal leaves the screen as saved.
+- **FORM2-25 (LOW-MED): a public form could be sent twice.** With reCAPTCHA on,
+  a second tap while the token was fetched sent a second submission. A guard is
+  now held from before the challenge.
+- **FORM2-26 (LOW): the form list could show an earlier search's results.** It
+  refetches on each keystroke with no stale guard.
+
+Four existing tests changed, each because the code under them changed shape,
+not because an expectation was loosened: three assert the exact call to the
+event-request processor, which now also takes `reprocessing`; one stubs a form
+field without a `field_type`, which every real field has and the public
+required check now reads.
+
+### Open (LOW, recorded here only)
+
+- Reprocessing a successful equipment assignment rewrites its result as a
+  failure ("Item is not available (status: assigned)"); no duplicate is made.
+  Read, not reproduced.
+- "Export CSV" in the submissions view exports the current page only.
+- Date-and-time answers are converted from the viewer's zone to the
+  department's, so they shift when the two differ.
+- "Submit Another Response" drops the fields' default values.
+- A file over 10 MB is ignored without a message (moot while FORM2-4 stands).
+- The form list asks for no limit, so the backend's 100 applies with no paging;
+  the category filter has no "Other".
+- `FormRenderer` keeps "Fix the errors below." after the errors are fixed;
+  `PublicFormPage`'s error banner has no `role="alert"` and is not scrolled to.
+- `membership_pipeline_service.py` logs an applicant's email on a duplicate
+  application as well (Pitfall 33), outside this module.
+
+### Verified good ✅ (this pass)
+
+- One-per-person on both submit paths locks the form row and then makes a
+  locking read (FORM-10 holds). Draft, closed and archived forms are refused on
+  both paths, and `require_authentication` is enforced.
+- Public intake: the daily cap is spent after validation and once across the
+  deadlock retry; honeypot, captcha, per-IP limits and the slug format check
+  hold.
+- Hidden-branch answers are dropped and excused from `required`; select,
+  radio, checkbox and multi-select values are checked against their options.
+  The frontend's visibility rules (`utils/formVisibility.ts`) match the
+  server's, including cycle breaking.
+- Every submission read and delete is org-scoped; integration FKs pass
+  `_entity_in_org`. Event-request emails wait for the commit, and the status
+  token stays out of `integration_result`.
+- Follow-up forms: hashed token, locked submit, one 404 for every failure,
+  no-store and noindex headers, send-then-stamp reminders.
+- Member lookup uses `like_pattern` with `ESCAPE` and current account statuses.
+- Field update payloads send null for every cleared key (Pitfall 1), create
+  payloads use `|| undefined`, every confirmation goes through `useConfirm`, and
+  the CSV goes through `buildCsv` with sensitive answers left out.
+
+### Not read (scope, stated plainly)
+
+Form create, list, publish warnings, archive and field CRUD in
+`forms_service.py` (pass 5 covered them); the follow-up form notification
+emails; the membership pipeline's own `create_prospect` / stage internals; the
+co-located frontend tests beyond those touched; `applicantFields.ts`,
+`useEmbedHeight` and the embed snippet.
+
+### Completion gate (pass 6)
+
+| Check                                                   | Result                                                                   |
+| ------------------------------------------------------- | ------------------------------------------------------------------------ |
+| `flake8` / `black` / `isort` (changed files)            | ✅ clean                                                                 |
+| mypy ratchet                                            | ✅ 0 errors, matching the baseline                                       |
+| endpoint docstring permissions check                    | ✅ 0 warnings                                                            |
+| new backend tests                                       | ✅ 16 (9 failed on the unfixed code, 7 controls); 10 run in the unit job |
+| forms, event-request and public backend tests           | ✅ 2,157 passed, 1 skipped                                               |
+| `npm run typecheck` / ESLint (changed files) / Prettier | ✅ clean                                                                 |
+| forms frontend tests                                    | ✅ 82 passed in 21 files; 16 new tests, each failed first                |
 
 ---
 

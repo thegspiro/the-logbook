@@ -3,9 +3,12 @@
  * choice to give a different one, with the reason.
  *
  * The score and the calculated grade are the server's; this only shows them
- * and records what the evaluator chose. Choosing the calculated grade again
- * clears the change, so "Use the calculated grade" and picking the same level
- * mean the same thing and never ask for a reason.
+ * and records what the evaluator chose. The calculated grade is shown in the
+ * list by name, marked "(calculated)", and is the choice already made:
+ * picking it clears any change and never asks for a reason. A separate "Use
+ * the calculated grade" entry left an evaluator who picked that level by name
+ * watching the box snap back to different wording. Only a grade that could
+ * not be calculated has no level to name, and keeps that entry.
  */
 import React from 'react';
 import type { GradeResult, ScaleLevel } from '../../types/evaluations';
@@ -63,16 +66,16 @@ export const GradePanel: React.FC<GradePanelProps> = ({
             <select
               id={`${id}-grade`}
               className="form-input"
-              value={changed ? String(overrideLevel) : ''}
+              value={changed ? String(overrideLevel) : calculated !== null ? String(calculated) : ''}
               onChange={(e) => {
                 const level = e.target.value ? Number(e.target.value) : null;
                 onChange?.(level === calculated ? null : level, reason);
               }}
             >
-              <option value="">Use the calculated grade</option>
+              {calculated === null && <option value="">Use the calculated grade</option>}
               {levels.map((level) => (
                 <option key={level.value} value={level.value}>
-                  {level.label}
+                  {level.value === calculated ? `${level.label} (calculated)` : level.label}
                 </option>
               ))}
             </select>

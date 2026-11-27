@@ -51,7 +51,7 @@ from its open list.
 | B10 | messaging & communications | MSG2   | ⬜     |
 | B11 | notifications              | NOTIF2 | ⬜     |
 | B12 | integrations               | INT2   | ✅     |
-| B13 | forms                      | FORM2  | ⬜     |
+| B13 | forms                      | FORM2  | ✅     |
 | B14 | grants & fundraising       | GF2    | ⬜     |
 | B15 | admin-hours                | AH2    | ⬜     |
 | B16 | reports & analytics        | RPT2   | ⬜     |
@@ -3811,6 +3811,35 @@ secrets redacted for non-admins. See
   missing) and **3 flagged** (INT2-15 training in chat, INT2-16 Microsoft 365
   client ID, INT2-17 unused chat settings). See integrations.md → Pass 6.
   Next: B13 forms.
+
+- **B13 forms ✅ (pass 6).** Read what pass 5 left: the submission pipeline,
+  the integration processors and the forms screens. **17 fixes**, each test red
+  first:
+  - Backend: FORM2-10 (MED) reprocessing an event-request submission filed a
+    new request and resent both emails; FORM2-11 length limits counted the
+    escaped text; FORM2-12 optional `min_length` and `nan`/`inf` numbers were
+    accepted; FORM2-13 a required Member Lookup blocked every public
+    submission; FORM2-14 gear could be assigned to a former member; FORM2-15
+    deleting a submission was not audited; FORM2-16 an applicant's email was
+    logged.
+  - Frontend: FORM2-17 (MED) switching forms on the Submissions tab kept the
+    previous form's labels and page; FORM2-18 (MED) the Results view could show
+    the form just left; FORM2-19 "Recent answers" were the oldest; FORM2-20
+    (MED) public forms had no multi-select control; FORM2-21 (MED) the
+    Integrations dialog hid its errors and carried mappings between forms;
+    FORM2-22 Member Lookup kept a member typed over; FORM2-23 new and
+    duplicated fields collided on order; FORM2-24 a refused reorder still
+    showed the new order; FORM2-25 a public form could be sent twice;
+    FORM2-26 the form list could show an earlier search.
+
+  **7 flagged** to KNOWN_LIMITATIONS, led by FORM2-3 (HIGH, open defect): a
+  registration form skips every RSVP rule, including capacity and the waitlist.
+  Also FORM2-4 file and signature answers cannot be submitted, FORM2-5 escaped
+  answers on screen, FORM2-6 starter templates with unanswerable questions,
+  FORM2-7 an inert notify setting, FORM2-8 repeat applications replace stage
+  answers, FORM2-9 equipment forms need no inventory permission. Eight LOW
+  items are recorded as open. Gate clean. See forms.md → Pass 6. Next: B14
+  grants & fundraising.
 
 - **B9 membership pipeline ✅ (pass 6).** Read the lifecycle pass 5 left
   unread (gates, auto-advance, conversion, the inactivity sweep, the status

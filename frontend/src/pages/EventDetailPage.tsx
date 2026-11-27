@@ -70,6 +70,7 @@ import { getErrorDetail, getErrorMessage } from '../utils/errorHandling';
 import { EventRSVPSection } from '../components/event-detail/EventRSVPSection';
 import { EventAttendeesCard } from '../components/event-detail/EventAttendeesCard';
 import { EventSummaryStrip } from '../components/event-detail/EventSummaryStrip';
+import { FoldedCard } from '../components/event-detail/FoldedCard';
 import EventRSVPModal from '../components/event-detail/EventRSVPModal';
 import EventCancelModal from '../components/event-detail/EventCancelModal';
 import EventPostponeModal, { type PostponeEventPayload } from '../components/event-detail/EventPostponeModal';
@@ -1010,6 +1011,12 @@ export const EventDetailPage: React.FC = () => {
   // Seats taken, which is what max_attendees caps. Falls back to the member
   // count for payloads predating the aggregate.
   const occupiedSeats = event.occupied_seats ?? event.going_count ?? 0;
+  // Folded to one line until somebody has written something in it.
+  const hasOutreachCloseout =
+    Boolean(event.outreach_outcome_note) ||
+    (event.outreach_apparatus_ids?.length ?? 0) > 0 ||
+    (event.outreach_materials?.length ?? 0) > 0 ||
+    Boolean(event.outreach_photos);
   // No requires_rsvp here, deliberately. That flag means "a response is
   // expected" — it drives the Required row in the sidebar, the deadline
   // countdown and the non-respondent reminder audience — not "responses are
@@ -1898,35 +1905,48 @@ export const EventDetailPage: React.FC = () => {
                 Merged rather than replaced: the save answers with a plain
                 event, which lacks the detail-only fields this page shows. */}
           {event.can_record_guest_headcount && (
-            <EventGuestHeadcountCard
-              event={event}
-              onSaved={(updated) =>
-                setEvent((prev) => (prev ? { ...prev, guest_headcount: updated.guest_headcount ?? null } : prev))
-              }
-            />
+            <FoldedCard
+              title="Guest headcount"
+              summary="Not recorded"
+              actionLabel="Record headcount"
+              startFolded={event.guest_headcount == null}
+            >
+              <EventGuestHeadcountCard
+                event={event}
+                onSaved={(updated) =>
+                  setEvent((prev) => (prev ? { ...prev, guest_headcount: updated.guest_headcount ?? null } : prev))
+                }
+              />
+            </FoldedCard>
           )}
 
           {/* What happened, on the same rule as the headcount: an outreach
                 event that has started, for someone with events.manage. */}
           {event.can_record_guest_headcount && (
-            <EventOutreachCloseoutCard
-              event={event}
-              onSaved={(updated) =>
-                setEvent((prev) =>
-                  prev
-                    ? {
-                        ...prev,
-                        outreach_outcome_note: updated.outreach_outcome_note ?? null,
-                        outreach_apparatus_ids: updated.outreach_apparatus_ids ?? null,
-                        outreach_materials: updated.outreach_materials ?? null,
-                        outreach_photos: updated.outreach_photos ?? null,
-                      }
-                    : prev
-                )
-              }
-            />
+            <FoldedCard
+              title="How it went"
+              summary="Not written up"
+              actionLabel="Write it up"
+              startFolded={!hasOutreachCloseout}
+            >
+              <EventOutreachCloseoutCard
+                event={event}
+                onSaved={(updated) =>
+                  setEvent((prev) =>
+                    prev
+                      ? {
+                          ...prev,
+                          outreach_outcome_note: updated.outreach_outcome_note ?? null,
+                          outreach_apparatus_ids: updated.outreach_apparatus_ids ?? null,
+                          outreach_materials: updated.outreach_materials ?? null,
+                          outreach_photos: updated.outreach_photos ?? null,
+                        }
+                      : prev
+                  )
+                }
+              />
+            </FoldedCard>
           )}
-
           {/* Guests are listed apart from member attendance and never
                 counted in it (W23-2). */}
           <EventGuestsCard
@@ -1953,13 +1973,20 @@ export const EventDetailPage: React.FC = () => {
           {/* Attachments. Shown empty to someone who manages events, who
                 can attach the first file from here. */}
           {((event.attachments?.length ?? 0) > 0 || canManage) && (
-            <EventAttachmentsList
-              attachments={event.attachments ?? []}
-              eventId={event.id}
-              getAttachmentDownloadUrl={(eid, aid) => eventService.getAttachmentDownloadUrl(eid, aid)}
-              onUpload={canManage ? handleAttachmentUpload : undefined}
-              onDelete={canManage ? handleAttachmentDelete : undefined}
-            />
+            <FoldedCard
+              title="Attachments"
+              summary="None yet"
+              actionLabel="Attach file"
+              startFolded={(event.attachments?.length ?? 0) === 0}
+            >
+              <EventAttachmentsList
+                attachments={event.attachments ?? []}
+                eventId={event.id}
+                getAttachmentDownloadUrl={(eid, aid) => eventService.getAttachmentDownloadUrl(eid, aid)}
+                onUpload={canManage ? handleAttachmentUpload : undefined}
+                onDelete={canManage ? handleAttachmentDelete : undefined}
+              />
+            </FoldedCard>
           )}
 
           {/* Linked Elections */}
@@ -2082,20 +2109,27 @@ export const EventDetailPage: React.FC = () => {
           )}
           {/* Notifications Panel (for managers) */}
           {canManage && !event.is_cancelled && !isAttendanceFinalized && (
-            <EventNotificationPanel
-              notificationType={notifications.notificationType}
-              onNotificationTypeChange={notifications.setNotificationType}
-              notificationTarget={notifications.notificationTarget}
-              onNotificationTargetChange={notifications.setNotificationTarget}
-              notificationMessage={notifications.notificationMessage}
-              onNotificationMessageChange={notifications.setNotificationMessage}
-              sendingNotification={notifications.sendingNotification}
-              showNotifyConfirm={notifications.showNotifyConfirm}
-              onShowNotifyConfirm={notifications.setShowNotifyConfirm}
-              onSendNotification={() => void notifications.handleSendNotification()}
-              lastNotification={notifications.lastNotification}
-              timezone={tz}
-            />
+            <FoldedCard
+              title="Notifications"
+              summary="Message this event's members"
+              actionLabel="Write a notification"
+              startFolded
+            >
+              <EventNotificationPanel
+                notificationType={notifications.notificationType}
+                onNotificationTypeChange={notifications.setNotificationType}
+                notificationTarget={notifications.notificationTarget}
+                onNotificationTargetChange={notifications.setNotificationTarget}
+                notificationMessage={notifications.notificationMessage}
+                onNotificationMessageChange={notifications.setNotificationMessage}
+                sendingNotification={notifications.sendingNotification}
+                showNotifyConfirm={notifications.showNotifyConfirm}
+                onShowNotifyConfirm={notifications.setShowNotifyConfirm}
+                onSendNotification={() => void notifications.handleSendNotification()}
+                lastNotification={notifications.lastNotification}
+                timezone={tz}
+              />
+            </FoldedCard>
           )}
         </div>
 

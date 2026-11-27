@@ -2458,6 +2458,9 @@ class ShiftCompletionService:
                 func.sum(ShiftCompletionReport.hours_on_shift).label("total_hours"),
                 func.sum(ShiftCompletionReport.calls_responded).label("total_calls"),
                 func.avg(ShiftCompletionReport.performance_rating).label("avg_rating"),
+                func.count(ShiftCompletionReport.performance_rating).label(
+                    "rated_reports"
+                ),
             ).where(*base_filter)
         )
         row = result.one()
@@ -2497,6 +2500,7 @@ class ShiftCompletionService:
             "avg_rating": (
                 round(float(row.avg_rating or 0), 1) if row.avg_rating else None
             ),
+            "rated_reports": int(row.rated_reports or 0),
             "monthly": monthly,
         }
 
