@@ -6,7 +6,8 @@ Setup:
 * ``/templates`` — ``evaluations.configure`` builds the forms and their
   workflows (``/templates/starters`` lists the ready-made ones,
   ``/templates/preview`` and ``/templates/preview-options`` show a form as it
-  stands). Reading them is also open to ``evaluations.manage``, who needs to
+  stands, and ``/templates/preview-pdf`` gives it as a PDF to pass round for
+  review). Reading them is also open to ``evaluations.manage``, who needs to
   see which form each member will get when drafting.
 * ``/periods`` — ``evaluations.manage`` opens and closes review periods;
   ``evaluations.configure`` may read them. ``/periods/{id}/reassign-options``,
@@ -106,6 +107,7 @@ from app.schemas.evaluation import (
     StepAssignment,
     SubmitResult,
     TemplateDraftWrite,
+    TemplatePreviewPdfRequest,
     TemplatePreviewRequest,
     TemplatePreviewResponse,
 )
@@ -218,6 +220,60 @@ async def preview_template(
             {"member_id": data.member_id, "period_id": data.period_id},
         )
     return preview
+
+
+@router.post("/templates/preview-pdf")
+async def preview_template_pdf(
+    data: TemplatePreviewPdfRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("evaluations.configure")),
+):
+    """The form as it stands in the builder, as the PDF a finalized
+    evaluation would produce, every answer blank, for passing round before
+    the form is published.
+
+    The rule on whose figures it may carry is ``/templates/preview``'s
+    (owner decision 2026-11-26): sample figures, or a real member's for a
+    builder who also holds ``evaluations.view_all``. Every page is marked a
+    preview and nothing is stored. A PDF of a real member is audited under
+    its own event, since the file leaves the Logbook with their figures in it.
+    """
+    if data.member_id is not None and not user_has_permission(
+        current_user, "evaluations.view_all"
+    ):
+        raise HTTPException(
+            status_code=403,
+            detail="Previewing with a member's figures needs evaluations.view_all.",
+        )
+    async with handle_service_errors("Failed to prepare the preview PDF"):
+        pdf = await EvaluationDocumentService(db).preview_pdf(
+            current_user.organization_id,
+            data.definition,
+            data.workflow,
+            data.member_id,
+            data.period_id,
+            data.part,
+            data.name,
+        )
+    if data.member_id is not None:
+        await _audit(
+            db,
+            current_user,
+            "evaluation_template_preview_pdf_downloaded",
+            {
+                "member_id": data.member_id,
+                "period_id": data.period_id,
+                "part": data.part,
+            },
+        )
+    return Response(
+        content=pdf,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": 'attachment; filename="evaluation-preview.pdf"',
+            "Cache-Control": "no-store",
+        },
+    )
 
 
 @router.post("/templates", response_model=EvaluationTemplateDetail, status_code=201)

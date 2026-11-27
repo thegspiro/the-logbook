@@ -120,6 +120,22 @@ describe('figureDetail', () => {
     expect(figureDetail('shifts.hours', { available: true, value: 40, external_hours: 0 })).toBeNull();
   });
 
+  it('says what a total is made of, ahead of what was left out', () => {
+    expect(
+      figureDetail('training.hours', {
+        available: true,
+        value: 68.75,
+        breakdown: '9 training records: Continuing Education 68.75 h',
+      })
+    ).toBe('9 training records: Continuing Education 68.75 h');
+    expect(
+      figureDetail('shifts.hours', { available: true, value: 40, external_hours: 12.5, breakdown: '4 shifts' })
+    ).toBe('4 shifts. Not included: 12.5 h for other agencies');
+    expect(figureDetail('shifts.count', { available: true, value: 4, external_shifts: 0, breakdown: '40 h' })).toBe(
+      '40 h'
+    );
+  });
+
   it("shows a waiver summary's outcomes", () => {
     expect(
       figureDetail('meetings.waivers_summary', { available: true, value: 3, breakdown: '2 approved, 1 denied' })
