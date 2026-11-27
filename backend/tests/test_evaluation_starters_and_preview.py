@@ -389,7 +389,11 @@ class TestPreview:
         assert body["sample"] is False
         assert body["member_name"] == member.full_name
         assert body["period_name"] == "2025 Annual"
-        assert body["data"]["training.hours"] == {"available": True, "value": 11.5}
+        assert body["data"]["training.hours"] == {
+            "available": True,
+            "value": 11.5,
+            "breakdown": "2 training records: Continuing Education 11.5 h",
+        }
         assert body["suggested_scores"] == {"training": 4}
         # Not a captain, so the officer-only section and its figure are left out.
         assert body["includes_officer_sections"] is False
