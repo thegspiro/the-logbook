@@ -1334,7 +1334,9 @@ jobs:
   # the network: a stall fails this job in minutes rather than hanging it.
   # When the stall is the Azure mirror's, `install-webkit-deps.sh` first
   # retries on archive.ubuntu.com, so a cache miss during an outage of that
-  # one mirror no longer fails the job.
+  # one mirror no longer fails the job. A third-party source the runner image
+  # carries (packages.microsoft.com answered 403 on 2026-11-26 and 27) is
+  # disabled for that retry when the first attempt could not fetch from it.
   #
   # Until 2026-11-11 that cache had never once been saved, so every run went to
   # the mirror. See the step that hands the archive directory back after the
