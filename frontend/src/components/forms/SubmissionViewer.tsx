@@ -12,7 +12,7 @@
  *     fields={formFields}
  *   />
  */
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   RefreshCw,
   AlertCircle,
@@ -75,9 +75,26 @@ const SubmissionViewer = ({
   const [page, setPage] = useState(0);
   const [deleting, setDeleting] = useState<string | null>(null);
   const [reprocessing, setReprocessing] = useState<string | null>(null);
+  // Responses for an earlier form or page are dropped: switching forms while
+  // one is loading must not paint the old form's submissions under the new one.
+  const latestRequest = useRef(0);
+  const loadedFormId = useRef(formId);
 
   useEffect(() => {
     if (formId && !directSubmission) {
+      // A different form starts from its own first page and its own field
+      // labels; the previous form's page number and fields mean nothing here.
+      if (loadedFormId.current !== formId) {
+        loadedFormId.current = formId;
+        latestRequest.current += 1;
+        if (!directFields) setFields([]);
+        if (page !== 0) {
+          setPage(0);
+          return;
+        }
+        void loadData(true);
+        return;
+      }
       void loadData();
     }
   }, [formId, page]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -95,17 +112,20 @@ const SubmissionViewer = ({
     }
   }, [directFields]);
 
-  const loadData = async () => {
+  const loadData = async (formChanged = false) => {
     if (!formId) return;
+    const request = ++latestRequest.current;
+    const needFields = !directFields && (formChanged || fields.length === 0);
     try {
       setLoading(true);
       setError(null);
 
       // Load form + submissions in parallel
       const [formData, subsData] = await Promise.all([
-        fields.length === 0 ? formsService.getForm(formId) : null,
+        needFields ? formsService.getForm(formId) : null,
         formsService.getSubmissions(formId, { skip: page * limit, limit }),
       ]);
+      if (request !== latestRequest.current) return;
 
       if (formData) {
         setFields(formData.fields);
@@ -113,9 +133,10 @@ const SubmissionViewer = ({
       setSubmissions(subsData.submissions);
       setTotal(subsData.total);
     } catch {
+      if (request !== latestRequest.current) return;
       setError('Failed to load submissions.');
     } finally {
-      setLoading(false);
+      if (request === latestRequest.current) setLoading(false);
     }
   };
 
