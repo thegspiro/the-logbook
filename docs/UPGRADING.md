@@ -135,6 +135,24 @@ _is_ the upgrade. Before it:
 Newest first. Every entry here is a change that was safe on a fresh install
 and refused to boot an existing one.
 
+### Outreach requesters are reminded once to share feedback (2026-11-26)
+
+Nothing blocks a restart. Migration `7c3e9a51b2d4` adds the
+`outreach_feedback_reminder` email template type to
+`email_templates.template_type` and `scheduled_emails.template_type`, and the
+nullable column `event_requests.feedback_reminder_sent_at`. Existing requests
+stay NULL. It builds on `103bffdb9528`. A downgrade drops the column and
+deletes rows of the new template type.
+
+- **A new daily task, `outreach_feedback_reminders` (10:10).** It emails an
+  outreach requester once, three days after their request was completed, when
+  the department has a feedback form and the requester has not answered. Only
+  requests completed in the last 14 days are considered, so the first run
+  after the upgrade reminds at most a fortnight's requesters, and none unless
+  a feedback form is chosen. A host that runs the tasks from cron rather than
+  the built-in scheduler needs the new line from
+  `app/services/scheduled_tasks.py`.
+
 ### The web container publishes a second port for the public website (2026-11-26)
 
 The department's [public website](./PUBLIC_WEBSITE.md) (#4732) is served by a
