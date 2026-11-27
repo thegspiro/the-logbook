@@ -400,6 +400,26 @@ async def update_leave_of_absence(
         username=current_user.username,
     )
 
+    # Extending or re-activating a leave covers days the member may still be
+    # rostered on. Creating a leave and approving an extension both release
+    # those shifts; this edit did not, and left the member scheduled on the
+    # new days (app-review ORU6-6). Best-effort, as on create: the edit is
+    # already recorded.
+    if leave.active and updates.keys() & {"start_date", "end_date", "active"}:
+        try:
+            await SchedulingService(db).cancel_member_assignments_in_range(
+                current_user.organization_id,
+                str(leave.user_id),
+                leave.start_date,
+                leave.end_date,
+            )
+        except Exception as exc:  # pragma: no cover - defensive
+            logger.warning(
+                "Failed to cancel shift assignments for leave {}: {}",
+                leave.id,
+                exc,
+            )
+
     if before is not None:
         _notify_member(background_tasks, current_user, leave, before)
     return _to_response(leave)

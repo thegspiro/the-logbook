@@ -87,6 +87,9 @@ from app.services.admin_continuity_service import (
     LastAdministratorError,
     assert_not_last_administrator,
     assert_positions_retain_administrator,
+    assert_rank_change_retains_administrator,
+    lock_administrator_continuity,
+    rank_grants_administrator,
 )
 from app.services.department_email import generate_department_email
 from app.services.directory_account_service import (
@@ -2233,6 +2236,16 @@ async def update_user_profile(
             db, str(current_user.organization_id), profile_update.member_status
         )
 
+    # A rank or class change can clear the rank the sole administrator's
+    # access rests on; the continuity guard below locks the administrator
+    # scope, which is taken before the member row, as every path does.
+    # Only when the change could clear an administrator-granting rank: a new
+    # rank without that access, or a move to the administrative class.
+    if (
+        "rank" in profile_update.model_fields_set
+        and not rank_grants_administrator(profile_update.rank)
+    ) or is_administrative(profile_update.member_class, None):
+        await lock_administrator_continuity(db, str(current_user.organization_id))
     result = await db.execute(
         select(User)
         .where(User.id == str(user_id))
@@ -2251,6 +2264,15 @@ async def update_user_profile(
 
     # Update only provided fields
     update_data = profile_update.model_dump(exclude_unset=True)
+
+    # A blank member number is no number. Stored as '' it skipped the check
+    # below, and the second member saved blank hit the unique
+    # (organization_id, membership_number) index as a 500 (app-review ORU6-10).
+    if (
+        isinstance(update_data.get("membership_number"), str)
+        and not update_data["membership_number"].strip()
+    ):
+        update_data["membership_number"] = None
 
     # Check membership_number uniqueness within the organization. Only a change
     # is checked: a member already holding a number that is now reserved (the
@@ -2393,6 +2415,19 @@ async def update_user_profile(
             # is not asserting the rank, and leaving it would leave its default
             # permissions live on a member now outside the chain of command.
             update_data["rank"] = None
+
+        if "rank" in update_data and update_data["rank"] != user.rank:
+            try:
+                await assert_rank_change_retains_administrator(
+                    db,
+                    str(current_user.organization_id),
+                    user,
+                    update_data["rank"],
+                )
+            except LastAdministratorError as e:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)
+                ) from e
 
         if "hire_date" in update_data and update_data["hire_date"] != user.hire_date:
             try:
