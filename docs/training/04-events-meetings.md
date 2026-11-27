@@ -1943,9 +1943,9 @@ the **Period** you choose:
 
 **Who can do this:** officers who can manage events.
 
-On an event's page, the **Notifications** panel sends a message about that
-event. Choose a **Notification Type**, the audience, and an optional message,
-then send. It arrives in each member's Notifications inbox in The Logbook and
+On an event's page, the **Notifications** line opens the panel that sends a
+message about that event: select **Write a notification**. Choose a
+**Notification Type**, the audience, and an optional message, then send. It arrives in each member's Notifications inbox in The Logbook and
 by email.
 
 Whether a member gets the email depends on the type:
@@ -3780,8 +3780,10 @@ in a table with its **Target**, what it **Reached** and its **Status**.
 #### Recording a guest headcount
 
 For an event where guests did not sign in one by one — an assembly, a block
-party — open the event and enter the number in **Guest headcount** →
-**Guests counted**, then select **Save headcount**. **Clear** removes it.
+party — open the event, select **Record headcount** on the **Guest
+headcount** line, enter the number in **Guests counted**, then select **Save
+headcount**. **Clear** removes it. Once a headcount is saved the card shows in
+full.
 
 ![The Guest headcount card on an event's page: the Guests counted box holding 22, with the Save headcount and Clear buttons](./images/04-101-guest-headcount.png)
 
@@ -3807,7 +3809,8 @@ preferences; the notification still arrives.
 #### Recording how it went _(2026-11-21)_
 
 Beside **Guest headcount**, an outreach event that has started carries a
-**How it went** card, for the same officers. Fill in what you know and select
+**How it went** line, for the same officers. Select **Write it up** to open
+the card (it shows in full once something is saved), fill in what you know and select
 **Save close-out**; you can come back and change it later, after the event's
 attendance is finalized included.
 
