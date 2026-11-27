@@ -122,6 +122,7 @@ _ADDED_AFTER_THE_FREEZE = {
     EmailTemplateType.GUEST_HEADCOUNT_REMINDER.value: "73f64017f9e2",
     EmailTemplateType.PROGRAM_REQUIREMENT_REOPENED.value: "bfb747c095c3",
     EmailTemplateType.OUTREACH_FEEDBACK_RECEIVED.value: "d41f7a2c9e58",
+    EmailTemplateType.OUTREACH_FEEDBACK_REMINDER.value: "7c3e9a51b2d4",
     EmailTemplateType.TRAINING_APPROVAL_REMINDER.value: "5845dae0c277",
 }
 

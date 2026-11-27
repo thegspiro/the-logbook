@@ -12742,6 +12742,60 @@ permission.
 **The decision:** keep it as is, or require the integration's submitter to hold
 an inventory permission (or the form to be signed-in only).
 
+## Notifications — Decisions From App Review B11 Pass 6 (2026-11-26)
+
+Recorded rather than changed. Details in `docs/app-review/notifications.md` →
+Pass 6.
+
+### NOTIF2-12 — An expired-certification escalation repeats while email is down
+
+The escalation for an expired certification is marked as sent only when its
+email goes out. With email turned off for the installation, or failing, the
+member and every escalation officer receive a new "EXPIRED Certification"
+alert (and push) every day until it is fixed.
+
+**The decision:** mark the in-app escalation as sent on its own, and decide
+whether a failed email is retried the next day or dropped.
+
+### NOTIF2-13 — Certification alerts after a renewal
+
+Each training record is judged on its own. When a member renews a
+certification, the old record still triggers "EXPIRED … this member may need
+to be taken out of service" to the training and compliance officers and the
+chief, and a member who renews early still gets the 30-day warning. The
+compliance screens already treat a renewal as replacing the old certificate.
+
+**The decision:** how two records count as the same certificate (the same
+course, or the same course name), so the alerts follow the compliance rule.
+
+### NOTIF2-14 — Which notifications reach the lock screen
+
+Web push is sent for notifications created through the shared notification
+helper and by two other senders. Most notification sources (event reminders,
+scheduling, elections, attendance waivers, training submissions) write their
+entries directly and never push. The settings screen's "Get alerts on your
+lock screen" reads as covering all of them.
+
+**The decision:** extend push to every source, or say on the settings screen
+which notifications push.
+
+### NOTIF2-15 — Pinned notifications past the first page
+
+The inbox says pinned notifications stay at the top, but only the loaded page
+is sorted; the server returns newest first. A pinned notification older than
+the first page stays out of sight until "Load more".
+
+**The decision:** order pinned first on the server, or change the wording.
+
+### NOTIF2-16 — Push after signing out on a shared device
+
+Signing out does not remove the device's push subscription; it is released
+only when a different member signs in on it. On a shared station computer, the
+previous member's alerts can appear on its lock screen in between. The code
+does this deliberately.
+
+**The decision:** keep it, or release push on sign-out.
+
 ## Training — Decisions From App Review B18 Pass 6 (2026-11-26)
 
 Details in `docs/app-review/training.md` → Pass 6.
