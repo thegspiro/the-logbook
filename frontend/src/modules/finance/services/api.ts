@@ -124,6 +124,14 @@ function receiptForm(file: File): FormData {
 // Fiscal Years
 // =============================================================================
 
+/**
+ * These lists page at the API's default of 100, newest first, and nothing
+ * said so: a department's older dues or requests vanished from the list and
+ * its search (app-review FIN6-F4). Asked at the API's ceiling until the
+ * screens page for real.
+ */
+const LIST_LIMIT = 1000;
+
 export const fiscalYearService = {
   async list(): Promise<FiscalYear[]> {
     const response = await api.get<FiscalYear[]>('/finance/fiscal-years');
@@ -254,6 +262,7 @@ export const budgetService = {
         fiscal_year_id: params?.fiscalYearId,
         category_id: params?.categoryId,
         station_id: params?.stationId,
+        limit: LIST_LIMIT,
       },
     });
     return asArray(response.data);
@@ -790,6 +799,7 @@ export const purchaseRequestService = {
       params: {
         status: params?.status,
         fiscal_year_id: params?.fiscalYearId,
+        limit: LIST_LIMIT,
       },
     });
     return asArray(response.data);
@@ -862,7 +872,9 @@ export const purchaseRequestService = {
 
 export const expenseReportService = {
   async list(params?: { status?: string }): Promise<ExpenseReport[]> {
-    const response = await api.get<ExpenseReport[]>('/finance/expense-reports', { params: { status: params?.status } });
+    const response = await api.get<ExpenseReport[]>('/finance/expense-reports', {
+      params: { status: params?.status, limit: LIST_LIMIT },
+    });
     return asArray(response.data);
   },
 
@@ -991,7 +1003,9 @@ export const advanceService = {
 
 export const checkRequestService = {
   async list(params?: { status?: string }): Promise<CheckRequest[]> {
-    const response = await api.get<CheckRequest[]>('/finance/check-requests', { params: { status: params?.status } });
+    const response = await api.get<CheckRequest[]>('/finance/check-requests', {
+      params: { status: params?.status, limit: LIST_LIMIT },
+    });
     return asArray(response.data);
   },
 
@@ -1077,6 +1091,7 @@ export const duesService = {
         schedule_id: params?.scheduleId,
         user_id: params?.userId,
         status: params?.status,
+        limit: LIST_LIMIT,
       },
     });
     return asArray(response.data);

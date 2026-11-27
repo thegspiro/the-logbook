@@ -445,6 +445,35 @@ def dues_overdue_clause(now: datetime) -> ColumnElement[bool]:
     )
 
 
+def _refuse_backwards_year(start: Optional[datetime], end: Optional[datetime]) -> None:
+    """A fiscal year must not end before it starts.
+
+    One that did was accepted, and then every dues date fell outside it and
+    its range reports came back empty (app-review FIN6-6).
+    """
+    if start is None or end is None:
+        return
+
+    def as_utc(value: datetime) -> datetime:
+        return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+
+    if as_utc(end) < as_utc(start):
+        raise ValueError("A fiscal year's end date cannot be before its start date.")
+
+
+def waived_portion(amount_due: Decimal, amount_paid: Decimal, status) -> Decimal:
+    """What a waiver actually forgave: the part of the dues not already paid.
+
+    Counting the whole amount due double-counted any money paid before the
+    waiver, so a member who paid $40 of $100 and was then waived took the
+    department's outstanding total $40 below zero (app-review FIN6-3). The
+    dues summary and the delinquency report both use this.
+    """
+    if status != DuesStatus.WAIVED:
+        return Decimal("0.00")
+    return max(Decimal(amount_due) - Decimal(amount_paid), Decimal("0.00"))
+
+
 def effective_dues_status(
     status: DuesStatus | str,
     due_date: Optional[datetime],
@@ -871,6 +900,9 @@ class FinanceService:
         # Approval emails queued by this request's changes, sent by the
         # endpoint once they commit (finance_approval_notifications).
         self.approval_notices: list[ApprovalNotice] = []
+        # Set by record_dues_payment when the reference was already recorded,
+        # so the endpoint does not audit a payment that was not made.
+        self.dues_payment_was_duplicate = False
 
     def take_approval_notices(self) -> list[ApprovalNotice]:
         """The queued approval emails, emptying the queue."""
@@ -933,6 +965,7 @@ class FinanceService:
     async def create_fiscal_year(
         self, org_id: str, created_by: str, **kwargs
     ) -> FiscalYear:
+        _refuse_backwards_year(kwargs.get("start_date"), kwargs.get("end_date"))
         fy = FiscalYear(
             organization_id=org_id,
             created_by=created_by,
@@ -952,6 +985,10 @@ class FinanceService:
             raise ValueError("Fiscal year not found")
         if fy.is_locked:
             raise ValueError("Fiscal year is locked and cannot be modified")
+        _refuse_backwards_year(
+            kwargs.get("start_date") or fy.start_date,
+            kwargs.get("end_date") or fy.end_date,
+        )
         if (
             "request_deadline" in kwargs
             and kwargs["request_deadline"] != fy.request_deadline
@@ -6100,7 +6137,12 @@ class FinanceService:
     async def add_expense_line_item(
         self, er_id: str, org_id: str, requester_id: Optional[str] = None, **kwargs
     ) -> ExpenseLineItem:
-        er = await self.get_expense_report(er_id, org_id, restrict_to_user=requester_id)
+        # Locked, as _draft_line is: a line landing beside a concurrent submit
+        # changed the total after the approval chain was chosen on the old one
+        # (app-review FIN6-9).
+        er = await self.get_expense_report(
+            er_id, org_id, restrict_to_user=requester_id, for_update=True
+        )
         if not er:
             _raise_not_found("Expense report", requester_id)
         await self.require_year_accepts(er.fiscal_year_id, org_id, action="new")
@@ -7778,18 +7820,35 @@ class FinanceService:
             else DuesStatus.PENDING
         )
 
+        # Two runs at once each found nobody billed and both inserted, billing
+        # every member twice (app-review FIN6-2). The schedule row serializes
+        # the runs, and the billed set is a locking read so the second run
+        # sees the first's rows rather than its older snapshot (pitfall 27).
+        await self.db.execute(
+            select(DuesSchedule.id)
+            .where(
+                DuesSchedule.id == schedule_id,
+                DuesSchedule.organization_id == org_id,
+            )
+            .with_for_update()
+        )
+        already_billed = set(
+            (
+                await self.db.execute(
+                    select(MemberDues.user_id)
+                    .where(MemberDues.dues_schedule_id == schedule_id)
+                    .with_for_update()
+                )
+            )
+            .scalars()
+            .all()
+        )
+
         count = 0
         for user in users:
             if not bills_member(schedule, user):
                 continue
-            # Check if dues already exist for this user + schedule
-            existing = await self.db.execute(
-                select(MemberDues).where(
-                    MemberDues.dues_schedule_id == schedule_id,
-                    MemberDues.user_id == user.id,
-                )
-            )
-            if existing.scalar_one_or_none():
+            if user.id in already_billed:
                 continue
 
             dues = MemberDues(
@@ -7942,10 +8001,13 @@ class FinanceService:
             # Already recorded. Returning the current state — rather than
             # raising — is what makes a retried or double-clicked submission
             # safe, which is the entire point of capturing the reference.
+            # The id, not the member-typed reference (pitfall 33).
             logger.info(
-                f"Dues payment {reference!r} already recorded against {dues_id}; "
-                "ignoring duplicate submission"
+                "Dues payment already recorded against {}; ignoring duplicate "
+                "submission",
+                dues_id,
             )
+            self.dues_payment_was_duplicate = True
             return dues
 
         amount = Decimal(str(kwargs.get("amount_paid", 0)))
@@ -8162,6 +8224,10 @@ class FinanceService:
                 MemberDues.organization_id == org_id,
             )
             .options(selectinload(MemberDues.payments))
+            # Locked as the waive and the payment paths are: two reversals at
+            # once both passed the WAIVED check (app-review FIN6-7).
+            .with_for_update()
+            .execution_options(populate_existing=True)
         )
         dues: MemberDues | None = result.scalar_one_or_none()
         if not dues:
@@ -8197,7 +8263,7 @@ class FinanceService:
         total_expected = sum((d.amount_due for d in all_dues), Decimal("0.00"))
         total_collected = sum((d.amount_paid for d in all_dues), Decimal("0.00"))
         total_waived = sum(
-            (d.amount_due for d in all_dues if d.status == DuesStatus.WAIVED),
+            (waived_portion(d.amount_due, d.amount_paid, d.status) for d in all_dues),
             Decimal("0.00"),
         )
         total_outstanding = total_expected - total_collected - total_waived
