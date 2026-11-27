@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useSubmitGuard } from '@/hooks/useSubmitGuard';
 import { DialogPanel } from '../components/ux/DialogPanel';
 import { getErrorMessage } from '@/utils/errorHandling';
@@ -119,6 +119,8 @@ const FormsPage: React.FC = () => {
   const [integrationTarget, setIntegrationTarget] = useState('membership');
   const [integrationType, setIntegrationType] = useState('membership_interest');
   const [fieldMappings, setFieldMappings] = useState<Record<string, string>>({});
+  // Shown inside the Integrations dialog: the page banner sits behind it.
+  const [integrationError, setIntegrationError] = useState<string | null>(null);
   const [integrationHealth, setIntegrationHealth] = useState<{
     total: number;
     processed: number;
@@ -126,7 +128,11 @@ const FormsPage: React.FC = () => {
     failed: number;
   } | null>(null);
 
+  // Search refetches on every keystroke, so an earlier, slower response must
+  // not replace the list for what the officer has typed since.
+  const latestListRequest = useRef(0);
   const loadData = useCallback(async () => {
+    const request = ++latestListRequest.current;
     setLoading(true);
     setError(null);
     try {
@@ -137,13 +143,15 @@ const FormsPage: React.FC = () => {
         }),
         formsService.getSummary(),
       ]);
+      if (request !== latestListRequest.current) return;
       setForms(formsRes.forms);
       setSummary(summaryRes);
     } catch (err: unknown) {
+      if (request !== latestListRequest.current) return;
       const message = getErrorMessage(err, 'Failed to load forms');
       setError(message);
     } finally {
-      setLoading(false);
+      if (request === latestListRequest.current) setLoading(false);
     }
   }, [searchQuery, categoryFilter]);
 
@@ -397,6 +405,12 @@ const FormsPage: React.FC = () => {
       ]);
       setSelectedFormDetail(detail);
       setSelectedFormId(formId);
+      // Mappings are field ids of the form they were chosen on; carried into
+      // another form's dialog they would be stored there and map nothing.
+      setIntegrationTarget('membership');
+      setIntegrationType('membership_interest');
+      setFieldMappings({});
+      setIntegrationError(null);
 
       // Compute integration health from submissions
       const subs = subsData.submissions;
@@ -430,9 +444,10 @@ const FormsPage: React.FC = () => {
       const targetFields = INTEGRATION_TARGET_FIELDS[integrationType] ?? [];
       const missingRequired = targetFields.filter((tf) => tf.required && !fieldMappings[tf.key]).map((tf) => tf.label);
       if (missingRequired.length > 0) {
-        setError(`Choose a form field for: ${missingRequired.join(', ')}`);
+        setIntegrationError(`Choose a form field for: ${missingRequired.join(', ')}`);
         return;
       }
+      setIntegrationError(null);
 
       // Build mappings: { formFieldId → targetFieldName }
       // The backend expects this direction: form field ID as key, target field name as value
@@ -455,8 +470,7 @@ const FormsPage: React.FC = () => {
         setSelectedFormDetail(detail);
         setFieldMappings({});
       } catch (err: unknown) {
-        const message = getErrorMessage(err, 'Failed to add integration');
-        setError(message);
+        setIntegrationError(getErrorMessage(err, 'Failed to add integration'));
       }
     });
 
@@ -475,8 +489,7 @@ const FormsPage: React.FC = () => {
       const detail = await formsService.getForm(selectedFormId);
       setSelectedFormDetail(detail);
     } catch (err: unknown) {
-      const message = getErrorMessage(err, 'Failed to delete integration');
-      setError(message);
+      setIntegrationError(getErrorMessage(err, 'Failed to delete integration'));
     }
   };
 
@@ -1636,6 +1649,12 @@ const FormsPage: React.FC = () => {
                       <X className="h-5 w-5" aria-hidden="true" />
                     </button>
                   </div>
+
+                  {integrationError && (
+                    <div className="alert-danger mb-4 text-sm" role="alert">
+                      {integrationError}
+                    </div>
+                  )}
 
                   {/* Integration Health Stats */}
                   {integrationHealth && integrationHealth.processed > 0 && (
