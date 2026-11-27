@@ -151,8 +151,15 @@ Select any event to open its page. It shows:
   none of these apply, the strip is left out;
 - your own response, under **Your RSVP**.
 
-Officers who manage events also see the full attendee list, the tools to check
-people in, and two more figures in the summary strip: **Responses** (how many
+Officers and organizers see the page in sections, as tabs under the summary
+strip: **Overview** (the details above), **Attendance** (the attendee list and
+check-in tools), **Staffing & outreach** (volunteers, guests and the outreach
+records, on events that have any) and **Messages** (notifications, for those
+who manage events). A section with nothing in it has no tab, so most members
+see one page with no tabs at all. The address keeps the open tab, so a link or
+a refresh returns to it.
+
+Officers who manage events also see two more figures in the summary strip: **Responses** (how many
 are going, with any "not going" and "maybe" answers beside it) and **Checked
 In**, which appears once the event starts or the first person is checked in. Other members may see a **Who's
 going** list, if the department shares it (see
