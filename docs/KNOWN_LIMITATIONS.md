@@ -12610,6 +12610,50 @@ after its retry limit. The revision the crew worked from is never compared.
 **The decision:** whether a check already started may be filed against the
 revision it began on.
 
+## Integrations — Decisions and Open Defects From App Review B12 Pass 6 (2026-11-26)
+
+Details in `docs/app-review/integrations.md` → Pass 6.
+
+### INT2-13 — A calendar outage strands the soonest events (defect, open)
+
+When Google or Microsoft is unreachable, each sync pass charges the failure to
+the next event due, and upcoming events go first. After a few hours the next
+days' events have used their retries and stay unpublished for good: neither
+the provider coming back, nor reconnecting, nor Retry republishes them. The
+fix is to stop counting an outage against an event, or to retry failed events
+once a pass succeeds again.
+
+### INT2-14 — Calendar health says healthy while events are missing (defect, open)
+
+The connection's health is reset to healthy by any pass in which nothing new
+failed, including the pass after an event's last attempt. So a calendar can
+read healthy, with no errors, while events are missing from it.
+
+### INT2-15 — Should training records be announced to chat?
+
+Recording a completed training posts "<member> completed <course> (N hours)"
+to the department's Slack, Discord or Teams channel and generic webhooks. That
+names a member and their training to a third-party service.
+
+**The decision:** keep announcing completions, or stop announcing training.
+
+### INT2-16 — Is a Microsoft 365 client ID secret?
+
+The client ID is stored encrypted, so the settings screen can never show it,
+and it has to be retyped or the save sends it blank (currently refused). A
+client ID is not a credential on its own.
+
+**The decision:** store it in plain settings so the screen can show it, or
+keep it encrypted and let the screen treat a blank as "keep".
+
+### INT2-17 — Chat settings that do nothing
+
+Slack and Discord store a list of event types, and Slack and Teams a channel
+name, that nothing reads. No screen offers them.
+
+**The decision:** remove them, or make them choose what is announced and
+where.
+
 ## Elections — Five Counting and Ballot Decisions From App Review B5 Pass 7 (2026-11-24)
 
 Recorded rather than changed. Details in `docs/app-review/elections.md` →
