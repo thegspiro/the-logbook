@@ -55,24 +55,32 @@ vi.mock('../utils/errorHandling', () => ({
 }));
 
 let mockHasPermission = false;
-vi.mock('../stores/authStore', () => ({
-  useAuthStore: vi.fn((selector) => {
-    const state = {
-      user: {
-        id: 'user-1',
-        first_name: 'Test',
-        last_name: 'User',
-        role: { slug: 'member' },
-        permissions: [],
-      },
-      checkPermission: () => mockHasPermission,
-    };
-    if (typeof selector === 'function') {
-      return (selector as (s: typeof state) => unknown)(state);
-    }
-    return state;
-  }),
-}));
+// getState() as well as the hook: the requirement form's seat picker reads
+// the department's positions, and the shift-settings loader behind it asks the
+// store for the signed-in organization outside a component.
+vi.mock('../stores/authStore', () => {
+  const state = () => ({
+    user: {
+      id: 'user-1',
+      first_name: 'Test',
+      last_name: 'User',
+      role: { slug: 'member' },
+      permissions: [],
+    },
+    checkPermission: () => mockHasPermission,
+  });
+  return {
+    useAuthStore: Object.assign(
+      vi.fn((selector) => {
+        if (typeof selector === 'function') {
+          return (selector as (s: ReturnType<typeof state>) => unknown)(state());
+        }
+        return state();
+      }),
+      { getState: state }
+    ),
+  };
+});
 
 vi.mock('react-hot-toast', () => ({
   // Callable (neutral toasts) with .success/.error helpers.
