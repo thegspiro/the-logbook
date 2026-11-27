@@ -303,7 +303,8 @@ describe('FundraisingEventsPage', () => {
     expect(id).toBe('ev-1');
     expect(payload.location).toBeNull();
     expect(payload.actualRevenue).toBe('3400');
-    expect(payload.expenses).toBe('700.00');
+    // Unchanged here, so not sent: Zeffy payments also move the totals.
+    expect(payload).not.toHaveProperty('expenses');
     expect(payload.status).toBe('completed');
     expect(payload.eventDate).toBe('2026-11-07T13:00:00.000Z');
   });
