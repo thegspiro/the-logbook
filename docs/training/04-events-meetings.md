@@ -3875,12 +3875,9 @@ stop the email under **Event officer duties** in their notification
 preferences; the bell still arrives. To stop it for the whole department, or
 reword it, edit **Requester Feedback Received** under **Email Templates**.
 
-> **Screenshots needed:** (`04-114-feedback-form-setting.png`) **Settings →
-> Public Requests → Handling**, the **Feedback From Requesters** block with the
-> starter form chosen as **Feedback form** and **How did the visit go?** as
-> **Rating question**; (`04-115-requester-feedback.png`) a completed request's
-> page showing the **Requester feedback** section with a rating and the two
-> written answers.
+![The Feedback From Requesters block in Request Handling: Outreach feedback chosen as the Feedback form and How did the visit go? as the Rating question, with the link to Forms where the questions and their branches are built](./images/04-114-feedback-form-setting.png)
+
+![A completed request's page with its Requester feedback section: rated 3, when it was sent and on which form, and the answers to What went well? and What could we do better?](./images/04-115-requester-feedback.png)
 
 ### Public Request Form
 
