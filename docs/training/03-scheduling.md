@@ -2015,6 +2015,11 @@ form.
   screens. Duty shifts do not count toward them. Tick the box on an hours
   requirement only when hours on shift are what it measures.
 
+A requirement limited to one seat (**Only time in this seat** on the
+requirement form) counts only the shifts the member held that seat on: its
+shift and hours columns leave out other seats, shifts with no seat recorded
+and outside shifts.
+
 **The summary cards** count **requirement checks**: one for each member under
 each requirement that applies to them. A member under three requirements is
 three checks. **Checks Met** and **Checks Not Met** split that total. They are
