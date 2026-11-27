@@ -1242,6 +1242,18 @@ class TemplatePreviewRequest(BaseModel):
     period_id: Optional[str] = Field(default=None, max_length=36)
 
 
+class TemplatePreviewPdfRequest(TemplatePreviewRequest):
+    """The same form and figures, to be laid out as a PDF for review.
+
+    ``workflow`` supplies the signatures the PDF lists, ``part`` is which of
+    the two forms it shows, and ``name`` is the template's name, printed as
+    the document's title."""
+
+    workflow: TemplateWorkflow
+    part: Literal["evaluator", "self_evaluation"] = "evaluator"
+    name: str = Field(min_length=1, max_length=150)
+
+
 class TemplatePreviewResponse(BaseModel):
     """What an evaluation drafted from this form would show, computed now and
     stored nowhere."""

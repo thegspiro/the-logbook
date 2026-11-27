@@ -12654,6 +12654,94 @@ name, that nothing reads. No screen offers them.
 **The decision:** remove them, or make them choose what is announced and
 where.
 
+## Forms — Decisions and Open Defects From App Review B13 Pass 6 (2026-11-26)
+
+Details in `docs/app-review/forms.md` → Pass 6.
+
+### FORM2-3 — A registration form skips every RSVP rule (defect, open, HIGH)
+
+An event-registration form writes the signed-in submitter's RSVP as "going"
+itself, checking only that attendance is not finalized. The rules the RSVP
+screen applies are skipped: cancelled, draft and ended events, the RSVP
+deadline, `max_attendees` and the waitlist, and the phase gate. Reproduced: a
+one-seat event took a second "going" member, a waitlisted member jumped the
+queue, and cancelled, ended, past-deadline and draft events all accepted a
+registration.
+
+The fix is to register through `EventService.create_or_update_rsvp`, so a full
+event waitlists as it does on the RSVP screen. It was not made in this pass
+because that method commits, and here it would commit in the middle of the
+submission's own transaction, so it needs its own change and tests.
+
+**The decision inside it:** whether a phase-gate warning refuses the
+registration (as the RSVP screen does unless an officer overrides) or lets it
+through.
+
+### FORM2-4 — File and signature answers cannot be submitted
+
+A file answer is the whole file, base64-encoded, and a signature is a PNG
+image, both stored as text. Every answer is capped at 5,000 characters, so any
+file over about 3.5 KB and most hand-drawn signatures are refused when the form
+is sent. A required file or signature question makes the form impossible to
+submit, while the screen says files up to 10 MB are accepted. The public form
+page also shows these questions as plain text boxes. The Incident Report
+starter template includes a file question.
+
+**The decision:** store uploads properly (as documents, with a link in the
+answer) or stop offering file and signature questions. Raising the cap would
+put 10 MB answers in a JSON column.
+
+### FORM2-5 — Answers are shown HTML-escaped
+
+Answers are stored escaped (`O&#x27;Brien`, `Smith &amp; Sons`). The
+submissions view, the CSV export and the results charts show them as stored,
+and in results an option value containing `&` is counted apart from its own
+option. The pipeline already unescapes answers before copying them to an
+applicant's record.
+
+**The decision:** unescape answers where they are shown, or stop escaping at
+storage (the screens already escape on output) and migrate the stored answers.
+
+### FORM2-6 — Starter templates create required choice questions with no choices
+
+Several starter templates add a required select or radio question with no
+options (for example "Type of Incident" and "Injuries Reported" on Incident
+Report, and the experience question on the public Membership Interest form). A
+required question with no choices can never be answered, and nothing stops the
+form being published.
+
+**The decision:** ship choices with the templates, refuse or warn when
+publishing a required choice question with no choices, or both.
+
+### FORM2-7 — "Notify on submission" is stored and never read
+
+A form carries `notify_on_submission` and `notification_emails`, accepted and
+returned by the API, but nothing reads them: the Forms module sends no email
+when a form is submitted. No screen offers the setting.
+
+**The decision:** wire an email sender, or remove the two columns.
+
+### FORM2-8 — A repeat application replaces the answers on the applicant's stage
+
+When the public interest form is submitted with the email of an applicant
+already in the pipeline, the new answers replace the ones stored on that
+applicant's form stage. Anyone who knows an applicant's email can change what
+coordinators see there; the first answers survive only as the original form
+submission.
+
+**The decision:** keep every set of answers, or keep the first.
+
+### FORM2-9 — An equipment-assignment form assigns gear without an inventory permission
+
+Any signed-in member who can submit an equipment-assignment form, and anyone at
+all if the form is public, can assign any available item to any current member.
+That is what the integration does, and an officer with `forms.manage` chooses
+to turn it on, but it is an inventory write that needs no `inventory.*`
+permission.
+
+**The decision:** keep it as is, or require the integration's submitter to hold
+an inventory permission (or the form to be signed-in only).
+
 ## Elections — Five Counting and Ballot Decisions From App Review B5 Pass 7 (2026-11-24)
 
 Recorded rather than changed. Details in `docs/app-review/elections.md` →
