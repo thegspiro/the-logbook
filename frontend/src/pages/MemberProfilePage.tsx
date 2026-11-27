@@ -11,7 +11,7 @@
  * - Contact information
  * - Roles and permissions
  *
- * Module sections are conditionally rendered based on AVAILABLE_MODULES.
+ * Module sections are conditionally rendered on the department's enabled modules.
  */
 
 import React, { useEffect, useState, useRef } from 'react';
@@ -56,7 +56,7 @@ import type {
 } from '../types/user';
 import type { TrainingRecord, ComplianceSummary } from '../types/training';
 import { useMemberRequirements } from '../hooks/useMemberRequirements';
-import { AVAILABLE_MODULES } from '../types/modules';
+import { useEnabledModules } from '../hooks/useEnabledModules';
 import { MAX_AVATAR_SIZE } from '../constants/config';
 import { ANONYMIZABLE_STATUSES, SEPARATED_STATUSES, UserStatus } from '../constants/enums';
 import TrainingSection from '../components/member-profile/TrainingSection';
@@ -119,11 +119,6 @@ function keepServiceSince(updated: UserWithRoles, previous: UserWithRoles | null
   };
 }
 
-function isModuleEnabled(moduleId: string): boolean {
-  const mod = AVAILABLE_MODULES.find((m) => m.id === moduleId);
-  return mod?.enabled ?? false;
-}
-
 function isExpiringSoon(record: TrainingRecord, tz: string): boolean {
   return isCertificationExpiringSoon(record.expiration_date, tz);
 }
@@ -163,6 +158,12 @@ export const MemberProfilePage: React.FC = () => {
   // Photo upload state
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  // Each with its own message: the page's one `error` is drawn only inside
+  // the contact editors and the status dialog, so a refused address save or
+  // photo did nothing visible, and the message turned up later in whichever
+  // of those opened next (app-review ORU6-F1).
+  const [photoError, setPhotoError] = useState<string | null>(null);
+  const [addressError, setAddressError] = useState<string | null>(null);
   const { confirm } = useConfirm();
 
   // Address edit state
@@ -216,9 +217,14 @@ export const MemberProfilePage: React.FC = () => {
   const [statusReason, setStatusReason] = useState('');
   const [separationDate, setSeparationDate] = useState('');
 
-  // Module enablement checks
-  const trainingEnabled = isModuleEnabled('training');
-  const schedulingEnabled = isModuleEnabled('scheduling');
+  // The department's own switches, not the static module catalogue: that
+  // read `true` for every module, so a department with Training off saw an
+  // empty Training card on every profile, fed by a request the module gate
+  // refused (app-review ORU6-F3). Off until the answer is known, so nothing
+  // is fetched for a module that turns out to be off.
+  const modules = useEnabledModules();
+  const trainingEnabled = !modules.isLoading && modules.isModuleOn('training');
+  const schedulingEnabled = !modules.isLoading && modules.isModuleOn('scheduling');
 
   const fetchInventoryItems = React.useCallback(async (uid: string) => {
     try {
@@ -350,15 +356,9 @@ export const MemberProfilePage: React.FC = () => {
       if (canViewTargetAdminHours) {
         void fetchAdminHours(userId);
       }
-      if (trainingEnabled && canViewTargetTraining) {
-        void fetchTrainingRecords(userId);
-        void fetchComplianceSummary(userId);
-      }
     }
   }, [
     userId,
-    trainingEnabled,
-    canViewTargetTraining,
     canViewTargetAdminHours,
     canViewTargetLeaves,
     isSelf,
@@ -366,9 +366,16 @@ export const MemberProfilePage: React.FC = () => {
     fetchModuleStatus,
     fetchLeaves,
     fetchAdminHours,
-    fetchTrainingRecords,
-    fetchComplianceSummary,
   ]);
+
+  // Apart from the rest: the module answer arrives after the first render,
+  // and folding it into the effect above re-read the whole profile when it did.
+  useEffect(() => {
+    if (userId && trainingEnabled && canViewTargetTraining) {
+      void fetchTrainingRecords(userId);
+      void fetchComplianceSummary(userId);
+    }
+  }, [userId, trainingEnabled, canViewTargetTraining, fetchTrainingRecords, fetchComplianceSummary]);
 
   useEffect(() => {
     if (userId && inventoryModuleEnabled && canViewTargetInventory) {
@@ -591,21 +598,21 @@ export const MemberProfilePage: React.FC = () => {
     // Client-side validation
     const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
     if (!allowedTypes.includes(file.type)) {
-      setError('Choose a JPEG, PNG, or WebP image.');
+      setPhotoError('Choose a JPEG, PNG, or WebP image.');
       return;
     }
     if (file.size > MAX_AVATAR_SIZE) {
-      setError('Image must be under 5MB.');
+      setPhotoError('Image must be under 5MB.');
       return;
     }
 
     try {
       setUploadingPhoto(true);
-      setError(null);
+      setPhotoError(null);
       const result = await userService.uploadPhoto(userId, file);
       setUser((prev) => (prev ? { ...prev, photo_url: result.photo_url } : prev));
     } catch (err: unknown) {
-      setError(getErrorMessage(err, 'Unable to upload photo.'));
+      setPhotoError(getErrorMessage(err, 'Unable to upload photo.'));
     } finally {
       setUploadingPhoto(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
@@ -625,11 +632,11 @@ export const MemberProfilePage: React.FC = () => {
     if (!confirmed) return;
     try {
       setUploadingPhoto(true);
-      setError(null);
+      setPhotoError(null);
       await userService.deletePhoto(userId);
       setUser((prev) => (prev ? { ...prev, photo_url: undefined } : prev));
     } catch (err: unknown) {
-      setError(getErrorMessage(err, 'Unable to remove photo.'));
+      setPhotoError(getErrorMessage(err, 'Unable to remove photo.'));
     } finally {
       setUploadingPhoto(false);
     }
@@ -645,6 +652,7 @@ export const MemberProfilePage: React.FC = () => {
       address_country: user?.address_country || 'USA',
       personal_email: user?.personal_email || '',
     });
+    setAddressError(null);
     setEditingAddress(true);
   };
 
@@ -652,7 +660,7 @@ export const MemberProfilePage: React.FC = () => {
     if (!user || !userId) return;
     try {
       setSavingAddress(true);
-      setError(null);
+      setAddressError(null);
       // Every field the form owns, blanks as null, so removing an address or
       // a personal email actually removes it (pitfall #1, update half).
       const updateData: UserProfileUpdate = {
@@ -667,7 +675,7 @@ export const MemberProfilePage: React.FC = () => {
       setUser((prev) => keepServiceSince(updated, prev));
       setEditingAddress(false);
     } catch (err: unknown) {
-      setError(getErrorMessage(err, 'Unable to update address.'));
+      setAddressError(getErrorMessage(err, 'Unable to update address.'));
     } finally {
       setSavingAddress(false);
     }
@@ -942,6 +950,11 @@ export const MemberProfilePage: React.FC = () => {
                     {displayNameOf(user) || user.username}
                   </h1>
                   {legalNameLine && <p className="text-theme-text-muted mt-1 text-sm">Legal name: {legalNameLine}</p>}
+                  {photoError && (
+                    <p className="mt-1 text-sm text-red-700 dark:text-red-400" role="alert">
+                      {photoError}
+                    </p>
+                  )}
                   {headerSubtitle && (
                     <p className="text-theme-text-secondary mt-1 text-[15px] font-medium">{headerSubtitle}</p>
                   )}
@@ -1371,6 +1384,11 @@ export const MemberProfilePage: React.FC = () => {
                         />
                       </div>
                     </div>
+                    {addressError && (
+                      <p className="text-sm text-red-700 dark:text-red-400" role="alert">
+                        {addressError}
+                      </p>
+                    )}
                     <div className="flex gap-2 pt-2">
                       <button
                         onClick={() => {
