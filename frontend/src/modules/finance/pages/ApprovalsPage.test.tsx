@@ -32,9 +32,14 @@ vi.mock('react-hot-toast', () => ({
 
 vi.mock('@/hooks/useTimezone', () => ({ useTimezone: () => 'UTC' }));
 const mockCheckPermission = vi.fn();
+// subscribe too: the real finance store this file renders subscribes to
+// sign-in changes when it loads.
 vi.mock('@/stores/authStore', () => ({
-  useAuthStore: (selector: (s: { checkPermission: (p: string) => boolean }) => unknown) =>
-    selector({ checkPermission: (p) => mockCheckPermission(p) as boolean }),
+  useAuthStore: Object.assign(
+    (selector: (s: { checkPermission: (p: string) => boolean }) => unknown) =>
+      selector({ checkPermission: (p) => mockCheckPermission(p) as boolean }),
+    { subscribe: () => () => {} }
+  ),
 }));
 
 import { useFinanceStore } from '../store/financeStore';

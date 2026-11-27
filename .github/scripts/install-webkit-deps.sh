@@ -31,6 +31,15 @@
 # one retry, and a mirror fault that presents differently next time is still
 # covered.
 #
+# A third-party apt source that refuses the runner fails the install too, and
+# changing the Ubuntu mirror does not help it: on 2026-11-26 and 27
+# packages.microsoft.com answered 403 to some runners, `apt-get update` exits
+# non-zero while any enabled source fails, and both attempts died on it before
+# a test ran. So before the retry, any source file under sources.list.d that
+# names a non-Ubuntu host attempt 1 logged `Failed to fetch` for is renamed to
+# `.disabled`, which apt skips silently. WebKit's libraries all come from the
+# Ubuntu archive, and the rename lasts only for this job's runner.
+#
 # Both attempts share ONE deadline (TOTAL_BUDGET), set under the step's own
 # `timeout-minutes`, for the reason install-system-deps.sh gives: a budget per
 # attempt would let the retries together outlast the step, and the step would
@@ -144,6 +153,31 @@ switch_mirror() {
     sudo sed -i "s/${azure_host//./\\.}/${fallback_host}/g" "${files[@]}"
 }
 
+# Non-Ubuntu hosts attempt 1 logged `Failed to fetch` for, one per line.
+failed_third_party_hosts() {
+    grep -oE 'Failed to fetch https?://[^/ ]+' "$log" \
+        | sed -E 's#^Failed to fetch https?://##' \
+        | sort -u \
+        | grep -vE '(^|\.)ubuntu\.com$' || true
+}
+
+disable_failed_sources() {
+    local host f found
+    for host in $(failed_third_party_hosts); do
+        found=no
+        for f in "$apt_etc"/sources.list.d/*.list "$apt_etc"/sources.list.d/*.sources; do
+            if [ -f "$f" ] && grep -qF "$host" "$f"; then
+                echo "Disabling ${f} for the retry: ${host} could not be fetched."
+                sudo mv "$f" "${f}.disabled"
+                found=yes
+            fi
+        done
+        if [ "$found" = "no" ]; then
+            echo "No apt source file under sources.list.d names ${host}; leaving the sources as they are."
+        fi
+    done
+}
+
 attempt1=0
 run_attempt yes || attempt1=$?
 if [ "$attempt1" -eq 0 ]; then
@@ -160,6 +194,7 @@ if [ "$attempt1" -eq 2 ]; then
 else
     echo "The install failed; retrying on ${fallback_host} in case the mirror was the cause."
 fi
+disable_failed_sources
 switch_mirror
 
 attempt2=0

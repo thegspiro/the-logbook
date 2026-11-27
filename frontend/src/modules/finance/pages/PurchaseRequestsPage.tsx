@@ -177,7 +177,7 @@ const PurchaseRequestsPage: React.FC = () => {
       </div>
 
       {/* Table */}
-      {filteredRequests.length === 0 ? (
+      {filteredRequests.length === 0 && error ? null : filteredRequests.length === 0 ? (
         <EmptyState
           icon={ClipboardList}
           title="No purchase requests found"
