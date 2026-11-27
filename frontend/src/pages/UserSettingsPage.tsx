@@ -249,6 +249,9 @@ export const UserSettingsPage: React.FC = () => {
   const [emailChoices, setEmailChoices] = useState<MemberEmailChoice[]>([]);
   const [alwaysSent, setAlwaysSent] = useState<string[]>([]);
   const [savingPreferences, setSavingPreferences] = useState(false);
+  // A save sends both switches, so saving the defaults shown after a failed
+  // read would overwrite the member's own choices (NOTIF2-9).
+  const [preferencesLoadFailed, setPreferencesLoadFailed] = useState(false);
   const [_loadingPreferences, setLoadingPreferences] = useState(false);
 
   // Emergency contacts state
@@ -309,8 +312,9 @@ export const UserSettingsPage: React.FC = () => {
         const prefs = await userService.getNotificationPreferences(user.id);
         setEmailNotifications(prefs.email_notifications ?? true);
         setSmsNotifications(prefs.sms_notifications ?? true);
+        setPreferencesLoadFailed(false);
       } catch {
-        // Use defaults if fetch fails
+        setPreferencesLoadFailed(true);
       }
       try {
         const choices = await userService.getMyEmailChoices();
@@ -1891,11 +1895,17 @@ export const UserSettingsPage: React.FC = () => {
               </div>
 
               <div className="pt-4">
+                {preferencesLoadFailed && (
+                  <p role="alert" className="alert-danger mb-3 text-sm">
+                    Your notification settings could not be loaded, so they cannot be saved from here. Reload the page
+                    to try again.
+                  </p>
+                )}
                 <button
                   onClick={() => {
                     void handleSavePreferences();
                   }}
-                  disabled={savingPreferences}
+                  disabled={savingPreferences || preferencesLoadFailed}
                   className="btn-primary flex w-full justify-center rounded-md text-sm font-medium disabled:cursor-not-allowed"
                 >
                   {savingPreferences ? 'Saving...' : 'Save Preferences'}
