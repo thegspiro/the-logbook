@@ -384,7 +384,9 @@ const EvaluationTemplateBuilderPage: React.FC = () => {
               onChange={editWorkflow}
             />
           )}
-          {tab === 'preview' && <TemplatePreviewPanel definition={definition} />}
+          {tab === 'preview' && (
+            <TemplatePreviewPanel definition={definition} workflow={workflow} templateName={template.name} />
+          )}
           {tab === 'details' && (
             <form className="card max-w-3xl space-y-4 p-4 sm:p-6" onSubmit={(event) => void saveDetails(event)}>
               <div className="alert-info flex gap-3">

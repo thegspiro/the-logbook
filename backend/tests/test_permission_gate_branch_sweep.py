@@ -89,6 +89,7 @@ ALLOWED = {
         "evaluations.view_all",
     ),
     ("evaluations.py", "POST", "/templates/preview", "evaluations.view_all"),
+    ("evaluations.py", "POST", "/templates/preview-pdf", "evaluations.view_all"),
     # `*` narrows which templates a settings.manage holder may rewrite: the
     # ones carrying a temporary password, a reset or ballot token or an
     # applicant's private link need a full administrator (ADV-3). It cannot

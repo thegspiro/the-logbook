@@ -40,6 +40,7 @@ vi.mock('../services/api', () => ({
     getEventStats: vi.fn(),
     getEligibleMembers: vi.fn(),
     sendReminders: vi.fn(),
+    getAttachmentDownloadUrl: vi.fn((eventId: string, attachmentId: string) => `/files/${eventId}/${attachmentId}`),
     bulkAddAttendees: vi.fn(),
     createOrUpdateRSVP: vi.fn(),
     cancelEvent: vi.fn(),
@@ -2469,6 +2470,107 @@ describe('EventDetailPage', () => {
       await openMore();
 
       expect(screen.queryByRole('button', { name: /View QR Code/ })).not.toBeInTheDocument();
+    });
+  });
+
+  describe('Optional cards that have nothing in them yet', () => {
+    const anHourAgo = () => new Date(Date.now() - 60 * 60_000).toISOString();
+    const inAnHour = () => new Date(Date.now() + 60 * 60_000).toISOString();
+
+    beforeEach(() => {
+      mockCheckPermission.mockReturnValue(true);
+      mockAuthState.checkPermission = mockCheckPermission;
+      mockAuthState.user = { id: 'admin-1', permissions: ['events.manage'] } as CurrentUser;
+      vi.mocked(eventService.getEvent).mockReset();
+      vi.mocked(eventService.getEventRSVPs).mockReset();
+      vi.mocked(eventService.getEventRSVPs).mockResolvedValue([]);
+      vi.mocked(eventService.getEventStats).mockReset();
+      vi.mocked(eventService.getEventStats).mockResolvedValue(mockStats);
+    });
+
+    it('folds empty attachments to one line and opens the upload on request', async () => {
+      vi.mocked(eventService.getEvent).mockResolvedValue({ ...mockEvent, attachments: [] });
+
+      const user = userEvent.setup();
+      renderWithRouter(<EventDetailPage />);
+
+      const folded = await screen.findByRole('region', { name: 'Attachments' });
+      expect(folded).toHaveTextContent('Attachments · None yet');
+      expect(screen.queryByRole('heading', { name: 'Attachments' })).not.toBeInTheDocument();
+
+      await user.click(within(folded).getByRole('button', { name: 'Attach file' }));
+      expect(screen.getByRole('heading', { name: 'Attachments' })).toBeInTheDocument();
+    });
+
+    it('shows attachments in full when the event has one', async () => {
+      vi.mocked(eventService.getEvent).mockResolvedValue({
+        ...mockEvent,
+        attachments: [
+          {
+            id: 'att-1',
+            file_name: 'agenda.pdf',
+            file_path: 'events/evt-1/agenda.pdf',
+            file_size: 1024,
+            file_type: 'application/pdf',
+            uploaded_by: 'admin-1',
+            uploaded_at: '2026-03-10T10:00:00Z',
+          },
+        ],
+      });
+
+      renderWithRouter(<EventDetailPage />);
+
+      expect(await screen.findByText('agenda.pdf')).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Attach file' })).not.toBeInTheDocument();
+    });
+
+    it('folds the notification composer until it is asked for', async () => {
+      vi.mocked(eventService.getEvent).mockResolvedValue(mockEvent);
+
+      const user = userEvent.setup();
+      renderWithRouter(<EventDetailPage />);
+
+      const folded = await screen.findByRole('region', { name: 'Notifications' });
+      expect(screen.queryByRole('button', { name: /send notification/i })).not.toBeInTheDocument();
+
+      await user.click(within(folded).getByRole('button', { name: 'Write a notification' }));
+      expect(screen.getByRole('button', { name: /send notification/i })).toBeInTheDocument();
+    });
+
+    it('folds an unrecorded headcount and an unwritten close-out on an outreach event', async () => {
+      vi.mocked(eventService.getEvent).mockResolvedValue({
+        ...mockEvent,
+        event_type: 'public_education',
+        start_datetime: anHourAgo(),
+        end_datetime: inAnHour(),
+        can_record_guest_headcount: true,
+        guest_headcount: null,
+      });
+
+      renderWithRouter(<EventDetailPage />);
+
+      expect(await screen.findByRole('button', { name: 'Record headcount' })).toBeInTheDocument();
+      expect(screen.getByRole('region', { name: 'Guest headcount' })).toHaveTextContent('Not recorded');
+      expect(screen.getByRole('button', { name: 'Write it up' })).toBeInTheDocument();
+      expect(screen.getByRole('region', { name: 'How it went' })).toHaveTextContent('Not written up');
+    });
+
+    it('shows a recorded headcount and a written close-out in full', async () => {
+      vi.mocked(eventService.getEvent).mockResolvedValue({
+        ...mockEvent,
+        event_type: 'public_education',
+        start_datetime: anHourAgo(),
+        end_datetime: inAnHour(),
+        can_record_guest_headcount: true,
+        guest_headcount: 40,
+        outreach_outcome_note: 'Forty neighbours came through.',
+      });
+
+      renderWithRouter(<EventDetailPage />);
+
+      expect(await screen.findByDisplayValue('Forty neighbours came through.')).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Record headcount' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Write it up' })).not.toBeInTheDocument();
     });
   });
 
