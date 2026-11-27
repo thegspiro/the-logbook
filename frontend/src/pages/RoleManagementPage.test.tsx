@@ -382,6 +382,20 @@ describe('RoleManagementPage deleting a role', () => {
     await user.click(within(dialog).getByRole('button', { name: 'Keep it' }));
     expect(roleService.deleteRole).not.toHaveBeenCalled();
   });
+
+  it('sends one delete while the first is in flight', async () => {
+    vi.mocked(roleService.deleteRole).mockReturnValue(new Promise(() => {}));
+    const user = userEvent.setup();
+    renderWithRouter(<RoleManagementPage />);
+
+    const remove = await screen.findByRole('button', { name: /^Delete\b/ });
+    await user.click(remove);
+    await user.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Delete' }));
+    await user.click(remove);
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(roleService.deleteRole).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe('RoleManagementPage — positions that mirror a rank', () => {

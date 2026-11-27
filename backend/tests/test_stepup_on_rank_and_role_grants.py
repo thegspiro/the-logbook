@@ -88,6 +88,12 @@ class TestProfileUpdate:
             patch(f"{USERS}.log_audit_event", new=AsyncMock()),
             patch(f"{USERS}._enforce_rank_grant_ceiling", new=AsyncMock()),
             patch(f"{USERS}.ensure_stepup", new=stepup),
+            # The last-administrator guard on a rank clear is its own concern,
+            # proved against the database in
+            # test_orgs_roles_users_pass6_integration; this mock has no
+            # members to count.
+            patch(f"{USERS}.lock_administrator_continuity", new=AsyncMock()),
+            patch(f"{USERS}.assert_rank_change_retains_administrator", new=AsyncMock()),
         ):
             await update_user_profile(
                 uuid4(),

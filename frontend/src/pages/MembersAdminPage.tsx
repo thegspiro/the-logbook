@@ -161,6 +161,10 @@ export const MembersAdminPage: React.FC<MembersAdminPageProps> = ({ population =
   const [roles, setRoles] = useState<Role[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // Only a failed load replaces the page: a refused row action (the last
+  // admin's position, a delete) used to take the whole roster away with no
+  // way back short of a reload (app-review ORU6-F2).
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [selectedUser, setSelectedUser] = useState<UserWithRoles | null>(null);
   const [selectedRole, setSelectedRole] = useState<Role | null>(null);
   const [editingRoles, setEditingRoles] = useState(false);
@@ -223,13 +227,14 @@ export const MembersAdminPage: React.FC<MembersAdminPageProps> = ({ population =
     try {
       setLoading(true);
       setError(null);
+      setLoadError(null);
 
       const [usersData, rolesData] = await Promise.all([userService.getUsersWithRoles(), roleService.getRoles()]);
 
       setUsers(usersData);
       setRoles(rolesData);
     } catch (err: unknown) {
-      setError(getLoadFailureMessage(err, 'members and positions'));
+      setLoadError(getLoadFailureMessage(err, 'members and positions'));
     } finally {
       setLoading(false);
     }
@@ -650,15 +655,16 @@ export const MembersAdminPage: React.FC<MembersAdminPageProps> = ({ population =
     );
   }
 
-  if (error && !editingRoles && !editingMembers && !editingProfile && !resetPasswordUser && !resetMfaUser) {
+  if (loadError) {
     return (
       <div className="min-h-screen">
         <div className="mx-auto max-w-7xl py-8">
           <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-4" role="alert" aria-live="assertive">
-            <div className="flex">
-              <div className="ml-3">
-                <p className="text-sm text-red-700 dark:text-red-400">{error}</p>
-              </div>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <p className="text-sm text-red-700 dark:text-red-400">{loadError}</p>
+              <button type="button" onClick={() => void fetchData()} className="btn-secondary">
+                Retry
+              </button>
             </div>
           </div>
         </div>
