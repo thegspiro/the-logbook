@@ -454,6 +454,9 @@ class TrainingRequirementBase(BaseModel):
     # May shift attendance satisfy it on the Shift Compliance report? Omitted
     # on create, the model decides: on for a SHIFTS requirement, off otherwise.
     shift_credited: Optional[bool] = None
+    # A shift-credited Hours or Shifts requirement may count time in one seat
+    # only (owner decisions, 2026-11-26); None counts every shift.
+    credited_seat: Optional[str] = Field(None, max_length=100)
     training_type: Optional[str] = None
     # Requirement quantities (field used depends on requirement_type)
     required_hours: Optional[float] = Field(None, ge=0, le=FLOAT32_MAX)
@@ -681,6 +684,8 @@ class TrainingRequirementUpdate(RefusesNull):
     allows_external_credit: Optional[bool] = None
     allows_chief_override: Optional[bool] = None
     shift_credited: Optional[bool] = None
+    # null clears the seat, so the requirement counts every shift again.
+    credited_seat: Optional[str] = Field(None, max_length=100)
     training_type: Optional[str] = None
     required_hours: Optional[float] = Field(None, ge=0, le=FLOAT32_MAX)
     required_courses: Optional[List[str]] = None

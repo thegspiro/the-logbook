@@ -16,6 +16,8 @@ import { ErrorSummary } from '../ux/ErrorSummary';
 import { firstRefused, saveExceptRefused } from '../../utils/saveExceptRefused';
 import { eventService } from '../../services/api';
 import { blankToNull } from '../../utils/formValues';
+import { getPositionOptions } from '../../modules/scheduling/components/shiftTemplateTypes';
+import { positionLabel } from '../../modules/scheduling/utils/positionLabels';
 import { formatCalendarDate, getTodayLocalDate } from '../../utils/dateFormatting';
 import { canSplitForNewMembers, existingMemberPolicyOf } from '../../utils/requirementGrandfathering';
 import { ExistingMemberPolicy, RequirementChangeScope } from '../../constants/enums';
@@ -161,6 +163,7 @@ const TYPE_DEPENDENT_KEYS = [
   'passing_score',
   'max_attempts',
   'shift_credited',
+  'credited_seat',
 ] as const;
 
 /** The grandfathering pair is one decision: refusing either keeps both as stored. */
@@ -273,6 +276,7 @@ export const RequirementModal: React.FC<RequirementModalProps> = ({
     // null until the officer touches it: a new requirement then follows its
     // type (SHIFTS on, HOURS off), matching the backend default.
     shift_credited: seed?.shift_credited ?? null,
+    credited_seat: seed?.credited_seat || '',
     applies_to_all: seed?.applies_to_all ?? true,
     required_membership_types: seed?.required_membership_types || ([] as string[]),
     due_date: seed?.due_date || '',
@@ -337,6 +341,21 @@ export const RequirementModal: React.FC<RequirementModalProps> = ({
   // the backend ignores — that pairing is what made one-time requirements read
   // as annual.
   const isOneTime = formData.frequency === 'one_time';
+
+  // A seat limit applies only where the requirement grades from shifts
+  // worked; the backend refuses one anywhere else (requirement_seat.py).
+  const seatLimitApplies =
+    (formData.requirement_type === 'hours' || formData.requirement_type === 'shifts') &&
+    (formData.shift_credited ?? formData.requirement_type === 'shifts');
+  const seatOptions = useMemo(() => {
+    const options = getPositionOptions();
+    const stored = formData.credited_seat;
+    // A seat saved before the department renamed or removed it still shows,
+    // so opening the requirement does not quietly change what it counts.
+    return stored && !options.some((o) => o.value === stored)
+      ? [...options, { value: stored, label: positionLabel(stored) }]
+      : options;
+  }, [formData.credited_seat]);
 
   const [membershipTypeOptions, setMembershipTypeOptions] = useState<MembershipTypeOption[]>([...MEMBERSHIP_TYPES]);
   // The department's tiers come from the events endpoint because it is open to
@@ -505,6 +524,9 @@ export const RequirementModal: React.FC<RequirementModalProps> = ({
       ...(formData.requirement_type === 'hours' || formData.requirement_type === 'shifts'
         ? { shift_credited: formData.shift_credited ?? formData.requirement_type === 'shifts' }
         : {}),
+      // Sent on every save, as null when "Any seat" or when the requirement
+      // stops grading from shifts: a stored seat would keep limiting it.
+      credited_seat: seatLimitApplies ? blankToNull(formData.credited_seat) : null,
       applies_to_all: formData.applies_to_all,
       // Sent on every save, as [] when none is selected: an omitted key leaves
       // the stored list in place, and a stale member category outranks role
@@ -1496,6 +1518,31 @@ export const RequirementModal: React.FC<RequirementModalProps> = ({
                     </span>
                   </span>
                 </label>
+                {seatLimitApplies && (
+                  <div>
+                    <label htmlFor="requirement-credited-seat" className="form-label">
+                      Only time in this seat
+                    </label>
+                    <select
+                      id="requirement-credited-seat"
+                      className="form-input"
+                      value={formData.credited_seat}
+                      onChange={(e) => setFormData({ ...formData, credited_seat: e.target.value })}
+                      aria-describedby="requirement-credited-seat-hint"
+                    >
+                      <option value="">Any seat</option>
+                      {seatOptions.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                    <p id="requirement-credited-seat-hint" className="text-theme-text-muted mt-1 text-xs">
+                      For example, Driver/Operator hours toward a driver requirement. Shifts with no seat recorded and
+                      time on another agency&apos;s apparatus do not count toward a seat.
+                    </p>
+                  </div>
+                )}
               </div>
             )}
 

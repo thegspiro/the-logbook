@@ -602,10 +602,14 @@ curl http://localhost:3001/health
 **[CALLOUT: Issue #1]**
 
 > "**Number one: Port conflicts.** If you already have something running on port
-> 3000 or 3001, Docker will fail to bind. The database and Redis ports aren't
-> published to the host by default, so they won't collide. Check with
-> `docker compose logs` and change `FRONTEND_PORT` or `BACKEND_PORT` in your
-> `.env` file if needed."
+> 3000, 3001 or 3002, Docker will fail to bind. 3002 is your department's
+> public website, which stays switched off until you publish it. The database
+> and Redis ports aren't published to the host by default, so they won't
+> collide. Check with `docker compose logs` and change `FRONTEND_PORT`,
+> `BACKEND_PORT` or `PUBLIC_SITE_PORT` in your `.env` file if needed."
+
+**[PRODUCTION NOTE (2026-11-26): 3002 and `PUBLIC_SITE_PORT` were added for the
+Public Website (#4732); on Unraid the port is 7882. Re-record this line only.]**
 
 **[CALLOUT: Issue #2]**
 

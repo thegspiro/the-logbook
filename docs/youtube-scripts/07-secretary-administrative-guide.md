@@ -905,14 +905,27 @@ a demo template that has a backup row. The Footers tab is at
 
 ### PUBLIC PORTAL (17:20 – 17:35)
 
-**[SCREEN: Navigate to Public Portal settings]**
+**[SCREEN: Administration → Organization Settings, the two rows **Public
+Portal** and **Public Website**; open **Public Portal** on its **Data Control**
+tab, then **Public Website** with **Publish the website** off.]**
 
-> "The Public Portal is your department's public-facing page — visible to
-> non-members. If your department uses this for community engagement, you can
-> manage what's displayed: upcoming public events, recruitment information,
-> contact details."
+> "Two settings face the public, and they are different things. The Public
+> Portal is a data feed: a website your department already runs somewhere else
+> reads your public events and department information from it, using a key,
+> and nothing is shared until you turn each field on. The Public Website is a
+> website The Logbook serves for you: a home page, an About page and a Contact
+> page, in one of three looks, all off until you publish it. Whoever runs your
+> server points your public address at it."
 
-**[SCREEN: Show the public portal configuration briefly]**
+**[PRODUCTION NOTE (2026-11-26): the Public Website (#4732) is new. The
+narration above replaces a line that called the Public Portal "your
+department's public-facing page" listing "recruitment information, contact
+details"; the portal is an API, and recruitment is not yet on either. Film the
+demo department with the website unpublished, then, if a published demo is
+available, two seconds of its Home page in the Classic look at the public
+website port (3002 in the demo stack). Do not show events, news or a Join us
+page on it: they are not built yet. Re-record this beat, about 15 seconds
+longer than before.]**
 
 **[TRANSITION: Suggestion boxes]**
 
