@@ -182,9 +182,24 @@ class TestProfileUpdate:
             with patch(
                 "app.api.v1.endpoints.users.log_audit_event", new=AsyncMock()
             ) as audit:
-                with patch(
-                    "app.api.v1.endpoints.users._enforce_rank_grant_ceiling",
-                    new=AsyncMock(),
+                with (
+                    patch(
+                        "app.api.v1.endpoints.users._enforce_rank_grant_ceiling",
+                        new=AsyncMock(),
+                    ),
+                    # The last-administrator guard on a rank clear is proved
+                    # against the database in
+                    # test_orgs_roles_users_pass6_integration; this mock has
+                    # no members to count.
+                    patch(
+                        "app.api.v1.endpoints.users.lock_administrator_continuity",
+                        new=AsyncMock(),
+                    ),
+                    patch(
+                        "app.api.v1.endpoints.users."
+                        "assert_rank_change_retains_administrator",
+                        new=AsyncMock(),
+                    ),
                 ):
                     result = await update_user_profile(
                         uuid4(), payload, db, caller, request=fake_request()
@@ -407,9 +422,21 @@ class TestMembershipTypeChange:
             settings={"membership_tiers": {"tiers": tiers}} if tiers else {},
         )
         db = self._db(member, org)
-        with patch(
-            "app.api.v1.endpoints.member_status.log_audit_event", new=AsyncMock()
-        ) as audit:
+        with (
+            patch(
+                "app.api.v1.endpoints.member_status.log_audit_event", new=AsyncMock()
+            ) as audit,
+            # As in TestProfileUpdate: the guard is proved against the database.
+            patch(
+                "app.api.v1.endpoints.member_status.lock_administrator_continuity",
+                new=AsyncMock(),
+            ),
+            patch(
+                "app.api.v1.endpoints.member_status."
+                "assert_rank_change_retains_administrator",
+                new=AsyncMock(),
+            ),
+        ):
             result = await change_membership_type(
                 uuid4(), self._request(membership_type), db, caller
             )

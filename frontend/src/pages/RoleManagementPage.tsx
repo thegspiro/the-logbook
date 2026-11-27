@@ -234,31 +234,35 @@ export const RoleManagementPage: React.FC = () => {
       }
     });
 
-  const handleDelete = async (role: Role) => {
-    if (
-      !(await confirm({
-        title: 'Delete role',
-        message:
-          role.user_count === undefined
-            ? `Delete the role "${role.name}"? Members assigned to it will lose its permissions.`
-            : role.user_count === 0
-              ? `Delete the role "${role.name}"? No members hold it.`
-              : `Delete the role "${role.name}"? ${role.user_count} ${role.user_count === 1 ? 'member holds' : 'members hold'} it and will lose its permissions.`,
-        confirmLabel: 'Delete',
-        cancelLabel: 'Keep it',
-      }))
-    ) {
-      return;
-    }
+  // Guarded: while one delete was in flight the button stayed live, and a
+  // second confirm sent a second delete that came back as an error
+  // (app-review ORU6-F7).
+  const handleDelete = (role: Role) =>
+    run(async () => {
+      if (
+        !(await confirm({
+          title: 'Delete role',
+          message:
+            role.user_count === undefined
+              ? `Delete the role "${role.name}"? Members assigned to it will lose its permissions.`
+              : role.user_count === 0
+                ? `Delete the role "${role.name}"? No members hold it.`
+                : `Delete the role "${role.name}"? ${role.user_count} ${role.user_count === 1 ? 'member holds' : 'members hold'} it and will lose its permissions.`,
+          confirmLabel: 'Delete',
+          cancelLabel: 'Keep it',
+        }))
+      ) {
+        return;
+      }
 
-    try {
-      setError(null);
-      await roleService.deleteRole(role.id);
-      await fetchData();
-    } catch (err: unknown) {
-      setError(getErrorMessage(err, 'Could not delete the role. Try again.'));
-    }
-  };
+      try {
+        setError(null);
+        await roleService.deleteRole(role.id);
+        await fetchData();
+      } catch (err: unknown) {
+        setError(getErrorMessage(err, 'Could not delete the role. Try again.'));
+      }
+    });
 
   const handleTogglePermission = (permission: string) => {
     setFormData((prev) => ({
