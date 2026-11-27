@@ -163,6 +163,7 @@ const TrainingRequirementsPage: React.FC = () => {
         registry_code: requirement.registry_code,
         allows_external_credit: requirement.allows_external_credit,
         shift_credited: requirement.shift_credited,
+        credited_seat: requirement.credited_seat ?? null,
         training_type: requirement.training_type,
         required_hours: requirement.required_hours,
         required_courses: requirement.required_courses,

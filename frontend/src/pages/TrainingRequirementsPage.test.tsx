@@ -33,21 +33,29 @@ vi.mock('../services/api', () => ({
   },
 }));
 
-vi.mock('../stores/authStore', () => ({
-  useAuthStore: vi.fn((selector) => {
-    const state = {
-      user: {
-        id: 'user-1',
-        role: { slug: 'admin' },
-        permissions: ['training.manage'],
-      },
-    };
-    if (typeof selector === 'function') {
-      return (selector as (s: typeof state) => unknown)(state);
-    }
-    return state;
-  }),
-}));
+// getState() as well as the hook: the requirement form's seat picker reads
+// the department's positions, and the shift-settings loader behind it asks the
+// store for the signed-in organization outside a component.
+vi.mock('../stores/authStore', () => {
+  const state = {
+    user: {
+      id: 'user-1',
+      role: { slug: 'admin' },
+      permissions: ['training.manage'],
+    },
+  };
+  return {
+    useAuthStore: Object.assign(
+      vi.fn((selector) => {
+        if (typeof selector === 'function') {
+          return (selector as (s: typeof state) => unknown)(state);
+        }
+        return state;
+      }),
+      { getState: () => state }
+    ),
+  };
+});
 
 // Callable as well: the page raises a non-blocking warning with toast(...).
 vi.mock('react-hot-toast', () => ({
