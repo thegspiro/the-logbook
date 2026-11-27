@@ -2,7 +2,7 @@
 
 **Prefix:** `GF2` · **Iteration:** B14 · **Reviewed:** 2026-08-06 (pass 1),
 2026-08-08 (pass 2), 2026-08-09 (pass 3), 2026-08-09 (pass 4),
-2026-10-16 (pass 5)
+2026-10-16 (pass 5), 2026-11-26 (pass 6)
 
 **Backend:** `endpoints/grants.py` (1,842 L, 45 endpoints), `services/grant_service.py`
 (1,000 L), `services/fundraising_service.py` (540 L), model `models/grant.py`
@@ -10,6 +10,145 @@
 **Prior audit:** `docs/module-audit/grants-fundraising.md` (iteration 14) — GF-1
 (CRITICAL), GF-2/3 (HIGH), GF-4/5 fixed; GF-6 (remaining unvalidated FKs), GF-7
 (state machine), GF-8 (anonymity), GF-9 (float/PII) left open.
+
+---
+
+## Pass 6 (2026-11-26) — totals, pledges, compliance tasks and the screens (13 fixed, 6 flagged)
+
+Pass 5 read the update, delete and recompute paths. This pass read the rest of
+both services (lifecycle, compliance generation, dashboards, reports, pledges),
+the reminder job, and the whole frontend module. Backend candidates were
+reproduced against the real test database first. Every fix has a test that
+failed on the unfixed code, except GF2-15 (a row lock).
+
+### Flagged (in `docs/KNOWN_LIMITATIONS.md` → "Grants & Fundraising — Decisions From App Review B14 Pass 6")
+
+| Id    | Severity | Finding                                                                                                                                                                    |
+| ----- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| GF2-3 | MEDIUM   | Compliance tasks are never generated for an application created as Awarded, or awarded before its dates were entered (reproduced: 0 tasks each).                           |
+| GF2-4 | LOW      | The grant report counts a task overdue only by its status; the dashboard and reminders count open-and-past-due.                                                            |
+| GF2-5 | LOW-MED  | The closeout task is fixed at end + 90 days; "Final Report Due" and "Next Report Due" are read by nothing.                                                                 |
+| GF2-6 | LOW      | The report's category bars leave out expenditures with no budget line, so they do not add up to Total Spent.                                                               |
+| GF2-7 | LOW      | Changing a pledge's donor makes every gift already linked to it uneditable (reproduced).                                                                                   |
+| GF2-8 | MEDIUM   | The Budget tab's Total Spent sums budget lines, while the overspend banner uses every expenditure: with uncharged spending they disagree (Pitfall 29; a wording decision). |
+
+### Fixed — backend
+
+- **GF2-9 (MED): "Outstanding Pledges" dropped overdue pledges and could go
+  negative.** The dashboard summed pending and partial pledges only, and added
+  `pledged − fulfilled` with no floor. Reproduced: a $500 pledge read 0 once
+  marked overdue, and a pledge lowered below what was received subtracted $100
+  from the rest. It now counts the same open set the reminders do and floors
+  each pledge at zero, as the Pledges page does.
+- **GF2-10 (MED): changing a pledge's amount never re-settled its status.** A
+  paid-up pledge raised from $300 to $900 stayed Fulfilled, so the remaining $600
+  was missing from the totals and the reminders, and the next gift was refused.
+  A changed amount now re-settles the status through `pledge_status_after`; a
+  status sent with the edit stands, and a save with an unchanged amount (the
+  dialog always sends it) leaves a status set by hand alone.
+- **GF2-11 (LOW-MED): the year-to-date and 12-month totals used UTC midnight.**
+  A gift at 10pm on December 31 in New York counted in next year's tile and in
+  last year's report at once. Both are now bounded at the department's
+  midnights, as the report is.
+- **GF2-12 (LOW): monthly and quarterly report due dates drifted to the 28th.**
+  Each date stepped from the previous, already-clamped one. They are now counted
+  from the start date (Jan 31 → Feb 28, Mar 31, Apr 30, …).
+- **GF2-13 (MED): a task marked Overdue disappeared from the dashboard.** The
+  due list filtered pending and in-progress only, hiding the tasks most behind,
+  which the reminders still email.
+- **GF2-14 (LOW): a budget line's remaining amount was null when created and
+  stale after an edit.** It was set only when an expenditure was recorded.
+- **GF2-15 (LOW): `update_pledge` read the pledge without a lock** while
+  donation writes lock it and move its amount by a delta (Pitfall 27). It now
+  locks the row. No test: the race needs two committing sessions, and the
+  change is the lock itself.
+
+### Fixed — frontend
+
+- **GF2-16 (HIGH): the Opportunities page crashed on search.** The page filtered
+  the server's results again in the browser and called `agency.toLowerCase()`,
+  which throws for an opportunity with no agency; the error boundary replaced the
+  page. The second filter also hid matches the server found in the description.
+  It is removed (the server already filters) and `agency` is typed nullable.
+- **GF2-17 (MED-HIGH): editing a fundraising event erased Zeffy-synced totals.**
+  The dialog always sent the money raised, expenses and attendance it had
+  loaded, so a sync since then was written over. They are now sent only when
+  changed, as the pledge dialog does for the amount received.
+- **GF2-18 (MED): the grant detail page could show the previous grant while
+  writing to this one.** The store kept the last grant while the next loaded or
+  after its load failed, with no stale guard, and the page drew it under the new
+  URL; budget lines, expenditures and notes then went to the URL's grant. The
+  store now clears a different grant and ignores late responses, and the page
+  draws only the grant whose id is in the URL.
+- **GF2-19 (MED): the Donations total counted refunded, pending and failed
+  gifts.** It now counts completed gifts only, as every server total does, and
+  says so.
+- **GF2-20 (MED): the application edit form stayed editable after a failed
+  load.** Saving the blank form nulled every field not retyped. A failed load now
+  shows an error and no form, and an edit starts in the loading state.
+- **GF2-21 (LOW): "New Application" was shown to view-only members.** Both links
+  now need `fundraising.manage`, like the route.
+
+One existing test changed: `pledgesAndEvents.test.tsx` asserted that an event
+edit sends the unchanged expenses, which is the behaviour GF2-17 removes.
+
+### Open (recorded here only)
+
+- **(MED)** In `grantsStore`, each detail add, edit and delete re-fetches the
+  grant inside the same `try` as the write. A write that saved and a re-fetch
+  that failed is reported as a failed save, inviting a duplicate budget line or
+  expenditure.
+- The dashboard's Recent Donations show "Unknown" for every gift from a
+  directory donor (fixed on the Donations page by W69-3, not here).
+- The dashboard's pipeline chips leave out Internal Review and Denied, so they
+  do not add up to the Pending tile.
+- Deadline and overdue maths on the Opportunities page, the task due dates on
+  the detail page and the pipeline cards read calendar dates as UTC midnight,
+  so they turn a day early in the evening west of UTC.
+- Donors, Campaigns, Pledges, Fundraising Events, Reports and Zeffy lists have
+  no stale-response guard.
+- `DonationFormPage` always sends the amount and payment status on edit, so a
+  form opened before a Zeffy refund can undo it.
+- The pledge and event dialogs show "None" for a linked donor or campaign they
+  do not list; a retired linked opportunity cannot be unlinked.
+- Donors and Campaigns show the API's first 100 with no paging; "Assigned To"
+  sorts by member id; Mark Complete has no in-flight guard (two completion
+  notes on a double click); a few list parameters are sent that the backend
+  ignores.
+
+### Verified good ✅ (this pass)
+
+- All 45 routes carry `fundraising.view` / `fundraising.manage`; every by-id
+  read and write is org-scoped directly or through its application.
+- Campaign, donor and budget-line totals lock the parent and use a locking sum
+  over completed donations only; reassigning a donation recomputes both parents;
+  pledges paid by donations are locked in id order and a refund takes its share
+  back.
+- Money is `Decimal` in the reports; every `LIKE` uses `like_pattern` with
+  `escape`; no CSV export exists in this module.
+- Reminders are email-only, reach current members only, are idempotent per
+  entity, due date, stage and member, and stop catching up after 7 days.
+- The frontend reads every response field in camelCase, sends every owned field
+  on update with `blankToNull`, formats dates through `dateFormatting`, uses
+  `useConfirm`, and gives every table the reflow tiers and labels.
+
+### Not read (scope, stated plainly)
+
+The Zeffy webhook and endpoint module and most of `zeffy_sync_service.py`;
+`donor_privacy.py`; most `grants.py` handler bodies (every route's permission
+was enumerated); the co-located frontend tests; the modal markup of
+`GrantDetailPage.tsx` and the lower halves of several form pages.
+
+### Completion gate (pass 6)
+
+| Check                                                     | Result                                                     |
+| --------------------------------------------------------- | ---------------------------------------------------------- |
+| `flake8` / `black` / `isort` (changed files)              | ✅ clean                                                   |
+| mypy ratchet                                              | ✅ 0 errors, matching the baseline                         |
+| new backend tests                                         | ✅ 9 (8 failed on the unfixed code, 1 control)             |
+| grant, fundraising, donation, pledge, Zeffy backend tests | ✅ 1,682 passed, 1 skipped                                 |
+| `npm run typecheck` / ESLint (changed files) / Prettier   | ✅ clean                                                   |
+| grants-fundraising frontend tests                         | ✅ 211 passed in 42 files; 12 new tests, each failed first |
 
 ---
 
