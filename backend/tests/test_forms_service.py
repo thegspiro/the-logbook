@@ -403,7 +403,9 @@ async def test_in_app_submit_skips_the_check_when_repeats_are_allowed():
 @pytest.mark.asyncio
 async def test_invalid_public_form_does_not_consume_daily_cap(monkeypatch):
     db = AsyncMock()
-    field = SimpleNamespace(id="field-id", label="Required", required=True)
+    field = SimpleNamespace(
+        id="field-id", label="Required", required=True, field_type="text"
+    )
     service = FormsService(db)
     service.get_form_by_slug = AsyncMock(
         return_value=SimpleNamespace(
