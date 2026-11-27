@@ -241,6 +241,18 @@ describe('UserSettingsPage', () => {
       expect(await screen.findByText('All changes saved')).toBeInTheDocument();
     });
 
+    // NOTIF2-9: a failed preferences read left both switches showing on, and
+    // Save sent them — so a member who had muted texts, and still holds SMS
+    // consent, started receiving texts again.
+    it('does not offer to save notification preferences it could not load', async () => {
+      vi.mocked(userService.getNotificationPreferences).mockRejectedValue(new Error('Network Error'));
+      window.history.pushState({}, '', '/account?tab=notifications');
+      renderWithRouter(<UserSettingsPage />);
+
+      expect(await screen.findByText(/notification settings could not be loaded/i)).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Save Preferences' })).toBeDisabled();
+    });
+
     it('now holds the consents and the data export, which left the Security tab', async () => {
       window.history.pushState({}, '', '/account?tab=privacy');
       renderWithRouter(<UserSettingsPage />);
