@@ -992,4 +992,20 @@ describe('MembersAdminPage — says why a position was not removed', () => {
     expect(alert).toHaveTextContent('Could not remove the position: the server hit a problem on its end.');
     expect(alert).not.toHaveTextContent(/connection/i);
   });
+
+  // App-review ORU6-F2: a refused row action replaced the whole page with the
+  // error, roster gone and no way back short of a reload.
+  it('keeps the roster on screen beside a refused row action', async () => {
+    vi.mocked(userService.assignUserRoles).mockRejectedValue({
+      response: { status: 400, data: { detail: 'The last administrator cannot lose the Admin position' } },
+    });
+    const user = userEvent.setup();
+    renderWithRouter(<MembersAdminPage />);
+
+    await user.click(await screen.findByRole('button', { name: 'Remove Driver position from Jordan Avery' }));
+    await user.click(within(await screen.findByRole('dialog')).getByRole('button', { name: /^Remove/ }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('The last administrator cannot lose the Admin position');
+    expect(screen.getByRole('button', { name: 'Remove Driver position from Jordan Avery' })).toBeInTheDocument();
+  });
 });

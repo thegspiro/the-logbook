@@ -2,7 +2,7 @@
 
 **Prefix:** `ORU2` · **Iteration:** B21 · **Reviewed:** 2026-08-06 (pass 1),
 2026-08-08 (pass 2), 2026-08-09 (pass 3), 2026-08-09 (pass 4),
-2026-10-25 (pass 5)
+2026-10-25 (pass 5), 2026-11-26 (pass 6)
 
 **Backend:** the privilege-management surface — `endpoints/roles.py` +
 `role_service.py` + `core/permissions.py`, `endpoints/organizations.py` +
@@ -12,6 +12,127 @@
 (create-member escalation), ORU-2/3/5 (settings secret leaks), ORU-4 (cross-tenant
 module read), ORU-6, ORU-8 (PII), ORU-9 fixed; ORU-7 (role-edit ceiling, last-admin,
 member-role guard) left open.
+
+---
+
+## Pass 6 (2026-11-26) — member lifecycle, administrators, settings and the member screens (14 fixed, 6 flagged)
+
+Earlier passes covered the privilege-escalation surface and the update payloads. This pass checked whether the workflows hold:
+
+- status transitions and what they do to a member
+- leaves of absence
+- the membership-tier ladder
+- the last-administrator guards
+- organization settings writes
+- member numbers
+- the roster, profile, account and role screens
+
+Backend candidates were reproduced against the real test database first. Every fix has a test that failed on the unfixed code, except ORU2-17, whose race needs two connections.
+
+### Flagged (in `docs/KNOWN_LIMITATIONS.md` → "Members — Decisions From App Review B21 Pass 6")
+
+| Id      | Severity | Finding                                                                                                                                                                                 |
+| ------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| ORU2-5  | MEDIUM   | Undo-drop and reactivate skip the account ceiling and step-up that a status change applies: a `members.manage`-only officer restored a `*` holder (reproduced).                         |
+| ORU2-6  | MEDIUM   | "On leave" means a status to the admin hub and a leave record to the leave widget and to training and scheduling. The counts disagree, and the widget counts ended leaves (reproduced). |
+| ORU2-7  | LOW      | An officer can record overlapping or duplicate leaves; the member-request path extends instead (reproduced).                                                                            |
+| ORU2-8  | LOW      | Suspended → dropped → undo-drop to "leave" succeeds, though suspended → leave is refused (reproduced).                                                                                  |
+| ORU2-9  | LOW      | Position member counts and the holders list include soft-deleted members.                                                                                                               |
+| ORU2-10 | LOW      | The roster's Total and the dashboard's member total count differently; dropped members are in Total but in no tile.                                                                     |
+
+### Fixed — backend
+
+- **ORU2-11 (MED): clearing the sole administrator's rank removed the last administrator.**
+  - Rank defaults carry `members.manage` for the chief officers.
+  - A profile save clearing the rank, or a move to the administrative class (which clears it), left no administrator (reproduced).
+  - Both now go through the continuity guard, taking its lock first.
+- **ORU2-12 (MED): the general settings route rewrote the membership-tier ladder.**
+  - It skipped every guard the tier endpoint enforces: removing an occupied tier, years that fall as the ladder rises, and duplicate ids (reproduced).
+  - The key is now stripped there, as the waiver policies already are.
+- **ORU2-13 (LOW/MED): settings saves read the organization unlocked** and wrote the whole JSON back. A save could revert a concurrent locked writer's change (reproduced in one session). Both settings writers now lock and re-read.
+- **ORU2-14 (LOW): extending or re-activating a leave by edit left the member rostered** on the new days (reproduced). Creating a leave and approving an extension already released those shifts; this edit now does too.
+- **ORU2-15 (LOW): the last-administrator guard refused moving the sole administrator to probationary** (reproduced). Probationary is a current status that can sign in. The guard now uses `ACTIVE_ACCOUNT_STATUSES` (pitfall 32).
+- **ORU2-16 (LOW): a blank member number was stored as `''`**, so the second member saved blank hit the unique index as a 500 (reproduced). A blank is now stored as no number.
+- **ORU2-17 (LOW): manual and automatic archiving read the member unlocked.** An archive racing a reinstatement could write ARCHIVED over the restored member. Both now lock and re-read.
+- **ORU2-18 (LOW): blocked privilege-escalation attempts never reached the audit trail.** The alert's datetime and enums failed JSON encoding, and the write rolled back with only a log line (reproduced). Alerts are now serialized explicitly at all six sites.
+
+### Fixed — frontend
+
+- **ORU2-19 (MED): address and photo errors on the member profile were never shown.**
+  - A refused address save spun and stopped without a word, and a too-large photo did nothing.
+  - The message then appeared later inside whichever contact editor or status dialog opened next.
+  - Each now has its own message.
+- **ORU2-20 (MED): a refused row action on Members Admin replaced the page with a bare error box**, roster gone, until a reload (for example, removing the last administrator's position). Only a failed load now replaces the page, and it offers Retry.
+- **ORU2-21 (LOW/MED): the member profile read the static module catalogue**, which says every module is on.
+  - A department with Training off fetched records the module gate refused, and showed an empty Training card on every profile.
+  - It now reads the department's switches.
+- **ORU2-22 (LOW): the roster's delete dialog reset on every page re-render**, re-enabling its buttons and wiping the typed name mid-delete. It now resets on the member's id.
+- **ORU2-23 (LOW): My Account stored an emptied middle name, phone, mobile or address field as an empty string** rather than clearing it.
+- **ORU2-24 (LOW): Role Management's Delete could be sent twice.**
+
+### Open (recorded here only)
+
+- Moving straight from one member's profile to another (back/forward, a deep link) keeps the first member's sections until the second's load, and a slow first answer can land over it. No in-app link does this.
+- On the profile, a failed inventory, training or admin-hours load reads as an empty section, including "No equipment is assigned to this member."
+- Dead code:
+  - Members Admin's profile drawer is unreachable, and would send `''` as a member number if wired up.
+  - `membershipStore` has no consumers.
+  - A comment in `MemberAdminEditPage` about the rank save is out of date.
+- Log lines in `users.py`, `role_service.py` and the departure clearance carry usernames, emails and position names where an id would do (pitfall 33, second half).
+- The Role Management route requires `positions.manage_permissions`, while `GET /roles` needs only `positions.view`.
+
+### Verified good ✅ (this pass)
+
+- **Status state machine:**
+  - no-ops are refused and ARCHIVED is isolated;
+  - row locks re-read under the lock, with the continuity lock taken first;
+  - service stints, separation dates (department timezone), NFC cards, shift release and drop clearances follow a change;
+  - sign-in is cut at once.
+- **Admin continuity:**
+  - locked recounts on position edit and delete;
+  - the last `*` holder is protected;
+  - role assignment checks continuity, the grant ceiling and the base position.
+- **Member numbers:** the generator locks and never reissues a held or reserved number.
+- **Tier config:** locks, and validates order, duplicates and occupancy.
+- **Settings:** deep copy, deep merge and secret placeholders preserved.
+- **Frontend:**
+  - update payloads on the admin edit page and the contact editors send nulls;
+  - probationary members are counted as current;
+  - dates are calendar dates;
+  - the tiers, leave and visibility sections show failures with Retry;
+  - the auth store clears member data on sign-out.
+
+### Not read (scope, stated plainly)
+
+- **Backend:**
+  - `create_member` beyond number and rank;
+  - the photo, passkey, anonymize, audit-history and consent routes;
+  - the setup checklist, profile and retention routes;
+  - `roles.py` beyond the holder listing;
+  - the service-history internals, shift release, leave-request voting and tier advancement in detail.
+- **Frontend:**
+  - member import, audit history, My Crew and the ID-card pages;
+  - waiver management's leave actions;
+  - the ranks/EVOC, email, storage, auth and label-printer settings;
+  - the profile's service, supervisor, qualification and voting sections.
+
+**Existing tests changed (harness only, no assertion):**
+`test_administrative_rank_restriction.py` and `test_stepup_on_rank_and_role_grants.py`
+drive the profile and membership-type routes with a mocked session that has no
+members to count. They now patch out the continuity lock and the new rank guard,
+which `test_orgs_roles_users_pass6_integration.py` proves against the database.
+
+### Completion gate (pass 6)
+
+| Check                                                   | Result                                                                                                                                                                              |
+| ------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `flake8` / `black` / `isort` (changed files)            | ✅ clean                                                                                                                                                                            |
+| mypy ratchet                                            | ✅ 0 errors, matching the baseline                                                                                                                                                  |
+| `check_endpoint_permissions.py --strict`                | ✅ 0 warnings                                                                                                                                                                       |
+| new backend tests                                       | ✅ 8, each failed on the unfixed code                                                                                                                                               |
+| members, roles, organization and security tests         | ✅ 9,598 passed, 2 skipped, and 16 failed: mocked-session tests the new guard reached. Those were patched (below) and pass, as does the rest of the last-failed rerun (815 passed). |
+| `npm run typecheck` / ESLint (changed files) / Prettier | ✅ clean                                                                                                                                                                            |
+| member, profile, account and role page tests            | ✅ 240 passed in 6 files; 8 new tests, 7 failed first and 1 is a guard that held                                                                                                    |
 
 ---
 

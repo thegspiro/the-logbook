@@ -271,3 +271,42 @@ async def assert_positions_retain_administrator(
         return
 
     await assert_not_last_administrator(db, organization_id, user_id, action=action)
+
+
+def rank_grants_administrator(rank: str | None) -> bool:
+    """Do *rank*'s default permissions alone make its holder an administrator?"""
+    if not rank:
+        return False
+    return permission_matches(
+        ADMIN_PERMISSION, set(get_rank_default_permissions(str(rank)))
+    )
+
+
+async def assert_rank_change_retains_administrator(
+    db: AsyncSession,
+    organization_id: str,
+    user: User,
+    new_rank: str | None,
+    *,
+    action: str = "change the rank of",
+) -> None:
+    """Refuse a rank change that would cost the org its final administrator.
+
+    Rank defaults carry ``members.manage`` for the chief officers, so the sole
+    administrator's access can rest on their rank alone. Clearing that rank,
+    or the clear a move to the administrative class makes, left the
+    organization with no administrator; only position and status changes were
+    guarded (app-review ORU6-2). *user* must have its positions loaded.
+    """
+    # Only a rank whose defaults carry administrator access can take it away,
+    # and only for a new rank whose defaults do not.
+    if not rank_grants_administrator(user.rank) or rank_grants_administrator(new_rank):
+        return
+    permissions: set[str] = set()
+    for position in user.positions:
+        permissions.update(position.permissions or [])
+    if new_rank:
+        permissions.update(get_rank_default_permissions(str(new_rank)))
+    await assert_positions_retain_administrator(
+        db, organization_id, user.id, permissions, action=action
+    )
