@@ -76,7 +76,10 @@ const DonationsPage: React.FC = () => {
     return matchesSearch && matchesMethod;
   });
 
-  const totalAmount = filtered.reduce((sum: number, d: Donation) => sum + Number(d.amount), 0);
+  // Only a completed gift is money received: the server counts nothing else
+  // toward campaign, donor or report totals, and this figure has to agree.
+  const completed = filtered.filter((d: Donation) => d.paymentStatus === 'completed');
+  const totalAmount = completed.reduce((sum: number, d: Donation) => sum + Number(d.amount), 0);
 
   return (
     <div className="space-y-6">
@@ -103,7 +106,7 @@ const DonationsPage: React.FC = () => {
           </div>
           <div>
             <p className="text-theme-text-secondary text-sm">
-              Total ({filtered.length} {filtered.length === 1 ? 'donation' : 'donations'})
+              Total received ({completed.length} completed {completed.length === 1 ? 'gift' : 'gifts'})
             </p>
             <p className="text-theme-text-primary text-xl font-bold">{formatCurrency(totalAmount)}</p>
           </div>
