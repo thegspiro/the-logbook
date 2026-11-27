@@ -291,7 +291,7 @@ export interface GrantOpportunity {
   id: string;
   organizationId: string;
   name: string;
-  agency: string;
+  agency: string | null;
   description: string | null;
   eligibleUses: string | null;
   typicalAwardMin: number | null;
@@ -731,9 +731,10 @@ export interface FundraisingEventUpdatePayload {
   description: string | null;
   notes: string | null;
   status: FundraisingEventStatus;
-  actualRevenue: string;
-  expenses: string;
-  currentAttendees: number;
+  /** Sent only when changed: Zeffy payments also move these on the server. */
+  actualRevenue?: string;
+  expenses?: string;
+  currentAttendees?: number;
 }
 
 // =============================================================================
