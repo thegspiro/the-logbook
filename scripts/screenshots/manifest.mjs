@@ -14994,6 +14994,42 @@ export const SHOTS = [
     selector: "section[aria-labelledby='event-headcount-heading']",
   },
   {
+    // The starter form, which the seeder makes the department's feedback form
+    // (seed_outreach_feedback), with its rating question chosen.
+    id: "04-114-feedback-form-setting",
+    allowEmptyState:
+      '"No rating" is an option of the Rating question select, chosen or not.',
+    doc: "04-events-meetings.md",
+    line: 3805,
+    anchor:
+      "The Feedback From Requesters block in Settings, Public Requests, Handling",
+    alt: "The Feedback From Requesters block in Request Handling: Outreach feedback chosen as the Feedback form and How did the visit go? as the Rating question, with the link to Forms where the questions and their branches are built",
+    route: "/events/admin?tab=settings",
+    prepare: openPublicRequestsPage(/^Handling/),
+    expect: "Feedback From Requesters",
+    selector: "div.border-t:has(> div > p:text-is('Feedback From Requesters'))",
+  },
+  {
+    // Lena Brooks's request (the Pre-K station tour), completed by the
+    // outreach history and answered by seed_outreach_feedback with a 3, so
+    // the starter form's follow-up question shows.
+    id: "04-115-requester-feedback",
+    doc: "04-events-meetings.md",
+    line: 3811,
+    anchor:
+      "A completed request's page showing the Requester feedback section with a",
+    alt: "A completed request's page with its Requester feedback section: rated 3, when it was sent and on which form, and the answers to What went well? and What could we do better?",
+    route: "/events",
+    prepare: openFirstFromApi(
+      "/event-requests",
+      (id) => `/events/admin/requests/${id}`,
+      "requests",
+      (request) => request.contact_name === "Lena Brooks",
+    ),
+    expect: "What could we do better?",
+    selector: "section:has(> h3:has-text('Requester feedback'))",
+  },
+  {
     // Shown, not filled: the profile section saves as it is typed. The demo
     // department has no short name, so the box shows its example.
     id: "08-125-profile-short-name",

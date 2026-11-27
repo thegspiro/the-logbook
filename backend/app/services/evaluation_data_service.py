@@ -51,7 +51,12 @@ from app.models.knowledge_test import (
 )
 from app.models.meeting import Meeting, MeetingAttendee, MeetingType
 from app.models.member_position_term import MemberPositionTerm
-from app.models.skills_testing import SkillTest, SkillTestResult, SkillTestStatus
+from app.models.skills_testing import (
+    SkillTemplate,
+    SkillTest,
+    SkillTestResult,
+    SkillTestStatus,
+)
 from app.models.training import (
     ShiftEquipmentCheck,
     TrainingRecord,
@@ -345,6 +350,17 @@ def _pct(numerator: int, denominator: int) -> float:
     return round(numerator / denominator * 100, 1)
 
 
+def _counted(count: int, one: str, many: str) -> str:
+    return f"{count} {one if count == 1 else many}"
+
+
+def _training_type_label(value: object) -> str:
+    """A training type as the training screens name it
+    (``TRAINING_TYPE_LABELS`` in the frontend's ``constants/enums.ts``)."""
+    raw = str(getattr(value, "value", value) or "other")
+    return raw.replace("_", " ").title()
+
+
 def suggested_score(rule: Optional[Dict[str, Any]], value: Any) -> Optional[int]:
     """The score a data block's rule gives ``value``, or None.
 
@@ -495,19 +511,29 @@ class EvaluationDataService:
 
     @staticmethod
     def _from_shifts(key: str, totals: Dict[str, float]) -> Dict[str, Any]:
+        # What a total is made of goes in ``breakdown`` only when there is
+        # something to describe: a zero says nothing more than itself.
+        worked = int(totals["shifts"])
         if key == "shifts.hours":
-            return _value(totals["hours"], external_hours=totals["external_hours"])
+            entry = _value(totals["hours"], external_hours=totals["external_hours"])
+            if worked:
+                entry["breakdown"] = _counted(worked, "shift", "shifts")
+            return entry
         if key == "shifts.count":
-            return _value(
-                int(totals["shifts"]), external_shifts=int(totals["external_shifts"])
-            )
+            entry = _value(worked, external_shifts=int(totals["external_shifts"]))
+            if worked:
+                entry["breakdown"] = f"{totals['hours']:g} h"
+            return entry
         if key == "shifts.external_hours":
             shifts = int(totals["external_shifts"])
             return _value(
                 totals["external_hours"],
                 breakdown=f"{shifts} {'shift' if shifts == 1 else 'shifts'}",
             )
-        return _value(int(totals["calls"]))
+        entry = _value(int(totals["calls"]))
+        if worked:
+            entry["breakdown"] = f"Across {_counted(worked, 'shift', 'shifts')}"
+        return entry
 
     # ----------------------------------------------------------- per source
 
@@ -517,7 +543,27 @@ class EvaluationDataService:
         by_type = await TrainingService(self.db).get_training_hours_by_type(
             org_id, UUID(member.id), coverage.start, coverage.end
         )
-        return _value(round(sum(float(t.total_hours or 0) for t in by_type), 2))
+        entry = _value(round(sum(float(t.total_hours or 0) for t in by_type), 2))
+        # A record with no hours (a policy acknowledgment) adds nothing to the
+        # total, so it is not named as part of it.
+        credited = sorted(
+            (t for t in by_type if float(t.total_hours or 0) > 0),
+            key=lambda t: (
+                -float(t.total_hours),
+                _training_type_label(t.training_type),
+            ),
+        )
+        if credited:
+            records = sum(int(t.record_count or 0) for t in credited)
+            parts = "; ".join(
+                f"{_training_type_label(t.training_type)} "
+                f"{round(float(t.total_hours), 2):g} h"
+                for t in credited
+            )
+            entry["breakdown"] = (
+                f"{_counted(records, 'training record', 'training records')}: {parts}"
+            )
+        return entry
 
     async def _grading_inputs(
         self, org_id: str, member: User
@@ -816,19 +862,34 @@ class EvaluationDataService:
     async def _events_attended(
         self, org_id: str, member: User, coverage: Coverage, tz: ZoneInfo
     ) -> Dict[str, Any]:
-        return _value(len(await self._attended_events(org_id, member, coverage, tz)))
+        counts = self._event_type_counts(
+            await self._attended_events(org_id, member, coverage, tz)
+        )
+        return _value(
+            sum(n for _kind, n in counts),
+            breakdown="; ".join(f"{event_type_label(kind)}: {n}" for kind, n in counts)
+            or None,
+        )
+
+    @staticmethod
+    def _event_type_counts(attended: List[Tuple[str, Any]]) -> List[Tuple[str, int]]:
+        """Attended events counted by type, in the order the types are
+        declared. Types with nothing attended are left out."""
+        counts: Dict[str, int] = {}
+        for _eid, kind in attended:
+            key = str(getattr(kind, "value", kind) or EventType.OTHER.value)
+            counts[key] = counts.get(key, 0) + 1
+        order = {t.value: i for i, t in enumerate(EventType)}
+        return sorted(counts.items(), key=lambda kv: order.get(kv[0], len(order)))
 
     async def _events_attended_by_type(
         self, org_id: str, member: User, coverage: Coverage, tz: ZoneInfo
     ) -> Dict[str, Any]:
-        """Attended events counted by type, in the order the types are
-        declared, naming each as the community engagement report does. Types
-        with nothing attended are left out."""
-        counts: Dict[str, int] = {}
-        for _eid, kind in await self._attended_events(org_id, member, coverage, tz):
-            key = str(getattr(kind, "value", kind) or EventType.OTHER.value)
-            counts[key] = counts.get(key, 0) + 1
-        order = {t.value: i for i, t in enumerate(EventType)}
+        """One line per type attended, naming each as the community
+        engagement report does."""
+        counts = self._event_type_counts(
+            await self._attended_events(org_id, member, coverage, tz)
+        )
         return _value(
             [
                 {
@@ -839,9 +900,7 @@ class EvaluationDataService:
                     "event_type": kind,
                     "attended": n,
                 }
-                for kind, n in sorted(
-                    counts.items(), key=lambda kv: order.get(kv[0], len(order))
-                )
+                for kind, n in counts
             ]
         )
 
@@ -881,7 +940,15 @@ class EvaluationDataService:
         avg = stats.get("avg_rating")
         if avg is None:
             return _unavailable("No rated shift reports in the period.")
-        return _value(avg)
+        rated = int(stats.get("rated_reports") or 0)
+        return _value(
+            avg,
+            breakdown=(
+                _counted(rated, "rated shift report", "rated shift reports")
+                if rated
+                else None
+            ),
+        )
 
     async def _field_evaluation_averages(
         self, org_id: str, member: User, coverage: Coverage
@@ -973,7 +1040,15 @@ class EvaluationDataService:
         summary = await AdminHoursService(self.db).get_summary(
             org_id, member.id, start_utc, end_utc - timedelta(microseconds=1)
         )
-        return _value(float(summary.get("approved_hours") or 0))
+        entries = int(summary.get("approved_entries") or 0)
+        return _value(
+            float(summary.get("approved_hours") or 0),
+            breakdown=(
+                _counted(entries, "approved entry", "approved entries")
+                if entries
+                else None
+            ),
+        )
 
     async def _skills_passed(
         self, org_id: str, member: User, coverage: Coverage, tz: ZoneInfo
@@ -981,20 +1056,32 @@ class EvaluationDataService:
         """Official, validated passes; the filter ``member_skill_expirations``
         applies, without its expiry-tracking condition."""
         start_utc, end_utc = local_range_utc(coverage.start, coverage.end, tz)
-        count = await self.db.scalar(
-            select(func.count(SkillTest.id)).where(
-                SkillTest.organization_id == org_id,
-                SkillTest.candidate_id == member.id,
-                SkillTest.is_practice.is_(False),
-                SkillTest.status == SkillTestStatus.COMPLETED.value,
-                SkillTest.result == SkillTestResult.PASS.value,
-                SkillTest.voided_at.is_(None),
-                SkillTest.validated_at.isnot(None),
-                SkillTest.completed_at >= start_utc,
-                SkillTest.completed_at < end_utc,
+        rows = (
+            await self.db.execute(
+                select(SkillTemplate.name, func.count(SkillTest.id))
+                .join(SkillTemplate, SkillTemplate.id == SkillTest.template_id)
+                .where(
+                    SkillTest.organization_id == org_id,
+                    SkillTest.candidate_id == member.id,
+                    SkillTest.is_practice.is_(False),
+                    SkillTest.status == SkillTestStatus.COMPLETED.value,
+                    SkillTest.result == SkillTestResult.PASS.value,
+                    SkillTest.voided_at.is_(None),
+                    SkillTest.validated_at.isnot(None),
+                    SkillTest.completed_at >= start_utc,
+                    SkillTest.completed_at < end_utc,
+                )
+                .group_by(SkillTemplate.id, SkillTemplate.name)
+                .order_by(SkillTemplate.name)
             )
+        ).all()
+        return _value(
+            sum(int(n) for _name, n in rows),
+            breakdown="; ".join(
+                f"{name} ({n})" if n > 1 else str(name) for name, n in rows
+            )
+            or None,
         )
-        return _value(int(count or 0))
 
     async def _knowledge_tests_passed(
         self, org_id: str, member: User, coverage: Coverage, tz: ZoneInfo

@@ -6,6 +6,7 @@ fields, submissions, public forms, integrations, and reporting.
 """
 
 import html as html_lib
+import math
 import re
 from datetime import date, datetime, timezone
 from typing import (
@@ -73,6 +74,17 @@ NUMERIC_CONDITION_OPERATORS = frozenset({"at_least", "at_most"})
 # Number() disagree on "1_000", "0x10" and "1e3", and the browser twin in
 # formVisibility.ts must reach the same answer as this one.
 _PLAIN_NUMBER = re.compile(r"-?[0-9]+(\.[0-9]+)?")
+
+
+# Field types the public form view leaves out (a member search needs a
+# signed-in session; see the field filter in api/public/forms.py, which must
+# move with this set). A public submission cannot answer what it was never
+# shown, so such a field is never demanded of one.
+PUBLIC_HIDDEN_FIELD_TYPES = frozenset({FieldType.MEMBER_LOOKUP.value})
+
+
+def is_public_hidden(field_type: Any) -> bool:
+    return getattr(field_type, "value", field_type) in PUBLIC_HIDDEN_FIELD_TYPES
 
 
 def as_plain_number(text: str) -> Optional[float]:
@@ -388,6 +400,11 @@ class FormsService:
 
             # Remove null bytes
             str_value = str_value.replace("\x00", "")
+            # Limits are on what the person typed, as the browser counts them:
+            # escaping first made "O'Brien" seven characters longer than the
+            # field's own maxlength allowed.
+            typed_length = len(str_value)
+            typed_length_stripped = len(str_value.strip())
 
             # HTML-escape to prevent stored XSS
             str_value = html_lib.escape(str_value)
@@ -405,17 +422,18 @@ class FormsService:
             else:
                 max_len = field.max_length or FormsService.MAX_TEXT_LENGTH
 
-            if len(str_value) > max_len:
+            if typed_length > max_len:
                 return (
                     {},
                     f"Value for '{field.label}' exceeds maximum length of {max_len} characters",
                 )
 
-            # Enforce min_length if set
+            # Enforce min_length on any answer given, required or not, as the
+            # browser does; an optional field may still be left empty.
             if (
                 field.min_length
-                and field.required
-                and len(str_value.strip()) < field.min_length
+                and typed_length_stripped
+                and typed_length_stripped < field.min_length
             ):
                 return (
                     {},
@@ -441,6 +459,10 @@ class FormsService:
             if field_type == FieldType.NUMBER.value and str_value.strip():
                 try:
                     num_val = float(html_lib.unescape(str_value))
+                    # float() accepts "nan" and "inf"; NaN then passes every
+                    # bound, since any comparison with it is false.
+                    if not math.isfinite(num_val):
+                        raise ValueError("not a finite number")
                     if field.min_value is not None and num_val < field.min_value:
                         return (
                             {},
@@ -1730,6 +1752,7 @@ class FormsService:
                     if (
                         field.required
                         and str(field.id) in visible_ids
+                        and not is_public_hidden(field.field_type)
                         and (
                             str(field.id) not in data
                             or self._is_empty_value(data[str(field.id)])
@@ -1862,7 +1885,9 @@ class FormsService:
             submission.integration_result = None
             await self.db.flush()
 
-            await self._process_integrations(submission, submission.form)
+            await self._process_integrations(
+                submission, submission.form, reprocessing=True
+            )
             await self.db.refresh(submission)
             return submission, None
         except Exception as e:
@@ -2105,7 +2130,11 @@ class FormsService:
                 logger.warning("Deferred post-commit side effect failed: {}", e)
 
     async def _process_integrations(
-        self, submission: FormSubmission, form: Form, is_public: bool = False
+        self,
+        submission: FormSubmission,
+        form: Form,
+        is_public: bool = False,
+        reprocessing: bool = False,
     ) -> None:
         """Process integrations after a form submission.
 
@@ -2181,6 +2210,7 @@ class FormsService:
                             integration=integration,
                             form=form,
                             is_public=is_public,
+                            reprocessing=reprocessing,
                         )
                         results["event_request"] = result
                 except Exception as e:
@@ -2224,7 +2254,11 @@ class FormsService:
                     results["event_registration"] = result
                 elif it == IntegrationType.EVENT_REQUEST:
                     result = await self._process_event_request(
-                        submission, integration, form=form, is_public=is_public
+                        submission,
+                        integration,
+                        form=form,
+                        is_public=is_public,
+                        reprocessing=reprocessing,
                     )
                     results["event_request"] = result
             except Exception as e:
@@ -2672,9 +2706,10 @@ class FormsService:
             )
             if is_duplicate:
                 logger.info(
-                    f"Duplicate application detected for "
-                    f"{mapped_data.get('email')} — existing prospect "
-                    f"{prospect_id} returned"
+                    "Duplicate application on submission {} — existing "
+                    "prospect {} returned",
+                    submission.id,
+                    prospect_id,
                 )
                 # Still auto-complete the form step for the existing
                 # prospect so it advances and stores the form data.
@@ -3107,12 +3142,21 @@ class FormsService:
         # scopes item_id by org but not user_id).
         from app.models.inventory import InventoryItem
 
-        if not await self._entity_in_org(
-            User, mapped_data["member_id"], submission.organization_id
-        ):
+        # Gear goes only to a current member (pitfall #32): a text field or an
+        # API caller can name a departed member's id, which the member search
+        # would never have offered.
+        current_member = await self.db.execute(
+            select(User.id).where(
+                User.id == str(mapped_data["member_id"]),
+                User.organization_id == str(submission.organization_id),
+                User.status.in_(ACTIVE_ACCOUNT_STATUSES),
+                User.deleted_at.is_(None),
+            )
+        )
+        if current_member.scalar_one_or_none() is None:
             return {
                 "success": False,
-                "error": "Assigned member is not in this organization",
+                "error": "Assigned member is not a current member of this organization",
             }
         if not await self._entity_in_org(
             InventoryItem, mapped_data["item_id"], submission.organization_id
@@ -3278,6 +3322,7 @@ class FormsService:
         integration: Optional[FormIntegration] = None,
         form: Optional[Form] = None,
         is_public: bool = False,
+        reprocessing: bool = False,
     ) -> Dict[str, Any]:
         """
         Process an event request form submission.
@@ -3298,6 +3343,26 @@ class FormsService:
             public_daily_limit,
             send_request_notification,
         )
+
+        # A submission files one request. Reprocessing it (the Reprocess
+        # button) must not file a second and send the requester and the
+        # coordinator the same emails again: the request it already made is
+        # the result. Only a reprocess can find one; a new submission has
+        # filed nothing yet.
+        already_filed = reprocessing and await self.db.scalar(
+            select(EventRequest.id)
+            .where(
+                EventRequest.form_submission_id == str(submission.id),
+                EventRequest.organization_id == str(submission.organization_id),
+            )
+            .limit(1)
+        )
+        if already_filed:
+            return {
+                "success": True,
+                "event_request_id": already_filed,
+                "message": "Event request already created from this submission",
+            }
 
         sub_data: Dict[str, Any] = (
             submission.data if isinstance(submission.data, dict) else {}

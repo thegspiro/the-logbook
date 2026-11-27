@@ -46,6 +46,7 @@ const PublicFormPage = ({ embedded = false }: PublicFormPageProps) => {
   const [submitMessage, setSubmitMessage] = useState('');
   // Honeypot ref - hidden from real users, bots will fill it
   const honeypotRef = useRef<HTMLInputElement>(null);
+  const submitInFlight = useRef(false);
   const captcha = useCaptcha('form_submit');
 
   // This page is outside ProtectedRoute, so nothing else resolves the session
@@ -101,7 +102,7 @@ const PublicFormPage = ({ embedded = false }: PublicFormPageProps) => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form) return;
+    if (!form || submitInFlight.current) return;
 
     // Validate required fields (skip hidden conditional fields)
     for (const field of form.fields) {
@@ -112,10 +113,14 @@ const PublicFormPage = ({ embedded = false }: PublicFormPageProps) => {
       }
     }
 
+    // Held from before the challenge: reCAPTCHA's token is a network call, and
+    // a second tap while it runs sent a second submission with a fresh token.
+    submitInFlight.current = true;
     let captchaToken: string | null = null;
     if (captcha.required) {
       captchaToken = await captcha.getToken();
       if (!captchaToken) {
+        submitInFlight.current = false;
         setError('Complete the challenge below, then submit.');
         return;
       }
@@ -145,6 +150,7 @@ const PublicFormPage = ({ embedded = false }: PublicFormPageProps) => {
       // challenge, or every retry replays a token the server already burned.
       captcha.reset();
     } finally {
+      submitInFlight.current = false;
       setSubmitting(false);
     }
   };
@@ -281,7 +287,11 @@ const PublicFormPage = ({ embedded = false }: PublicFormPageProps) => {
           </fieldset>
         );
 
+      // A multi-select stores the same comma-joined option values as a
+      // checkbox group; without its own case it fell through to a free-text
+      // box the server then refused unless the exact values were typed.
       case FieldType.CHECKBOX:
+      case FieldType.MULTISELECT:
         return (
           <fieldset className="space-y-2">
             <legend className="sr-only">{field.label}</legend>

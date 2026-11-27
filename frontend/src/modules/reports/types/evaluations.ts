@@ -624,6 +624,9 @@ export interface PreviewOptions {
   periods: { id: string; name: string; start_date: string; end_date: string; is_closed: boolean }[];
 }
 
+/** Which of a template's two forms a builder's preview shows. */
+export type PreviewPart = typeof EvaluationPartKind.EVALUATOR | typeof EvaluationPartKind.SELF_EVALUATION;
+
 /** A form filled with figures, as an evaluation drafted from it would show them. Stored nowhere. */
 export interface TemplatePreview {
   sample: boolean;
