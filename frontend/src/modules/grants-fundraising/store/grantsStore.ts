@@ -87,6 +87,7 @@ interface GrantsState {
 // response for the superseded filter must not overwrite state a newer
 // request already settled (GF-32).
 let latestApplicationsRequestId = 0;
+let latestApplicationRequestId = 0;
 
 export const useGrantsStore = create<GrantsState>((set) => ({
   // Initial state
@@ -141,16 +142,27 @@ export const useGrantsStore = create<GrantsState>((set) => ({
   },
 
   fetchApplication: async (id: string) => {
-    set({ isLoading: true, error: null });
+    // Another grant's record must not stand in for this one while it loads or
+    // after its load fails: the detail page writes budget lines, expenditures
+    // and notes to the grant in the URL, so showing the last one invited
+    // entries against the grant nobody was looking at.
+    const requestId = ++latestApplicationRequestId;
+    set((state) => ({
+      isLoading: true,
+      error: null,
+      ...(state.currentApplication?.id === id ? {} : { selectedApplication: null, currentApplication: null }),
+    }));
 
     try {
       const application = await grantsService.getApplication(id);
+      if (requestId !== latestApplicationRequestId) return; // superseded by a later call
       set({
         selectedApplication: application,
         currentApplication: application,
         isLoading: false,
       });
     } catch (error) {
+      if (requestId !== latestApplicationRequestId) return; // superseded by a later call
       set({
         error: handleStoreError(error, 'Failed to load grant application'),
         isLoading: false,
