@@ -3868,6 +3868,12 @@ link, and `{{feedback_url}}` the bare link, for wording of your own. Both stay
 empty unless a feedback form is chosen and the requester has not answered yet,
 so a template can carry them on any request.
 
+A requester who has not answered three days after the request was completed
+gets one reminder with the link, and never another. It goes only while a
+feedback form is chosen and only for requests completed in the last two
+weeks. To reword or stop it, edit **Requester Feedback Reminder** under
+**Email Templates**.
+
 When a requester sends feedback, the request's coordinator gets an email and a
 bell notification linking to the request. If the request has no coordinator,
 or the coordinator has left or can no longer manage events, it goes to the
