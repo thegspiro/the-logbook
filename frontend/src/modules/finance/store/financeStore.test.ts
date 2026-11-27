@@ -730,6 +730,31 @@ describe('financeStore', () => {
       expect(getState().isLoading).toBe(false);
       expect(getState().error).toBe('Not found');
     });
+
+    // App-review FIN6-F2: the previous record stayed on screen under the new
+    // id, its buttons acting on one record while showing the other.
+    it("drops another record's copy as soon as a different one is asked for", async () => {
+      useFinanceStore.setState({ selectedPurchaseRequest: { id: 'pr-a', title: 'A' } as never });
+      mockPRGet.mockReturnValue(new Promise(() => {}));
+
+      void getState().fetchPurchaseRequest('pr-b');
+
+      expect(getState().selectedPurchaseRequest).toBeNull();
+    });
+
+    it('does not let a slower answer for an earlier record land over the later one', async () => {
+      let answerA: (v: unknown) => void = () => {};
+      mockPRGet.mockImplementation((id: string) =>
+        id === 'pr-a' ? new Promise((resolve) => (answerA = resolve)) : Promise.resolve({ id: 'pr-b', title: 'B' })
+      );
+
+      const first = getState().fetchPurchaseRequest('pr-a');
+      await getState().fetchPurchaseRequest('pr-b');
+      answerA({ id: 'pr-a', title: 'A' });
+      await first;
+
+      expect(getState().selectedPurchaseRequest).toEqual({ id: 'pr-b', title: 'B' });
+    });
   });
 
   describe('createPurchaseRequest', () => {
@@ -812,7 +837,9 @@ describe('financeStore', () => {
     it('should handle error', async () => {
       mockPRSubmit.mockRejectedValue(new Error('Cannot submit'));
 
-      await getState().submitPurchaseRequest('pr1');
+      // Rethrown so the page does not report "submitted for approval"
+      // beside the refusal (app-review FIN6-F1).
+      await expect(getState().submitPurchaseRequest('pr1')).rejects.toThrow('Cannot submit');
 
       expect(getState().isLoading).toBe(false);
       expect(getState().error).toBe('Cannot submit');
@@ -939,7 +966,9 @@ describe('financeStore', () => {
     it('should handle error', async () => {
       mockERSubmit.mockRejectedValue(new Error('Cannot submit'));
 
-      await getState().submitExpenseReport('er1');
+      // Rethrown so the page does not report "submitted for approval"
+      // beside the refusal (app-review FIN6-F1).
+      await expect(getState().submitExpenseReport('er1')).rejects.toThrow('Cannot submit');
 
       expect(getState().isLoading).toBe(false);
       expect(getState().error).toBe('Cannot submit');
@@ -1066,7 +1095,9 @@ describe('financeStore', () => {
     it('should handle error', async () => {
       mockCRSubmit.mockRejectedValue(new Error('Not allowed'));
 
-      await getState().submitCheckRequest('cr1');
+      // Rethrown so the page does not report "submitted for approval"
+      // beside the refusal (app-review FIN6-F1).
+      await expect(getState().submitCheckRequest('cr1')).rejects.toThrow('Not allowed');
 
       expect(getState().isLoading).toBe(false);
       expect(getState().error).toBe('Not allowed');
@@ -1099,6 +1130,24 @@ describe('financeStore', () => {
   });
 
   describe('fetchMemberDues', () => {
+    // App-review FIN6-F6: whichever answer came last was kept, so a quick
+    // switch between schedules left one schedule's rows under the other.
+    it('keeps the answer for the schedule asked for last', async () => {
+      let answerFirst: (v: unknown) => void = () => {};
+      mockDuesListMemberDues.mockImplementation((params: { scheduleId?: string }) =>
+        params.scheduleId === 's1'
+          ? new Promise((resolve) => (answerFirst = resolve))
+          : Promise.resolve([{ id: 'from-s2' }])
+      );
+
+      const first = getState().fetchMemberDues({ scheduleId: 's1' });
+      await getState().fetchMemberDues({ scheduleId: 's2' });
+      answerFirst([{ id: 'from-s1' }]);
+      await first;
+
+      expect(getState().memberDues).toEqual([{ id: 'from-s2' }]);
+    });
+
     it('should load member dues with params', async () => {
       const dues = [{ id: 'md1', userId: 'u1', status: 'paid' }];
       mockDuesListMemberDues.mockResolvedValue(dues);
@@ -1229,5 +1278,33 @@ describe('financeStore', () => {
       expect(getState().isLoading).toBe(false);
       expect(getState().error).toBe('Failed to load purchase requests');
     });
+  });
+});
+
+// App-review FIN6-F3: on a shared station the next member saw the previous
+// one's every-member dues list until their own fetch landed.
+describe('when somebody else signs in', () => {
+  it('drops everything the previous member loaded', async () => {
+    const { useAuthStore } = await import('../../../stores/authStore');
+    useAuthStore.setState({ user: { id: 'treasurer' } as never });
+    useFinanceStore.setState({
+      memberDues: [{ id: 'd1' }] as never[],
+      selectedPurchaseRequest: { id: 'pr-1' } as never,
+    });
+
+    useAuthStore.setState({ user: { id: 'member' } as never });
+
+    expect(useFinanceStore.getState().memberDues).toEqual([]);
+    expect(useFinanceStore.getState().selectedPurchaseRequest).toBeNull();
+  });
+
+  it('keeps it when the same member is refreshed', async () => {
+    const { useAuthStore } = await import('../../../stores/authStore');
+    useAuthStore.setState({ user: { id: 'treasurer' } as never });
+    useFinanceStore.setState({ memberDues: [{ id: 'd1' }] as never[] });
+
+    useAuthStore.setState({ user: { id: 'treasurer', first_name: 'T' } as never });
+
+    expect(useFinanceStore.getState().memberDues).toEqual([{ id: 'd1' }]);
   });
 });

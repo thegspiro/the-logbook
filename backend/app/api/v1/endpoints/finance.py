@@ -5099,6 +5099,10 @@ async def record_dues_payment(
             recorded_by=str(current_user.id),
             **data.model_dump(),
         )
+        # A resubmitted reference recorded nothing, so the audit trail must
+        # not show a second payment (app-review FIN6-8).
+        if service.dues_payment_was_duplicate:
+            return dues
         await log_audit_event(
             db=db,
             event_type="finance.dues_payment_recorded",
