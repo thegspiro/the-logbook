@@ -12864,6 +12864,71 @@ the tab shows nothing spent and money remaining.
 **The decision:** show the server's total on the tab, with an "Uncharged" row so
 the lines still reconcile, or another wording.
 
+## Members — Decisions From App Review B21 Pass 6 (2026-11-26)
+
+Details in `docs/app-review/orgs-roles-users.md` → Pass 6.
+
+### ORU2-5 — Undo-drop and reactivate skip the account ceiling
+
+`PATCH /users/{id}/status` refuses to change the status of a member who holds
+permissions the caller lacks, and asks for step-up, because a status change can
+bring an account back into service. `POST /users/{id}/undo-drop` and
+`POST /users/{id}/reactivate` do the same job with neither check. An officer
+holding only `members.manage` restored a dropped `*` holder, and reactivated an
+archived one (reproduced). The restored member gets `*` back.
+
+**The decision:** apply the same ceiling and step-up to both routes, as the
+status route does. This narrows who may restore a member, so it waits for your
+sign-off. It is the recommended fix.
+
+### ORU2-6 — Two definitions of "on leave"
+
+The admin hub's "On leave" tile counts members whose status is LEAVE. The leave
+widget counts active leave records, including ones that have already ended.
+Training and scheduling read leave records by date. Recording a leave does not
+change the member's status, and setting the status to LEAVE creates no leave
+record, grants no training waiver, and blocks sign-in (reproduced).
+
+**The decision:** which one is the source of truth. At minimum, the widget
+should count only leaves covering today.
+
+### ORU2-7 — Overlapping leaves
+
+An officer can record a leave that overlaps, or duplicates, one the member
+already has: a double-click made two leaves, two waivers and two notices. The
+member's own request path extends an overlapping leave instead (owner decision
+2026-11-16), and then refuses later requests that touch two leaves.
+
+**The decision:** refuse an overlapping leave, or extend the existing one as
+the request path does.
+
+### ORU2-8 — Undo-drop can turn a suspension into leave
+
+Moving a member from suspended straight to leave is refused. Suspended →
+dropped → undo-drop with "leave" as the restore status succeeds (reproduced).
+The code's own comment says undoing a drop must not launder an unresolved
+suspension.
+
+**The decision:** limit the restore status to what the status before the drop
+allows, or keep leave as an allowed restore.
+
+### ORU2-9 — Position counts include deleted members
+
+A position's member count, its holders list (which includes emails) and the
+"affected members" count shown before a delete all include soft-deleted
+members.
+
+**The decision:** whether deleted members should be counted or listed at all.
+
+### ORU2-10 — Two member totals
+
+The roster's Total counts everyone except archived members, and its tiles have
+no place for dropped members. The dashboard's member total counts archived
+members too.
+
+**The decision:** which definition of "total" is authoritative, and whether the
+roster gets a Dropped tile or filter.
+
 ## Finance — Decisions From App Review B20 Pass 6 (2026-11-26)
 
 Details in `docs/app-review/finance.md` → Pass 6.

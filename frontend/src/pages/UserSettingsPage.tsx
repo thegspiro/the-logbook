@@ -134,6 +134,18 @@ function blankLegalNameErrors(record: Partial<Record<LegalNameField, string | nu
   return errors;
 }
 
+/** Optional profile boxes an emptied entry must clear rather than blank. */
+const CLEARABLE_PROFILE_FIELDS = [
+  'middle_name',
+  'phone',
+  'mobile',
+  'address_street',
+  'address_city',
+  'address_state',
+  'address_zip',
+  'address_country',
+] as const;
+
 export const UserSettingsPage: React.FC = () => {
   const { user, endSessionLocally } = useAuthStore();
   const navigate = useNavigate();
@@ -343,6 +355,14 @@ export const UserSettingsPage: React.FC = () => {
         ...(lastName ? { last_name: lastName } : {}),
         // An emptied box must clear the stored name, not be omitted (CLAUDE.md #1).
         preferred_name: blankToNull(profileForm.preferred_name),
+        // The same for every optional box: these went out as '' and were
+        // stored as empty strings (app-review ORU6-F6, the MR-5 class).
+        ...Object.fromEntries(
+          CLEARABLE_PROFILE_FIELDS.filter((key) => key in profileForm).map((key) => [
+            key,
+            blankToNull(profileForm[key]),
+          ])
+        ),
       };
       let refused: FieldErrors<ProfileField> = {};
       let updated: UserWithRoles;
