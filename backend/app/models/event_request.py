@@ -160,6 +160,11 @@ class EventRequest(Base):
     )
     reviewer_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     decline_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # When the one feedback reminder went to the requester; NULL until then.
+    # See outreach_feedback_reminder_service.
+    feedback_reminder_sent_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     # Confirmed event date (set by coordinator when scheduling)
     event_date: Mapped[Optional[datetime]] = mapped_column(

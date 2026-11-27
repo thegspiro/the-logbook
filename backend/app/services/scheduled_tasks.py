@@ -67,6 +67,9 @@ Recommended crontab (add to host or container cron):
 # Daily at 7:40 AM — ask the officer running an outreach event that ended yesterday to record its guest headcount
 40 7 * * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=guest_headcount_reminders
 
+# Daily at 10:10 AM — once, ask an outreach requester whose request was completed 3 days ago to share feedback
+10 10 * * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=outreach_feedback_reminders
+
 # Daily at 7:50 AM — remind training officers of a session sign-off waiting 7 (then 14) days
 50 7 * * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=training_approval_reminders
 
@@ -534,6 +537,16 @@ SCHEDULE = {
         "frequency": "daily",
         "recommended_time": "07:40",
         "cron": "40 7 * * *",
+    },
+    "outreach_feedback_reminders": {
+        "description": (
+            "Email an outreach requester who has not answered the department's "
+            "feedback form, once, three days after their request was completed, "
+            "for requests completed in the last 14 days"
+        ),
+        "frequency": "daily",
+        "recommended_time": "10:10",
+        "cron": "10 10 * * *",
     },
     "training_approval_reminders": {
         "description": (
@@ -1913,7 +1926,12 @@ async def run_event_reminders(db: AsyncSession) -> Dict[str, Any]:
                     ]
                     if going_user_ids:
                         users_result = await db.execute(
-                            select(User).where(User.id.in_(going_user_ids))
+                            select(User).where(
+                                User.id.in_(going_user_ids),
+                                # Leaving never removes an RSVP; the "all" audience
+                                # already filters to current members (NOTIF2-11).
+                                User.is_active,
+                            )
                         )
                         recipients = list(users_result.scalars().all())
 
@@ -2094,6 +2112,18 @@ async def run_guest_headcount_reminders(db: AsyncSession) -> Dict[str, Any]:
         return counts.emails
 
     return await _for_each_org(db, "guest_headcount_reminders", _process)
+
+
+async def run_outreach_feedback_reminders(db: AsyncSession) -> Dict[str, Any]:
+    """Remind outreach requesters once to share feedback; see the service."""
+    from app.services.outreach_feedback_reminder_service import (
+        OutreachFeedbackReminderService,
+    )
+
+    async def _process(db_session, org):
+        return await OutreachFeedbackReminderService(db_session).send_reminders(org)
+
+    return await _for_each_org(db, "outreach_feedback_reminders", _process)
 
 
 async def run_training_approval_reminders(db: AsyncSession) -> Dict[str, Any]:
@@ -8920,6 +8950,7 @@ TASK_RUNNERS = {
     "post_event_validation": run_post_event_validation,
     "apparatus_seat_request_lapse": run_apparatus_seat_request_lapse,
     "guest_headcount_reminders": run_guest_headcount_reminders,
+    "outreach_feedback_reminders": run_outreach_feedback_reminders,
     "training_approval_reminders": run_training_approval_reminders,
     "post_shift_validation": run_post_shift_validation,
     "shift_reminders": run_shift_reminders,
@@ -9030,6 +9061,9 @@ TASK_INTERVALS_SECONDS: Dict[str, int] = {
     "post_event_validation": 1800,
     # Daily; each event is reminded once (guest_headcount_reminder_service).
     "guest_headcount_reminders": 86400,
+    # Daily; each request is reminded once, stamped in
+    # feedback_reminder_sent_at (outreach_feedback_reminder_service).
+    "outreach_feedback_reminders": 86400,
     # Daily; each approval is reminded at most twice, stamped in
     # reminder_sent_at (training_approval_reminders).
     "training_approval_reminders": 86400,
