@@ -38,6 +38,17 @@ echo attempt >> "$STUB_CALLS"
 case "${MODE:-mirror}" in
   fail) echo "E: Unable to locate package"; exit 100 ;;
   hang) sleep 600; exit 0 ;;
+  thirdparty)
+    # apt-get update refuses to continue while any enabled source fails, so a
+    # third-party repository answering 403 fails the whole install.
+    if [ -f "$APT_ETC/sources.list.d/microsoft-prod.list" ]; then
+      echo "Err:6 https://packages.microsoft.com/ubuntu/24.04/prod noble InRelease"
+      echo "  403  Forbidden [IP: 13.107.213.40 443]"
+      echo "E: Failed to fetch https://packages.microsoft.com/ubuntu/24.04/prod/dists/noble/InRelease  403  Forbidden [IP: 13.107.213.40 443]"
+      exit 100
+    fi
+    echo "Setting up libwoff1 ..."
+    exit 0 ;;
 esac
 if grep -q azure.archive.ubuntu.com "$APT_ETC/apt-mirrors.txt"; then
   for i in 1 2 3 4 5; do
@@ -154,6 +165,30 @@ class InstallWebkitDepsTest(unittest.TestCase):
         assert result.returncode == 1
         assert self._attempts() == 2
         assert "from either mirror" in result.stdout
+
+    def test_a_third_party_source_refusing_access_is_disabled_for_the_retry(self):
+        # On 2026-11-26 and 27 packages.microsoft.com answered 403 to the
+        # runners, and apt-get update failed both attempts: the retry only
+        # changed the Ubuntu mirror, which was never the problem.
+        healthy = "https://archive.ubuntu.com/ubuntu/\tpriority:1\n"
+        (self.apt / "apt-mirrors.txt").write_text(healthy)
+        microsoft = self.apt / "sources.list.d" / "microsoft-prod.list"
+        microsoft.write_text(
+            "deb [arch=amd64] https://packages.microsoft.com/ubuntu/24.04/prod noble main\n"
+        )
+        docker = self.apt / "sources.list.d" / "docker.list"
+        docker.write_text("deb https://download.docker.com/linux/ubuntu noble stable\n")
+
+        result = self._run(MODE="thirdparty")
+
+        assert result.returncode == 0, result.stdout + result.stderr
+        assert self._attempts() == 2
+        assert not microsoft.exists()
+        assert "packages.microsoft.com" in result.stdout
+        # Only the source that failed is touched.
+        assert docker.exists()
+        assert (self.apt / "apt-mirrors.txt").read_text() == healthy
+        assert (self.apt / "sources.list.d" / "ubuntu.sources").exists()
 
     def test_a_stall_with_no_azure_signature_is_bounded_by_the_budget(self):
         started = time.monotonic()

@@ -43,7 +43,6 @@ from app.models.finance import (
     BudgetCategory,
     CheckRequest,
     CheckRequestStatus,
-    DuesStatus,
     ExpenseLineItem,
     ExpenseReport,
     ExpenseReportStatus,
@@ -55,7 +54,7 @@ from app.models.finance import (
 )
 from app.models.user import User
 from app.services.expense_substantiation import incurred_day
-from app.services.finance_service import dues_overdue_clause
+from app.services.finance_service import dues_overdue_clause, waived_portion
 from app.services.functional_expenses import FunctionalClassifier
 from app.services.restricted_funds import fund_balances
 from app.utils.member_names import format_display_name
@@ -1212,7 +1211,7 @@ class FinanceReportService:
         expected = sum((Decimal(r.amount_due) for r in records), ZERO)
         collected = sum((Decimal(r.amount_paid) for r in records), ZERO)
         waived = sum(
-            (Decimal(r.amount_due) for r in records if r.status == DuesStatus.WAIVED),
+            (waived_portion(r.amount_due, r.amount_paid, r.status) for r in records),
             ZERO,
         )
 

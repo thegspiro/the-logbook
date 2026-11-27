@@ -244,11 +244,26 @@ const ExpenseReportDetailPage: React.FC = () => {
           <ArrowLeft className="h-4 w-4" />
           Back to Expense Reports
         </Link>
-        <EmptyState
-          icon={Receipt}
-          title="Expense report not found"
-          description="The expense report you are looking for does not exist or has been removed."
-        />
+        {error ? (
+          <div className="alert-danger flex flex-wrap items-center justify-between gap-3" role="alert">
+            <span>{error}</span>
+            <button
+              type="button"
+              onClick={() => {
+                if (id) void fetchExpenseReport(id);
+              }}
+              className="btn-secondary"
+            >
+              Retry
+            </button>
+          </div>
+        ) : (
+          <EmptyState
+            icon={Receipt}
+            title="Expense report not found"
+            description="The expense report you are looking for does not exist or has been removed."
+          />
+        )}
       </div>
     );
   }

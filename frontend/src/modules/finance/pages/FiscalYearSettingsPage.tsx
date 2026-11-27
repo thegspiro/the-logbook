@@ -1296,7 +1296,7 @@ const FiscalYearSettingsPage: React.FC = () => {
                 </div>
               ))}
 
-            {fiscalYears.length === 0 ? (
+            {fiscalYears.length === 0 && error ? null : fiscalYears.length === 0 ? (
               <EmptyState
                 compact
                 headingLevel={3}
