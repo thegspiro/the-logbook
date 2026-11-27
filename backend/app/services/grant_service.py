@@ -585,8 +585,11 @@ class GrantService:
             }
             delta = freq_map.get(_status_value(application.reporting_frequency))
             if delta and application.grant_end_date:
-                report_date = application.grant_start_date + delta
+                # Each due date is counted from the start date, not from the
+                # previous one: stepping from a date already clamped to a short
+                # month (Jan 31 -> Feb 28) kept every later report on the 28th.
                 report_num = 1
+                report_date = application.grant_start_date + delta
                 while report_date <= application.grant_end_date:
                     tasks_to_create.append(
                         GrantComplianceTask(
@@ -609,8 +612,8 @@ class GrantService:
                             created_by=user_id,
                         )
                     )
-                    report_date += delta
                     report_num += 1
+                    report_date = application.grant_start_date + delta * report_num
 
         # Final closeout report
         if application.grant_end_date:
@@ -730,6 +733,11 @@ class GrantService:
         if not app:
             raise ValueError("Application not found")
         item = GrantBudgetItem(application_id=application_id, **data)
+        # Remaining is otherwise set only when an expenditure is recorded, so
+        # a new line answered null and an edited budget a stale figure.
+        item.amount_remaining = Decimal(item.amount_budgeted) - Decimal(
+            item.amount_spent or 0
+        )
         self.db.add(item)
         await self.db.flush()
         # A full refresh, not just the timestamps: these models carry other
@@ -761,6 +769,9 @@ class GrantService:
         if not item:
             return None
         apply_updates(item, data, skip={"application_id", "id"})
+        item.amount_remaining = Decimal(item.amount_budgeted) - Decimal(
+            item.amount_spent or 0
+        )
         await self.db.flush()
         await reload_updated_at(self.db, item)
         return item
@@ -1326,7 +1337,10 @@ class GrantService:
         )
         upcoming_deadlines = list(upcoming_result.scalars().all())
 
-        # Compliance tasks due in next 30 days
+        # Compliance tasks due in next 30 days, and every open one already
+        # past due. A task an officer marked Overdue is still open work (the
+        # reminders still email it); filtering it out hid exactly the tasks
+        # most behind.
         compliance_cutoff = today + timedelta(days=30)
         compliance_result = await self.db.execute(
             select(GrantComplianceTask)
@@ -1337,6 +1351,7 @@ class GrantService:
                     [
                         ComplianceTaskStatus.PENDING.value,
                         ComplianceTaskStatus.IN_PROGRESS.value,
+                        ComplianceTaskStatus.OVERDUE.value,
                     ]
                 ),
                 GrantComplianceTask.due_date <= compliance_cutoff,

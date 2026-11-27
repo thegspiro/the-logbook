@@ -11,7 +11,7 @@
  * edited, retired and started like any other.
  */
 
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router';
 import {
   Search,
@@ -122,7 +122,10 @@ export const GrantOpportunitiesPage: React.FC = () => {
         if (search) params.search = search;
         if (categoryFilter) params.category = categoryFilter;
         const data = await grantsService.listOpportunities(params);
-        if (!cancelled) setOpportunities(data);
+        if (!cancelled) {
+          setOpportunities(data);
+          setError(null);
+        }
       } catch {
         if (!cancelled) setError('Failed to load grant opportunities. Refresh the page to try again.');
       } finally {
@@ -174,17 +177,10 @@ export const GrantOpportunitiesPage: React.FC = () => {
     });
   };
 
-  const filteredOpportunities = useMemo(() => {
-    let list = opportunities;
-    if (search) {
-      const q = search.toLowerCase();
-      list = list.filter((o) => o.name.toLowerCase().includes(q) || o.agency.toLowerCase().includes(q));
-    }
-    if (categoryFilter) {
-      list = list.filter((o) => o.category === categoryFilter);
-    }
-    return list;
-  }, [opportunities, search, categoryFilter]);
+  // The server already filters by search (name, agency and description) and
+  // category. A second pass here hid matches found only in the description,
+  // and threw on an opportunity with no agency, taking the page down.
+  const filteredOpportunities = opportunities;
 
   return (
     <div className="space-y-6">
