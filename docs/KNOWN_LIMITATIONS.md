@@ -1,5 +1,76 @@
 # Known Limitations & Open Decisions
 
+## Photo Location — Waiver JPEGs and PNGs Lose Their Metadata; What Is Left Open (2026-11-26)
+
+✅ **Owner decision 2026-11-26: a JPEG or PNG photo filed with an attendance
+waiver request is stored without its location or other metadata.** The
+phone's GPS position is never kept. `app/utils/photo_metadata.py` rewrites
+the file from its own JPEG segments or PNG chunks, dropping EXIF, GPS, XMP,
+IPTC, comments, thumbnails, MPF second images, Motion Photo video and
+anything after the end of the image. The compressed image data is copied
+byte for byte, so the photo is **not re-compressed** and decodes to the same
+pixels. The colour profile, a CMYK file's Adobe segment and the orientation
+are kept (as a minimal EXIF holding that tag alone), so the photo looks and
+stands as it did. The member's original is malware-scanned before it is
+stripped, then the stripped file again as it is stored, so the ledger and the
+row describe the file kept. A photo whose structure cannot be read is refused
+with a 400 ("We couldn't read this photo. Save it again and retry.") and is
+never stored as filed. No dependency was added. HEIC photos were already
+converted to a metadata-free JPEG (#4720); that path is unchanged.
+
+Left open:
+
+- **Waiver photos stored before 2026-11-26 keep their metadata** _(default
+  taken, pending an owner decision on a backfill)_. Stripping them would
+  rewrite filed evidence and its recorded SHA-256 and size. They still
+  download and display as before, and retention removes them on its usual
+  schedule.
+- **PDFs filed with a waiver request are stored as filed** _(out of scope)_.
+  A PDF can carry its own metadata (author, the producing app, and JPEG
+  images inside it with EXIF of their own). Nothing strips it.
+- **A JPEG-LS file, or a JPEG using a reserved marker, is refused.** Neither
+  appears in a photo a phone or scanner writes, and an unknown segment can
+  carry anything, so the walker refuses rather than guesses. JPEG-LS is
+  refused every time: it stuffs bits rather than bytes, so whether its scan
+  could be walked would depend on its pixels.
+- **A JPEG with more than 4,096 markers, or a PNG with more than 16,384
+  chunks, is refused** _(default taken, after an independent review)_. A
+  10 MB file built from millions of empty segments or chunks took seconds
+  of CPU and hundreds of MB to walk. A camera's JPEG holds a few dozen
+  markers, and even a 10 MB file of ICC and extended-XMP segments stays
+  under 500. libpng writes 10 MB of image data as about 1,300 IDAT chunks.
+  Such a file gets the same "couldn't read this photo" 400. The caps are
+  `MAX_JPEG_SEGMENTS` and `MAX_PNG_CHUNKS` in `app/utils/photo_metadata.py`.
+  The walk also runs on a worker thread, crosses the compressed data with
+  compiled regular expressions rather than byte by byte, and builds its
+  output once from views of the upload, so it holds about one copy of the
+  file.
+- **Other upload paths still store a member's JPEG or PNG byte for byte,
+  EXIF and GPS included.** Open for an owner decision: should these strip it
+  too? Inventoried 2026-11-26; none was changed:
+
+  | Upload                                                                | Where it is stored                                           |
+  | --------------------------------------------------------------------- | ------------------------------------------------------------ |
+  | Training self-report submissions (copied onto the record on approval) | `training_submissions.py` `_store_attachment_file`           |
+  | Training record attachments                                           | `training_enhancements.py` `upload_record_attachment`        |
+  | Documents module                                                      | `documents.py` `upload_document`                             |
+  | Event attachments                                                     | `events.py` `upload_event_attachment`                        |
+  | Membership pipeline prospect documents                                | `membership_pipeline.py` `add_prospect_document`             |
+  | Email template attachments                                            | `email_templates.py` `upload_attachment`                     |
+  | Meeting minutes attachments                                           | `minutes_record_service.py` `store_minutes_attachment`       |
+  | Apparatus photos and documents                                        | `apparatus.py`, through `module_documents.store_as_document` |
+  | Facility photos and documents                                         | `facilities.py` `_store_facility_file`, the same             |
+  | Finance receipts (purchase, check and expense requests)               | `finance.py` `_store_receipt`, the same                      |
+
+  The history module keeps each photo's and scan's **original** as received
+  on purpose, downloadable only with `history.manage`, and gives everyone
+  else copies re-encoded without EXIF (`history_media_files.py`). Profile
+  photos, equipment-check photos, storefront product images, suggestion
+  screenshots and the organization logo are already re-encoded without EXIF.
+  Applying the stripper inside `FileStorageService.store_bytes` would cover
+  every row above at once, but would also strip the history originals, which
+  are meant to be kept as received.
+
 ## Public Website — Owner Decisions and What the First Version Leaves Out (2026-11-26)
 
 An installation can now publish a website for its department's community
@@ -11905,9 +11976,10 @@ request, kept 365 days) shipped with these gaps, each the narrower choice:
   - **The JPEG can be larger than the HEIC was.** It is written at quality
     85, and once more at 60 if that is over the 10 MB limit; a photo still
     over is a 400.
-  - **JPEG and PNG waiver documents still keep their own EXIF**, GPS
-    included: only HEIC passes through the converter. That predates this
-    change and is with the owner separately.
+  - ~~**JPEG and PNG waiver documents still keep their own EXIF**, GPS
+    included.~~ ✅ **Owner decision 2026-11-26: stored without their
+    metadata, losslessly**; see "Photo Location — Waiver JPEGs and PNGs Lose
+    Their Metadata" at the top of this file.
 - ~~**There is no preview of a document in the page.**~~ ✅ Resolved
   2026-11-23 (owner decision): a JPEG or PNG opens in a dialog on the request
   page, and a PDF in a new tab under the browser's own viewer. Both are a
@@ -12537,6 +12609,50 @@ after its retry limit. The revision the crew worked from is never compared.
 
 **The decision:** whether a check already started may be filed against the
 revision it began on.
+
+## Integrations — Decisions and Open Defects From App Review B12 Pass 6 (2026-11-26)
+
+Details in `docs/app-review/integrations.md` → Pass 6.
+
+### INT2-13 — A calendar outage strands the soonest events (defect, open)
+
+When Google or Microsoft is unreachable, each sync pass charges the failure to
+the next event due, and upcoming events go first. After a few hours the next
+days' events have used their retries and stay unpublished for good: neither
+the provider coming back, nor reconnecting, nor Retry republishes them. The
+fix is to stop counting an outage against an event, or to retry failed events
+once a pass succeeds again.
+
+### INT2-14 — Calendar health says healthy while events are missing (defect, open)
+
+The connection's health is reset to healthy by any pass in which nothing new
+failed, including the pass after an event's last attempt. So a calendar can
+read healthy, with no errors, while events are missing from it.
+
+### INT2-15 — Should training records be announced to chat?
+
+Recording a completed training posts "<member> completed <course> (N hours)"
+to the department's Slack, Discord or Teams channel and generic webhooks. That
+names a member and their training to a third-party service.
+
+**The decision:** keep announcing completions, or stop announcing training.
+
+### INT2-16 — Is a Microsoft 365 client ID secret?
+
+The client ID is stored encrypted, so the settings screen can never show it,
+and it has to be retyped or the save sends it blank (currently refused). A
+client ID is not a credential on its own.
+
+**The decision:** store it in plain settings so the screen can show it, or
+keep it encrypted and let the screen treat a blank as "keep".
+
+### INT2-17 — Chat settings that do nothing
+
+Slack and Discord store a list of event types, and Slack and Teams a channel
+name, that nothing reads. No screen offers them.
+
+**The decision:** remove them, or make them choose what is announced and
+where.
 
 ## Members — Decisions From App Review B21 Pass 6 (2026-11-26)
 
