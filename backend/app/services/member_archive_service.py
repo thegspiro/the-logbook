@@ -53,13 +53,18 @@ async def check_and_auto_archive(
     Returns a dict with archive details if the member was archived,
     or None if no action was taken.
     """
-    # Load the member
+    # Locked and re-read: an unlocked read of "dropped" taken before a
+    # concurrent reinstatement committed archived the member it had just
+    # brought back (app-review ORU6-11).
     result = await db.execute(
-        select(User).where(
+        select(User)
+        .where(
             User.id == user_id,
             User.organization_id == organization_id,
             User.deleted_at.is_(None),
         )
+        .with_for_update()
+        .execution_options(populate_existing=True)
     )
     member = result.scalar_one_or_none()
     if not member:

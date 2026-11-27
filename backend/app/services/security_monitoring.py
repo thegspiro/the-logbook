@@ -13,7 +13,7 @@ Comprehensive security monitoring with:
 import json
 import secrets
 from collections import defaultdict
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from datetime import datetime, timedelta, timezone
 from enum import Enum
 from ipaddress import ip_address, ip_network
@@ -79,6 +79,17 @@ class SecurityAlert:
     details: Dict[str, Any] = field(default_factory=dict)
     acknowledged: bool = False
     resolved: bool = False
+
+    def to_audit_data(self) -> Dict[str, Any]:
+        """The alert as JSON-safe audit data.
+
+        ``__dict__`` held a datetime and enums, so every audit write of an
+        alert raised in json and was rolled back with only a log line: no
+        blocked privilege-escalation attempt ever reached the audit trail
+        (app-review ORU6-12).
+        """
+        result: Dict[str, Any] = json.loads(json.dumps(asdict(self), default=str))
+        return result
 
 
 @dataclass
@@ -447,7 +458,7 @@ class SecurityMonitoringService:
                         event_type="security_alert",
                         event_category="security",
                         severity="critical",
-                        event_data=alert.__dict__,
+                        event_data=alert.to_audit_data(),
                         user_id=user_id,
                         ip_address=request_data.get("ip_address"),
                     )
@@ -621,7 +632,7 @@ class SecurityMonitoringService:
                 event_type="brute_force_detected",
                 event_category="security",
                 severity="critical",
-                event_data=alert.__dict__,
+                event_data=alert.to_audit_data(),
                 ip_address=ip,
                 user_id=user_id,
                 organization_id=organization_id,
@@ -654,7 +665,7 @@ class SecurityMonitoringService:
                     event_type="brute_force_detected",
                     event_category="security",
                     severity="critical",
-                    event_data=alert.__dict__,
+                    event_data=alert.to_audit_data(),
                     ip_address=ip,
                     user_id=user_id,
                     organization_id=organization_id,
@@ -845,7 +856,7 @@ class SecurityMonitoringService:
                 event_type="session_hijack_suspected",
                 event_category="security",
                 severity="critical",
-                event_data=alert.__dict__,
+                event_data=alert.to_audit_data(),
                 ip_address=current_ip,
                 user_id=user_id,
                 session_id=session_id,
@@ -978,7 +989,7 @@ class SecurityMonitoringService:
                 event_type="data_exfiltration_alert",
                 event_category="security",
                 severity="critical",
-                event_data=alert.__dict__,
+                event_data=alert.to_audit_data(),
                 ip_address=ip_address,
                 user_id=user_id,
             )
@@ -1094,7 +1105,7 @@ class SecurityMonitoringService:
                 event_type="privilege_escalation_attempt",
                 event_category="security",
                 severity="critical",
-                event_data=alert.__dict__,
+                event_data=alert.to_audit_data(),
                 ip_address=ip_address,
                 user_id=user_id,
             )

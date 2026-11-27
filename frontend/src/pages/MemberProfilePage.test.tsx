@@ -60,6 +60,7 @@ vi.mock('../hooks/useTimezone', () => ({
 
 const getUserInventory = vi.fn();
 const getEnabledModules = vi.fn();
+const getRecords = vi.fn((..._args: unknown[]) => Promise.resolve([]));
 const getUserWithRoles = vi.fn();
 const setMyProfileVisibility = vi.fn();
 const checkContactInfoEnabled = vi.fn();
@@ -115,7 +116,7 @@ vi.mock('../services/api', () => ({
     getEnabledModules: () => getEnabledModules() as unknown,
   },
   trainingService: {
-    getRecords: () => Promise.resolve([]),
+    getRecords: (...args: unknown[]) => getRecords(...args) as unknown,
     getComplianceSummary: () => Promise.resolve(null),
   },
   inventoryService: {
@@ -1049,6 +1050,21 @@ describe('MemberProfilePage editing', () => {
     ).toBeInTheDocument();
     expect(updateUserProfile).not.toHaveBeenCalled();
   });
+
+  // App-review ORU6-F1: the address card drew no error, so a refused save
+  // spun, stopped and left the editor open without a word.
+  it('says why an address save was refused, in the address card', async () => {
+    updateUserProfile.mockRejectedValue({
+      response: { status: 422, data: { detail: 'Enter a valid personal email address' } },
+    });
+    const user = userEvent.setup();
+    renderWithRouter(<MemberProfilePage />);
+
+    await user.click(await screen.findByRole('button', { name: 'Edit address' }));
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Enter a valid personal email address');
+  });
 });
 
 // The page used to gate every edit control on `users.update`, a permission
@@ -1183,6 +1199,42 @@ describe('MemberProfilePage preferred name', () => {
 });
 
 // Removing a profile photo was a single unconfirmed tap.
+// App-review ORU6-F3: the page read the static module catalogue, which
+// says every module is on, so a department with Training off still fetched
+// (and was refused) the member's records and drew an empty Training card.
+describe('MemberProfilePage with Training switched off', () => {
+  beforeEach(() => {
+    routeUserId = VIEWER_ID;
+    grantedPermissions = [];
+    getUserWithRoles.mockReset();
+    getUserWithRoles.mockResolvedValue({ ...targetUser, id: VIEWER_ID });
+    checkContactInfoEnabled.mockReset();
+    checkContactInfoEnabled.mockResolvedValue({ enabled: true, show_email: true, show_phone: true, show_mobile: true });
+    getMemberLeaves.mockReset();
+    getMemberLeaves.mockResolvedValue([]);
+    getRecords.mockClear();
+  });
+
+  it("neither fetches nor shows the member's training", async () => {
+    getEnabledModules.mockReset();
+    getEnabledModules.mockResolvedValue({ configured: true, enabled_modules: ['inventory'] });
+    renderWithRouter(<MemberProfilePage />);
+    await screen.findByRole('heading', { name: 'Contact Information' });
+    await waitFor(() => expect(getEnabledModules).toHaveBeenCalled());
+
+    expect(getRecords).not.toHaveBeenCalled();
+    expect(screen.queryByRole('heading', { name: /Training/ })).not.toBeInTheDocument();
+  });
+
+  it('still shows it when the department has it on', async () => {
+    getEnabledModules.mockReset();
+    getEnabledModules.mockResolvedValue({ configured: true, enabled_modules: ['training'] });
+    renderWithRouter(<MemberProfilePage />);
+
+    await waitFor(() => expect(getRecords).toHaveBeenCalledWith({ user_id: VIEWER_ID }));
+  });
+});
+
 describe('MemberProfilePage removing a profile photo', () => {
   beforeEach(() => {
     routeUserId = VIEWER_ID;
@@ -1210,6 +1262,19 @@ describe('MemberProfilePage removing a profile photo', () => {
 
     await waitFor(() => expect(deletePhoto).toHaveBeenCalledWith(VIEWER_ID));
     await waitFor(() => expect(screen.queryByRole('button', { name: 'Remove photo' })).not.toBeInTheDocument());
+  });
+
+  // App-review ORU6-F1: a failed removal set an error nothing on the photo
+  // drew, so the member saw no reaction at all.
+  it('says so when the removal fails', async () => {
+    deletePhoto.mockRejectedValue(new Error('Network Error'));
+    const user = userEvent.setup();
+    renderWithRouter(<MemberProfilePage />);
+
+    await user.click(await screen.findByRole('button', { name: 'Remove photo' }));
+    await user.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Remove photo' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Network Error');
   });
 
   it('does nothing when the member keeps it', async () => {
