@@ -199,6 +199,26 @@ guessed between. _(2026-11-24)_ The **New evaluation** dialog offers a
 active templates with a published version (`templates`, each with its
 `kind`), and the chosen one is sent as `template_id`.
 
+**Preview PDF** _(2026-11-26)_: the builder's Preview tab has a **Download
+PDF** button, so a form can be passed round department leadership before it
+is published. `POST /templates/preview-pdf` takes the definition and workflow
+as they stand in the builder, unsaved edits included, and returns the PDF a
+finalized evaluation drafted from them would produce
+(`render_evaluation_preview_pdf`, the record's own layout): every answer
+blank, and under each item its guidance, its choices, the figure shown beside
+it and what the figure suggests. The signature table lists the approvals and
+the acknowledgement the workflow collects, unsigned. It follows the tab's
+choices of form (evaluator or self-evaluation), review period and figures,
+and takes those figures from `preview_template`, so the two cannot disagree.
+
+Every page carries a "PREVIEW – NOT A RECORD" banner, footer and diagonal
+mark, the document has no record fingerprint, it is not PDF/A and nothing is
+stored. Whose figures it may carry is the on-screen preview's rule (owner
+decision 2026-11-26): sample figures, or a real member's for a builder who
+also holds `evaluations.view_all`. The screen asks before that download,
+since the file then holds a member's figures outside the Logbook, and each
+one is audited as `evaluation_template_preview_pdf_downloaded`.
+
 ## Figures
 
 `evaluation_data_sources.py` is the catalogue; `evaluation_data_service.py`
@@ -582,6 +602,7 @@ All under `/api/v1/evaluations`.
 | ----------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
 | `GET/POST /templates`, `GET/PATCH/DELETE /templates/{id}`, `PUT/DELETE /templates/{id}/draft`, `POST /templates/{id}/publish` | `configure` (reading also `manage`)                                                           |
 | `GET /templates/starters`, `GET /templates/preview-options`, `POST /templates/preview`                                        | `configure`                                                                                   |
+| `POST /templates/preview-pdf`                                                                                                 | `configure`; a real member's figures also need `view_all`. Nothing stored                     |
 | `GET /data-sources`, `GET /builder-options`                                                                                   | `configure`                                                                                   |
 | `GET/POST /periods`, `PATCH/DELETE /periods/{id}`                                                                             | `manage` (reading also `configure`)                                                           |
 | `GET ""`                                                                                                                      | `conduct`, `view_all` or `manage`                                                             |
@@ -628,7 +649,9 @@ table `create_all` has not built (pitfall #26).
 - `tests/test_evaluation_waiver_sources.py`: the four waiver-request sources.
 - `tests/test_evaluation_rules.py`, `test_evaluation_template_schema.py`,
   `test_evaluation_models.py`: definition, workflow and model rules.
-- `tests/test_evaluation_pdf.py`: the PDF text.
+- `tests/test_evaluation_pdf.py`: the PDF text, and the preview's marking.
+- `tests/test_evaluation_starters_and_preview.py`: the starters, the
+  builder's preview and its PDF.
 - `tests/test_evaluation_goal_list.py`: a Goals item stored as a list, the
   free-text answer turned into one goal, and parts saved before then read as
   they are.

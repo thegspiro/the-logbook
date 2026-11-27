@@ -12,7 +12,10 @@ from app.services.evaluation_document_service import (
     figure_detail,
     format_figure,
 )
-from app.utils.evaluation_pdf import render_evaluation_pdf
+from app.utils.evaluation_pdf import (
+    render_evaluation_pdf,
+    render_evaluation_preview_pdf,
+)
 
 pytestmark = [pytest.mark.unit]
 
@@ -88,6 +91,77 @@ def test_it_prints_the_record():
         "a" * 64,
     ):
         assert expected in text, expected
+
+
+PREVIEW = {
+    **RECORD,
+    "member_name": "Sample member",
+    "evaluator_name": None,
+    "content_hash": None,
+    "signatures": [
+        {
+            "label": "Chief's approval",
+            "name": "Fire Chief",
+            "disposition": "Not signed",
+            "comment": None,
+            "signed_at": "—",
+        }
+    ],
+    "preview": {"form": "the evaluator's form"},
+}
+
+
+def _pages(pdf: bytes) -> list[str]:
+    return [
+        " ".join(page.extract_text().split()) for page in PdfReader(BytesIO(pdf)).pages
+    ]
+
+
+def test_a_preview_says_so_on_every_page_and_claims_no_fingerprint():
+    # Enough sections to run past the first page.
+    record = {**PREVIEW, "sections": RECORD["sections"] * 30}
+    pages = _pages(render_evaluation_preview_pdf(record))
+
+    assert len(pages) > 1
+    for page in pages:
+        # The banner, the footer and the diagonal mark each carry it.
+        assert page.count("NOT A RECORD") >= 3, page
+        assert "PREVIEW" in page
+    text = " ".join(pages)
+    assert "Preview of the evaluator's form" in text
+    assert "Operational Annual" in text
+    assert "Chief's approval" in text
+    assert "Nobody has signed this preview" in text
+    assert "has no record fingerprint" in text
+    assert "Record fingerprint (SHA-256)" not in text
+    assert "on the record fingerprinted below" not in text
+
+
+def test_a_preview_of_a_form_nobody_signs_has_no_signature_table():
+    record = {
+        **PREVIEW,
+        "signatures": None,
+        "preview": {"form": "the self-evaluation form"},
+    }
+    text = " ".join(_pages(render_evaluation_preview_pdf(record)))
+
+    assert "Preview of the self-evaluation form" in text
+    assert "Signatures" not in text
+    assert "Signed by" not in text
+
+
+def test_a_record_is_never_marked_a_preview():
+    text = " ".join(_pages(render_evaluation_pdf(RECORD)))
+
+    assert "PREVIEW" not in text
+    assert "NOT A RECORD" not in text
+    assert "Record fingerprint (SHA-256)" in text
+    assert "Signed by" in text
+
+
+def test_the_preview_renderer_refuses_a_record():
+    with pytest.raises(ValueError, match="which form it shows"):
+        render_evaluation_preview_pdf(RECORD)
 
 
 def test_a_member_cannot_inject_markup():

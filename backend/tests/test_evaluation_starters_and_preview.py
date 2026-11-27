@@ -10,10 +10,12 @@ audited and stays inside the department — is the other half of this file.
 import uuid
 from collections.abc import AsyncGenerator, Awaitable, Callable
 from datetime import date
+from io import BytesIO
 
 import pytest
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
+from pypdf import PdfReader
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -23,7 +25,7 @@ from app.core.database import get_db
 from app.models.audit import AuditLog
 from app.models.evaluation import EvaluationPeriod, EvaluationTemplateVersion
 from app.models.training import TrainingRecord, TrainingStatus, TrainingType
-from app.models.user import User
+from app.models.user import Position, User
 from app.schemas.evaluation import definition_publish_errors, workflow_publish_errors
 from app.services.evaluation_service import form_definition
 from app.services.evaluation_starters import STARTERS, STARTERS_BY_KEY
@@ -538,3 +540,269 @@ class TestPreview:
         assert [p["id"] for p in as_builder["periods"]] == [period.id]
         assert as_chief["can_use_member_data"] is True
         assert {m["id"] for m in as_chief["members"]} == {builder.id, chief.id}
+
+
+PDF_URL = "/evaluations/templates/preview-pdf"
+PDF_EVENT = "evaluation_template_preview_pdf_downloaded"
+PDF_DEFINITION = {
+    **DEFINITION,
+    "sections": [
+        {
+            **DEFINITION["sections"][0],
+            "items": [
+                {
+                    **DEFINITION["sections"][0]["items"][0],
+                    "help_text": "Count drills and classes alike.",
+                },
+                {
+                    "key": "scene",
+                    "label": "Scene performance",
+                    "tool": "narrative",
+                    "include_in_self_evaluation": False,
+                },
+            ],
+        },
+        DEFINITION["sections"][1],
+    ],
+}
+
+
+def _workflow(position_id: str) -> dict:
+    return {
+        "steps": [
+            {
+                "key": "self",
+                "type": "self_evaluation",
+                "label": "Self-evaluation",
+                "actor": {"kind": "member"},
+                "due_days": 14,
+            },
+            {
+                "key": "evaluator",
+                "type": "evaluator",
+                "label": "Evaluator",
+                "actor": {"kind": "evaluator"},
+                "due_days": 30,
+            },
+            {
+                "key": "approval",
+                "type": "approval",
+                "label": "Chief's approval",
+                "actor": {"kind": "position", "position_id": position_id},
+                "due_days": 45,
+            },
+            {
+                "key": "ack",
+                "type": "member_acknowledgement",
+                "label": "Member acknowledgement",
+                "actor": {"kind": "member"},
+                "due_days": 58,
+            },
+        ]
+    }
+
+
+async def _position(db, org_id: str, name: str) -> Position:
+    position = Position(
+        organization_id=org_id,
+        name=name,
+        slug=f"p-{uuid.uuid4().hex[:8]}",
+        permissions=[],
+    )
+    db.add(position)
+    await db.flush()
+    return position
+
+
+def _pdf_text(response) -> str:
+    assert response.status_code == 200, response.text
+    assert response.headers["content-type"] == "application/pdf"
+    assert response.content.startswith(b"%PDF")
+    pages = PdfReader(BytesIO(response.content)).pages
+    return " ".join(" ".join(page.extract_text() for page in pages).split())
+
+
+async def _pdf_audits(db) -> list:
+    return list(
+        (
+            await db.execute(select(AuditLog).where(AuditLog.event_type == PDF_EVENT))
+        ).scalars()
+    )
+
+
+@pytest.mark.integration
+class TestPreviewPdf:
+    async def test_sample_figures_fill_a_blank_form_marked_as_a_preview(
+        self, db_session, make_client
+    ):
+        org = await _org(db_session)
+        builder = await _user(db_session, org, ["evaluations.configure"])
+        chief = await _position(db_session, org, "Fire Chief")
+
+        response = await (await make_client(builder)).post(
+            PDF_URL,
+            json={
+                "definition": PDF_DEFINITION,
+                "workflow": _workflow(chief.id),
+                "name": "Operational Annual",
+            },
+        )
+
+        text = _pdf_text(response)
+        assert "attachment" in response.headers["content-disposition"]
+        for expected in (
+            "PREVIEW",
+            "NOT A RECORD",
+            "Operational Annual",
+            "Preview of the evaluator's form",
+            "Sample member",
+            "Sample figures, not a member's",
+            # The figure, in the table and beside its item, and what it suggests.
+            "Training hours: 36 h",
+            "The figure suggests: L4",
+            "Rated: L1 · L2 · L3 · L4 · L5",
+            "Guidance: Count drills and classes alike.",
+            "Scene performance",
+            # Sample figures show the whole form, officer-only sections too.
+            "Leadership (officers only)",
+            "A weighted percentage of the ratings",
+            # Only the steps that are signed, each naming who signs.
+            "Chief's approval",
+            "Fire Chief",
+            "Member acknowledgement",
+            "Not signed",
+        ):
+            assert expected in text, expected
+        assert "Record fingerprint" not in text
+        assert await _pdf_audits(db_session) == []
+
+    async def test_a_member_s_figures_are_printed_and_the_download_is_audited(
+        self, db_session, make_client
+    ):
+        org = await _org(db_session)
+        chief = await _user(
+            db_session, org, ["evaluations.configure", "evaluations.view_all"]
+        )
+        member = await _user(db_session, org, [])
+        period = await _period(db_session, org)
+        await _hours(db_session, org, member.id, 11.5, date(2025, 3, 4))
+        position = await _position(db_session, org, "Fire Chief")
+
+        response = await (await make_client(chief)).post(
+            PDF_URL,
+            json={
+                "definition": PDF_DEFINITION,
+                "workflow": _workflow(position.id),
+                "name": "Operational Annual",
+                "member_id": member.id,
+                "period_id": period.id,
+            },
+        )
+
+        text = _pdf_text(response)
+        assert member.full_name in text
+        assert "Sample member" not in text
+        assert "2025 Annual" in text
+        assert "Training hours: 11.5 h" in text
+        # Not a captain: the officer-only section is not part of their form.
+        assert "Leadership" not in text
+        assert "NOT A RECORD" in text
+        audits = await _pdf_audits(db_session)
+        assert [row.event_data for row in audits] == [
+            {"member_id": member.id, "period_id": period.id, "part": "evaluator"}
+        ]
+
+    async def test_the_self_evaluation_form_asks_only_its_items_and_is_not_signed(
+        self, db_session, make_client
+    ):
+        org = await _org(db_session)
+        builder = await _user(db_session, org, ["evaluations.configure"])
+        position = await _position(db_session, org, "Fire Chief")
+
+        response = await (await make_client(builder)).post(
+            PDF_URL,
+            json={
+                "definition": PDF_DEFINITION,
+                "workflow": _workflow(position.id),
+                "name": "Operational Annual",
+                "part": "self_evaluation",
+            },
+        )
+
+        text = _pdf_text(response)
+        assert "Preview of the self-evaluation form" in text
+        assert "Training hours: 36 h" in text
+        assert "Scene performance" not in text
+        # What the figures suggest is the evaluator's to see.
+        assert "The figure suggests" not in text
+        assert "Chief's approval" not in text
+        assert "Signed by" not in text
+
+    async def test_a_builder_without_view_all_cannot_print_a_member(
+        self, db_session, make_client
+    ):
+        org = await _org(db_session)
+        builder = await _user(db_session, org, ["evaluations.configure"])
+        member = await _user(db_session, org, [])
+        position = await _position(db_session, org, "Fire Chief")
+
+        response = await (await make_client(builder)).post(
+            PDF_URL,
+            json={
+                "definition": PDF_DEFINITION,
+                "workflow": _workflow(position.id),
+                "name": "Operational Annual",
+                "member_id": member.id,
+            },
+        )
+
+        assert response.status_code == 403
+        assert await _pdf_audits(db_session) == []
+
+    async def test_view_all_alone_cannot_print_a_preview(self, db_session, make_client):
+        org = await _org(db_session)
+        reader = await _user(db_session, org, ["evaluations.view_all"])
+        position = await _position(db_session, org, "Fire Chief")
+
+        response = await (await make_client(reader)).post(
+            PDF_URL,
+            json={
+                "definition": PDF_DEFINITION,
+                "workflow": _workflow(position.id),
+                "name": "Operational Annual",
+            },
+        )
+
+        assert response.status_code == 403
+
+    async def test_another_department_s_member_period_and_position_stay_theirs(
+        self, db_session, make_client
+    ):
+        org, other = await _org(db_session), await _org(db_session)
+        chief = await _user(
+            db_session, org, ["evaluations.configure", "evaluations.view_all"]
+        )
+        outsider = await _user(db_session, other, [])
+        their_period = await _period(db_session, other)
+        their_position = await _position(db_session, other, "Their Commissioner")
+        client = await make_client(chief)
+        body = {
+            "definition": PDF_DEFINITION,
+            "workflow": _workflow(their_position.id),
+            "name": "Operational Annual",
+        }
+
+        by_member = await client.post(PDF_URL, json={**body, "member_id": outsider.id})
+        by_period = await client.post(
+            PDF_URL, json={**body, "period_id": their_period.id}
+        )
+        by_position = await client.post(PDF_URL, json=body)
+
+        assert by_member.status_code == 400
+        assert by_member.json()["detail"] == "Member not found."
+        assert by_period.status_code == 400
+        assert by_period.json()["detail"] == "Review period not found."
+        text = _pdf_text(by_position)
+        assert "Their Commissioner" not in text
+        assert "A position holder" in text
+        assert await _pdf_audits(db_session) == []
