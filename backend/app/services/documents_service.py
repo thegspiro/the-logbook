@@ -1311,13 +1311,28 @@ class DocumentsService:
         # loop already visits every folder between the (already-authorized)
         # root and each descendant, so the AND of every _folder_admits_user
         # result along the way is exactly what can_access_folder computes.
+        #
+        # DOC2-11: the walk is a locking read. A plain one answers from this
+        # transaction's first snapshot (get_folder_by_id, before this method),
+        # so a folder moved under the target since was missed: the database's
+        # parent_id cascade deleted it anyway, its documents' folder_id went
+        # NULL — open to every member, files left on disk. A locking read sees
+        # what has committed, and its next-key locks on parent_id keep a folder
+        # from being moved in after it (pitfall #27). Folders are locked before
+        # any Document, the canonical order the FAC-34 note below describes,
+        # starting with the target itself: whoever holds it is waited for
+        # here, before the walk or any Document query runs.
+        await self._lock_subtree_folders({str(folder_id)})
         subtree_ids = {str(folder_id)}
         frontier = {str(folder_id)}
         while frontier:
             child_rows = await self.db.execute(
-                select(DocumentFolder).where(
+                select(DocumentFolder)
+                .where(
                     DocumentFolder.parent_id.in_(frontier),
                 )
+                .with_for_update()
+                .execution_options(populate_existing=True)
             )
             rows = child_rows.scalars().all()
             for child in rows:
