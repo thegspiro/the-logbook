@@ -3590,7 +3590,10 @@ class SchedulingService:
         organization_id: UUID | str,
     ) -> Tuple[Optional[ShiftAttendance], Optional[str]]:
         """Member self-service check-out for a shift."""
-        shift = await self.get_shift_by_id(shift_id, organization_id)
+        # Locked, as check-in is: a check-out racing finalize_shift read the
+        # shift as open, waited on finalize's lock, then wrote over the
+        # check-out time finalize had just closed the row with (pitfall #27).
+        shift = await self.get_shift_by_id(shift_id, organization_id, for_update=True)
         if not shift:
             return None, "Shift not found"
         if shift.is_finalized:
@@ -3598,10 +3601,13 @@ class SchedulingService:
 
         existing = (
             await self.db.execute(
-                select(ShiftAttendance).where(
+                select(ShiftAttendance)
+                .where(
                     ShiftAttendance.shift_id == str(shift_id),
                     ShiftAttendance.user_id == user_id,
                 )
+                .with_for_update()
+                .execution_options(populate_existing=True)
             )
         ).scalar_one_or_none()
 
@@ -6286,10 +6292,25 @@ class SchedulingService:
             if not assignment:
                 return None, "Shift assignment not found or not assigned to you"
 
-            # Actor first, so the exempt path costs no extra query — the same
-            # reasoning as confirm_assignment above.
+            # The guards confirm_assignment has. A decline turned a recorded
+            # no-show, a cancelled seat, or a seat on a cancelled or finalized
+            # shift into DECLINED, and told the officer a seat had opened.
+            if assignment.assignment_status == AssignmentStatus.DECLINED:
+                return assignment, None
+            if assignment.assignment_status not in (
+                AssignmentStatus.ASSIGNED,
+                AssignmentStatus.PENDING,
+                AssignmentStatus.CONFIRMED,
+            ):
+                return None, "This assignment is no longer active to decline"
+            shift = await self.get_shift_by_id(assignment.shift_id, organization_id)
+            if shift is not None:
+                if shift.status == ShiftStatus.CANCELLED:
+                    return None, "Shift was cancelled"
+                if shift.is_finalized:
+                    return None, "Shift was finalized"
+
             if actor != SignupActor.MANAGER:
-                shift = await self.get_shift_by_id(assignment.shift_id, organization_id)
                 locked = shift is not None and await self._roster_locked_error(
                     shift, organization_id, actor
                 )
@@ -7621,7 +7642,24 @@ class SchedulingService:
                     if error:
                         return await reject(error)
 
+                # A member arriving on a shift where they hold a declined or
+                # cancelled row would hit the one-row-per-member key when the
+                # seat is rewritten to them; that row goes first, as
+                # create_assignment does (both members on an exchange).
                 if target_assign and swap_request.target_user_id:
+                    await self._clear_inactive_assignment(
+                        swap_request.offering_shift_id,
+                        swap_request.target_user_id,
+                        organization_id,
+                    )
+                    # An exchange always names the shift asked for in return;
+                    # target_assign was found on it.
+                    if swap_request.requesting_shift_id:
+                        await self._clear_inactive_assignment(
+                            swap_request.requesting_shift_id,
+                            swap_request.requesting_user_id,
+                            organization_id,
+                        )
                     req_assignment.user_id = swap_request.target_user_id
                     target_assign.user_id = swap_request.requesting_user_id
                     vacated = [
@@ -7635,6 +7673,11 @@ class SchedulingService:
                         ),
                     ]
                 elif is_handover and swap_request.target_user_id:
+                    await self._clear_inactive_assignment(
+                        swap_request.offering_shift_id,
+                        swap_request.target_user_id,
+                        organization_id,
+                    )
                     req_assignment.user_id = swap_request.target_user_id
                     vacated = [
                         (
@@ -7643,6 +7686,11 @@ class SchedulingService:
                         )
                     ]
                 elif requested_shift and swap_request.requesting_shift_id:
+                    await self._clear_inactive_assignment(
+                        swap_request.requesting_shift_id,
+                        swap_request.requesting_user_id,
+                        organization_id,
+                    )
                     req_assignment.shift_id = swap_request.requesting_shift_id
                     vacated = [
                         (
@@ -7843,6 +7891,13 @@ class SchedulingService:
                     "Ask a duty officer to reassign it."
                 )
 
+            # The recipient's declined or cancelled row on this shift would
+            # collide with the seat being rewritten to them.
+            await self._clear_inactive_assignment(
+                swap_request.offering_shift_id,
+                swap_request.target_user_id,
+                organization_id,
+            )
             offered_assignment.user_id = swap_request.target_user_id
             swap_request.status = SwapRequestStatus.APPROVED
             swap_request.reviewed_by = str(responder_id)
@@ -8357,6 +8412,12 @@ class SchedulingService:
             if error:
                 return await reject(error)
 
+            # A member who once declined this shift still holds that row, and
+            # rewriting the seat to them hit the one-row-per-member key: the
+            # pick-up answered "an unexpected error occurred".
+            await self._clear_inactive_assignment(
+                swap_request.offering_shift_id, member_id, organization_id
+            )
             offered_assignment.user_id = str(member_id)
             # Recorded as the target so the request reads, afterwards, as the
             # handover it became: the Requests tab names who took it, and the
@@ -8620,6 +8681,12 @@ class SchedulingService:
             .where(ShiftSwapRequest.organization_id == str(organization_id))
             .where(ShiftSwapRequest.status == SwapRequestStatus.PENDING)
             .where(Shift.shift_date <= cutoff)
+            # Locked, request then shift as every other swap path takes them:
+            # a pick-up committing between a plain read and this write had its
+            # APPROVED overwritten with "Expired automatically", and both
+            # members were told the seat was still the offerer's.
+            .with_for_update()
+            .execution_options(populate_existing=True)
         )
         rows = result.all()
         if not rows:
@@ -9075,6 +9142,11 @@ class SchedulingService:
             .where(Shift.organization_id == str(organization_id))
             .where(Shift.shift_date >= start_date)
             .where(Shift.shift_date <= end_date)
+            # A finalized shift was worked and its hours credited: time off
+            # approved for those dates afterwards must not cancel the seat,
+            # which dropped it from the hours and coverage figures while its
+            # attendance stayed.
+            .where(Shift.is_finalized.is_(False))
             .where(
                 ShiftAssignment.assignment_status.notin_(
                     self.INACTIVE_ASSIGNMENT_STATUSES

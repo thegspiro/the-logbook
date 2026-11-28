@@ -17,7 +17,8 @@ import {
 } from 'lucide-react';
 import { shiftCompletionService, userService } from '../services/api';
 import { useTimezone } from '../hooks/useTimezone';
-import { formatDate } from '../utils/dateFormatting';
+import { formatCalendarDate, formatDate } from '../utils/dateFormatting';
+import { getErrorMessage, toAppError } from '../utils/errorHandling';
 import { formatHours } from '../utils/hoursFormatting';
 import type { ShiftCompletionReport, TraineeShiftStats } from '../types/training';
 import { StarRating } from '../modules/scheduling/components/StarRating';
@@ -53,7 +54,7 @@ const ReportCard: React.FC<{
             <div className="text-theme-text-muted flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
               <span className="flex items-center space-x-1">
                 <Calendar className="h-3 w-3" />
-                <span>{report.shift_date}</span>
+                <span>{formatCalendarDate(report.shift_date)}</span>
               </span>
               <span className="flex items-center space-x-1">
                 <Clock className="h-3 w-3" />
@@ -122,6 +123,9 @@ const ShiftReportPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [memberMap, setMemberMap] = useState<Record<string, string>>({});
   const [schedulingEnabled, setSchedulingEnabled] = useState(true);
+  // A failed load is said, not shown as "No reports filed yet".
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [acknowledging, setAcknowledging] = useState<Set<string>>(() => new Set());
 
   useEffect(() => {
     void loadData();
@@ -133,11 +137,19 @@ const ShiftReportPage: React.FC = () => {
 
   const loadData = async () => {
     setLoading(true);
+    let failure: unknown = null;
+    // A 403 means this member may not see that list, which an empty list
+    // reports correctly; anything else is a failure to say so.
+    const listOrEmpty = (request: Promise<ShiftCompletionReport[]>) =>
+      request.catch((err: unknown) => {
+        if (toAppError(err).status !== 403) failure = failure ?? err;
+        return [] as ShiftCompletionReport[];
+      });
     try {
       const [membersData, filedData, receivedData, statsData] = await Promise.all([
         userService.getUsers(),
-        shiftCompletionService.getReportsByOfficer().catch(() => []),
-        shiftCompletionService.getMyReports().catch(() => []),
+        listOrEmpty(shiftCompletionService.getReportsByOfficer()),
+        listOrEmpty(shiftCompletionService.getMyReports()),
         shiftCompletionService.getMyStats().catch(() => null),
       ]);
 
@@ -149,20 +161,31 @@ const ShiftReportPage: React.FC = () => {
       setFiledReports(filedData);
       setReceivedReports(receivedData);
       setMyStats(statsData);
-    } catch {
-      // Error silently handled - empty state shown
+    } catch (err) {
+      failure = err;
     } finally {
+      setLoadError(failure ? getErrorMessage(failure, 'Could not load shift reports.') : null);
       setLoading(false);
     }
   };
 
   const handleAcknowledge = async (reportId: string) => {
+    // A second tap while the first is in flight showed the success toast
+    // and then "Failed to acknowledge report".
+    if (acknowledging.has(reportId)) return;
+    setAcknowledging((prev) => new Set(prev).add(reportId));
     try {
       await shiftCompletionService.acknowledgeReport(reportId);
       toast.success('Report acknowledged');
       void loadData();
     } catch {
       toast.error('Failed to acknowledge report');
+    } finally {
+      setAcknowledging((prev) => {
+        const next = new Set(prev);
+        next.delete(reportId);
+        return next;
+      });
     }
   };
 
@@ -282,13 +305,22 @@ const ShiftReportPage: React.FC = () => {
         )}
 
         {/* Filed Reports */}
+        {loadError && !loading && (
+          <div className="alert-danger mb-4 flex flex-wrap items-center justify-between gap-3" role="alert">
+            <span>{loadError}</span>
+            <button type="button" onClick={() => void loadData()} className="btn-secondary">
+              Retry
+            </button>
+          </div>
+        )}
+
         {activeTab === 'filed' && (
           <div className="space-y-3">
             {loading ? (
               <div className="py-12 text-center">
                 <div className="inline-block h-8 w-8 animate-spin rounded-full border-b-2 border-red-500" />
               </div>
-            ) : filedReports.length === 0 ? (
+            ) : filedReports.length === 0 && !loadError ? (
               <div className="bg-theme-surface rounded-lg py-12 text-center">
                 <ClipboardList className="text-theme-text-muted mx-auto mb-4 h-16 w-16" />
                 <p className="text-theme-text-muted">No reports filed yet.</p>
@@ -306,7 +338,7 @@ const ShiftReportPage: React.FC = () => {
               <div className="py-12 text-center">
                 <div className="inline-block h-8 w-8 animate-spin rounded-full border-b-2 border-red-500" />
               </div>
-            ) : receivedReports.length === 0 ? (
+            ) : receivedReports.length === 0 && !loadError ? (
               <div className="bg-theme-surface rounded-lg py-12 text-center">
                 <TrendingUp className="text-theme-text-muted mx-auto mb-4 h-16 w-16" />
                 <p className="text-theme-text-muted">No shift reports about you yet.</p>
@@ -321,6 +353,7 @@ const ShiftReportPage: React.FC = () => {
                         onClick={() => {
                           void handleAcknowledge(r.id);
                         }}
+                        disabled={acknowledging.has(r.id)}
                         className="btn-success rounded-sm px-3 py-1 text-xs"
                       >
                         Acknowledge

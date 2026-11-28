@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import toast from 'react-hot-toast';
 import { nth, renderWithRouter } from '../../test/utils';
@@ -400,6 +400,35 @@ describe('OpenShiftsTab', () => {
   // ==========================================================================
   // A failed load must not repaint the board with unfiltered shifts
   // ==========================================================================
+  // App-review SCH3-F8: a load per keystroke in the date box, and whichever
+  // answered last was painted, so an earlier date's shifts could win.
+  describe('two loads answered out of order', () => {
+    it('shows the answer for the date in the box', async () => {
+      const answers: ((rows: typeof mockShifts) => void)[] = [];
+      mockGetOpenShifts.mockReset();
+      mockGetOpenShifts.mockImplementation(() => new Promise<typeof mockShifts>((resolve) => answers.push(resolve)));
+      renderWithRouter(<OpenShiftsTab onViewShift={mockOnViewShift} />);
+      await waitFor(() => expect(answers).toHaveLength(1));
+      fireEvent.change(screen.getByLabelText('Filter open shifts from date'), {
+        target: { value: '2099-01-01' },
+      });
+      await waitFor(() => expect(answers).toHaveLength(2));
+
+      await act(async () => {
+        answers[1]?.([]);
+        await Promise.resolve();
+      });
+      expect(await screen.findByText('No open shifts available')).toBeInTheDocument();
+      await act(async () => {
+        answers[0]?.(mockShifts);
+        await Promise.resolve();
+      });
+
+      expect(screen.getByText('No open shifts available')).toBeInTheDocument();
+      expect(screen.queryByText(/Engine 1/)).not.toBeInTheDocument();
+    });
+  });
+
   describe('when the open-shift list cannot be loaded', () => {
     beforeEach(() => {
       mockGetOpenShifts.mockReset();
