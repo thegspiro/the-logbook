@@ -191,6 +191,9 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
       // session — loadSettings is a once-per-session cache and will not
       // fetch again.
       callTypeLabels: Object.fromEntries((updated.call_tracking?.call_types ?? []).map((t) => [t.slug, t.label])),
+      // The ordered list the call-type pickers offer; without it an added or
+      // retired type was missing from, or still offered by, every picker.
+      callTypes: updated.call_tracking?.call_types ?? [],
       // `??`, not `||`: 0 means "closes exactly at the start", which `||`
       // would silently replace with the default.
       signupClosesMinutesBefore: updated.signup_closes_minutes_before ?? 0,

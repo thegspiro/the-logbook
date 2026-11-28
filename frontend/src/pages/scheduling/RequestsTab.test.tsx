@@ -10,6 +10,7 @@ const mockGetTimeOffRequests = vi.fn();
 const mockReviewSwapRequest = vi.fn();
 const mockReviewTimeOff = vi.fn();
 const mockGetOpenSwaps = vi.fn();
+const mockCancelTimeOff = vi.fn();
 
 vi.mock('../../modules/scheduling/services/api', () => ({
   schedulingService: {
@@ -20,7 +21,7 @@ vi.mock('../../modules/scheduling/services/api', () => ({
     getOpenSwaps: (...args: unknown[]) => mockGetOpenSwaps(...args) as unknown,
     pickUpOpenSwap: vi.fn().mockResolvedValue({}),
     cancelSwapRequest: vi.fn().mockResolvedValue(undefined),
-    cancelTimeOff: vi.fn().mockResolvedValue(undefined),
+    cancelTimeOff: (...args: unknown[]) => mockCancelTimeOff(...args) as unknown,
     getShift: vi.fn().mockResolvedValue({
       id: 'shift-1',
       shift_date: '2026-03-01',
@@ -622,5 +623,55 @@ describe('RequestsTab', () => {
     releasePending();
     await waitFor(() => expect(mockGetTimeOffRequests).toHaveBeenCalled());
     expect(screen.getByRole('tab', { name: /time off/i })).toHaveTextContent('(27)');
+  });
+});
+
+// App-review SCH3-F11: a double tap sent two cancels, and the second answered
+// with an error after the success toast.
+describe('RequestsTab cancelling a request', () => {
+  beforeEach(() => {
+    mockCancelTimeOff.mockReset();
+    mockGetSwapRequests.mockReset();
+    mockGetSwapRequests.mockResolvedValue({ items: [], total: 0, skip: 0, limit: 20 });
+    mockGetOpenSwaps.mockReset();
+    mockGetOpenSwaps.mockResolvedValue([]);
+    mockCheckPermission.mockReset();
+    mockCheckPermission.mockReturnValue(false);
+    mockGetTimeOffRequests.mockReset();
+    mockGetTimeOffRequests.mockResolvedValue({
+      items: [
+        {
+          id: 'to-1',
+          organization_id: 'org',
+          user_id: 'user-1',
+          user_name: 'Test User',
+          start_date: '2099-01-10',
+          end_date: '2099-01-12',
+          status: 'pending',
+          created_at: '2026-11-01T00:00:00Z',
+          updated_at: '2026-11-01T00:00:00Z',
+        },
+      ],
+      total: 1,
+      skip: 0,
+      limit: 20,
+    });
+    window.history.replaceState({}, '', '/scheduling?tab=requests&requestView=timeoff');
+  });
+
+  it('cancels once however fast the confirmation is tapped', async () => {
+    let finish: () => void = () => {};
+    mockCancelTimeOff.mockImplementation(() => new Promise<void>((resolve) => (finish = resolve)));
+    const user = userEvent.setup();
+    renderWithRouter(<RequestsTab />);
+    await user.click(await screen.findByRole('button', { name: 'Cancel time-off request' }));
+    const confirm = await screen.findByRole('button', { name: 'Confirm cancellation' });
+
+    await user.click(confirm);
+    await user.click(confirm);
+    finish();
+
+    await waitFor(() => expect(mockCancelTimeOff).toHaveBeenCalledTimes(1));
+    expect(mockCancelTimeOff).toHaveBeenCalledWith('to-1');
   });
 });
