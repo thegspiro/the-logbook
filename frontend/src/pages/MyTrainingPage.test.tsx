@@ -12,6 +12,8 @@ const mockExportMyTraining = vi.fn();
 const mockGetMyTrainingRecords = vi.fn();
 const mockGetTests = vi.fn();
 const mockGetMyCohorts = vi.fn();
+const mockUpdateConfig = vi.fn();
+const mockToastError = vi.fn();
 
 vi.mock('../services/api', () => ({
   trainingModuleConfigService: {
@@ -20,6 +22,7 @@ vi.mock('../services/api', () => ({
     getVisibility: (...args: unknown[]) => mockGetVisibility(...args) as unknown,
     exportMyTraining: (...args: unknown[]) => mockExportMyTraining(...args) as unknown,
     getMyTrainingRecords: (...args: unknown[]) => mockGetMyTrainingRecords(...args) as unknown,
+    updateConfig: (...args: unknown[]) => mockUpdateConfig(...args) as unknown,
   },
   skillsTestingService: {
     getTests: (...args: unknown[]) => mockGetTests(...args) as unknown,
@@ -27,6 +30,10 @@ vi.mock('../services/api', () => ({
   courseCohortService: {
     getMyCohorts: (...args: unknown[]) => mockGetMyCohorts(...args) as unknown,
   },
+}));
+
+vi.mock('react-hot-toast', () => ({
+  default: { success: vi.fn(), error: (...args: unknown[]) => mockToastError(...args) as unknown },
 }));
 
 // The department's practical-skills method. Null is "unknown", which shows
@@ -382,6 +389,29 @@ describe('MyTrainingPage', () => {
       await user.click(screen.getByRole('checkbox', { name: /officer narrative/i }));
       expect(screen.getByRole('status')).toHaveTextContent('2 unsaved changes');
       expect(screen.getByRole('button', { name: 'Save 2 Changes' })).toBeInTheDocument();
+    });
+
+    it('says so when the settings cannot be saved', async () => {
+      // A refused save used to return the button to "Save 1 Change" with
+      // nothing said.
+      auth.permissions = ['training.configure'];
+      mockGetConfig.mockResolvedValue({
+        show_training_history: true,
+        report_review_required: false,
+        rating_scale_type: 'stars',
+      });
+      mockUpdateConfig.mockReset();
+      mockUpdateConfig.mockRejectedValue(new Error('Not allowed'));
+      mockToastError.mockReset();
+      const user = userEvent.setup();
+      renderWithRouter(<MyTrainingPage />);
+
+      await user.click(await screen.findByRole('button', { name: /member visibility settings/i }));
+      await user.click(await screen.findByRole('checkbox', { name: /training history/i }));
+      await user.click(screen.getByRole('button', { name: 'Save 1 Change' }));
+
+      await waitFor(() => expect(mockToastError).toHaveBeenCalledWith('Not allowed'));
+      expect(screen.getByRole('button', { name: 'Save 1 Change' })).toBeInTheDocument();
     });
 
     it('keeps the overview usable when the settings fetch fails', async () => {
