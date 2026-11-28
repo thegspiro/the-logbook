@@ -7,7 +7,10 @@ import { eventService } from '../services/api';
 import { QrCode } from 'lucide-react';
 import { EventsPageHeader } from '../components/events/EventsPageHeader';
 import { AdminPageHeader } from '../components/admin/AdminPageHeader';
-import { formatTime } from '../utils/dateFormatting';
+import { formatTime, getTodayLocalDate } from '../utils/dateFormatting';
+import { saveBlob } from '../utils/saveBlob';
+import { getErrorMessage } from '../utils/errorHandling';
+import toast from 'react-hot-toast';
 import { StatGrid } from '../components/ux/StatGrid';
 
 /**
@@ -69,14 +72,20 @@ const AnalyticsDashboardPage: React.FC<{ embedded?: boolean }> = ({ embedded = f
   }, [loadMetrics]);
 
   const exportData = async () => {
-    const dataStr = await analyticsService.exportAnalytics(eventId);
-    const dataBlob = new Blob([dataStr], { type: 'application/json' });
-    const url = URL.createObjectURL(dataBlob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `analytics-${eventId || 'overall'}-${new Date().toISOString()}.json`;
-    link.click();
-    URL.revokeObjectURL(url);
+    let dataStr: string;
+    try {
+      dataStr = await analyticsService.exportAnalytics(eventId);
+    } catch (err: unknown) {
+      // Nothing is saved: a stand-in file looked like an export with no data.
+      toast.error(getErrorMessage(err, 'Could not export analytics.'));
+      return;
+    }
+    // Named by the department's date: the UTC timestamp put tomorrow's date
+    // (and colons, which some systems refuse) in the file name.
+    saveBlob(
+      new Blob([dataStr], { type: 'application/json' }),
+      `analytics-${eventId || 'overall'}-${getTodayLocalDate(tz)}.json`
+    );
   };
 
   const scopeLine = eventId ? 'Check-in scans for this event' : 'Check-in scans across all events';

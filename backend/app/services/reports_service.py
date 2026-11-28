@@ -284,10 +284,17 @@ class ReportsService:
                     "rank": self._resolve_rank(user.rank, rank_map),
                     "status": status_val,
                     "station": user.station,
+                    # The date they joined the department, as compliance reads it
+                    # (training_compliance.member_join_date): an imported
+                    # roster's accounts were all created on the import day.
                     "joined_date": (
-                        str(local_date(user.created_at, tz))
-                        if user.created_at
-                        else None
+                        str(user.hire_date)
+                        if user.hire_date
+                        else (
+                            str(local_date(user.created_at, tz))
+                            if user.created_at
+                            else None
+                        )
                     ),
                     "roles": role_names,
                 }
@@ -380,8 +387,12 @@ class ReportsService:
                 if status_val == TrainingStatus.COMPLETED.value:
                     member_stats[uid]["completed_courses"] += 1
                     completed_count += 1
-                if record.hours_completed:
-                    member_stats[uid]["total_hours"] += float(record.hours_completed)
+                    # Completed hours only, as the annual report and the
+                    # department overview count them.
+                    if record.hours_completed:
+                        member_stats[uid]["total_hours"] += float(
+                            record.hours_completed
+                        )
 
         entries = list(member_stats.values())
         completion_rate = (
@@ -747,6 +758,9 @@ class ReportsService:
                 # every other method, not the raw UUID (dialect-fragile).
                 User.organization_id == str(organization_id),
                 User.status.in_(ACTIVE_ACCOUNT_STATUSES),
+                # A soft delete leaves the status alone; every other report
+                # leaves deleted members out, and so must this one.
+                User.deleted_at.is_(None),
                 User.compliance_exempt.is_(False),
             )
             .order_by(User.last_name, User.first_name)
@@ -766,11 +780,15 @@ class ReportsService:
         records = records_result.scalars().all()
 
         # Get shift completion reports in period
+        # Approved reports only: training credit is released with an
+        # approved report (shift_completion_service), so a draft, pending or
+        # flagged one counts nowhere else and must not count here.
         shift_reports_result = await self.db.execute(
             select(ShiftCompletionReport).where(
                 ShiftCompletionReport.organization_id == str(organization_id),
                 ShiftCompletionReport.shift_date >= start_date,
                 ShiftCompletionReport.shift_date <= end_date,
+                ShiftCompletionReport.review_status == "approved",
             )
         )
         shift_reports = shift_reports_result.scalars().all()
@@ -814,11 +832,14 @@ class ReportsService:
 
             by_type[training_type] = by_type.get(training_type, 0) + 1
 
-            if uid in member_data:
+            # Only a completed record's hours are training done. A failed,
+            # cancelled or scheduled record still carries hours (the column is
+            # NOT NULL), and the department overview and member stats count
+            # completed records only.
+            if uid in member_data and status_val == TrainingStatus.COMPLETED.value:
                 member_data[uid]["training_hours"] += hours
-                if status_val == TrainingStatus.COMPLETED.value:
-                    member_data[uid]["courses_completed"] += 1
-                    total_completions += 1
+                member_data[uid]["courses_completed"] += 1
+                total_completions += 1
                 total_hours += hours
 
         # Process shift reports
@@ -1189,12 +1210,18 @@ class ReportsService:
         items_query = (
             select(InventoryItem)
             .options(selectinload(InventoryItem.category))
-            .where(InventoryItem.organization_id == str(organization_id))
+            .where(
+                InventoryItem.organization_id == str(organization_id),
+                # A retired item is no longer stock.
+                InventoryItem.active.is_(True),
+            )
             .order_by(InventoryItem.name)
         )
 
         type_filter = (filters or {}).get("item_type")
-        if type_filter:
+        # A filter of the wrong shape (a list, an object) is ignored rather
+        # than handed to the query, where it raised and answered 500.
+        if isinstance(type_filter, str) and type_filter:
             items_query = items_query.where(
                 InventoryItem.category.has(InventoryCategory.item_type == type_filter)
             )
@@ -1211,9 +1238,13 @@ class ReportsService:
             cat_name = item.category.name if item.category else None
             low_threshold = item.category.low_stock_threshold if item.category else None
 
-            total_qty = item.quantity or 1
+            # `quantity` is the on-hand count; issuing lowers it and raises
+            # `quantity_issued`. Subtracting the issued units again reported
+            # 6 on hand with 4 issued as 2 available, and `or 1` turned an
+            # empty shelf into one unit.
+            available_qty = item.quantity or 0
             issued_qty = item.quantity_issued or 0
-            available_qty = total_qty - issued_qty
+            total_qty = available_qty + issued_qty
 
             is_low = low_threshold is not None and available_qty < low_threshold
             if is_low:
@@ -2337,6 +2368,9 @@ class ReportsService:
         org_id = str(organization_id)
         filters = filters or {}
         pipeline_id = filters.get("pipeline_id")
+        if not isinstance(pipeline_id, str):
+            # Ignored, not queried: an object here raised and answered 500.
+            pipeline_id = None
 
         # Find the pipeline
         if pipeline_id:

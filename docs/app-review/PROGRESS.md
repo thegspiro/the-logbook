@@ -54,7 +54,7 @@ from its open list.
 | B13 | forms                      | FORM2  | ✅     |
 | B14 | grants & fundraising       | GF2    | ✅     |
 | B15 | admin-hours                | AH2    | ✅     |
-| B16 | reports & analytics        | RPT2   | ⬜     |
+| B16 | reports & analytics        | RPT2   | ✅     |
 | B17 | events                     | EV2    | ✅     |
 | B18 | training                   | TR2    | ✅     |
 | B19 | scheduling                 | SCH2   | ✅     |
@@ -4042,6 +4042,28 @@ secrets redacted for non-admins. See
   AH2-4 self-approval controls; AH2-5 no reactivation. Several LOW items are
   recorded as open. Gate clean. See admin-hours.md → Pass 6. Next: B16 reports
   & analytics.
+
+- **B16 reports & analytics ✅ (pass 6).** Read the report builders, the export
+  and schedule services, the reports screens and the analytics dashboard. **13
+  fixes**, each test red first:
+  - Backend: RPT2-37 (MED) Annual Training listed deleted members; RPT2-38
+    (MED) failed and cancelled training hours were counted; RPT2-39 (MED) draft
+    and flagged shift reports were counted; RPT2-40 (MED) the Inventory report
+    subtracted issued units twice and listed retired items; RPT2-41 the roster's
+    join date; RPT2-42 malformed filters answered 500.
+  - Frontend: RPT2-43 (MED) the analytics dashboard showed zeros on a failure;
+    RPT2-44 (MED) a failed export saved a stand-in file; RPT2-45 (MED) Compare
+    on a saved report used the wrong period; RPT2-46 date presets used the
+    browser's calendar; RPT2-47 (MED) Saved Reports hid a failed load; RPT2-48
+    (MED) the template builder had no unsaved-changes guard; RPT2-49 "Days Left"
+    colour.
+
+  **7 flagged** to KNOWN_LIMITATIONS: RPT2-30 (MED) Event Attendance versus the
+  W21-6 dashboard definition; RPT2-31 (MED) inventory low stock and value;
+  RPT2-32 calls on unapproved reports; RPT2-33 forged check-in metrics; RPT2-34
+  a certificate's expiry day; RPT2-35 the QR analytics tab; RPT2-36 Compare on
+  saved reports. Several LOW items are recorded as open. Gate clean. See
+  reports-analytics.md → Pass 6. Next: B17 events.
 
 - **B10 messaging & communications ✅ (pass 6).** Read the business logic of
   44 commits no pass had (audience and recipient rows, scheduled publishing,
