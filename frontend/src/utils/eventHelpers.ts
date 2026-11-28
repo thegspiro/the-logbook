@@ -140,6 +140,8 @@ export function generateICSContent(event: {
     `DTEND:${formatICSDate(event.end_datetime)}`,
     `SUMMARY:${escapeICS(event.title)}`,
     `UID:${event.id}@thelogbook`,
+    // Required by RFC 5545; some calendars refuse an event without it.
+    `DTSTAMP:${formatICSDate(new Date().toISOString())}`,
   ];
 
   if (event.description) {

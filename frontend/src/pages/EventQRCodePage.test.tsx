@@ -366,7 +366,9 @@ describe('EventQRCodePage', () => {
         if (callCount === 1) {
           return Promise.resolve(mockQRCheckInData);
         }
-        return Promise.reject(createMockApiError('Network error'));
+        // A dropped connection has no response; a 4xx is the server refusing
+        // the event, which takes the code down (EventQRCodePage.refused.test).
+        return Promise.reject(new Error('Network Error'));
       });
 
       renderWithRouter(<EventQRCodePage />);
@@ -399,8 +401,11 @@ describe('EventQRCodePage', () => {
 
       renderWithRouter(<EventQRCodePage />);
 
+      // The event's crumb is named once its data has loaded, which can be
+      // after the trail itself renders; reading it synchronously failed on
+      // a loaded CI runner.
       const trail = await screen.findByRole('navigation', { name: /breadcrumb/i });
-      expect(within(trail).getByRole('link', { name: 'Test Event' })).toHaveAttribute('href', '/events/1');
+      expect(await within(trail).findByRole('link', { name: 'Test Event' })).toHaveAttribute('href', '/events/1');
     });
   });
 

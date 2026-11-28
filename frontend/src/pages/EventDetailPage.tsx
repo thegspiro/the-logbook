@@ -527,8 +527,10 @@ export const EventDetailPage: React.FC = () => {
       return;
     }
     try {
-      const allEvents = await eventService.getEvents({ limit: 200 });
-      const siblings = allEvents
+      // The series alone, not the department's first 200 events: the list is
+      // oldest first, so a recent series was cut off entirely once a
+      // department had held 200 events.
+      const siblings = (await eventService.getEvents({ recurrence_series_id: parentId, limit: 500 }))
         .filter((e) => e.recurrence_parent_id === parentId || e.id === parentId)
         .sort((a, b) => new Date(a.start_datetime).getTime() - new Date(b.start_datetime).getTime());
       setSeriesEvents(siblings);
@@ -1327,7 +1329,10 @@ export const EventDetailPage: React.FC = () => {
                 )}
                 {!canManage && !isEventOver && (
                   <button
-                    onClick={() => downloadICSFile(event)}
+                    onClick={() =>
+                      // A listed location is held as location_name, with location null.
+                      downloadICSFile({ ...event, location: event.location_name || event.location || null })
+                    }
                     className="btn-secondary inline-flex items-center gap-1.5 text-sm"
                   >
                     <CalendarPlus className="h-4 w-4" />

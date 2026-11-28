@@ -13136,6 +13136,85 @@ could filter on.
 **The decision:** show the newest per course in the section too, and leave
 voided records out on the server.
 
+## Events — Decisions and Open Defects From App Review B17 Pass 6 (2026-11-26)
+
+Details in `docs/app-review/events.md` → Pass 6.
+
+### EV2-7 — Re-finalizing leaves admin hours nobody earns any more (defect, open)
+
+Finalizing credits admin hours by event type. Reopening and re-finalizing with
+a member's credit set to 0, or after changing the event to a type with no
+mapping, leaves the earlier entry in place (reproduced: 120 minutes before and
+after). Training credit is withdrawn in the same case; admin hours are not.
+
+**The decision inside it:** whether an entry a supervisor already approved may
+be removed this way, or should go back to review.
+
+### EV2-8 — Changing an event's capacity and the waitlist
+
+Raising or clearing `max_attendees` promotes nobody: waitlisted members stay
+waitlisted until they re-RSVP, and with the cap cleared the Promote button
+answers "No waitlisted users". Lowering it moves a member who is already going
+to the waitlist the next time they re-save their RSVP, even a notes edit.
+
+**The decision:** promote everyone who now fits when the cap goes up or is
+cleared (a clear fix, left with the rest of this item), and whether a going
+member whose party did not grow may be waitlisted by a lowered cap.
+
+### EV2-9 — Self check-out after the event has ended
+
+On a window-type event a member can check out up to the window's end after
+the event, and the measured time is not capped at the event's end (reproduced:
+134 minutes credited for a 120-minute event); on flexible and strict events the
+same check-out is refused.
+
+**The decision:** whether check-out is allowed after the window closes, and
+capping the measured time at the event's end either way.
+
+### EV2-10 — Self check-in needs no presence
+
+The event QR code carries only the event id, so any member can check in from
+anywhere during the window and earn training or admin-hours credit. A self
+check-in also makes a "going" RSVP on a full event without a capacity check.
+
+**The decision:** whether self check-in needs a rotating code, a location, or
+an officer's confirmation, and whether it should respect capacity.
+
+### EV2-11 — Bulk add overwrites existing responses
+
+The bulk-add endpoint says it skips members who already responded; each row
+instead overwrites that member's status and is counted as added, and nothing
+promotes the waitlist when it moves someone off "going".
+
+**The decision:** skip existing responses as documented, or document the
+overwrite (and promote after it).
+
+### EV2-12 — The Past view shows the oldest past events
+
+The events list is sorted oldest first and capped at 100, so a department with
+more than 100 past events sees its oldest ones under "Past", and the calendar
+in that mode shows recent months empty.
+
+**The decision:** a newest-first sort on `/events` (or paging) for the Past
+view; there is no frontend-only fix.
+
+### EV2-13 — Record Times fills in the scheduled end
+
+Record Times pre-fills the end with the scheduled end on an event still in
+progress, and saving an end finalizes the event. An officer fixing only a late
+start closes check-in and locks attendance.
+
+**The decision:** pre-fill the end only once the event is over (or has a
+recorded end), if that matches how officers use it.
+
+### EV2-14 — A cancelled event has no header actions
+
+A cancelled event cannot be edited, duplicated or deleted from its page, and is
+hidden from the list by default.
+
+**The decision:** whether Delete and Duplicate should stay available on a
+cancelled event.
+
 ## Department Messages — Decisions From App Review B10 Pass 6 (2026-11-26)
 
 Recorded rather than changed. Details in `docs/app-review/messaging.md` →
