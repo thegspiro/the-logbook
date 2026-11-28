@@ -13378,6 +13378,63 @@ not offer owner-only folders, but the API creates them.
 **The decision:** whether a full administrator may change an owner-only
 folder's access, or reassign its owner.
 
+## Department Messages — Decisions From App Review B10 Pass 6 (2026-11-26)
+
+Recorded rather than changed. Details in `docs/app-review/messaging.md` →
+Pass 6.
+
+### MSG2-12 — Stuck delivery retries use up the department's email limit (defect, open)
+
+A message's email or text that cannot be sent is retried every five minutes.
+A retry whose channel no longer applies is never retired. Examples: a text
+after Twilio is turned off, consent is withdrawn or the phone is removed; an
+email after the address is removed. Each pass also counts against the
+department's hourly email limit before it skips the member. One stuck retry
+uses 12 of the 30 hourly email slots; three keep the department over the limit
+for good, and every new message's email is then held back. Email is the
+channel of record.
+
+This is a defect, not a choice. It is recorded here because it was not fixed
+in the review pass that found it. The fix is to retire a retry whose channel no
+longer applies, and to count the limit only when a send is actually attempted.
+
+### MSG2-13 — Statuses the audience picker offers but cannot reach
+
+The audience picker offers Leave, Inactive and Retired. Messages reach only
+active (and probationary) accounts, so Leave and Inactive reach nobody and
+Retired almost nobody. The message posts with no warning.
+
+**The decision:** remove those statuses from the picker, or deliberately reach
+members on leave or inactive (by email, since they may not sign in).
+
+### MSG2-14 — Is a published message's audience fixed or live?
+
+The audience is written when a message publishes and revisited only when
+someone edits the audience. So a member who leaves stays in the acknowledgment
+report as owing an acknowledgment, and a member who joins never receives an
+older standing notice. Relatedly, the Dashboard's "clear" takes a persistent
+message down for everyone; it now asks first, but members may expect it to
+hide the message only for themselves.
+
+**The decision:** whether audiences stay as published or follow the roster,
+and whether clearing from the Dashboard is per member.
+
+### MSG2-15 — The author counts toward their own message
+
+The author is counted in the audience and listed as owing an acknowledgment,
+but is never sent the message.
+
+**The decision:** leave the author out of the audience, or send it to them.
+
+### MSG2-16 — Acknowledgments after an edit
+
+An acknowledgment survives a change to the message's text. Turning on "require
+acknowledgment" after publishing puts members who already read it back to
+pending, without telling them.
+
+**The decision:** whether a text change requires acknowledging again, and
+whether members are told when acknowledgment becomes required.
+
 ## Membership Pipeline — Decisions From App Review B9 Pass 6 (2026-11-26)
 
 Recorded rather than changed. Details in

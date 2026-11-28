@@ -162,7 +162,7 @@ import copy
 import html as _html
 import time
 from datetime import date, datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 from loguru import logger
 from sqlalchemy import func, inspect, or_, select, update
@@ -5009,9 +5009,11 @@ async def run_publish_scheduled_messages(db: AsyncSession) -> Dict[str, Any]:
     them live (scheduled_at cleared to NULL) and then fans each out across the
     in-app/email/SMS channels — the same delivery used for immediate posts.
 
-    scheduled_at is cleared *before* delivery so a delivery failure leaves the
-    message live-but-unescalated (members still see it in their inbox) rather
-    than risking a duplicate escalation on the next run.
+    scheduled_at is cleared, and the recipient rows written, in one savepoint
+    per message *before* delivery, so a delivery failure leaves the message
+    live-but-unescalated (its members see it in their inbox) rather than
+    risking a duplicate escalation on the next run, and a failure writing the
+    recipients leaves it scheduled for the next run.
 
     A message whose expires_at has already passed when it comes due is
     deactivated and counted as expired instead of being delivered.
@@ -5049,80 +5051,73 @@ async def run_publish_scheduled_messages(db: AsyncSession) -> Dict[str, Any]:
         .with_for_update(skip_locked=True, of=DepartmentMessage)
     )
     due = list(result.scalars().all())
-    for message in due:
-        # Clearing the due marker is the durable claim. Commit all claims while
-        # locks are held and only then perform potentially slow network I/O.
-        message.scheduled_at = None
-    await db.commit()
 
     delivery = MessageDeliveryService(db)
     messaging = MessagingService(db)
     published = 0
     expired = 0
     failed = 0
+    to_deliver: List[Tuple[str, Any]] = []
     needs_refresh = False
     for message in due:
-        # Fallback in case even the refresh/id-read below fails; never
-        # touches the ORM object, so it is always safe to log.
         msg_id = "?"
+        # The claim (scheduled_at cleared) and the recipient rows are written
+        # together, in a savepoint per message. They used to be committed for
+        # the whole batch first and the recipients written afterwards, so a
+        # failure in between left a message live for nobody: the inbox reads
+        # recipient rows, and with nothing scheduled the next run never
+        # picked it up again (MSG2-11). A failure now rolls back that message
+        # alone and leaves it scheduled for the next run.
         try:
             if needs_refresh:
-                # A prior message's rollback expires every persistent
-                # object in the session, including this pre-fetched
-                # message — reading an attribute without refreshing
-                # first would trigger an implicit lazy load outside the
-                # async greenlet bridge and raise MissingGreenlet (same
-                # shape as CRON2-31-1/5/6).
+                # A rolled-back savepoint expires every object in the session;
+                # reading this one's attributes unrefreshed would lazy-load
+                # outside the async bridge (MissingGreenlet).
                 await db.refresh(message)
-            # Captured as a plain string, immediately after any needed
-            # refresh above but still inside the try: a failed
-            # commit/flush further down leaves the session needing an
-            # explicit rollback, and *any* attribute read on *any*
-            # loaded object — not just an expired one — raises
-            # PendingRollbackError until that rollback runs (verified
-            # against a real connection; this is stronger than mere
-            # attribute-expiry). Reading message.id from inside the
-            # except block below would therefore itself raise, aborting
-            # this exception handler before it reaches its own
-            # db.rollback() and crashing the whole batch — exactly what
-            # CRON-31-1 exists to prevent.
             msg_id = getattr(message, "id", "?")
-            # A message that expired before its send time came due goes live for
-            # nobody and must not be escalated. The claim above already cleared
-            # scheduled_at for the whole batch, so deactivation is all that is left
-            # to persist here — main set it per message because it claimed per
-            # message; that assignment would be a no-op now.
-            expires_at = getattr(message, "expires_at", None)
-            if expires_at is not None:
-                if expires_at.tzinfo is None:
-                    expires_at = expires_at.replace(tzinfo=timezone.utc)
+            publish = False
+            async with db.begin_nested():
+                message.scheduled_at = None
+                # A message that expired before its send time came due goes
+                # live for nobody and must not be escalated.
+                expires_at = getattr(message, "expires_at", None)
+                if expires_at is not None:
+                    if expires_at.tzinfo is None:
+                        expires_at = expires_at.replace(tzinfo=timezone.utc)
+                    else:
+                        expires_at = expires_at.astimezone(timezone.utc)
+                if expires_at is not None and expires_at <= now:
+                    message.is_active = False
+                    expired += 1
                 else:
-                    expires_at = expires_at.astimezone(timezone.utc)
-            if expires_at is not None and expires_at <= now:
-                message.is_active = False
-                await db.commit()
-                expired += 1
-                continue
-            await messaging.materialize_recipients(message)
-            await db.commit()
+                    await messaging.materialize_recipients(message)
+                    publish = True
+            # Queued only once the savepoint has committed: its recipient
+            # rows flush on the way out, and that is where a bad one raises.
+            if publish:
+                to_deliver.append((msg_id, message))
+        except Exception as e:
+            logger.error("Failed to publish scheduled message {}: {}", msg_id, e)
+            failed += 1
+            needs_refresh = True
+    # Every claim and its recipients are durable before any slow network I/O,
+    # while the row locks are still held.
+    await db.commit()
+
+    for msg_id, message in to_deliver:
+        try:
+            if needs_refresh:
+                # A later message's rolled-back savepoint expired this one too.
+                await db.refresh(message)
             await delivery.deliver(message)
             published += 1
         except Exception as e:
-            # The claim step above already cleared scheduled_at for every
-            # message in this batch, which is the only condition the "due"
-            # query selects on — so one message's failure here (a bad
-            # targeting rule, a transient DB error) must not be allowed to
-            # propagate and orphan every message still left in `due`: they
-            # would never be picked up again. Log and move on instead.
-            logger.error(
-                "Failed to publish scheduled message {}: {}",
-                msg_id,
-                e,
-            )
+            # The message is live with its recipients; members see it in their
+            # inbox. Its channel deliveries are retried by the delivery tasks.
+            logger.error("Failed to deliver scheduled message {}: {}", msg_id, e)
             failed += 1
             try:
                 await db.rollback()
-                needs_refresh = True
             except Exception:
                 pass
 
