@@ -47,7 +47,7 @@ from its open list.
 | B6  | meetings & minutes         | MM2    | ✅     |
 | B7  | equipment-check            | EC2    | ✅     |
 | B8  | documents                  | DOC2   | ✅     |
-| B9  | membership pipeline        | MP2    | ⬜     |
+| B9  | membership pipeline        | MP2    | ✅     |
 | B10 | messaging & communications | MSG2   | ✅     |
 | B11 | notifications              | NOTIF2 | ✅     |
 | B12 | integrations               | INT2   | ✅     |
@@ -4103,3 +4103,26 @@ secrets redacted for non-admins. See
   MSG2-14 (frozen or live audiences), MSG2-15 (the author counted), MSG2-16
   (acknowledgments after an edit). See messaging.md → Pass 6. Next: B11
   notifications.
+
+- **B9 membership pipeline ✅ (pass 6).** Read the lifecycle pass 5 left
+  unread (gates, auto-advance, conversion, the inactivity sweep, the status
+  link, interviews and election packages) and the prospective-members screens.
+  **8 fixes**, each test red first.
+  - MP2-9: a document from an earlier stage ticked this stage's requirement.
+  - MP2-10: bulk actions could reach applicants no longer shown.
+  - MP2-11: one applicant's election package could appear, and be saved, for
+    another.
+  - MP2-12: the interview page could show and post for the previous applicant.
+  - MP2-13: rejected, withdrawn, on-hold or inactive applicants could be
+    converted.
+  - MP2-15: an applicant reactivated and idle again was never re-marked.
+  - MP2-16: checklist ticks were counted, not matched.
+  - MP2-17: a stage email's status link could be expired.
+
+  **7 flagged** to KNOWN_LIMITATIONS: MP2-14 (the login email goes out
+  before the conversion commits; deferring it conflicts with the
+  never-carry-the-password rule), MP2-18 (HIGH: Reference Check cannot be
+  completed), MP2-19 (a failed vote undone by a new package), MP2-20 (interview
+  panel rule), MP2-21 (screening panel shows nothing), MP2-22 (which moves send
+  stage emails), MP2-23 (closed or regressed state left behind). See
+  membership-pipeline.md → Pass 6. Next: B10 messaging & communications.

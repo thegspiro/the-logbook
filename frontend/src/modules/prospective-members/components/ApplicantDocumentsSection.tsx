@@ -79,9 +79,17 @@ const ApplicantDocumentsSection: React.FC<ApplicantDocumentsSectionProps> = ({ a
     return (config?.required_document_types ?? []).map((type) => type.trim()).filter(Boolean);
   }, [applicant.current_stage_type, applicant.current_stage_config]);
 
+  // Only documents filed at this stage count, as the server grades them
+  // (step_id); one filed at an earlier stage showed a tick and Advance then
+  // refused (MP2-9).
   const filedTypes = useMemo(
-    () => new Set(documents.map((document) => normalizeType(document.document_type ?? ''))),
-    [documents]
+    () =>
+      new Set(
+        documents
+          .filter((document) => document.stage_id === applicant.current_stage_id)
+          .map((document) => normalizeType(document.document_type ?? ''))
+      ),
+    [documents, applicant.current_stage_id]
   );
 
   useEffect(() => {

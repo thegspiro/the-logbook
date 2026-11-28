@@ -13435,6 +13435,88 @@ pending, without telling them.
 **The decision:** whether a text change requires acknowledging again, and
 whether members are told when acknowledgment becomes required.
 
+## Membership Pipeline — Decisions From App Review B9 Pass 6 (2026-11-26)
+
+Recorded rather than changed. Details in
+`docs/app-review/membership-pipeline.md` → Pass 6.
+
+### MP2-14 — The login email goes out before the conversion is saved
+
+Converting an applicant by hand emails the new member their login inside the
+same transaction that creates the account, before it is committed. If the
+commit then fails (two conversions racing for a username or membership
+number), the applicant has credentials for an account that does not exist.
+Sending after the commit, as the automatic conversion does, was tried and
+reverted: the manual path deliberately never hands the sender back to the
+endpoint, because it would hold the plaintext password in memory past the
+service call.
+
+**The decision:** how to send after the commit without carrying the password,
+for example by emailing a set-password link instead of the password itself.
+
+### MP2-18 — A Reference Check stage cannot be completed
+
+The stage's gate requires a number of references recorded against the
+applicant, and nothing records them: no screen, and no part of the server. With
+"require all before advancing" on (the default), Advance always fails with
+"requires at least N reference(s); only 0 received". The stage is required by
+default, so Skip is refused too. Any department that added a Reference Check
+stage has applicants who cannot get past it. The "auto-advance when all
+references are verified" option has no effect.
+
+**The decision:** build a way to record references (who, contacted when,
+outcome), or stop enforcing the stage until there is one.
+
+### MP2-19 — What undoes a failed membership vote?
+
+The election gate reads only the newest election package. After a "not
+elected" vote, creating a new package (a draft) passes the gate, and the
+applicant can then be advanced or converted.
+
+**The decision:** whether a decided vote can be superseded only by a new
+ballot, or a new package must say it is for a new vote and record why.
+
+### MP2-20 — What does an interview panel require?
+
+The interview stage counts repeat interviews by the same person toward the
+total, and passes if any one interview has a qualifying recommendation. One
+interviewer logging a "recommend" and a "do not recommend" passed a stage whose
+template reads "require two interviews with positive recommendations".
+
+**The decision:** distinct interviewers or not, and whether every
+recommendation must qualify or just one. The template's wording should follow.
+
+### MP2-21 — The medical screening panel shows nothing
+
+The applicant drawer's medical screening panel reads fields nothing writes, so
+it always says "No screening data recorded yet". Meanwhile the gate grades the
+applicant's actual screening records. The screen should show the gate's own
+grading, as the interview stage does, which needs the server to report it.
+
+**The decision:** approve that addition to the applicant endpoint.
+
+### MP2-22 — Which moves trigger a stage's emails?
+
+A stage's automated email, status-page link and meeting link run only when an
+applicant is advanced onto it. Being created onto it, assigned to it or moved
+back to it sends nothing. So a pipeline whose first stage is an automated
+welcome email never sends it.
+
+**The decision:** which of creation, assign-stage and regress should run a
+stage's entry effects.
+
+### MP2-23 — What a closed or regressed application leaves behind
+
+- A withdrawn or rejected applicant whose package is already on a ballot stays
+  on it and is tallied.
+- Moving an applicant back to a stage keeps its stored approvals and checklist
+  ticks, so advancing again needs no re-sign.
+- One member holding two required approval positions can sign both.
+- Conversion is refused when an existing member shares the applicant's name,
+  with no override, and the message wrongly says "email".
+
+**The decision:** each of the four.
+
 ## Elections — Five Counting and Ballot Decisions From App Review B5 Pass 7 (2026-11-24)
 
 Recorded rather than changed. Details in `docs/app-review/elections.md` →

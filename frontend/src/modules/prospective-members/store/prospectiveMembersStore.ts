@@ -225,7 +225,7 @@ const isPastLastPage = (requested: number, response: PaginatedApplicantList): bo
  * report its error, which would otherwise surface against a list it is no
  * longer describing.
  */
-type FetchKey = 'applicants' | 'inactive' | 'withdrawn' | 'rejected' | 'converted' | 'stats';
+type FetchKey = 'applicants' | 'inactive' | 'withdrawn' | 'rejected' | 'converted' | 'stats' | 'electionPackage';
 const requestTokens: Record<FetchKey, number> = {
   applicants: 0,
   inactive: 0,
@@ -233,6 +233,7 @@ const requestTokens: Record<FetchKey, number> = {
   rejected: 0,
   converted: 0,
   stats: 0,
+  electionPackage: 0,
 };
 const beginFetch = (key: FetchKey): number => {
   requestTokens[key] += 1;
@@ -931,12 +932,19 @@ export const useProspectiveMembersStore = create<ProspectiveMembersState>((set, 
   },
 
   // Election package actions
+  // Cleared first and token-guarded: the drawer seeds its form from this, so
+  // the previous applicant's package must never stand in for the next one's —
+  // not from a slower answer landing last, nor because the next fetch failed
+  // (MP2-11).
   fetchElectionPackage: async (applicantId: string) => {
-    set({ isLoadingElectionPackage: true });
+    const token = beginFetch('electionPackage');
+    set({ isLoadingElectionPackage: true, currentElectionPackage: null });
     try {
       const pkg = await applicantService.getElectionPackage(applicantId);
+      if (!isCurrentFetch('electionPackage', token)) return;
       set({ currentElectionPackage: pkg, isLoadingElectionPackage: false });
     } catch (error) {
+      if (!isCurrentFetch('electionPackage', token)) return;
       set({
         error: handleStoreError(error, 'Failed to load election package'),
         isLoadingElectionPackage: false,

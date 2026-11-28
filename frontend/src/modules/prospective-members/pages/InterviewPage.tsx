@@ -560,7 +560,7 @@ export const InterviewPage: React.FC = () => {
   const currentUser = useAuthStore((s) => s.user);
 
   const {
-    currentApplicant,
+    currentApplicant: storedApplicant,
     isLoadingApplicant,
     interviews,
     isLoadingInterviews,
@@ -568,6 +568,13 @@ export const InterviewPage: React.FC = () => {
     fetchInterviews,
     error,
   } = useProspectiveMembersStore();
+
+  // Only the applicant this page was opened for. The store holds whichever was
+  // loaded last, so coming from another applicant's page — or after this
+  // one's fetch failed — it is someone else, and the interview form would post
+  // to their id (MP2-12).
+  const currentApplicant =
+    storedApplicant && (!applicantId || storedApplicant.id === applicantId) ? storedApplicant : null;
 
   const [showForm, setShowForm] = useState(false);
 
@@ -581,6 +588,7 @@ export const InterviewPage: React.FC = () => {
   const [requirementKey, setRequirementKey] = useState(0);
   const shownApplicantId = currentApplicant?.id;
   useEffect(() => {
+    setCanInterview(false);
     if (!shownApplicantId) return undefined;
     let cancelled = false;
     applicantService
@@ -610,6 +618,20 @@ export const InterviewPage: React.FC = () => {
     if (!applicantId) return;
     void fetchInterviews(applicantId);
   }, [applicantId, fetchInterviews]);
+
+  if (!isLoadingApplicant && !currentApplicant && error) {
+    return (
+      <div className="mx-auto max-w-6xl px-4 py-6">
+        <div
+          role="alert"
+          className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-800 dark:bg-red-900/20 dark:text-red-400"
+        >
+          <AlertCircle className="h-4 w-4 flex-shrink-0" />
+          {error}
+        </div>
+      </div>
+    );
+  }
 
   // Loading state
   if (isLoadingApplicant || !currentApplicant) {

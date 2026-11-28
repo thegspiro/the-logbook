@@ -2,7 +2,147 @@
 
 **Prefix:** `MP2` · **Iteration:** B9 · **Reviewed:** 2026-08-06 (pass 1),
 2026-08-06 (pass 2), 2026-08-09 (pass 3), 2026-08-09 (pass 4),
-2026-10-15 (pass 5)
+2026-10-15 (pass 5), 2026-11-26 (pass 6)
+
+---
+
+## Pass 6 (2026-11-26) — the lifecycle pass 5 did not read, and the screens: 8 fixed, 7 flagged
+
+### Scope, stated plainly
+
+Pass 5 read the update methods. This pass read what it named as unread:
+
+- stage advance and regress, and the stage gates;
+- auto-advance;
+- conversion to a member;
+- the inactivity sweep;
+- the public status page and its link;
+- the activity log;
+- the interview and election-package rules.
+
+It also read the prospective-members screens beyond their payload builders:
+
+- the board and table;
+- the applicant drawer;
+- documents, election packages and the interview page;
+- settings.
+
+Nine backend findings were reproduced first against the real database. Every fix has a test that failed on the unfixed code.
+
+**Not read:**
+
+- Backend: `prospect_access.py` (access control is the security review's), the event-link code, `_auto_enroll_probationary`, the kanban and stats queries, the follow-up form service.
+- Frontend: most of the stage-config editor, the pipeline builder and the conversion modal's steps.
+
+### Frontend
+
+**MP2-9 — MED — A document filed at an earlier stage showed as meeting this stage's requirement — ✅ FIXED**
+
+- The tick counted documents uploaded at any stage. The advance gate counts only those filed at the current stage, so the tick showed green and Advance then failed with "Missing required documents".
+- The tick now counts as the gate does.
+
+**MP2-10 — MED-HIGH — Bulk actions could reach applicants no longer on screen — ✅ FIXED**
+
+- The selection survived a pipeline switch, a filter, a page change, and a reject or convert from the drawer.
+- The bar counted hidden rows, and a bulk Reject, Hold or Advance sent their ids, including applicants of the pipeline viewed before. The inactive-purge selection had the same problem.
+- Both selections now keep only rows on screen.
+
+**MP2-11 — MED — One applicant's election package could appear in another's drawer — ✅ FIXED**
+
+- The package fetch neither cleared the previous package nor dropped a stale answer.
+- A slower response for the first applicant, or a failed fetch for the second, left the first's package showing. Its notes seeded the form, and Save Draft sent them to the second applicant's package.
+- The fetch now clears first and is token-guarded, like the store's other fetches.
+
+**MP2-12 — MED — The interview page could show, and post for, the previous applicant — ✅ FIXED**
+
+- It rendered whichever applicant the store held. Coming from another applicant's page, that applicant showed.
+- If this applicant's fetch failed (a 403 after unassignment), the previous applicant stayed on screen and the interview form posted to their id. With an empty store, a failed fetch spun forever.
+- It now shows only the applicant in its address, and the error when that applicant cannot load.
+
+### Backend
+
+**MP2-13 — MED — A rejected, withdrawn, on-hold or inactive applicant could be converted to a member — ✅ FIXED**
+
+- `transfer_to_membership` refused only an applicant already transferred. Every other forward move goes through `_assert_movable`; conversion now does too.
+
+**MP2-15 — LOW-MED — An applicant reactivated and left idle again was never marked inactive again — ✅ FIXED**
+
+- The sweep skipped anyone it had ever marked. Counted as critical rather than warned, they got no warning email either.
+- A mark now counts only if it postdates the last reactivation.
+
+**MP2-16 — LOW — The checklist gate counted ticks instead of matching them — ✅ FIXED**
+
+- `["x", "x", "x"]` passed a three-item checklist, as did ticks of items since renamed.
+- Ticks are now matched against the configured labels (normalized, as the document gate normalizes types).
+
+**MP2-17 — LOW — A stage email's "track your application" link could already be expired — ✅ FIXED**
+
+- The email used the token's existing timestamp, so for an applicant whose link was over 30 days old the emailed link returned 404.
+- It now refreshes the timestamp when it includes the link, as the status-page stage already did.
+
+### Flagged for the owner (in `docs/KNOWN_LIMITATIONS.md`)
+
+- **MP2-14 (LOW-MED) — A manual conversion emails the new member's login before the commit.**
+  - A commit that then fails (a username or membership-number race) leaves the applicant with credentials for an account that does not exist.
+  - Deferring the email to after the commit was tried and reverted. `test_prospect_transfer_password.py` pins that the transfer result never carries the sender, which would hold the plaintext password in a closure.
+  - Closing this needs a way to send after the commit that does not carry the password. That is a design decision, not a one-line fix.
+- **MP2-18 (HIGH) — A Reference Check stage cannot be completed.**
+  - The gate counts `action_result.references`, and nothing writes that key. So Advance always fails, and Skip is refused on a required stage, which is the default.
+  - The drawer's panel shows "0 of ? references received", and the "auto-advance when all references are verified" box has no reader (pitfall #19).
+  - Decide: build reference capture, or stop enforcing the stage.
+- **MP2-19 (MED) — A "not elected" vote is undone by creating a new package.**
+  - The gate reads only the latest package, and a new draft passes it. So Advance, and Convert, go through after a failed vote.
+- **MP2-20 (LOW-MED) — The Interview Panel gate is weaker than its template says.**
+  - Repeat interviews by one person count toward the total, and any one positive recommendation passes. So one interviewer's `recommend` plus `do_not_recommend` advanced the applicant past "two interviews with positive recommendations".
+- **MP2-21 (MED) — The Medical Screening panel reads data nothing writes.**
+  - It shows "No screening data recorded yet" whatever the gate, which grades `ScreeningRecord` rows, decides.
+  - The fix needs the backend to expose its grading, as it does for interviews (pitfall #29).
+- **MP2-22 (LOW) — Stage-entry effects run only on a forward advance.**
+  - The stage email, status-page link and meeting auto-link do not run on creation, assign-stage or regress. A pipeline whose first stage is an automated email sends nothing to a new applicant.
+- **MP2-23 (LOW) — State left behind:**
+  - a withdrawn or rejected applicant's package stays on its ballot and is tallied;
+  - a regressed stage keeps its approvals and ticks;
+  - one member can sign two approval roles;
+  - the duplicate-member check refuses conversion on a name match alone, with no override and a message that says "email".
+
+### Open (not flagged)
+
+- **LOW — Emails sent before the commit:** stage, status-link, follow-up and completion emails go out inside the transaction. A failed commit leaves an email describing a move that did not happen.
+- **LOW — Other backend items:**
+  - The Documenso webhook answers 500 to a stage-gate refusal, so the provider retries.
+  - The auto-transfer refusal log names the matched member (pitfall #33).
+  - A converted applicant keeps an in-progress final stage.
+  - A stage added later has no progress row for existing applicants.
+  - The inactivity clock is `updated_at`, which a status-page view resets.
+- **LOW — Frontend:**
+  - Kanban drag and the table's Advance ignore a convert stage mid-pipeline.
+  - `fetchApplicant` has no stale guard and always reopens the drawer.
+  - The activity log and other drawer sections race when switching applicants.
+  - Convert/Back use the board's pipeline for an applicant from another.
+  - The membership-type buttons show without `can_work`.
+  - Column sort sorts the loaded page only.
+  - Settings toggles re-seed the inactivity form.
+  - The timeline and the strip use different completion rules.
+  - `fetchPipeline` has no stale guard.
+
+### Mechanical checks
+
+- **Route gating:** 64 routes.
+  - 19 call `require_permission` directly.
+  - 45 go through the module's own dependencies: `require_pipeline_reader`, or `require_prospect_access(Level.…)`, which admits the permission or an assignment to the applicant.
+- **Status filters:** no `== UserStatus.ACTIVE` gates.
+- **Search:** both `LIKE` sites escape.
+
+### Completion gate (pass 6)
+
+| Check                                        | Result                                                 |
+| -------------------------------------------- | ------------------------------------------------------ |
+| pipeline, prospect and membership tests      | ✅ **1,386 passed**, 1 skipped (optional `pywebpush`)  |
+| new tests                                    | ✅ 5 backend (real database), 5 frontend; failed first |
+| `flake8` / `black` / `isort` (changed files) | ✅ clean                                               |
+| mypy ratchet                                 | ✅ 0 errors, matching the baseline                     |
+| prospective-members frontend tests           | ✅ 414 passed (45 files)                               |
+| `npm run typecheck` / `npm run lint`         | ✅ 0 errors / 0 warnings                               |
 
 ---
 

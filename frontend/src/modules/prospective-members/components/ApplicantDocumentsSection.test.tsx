@@ -163,6 +163,18 @@ describe('ApplicantDocumentsSection', () => {
       expect(screen.getByRole('button', { name: /Upload the Photo ID document/ })).toBeInTheDocument();
     });
 
+    // MP2-9: the server grades only documents filed at the current stage
+    // (step_id), so one filed at an earlier stage showed a tick here and then
+    // Advance failed with "Missing required documents".
+    it('does not count a document filed at an earlier stage', async () => {
+      mockGetDocuments.mockResolvedValue([{ ...document, stage_id: 'stage-2', document_type: 'Background Check' }]);
+      renderWithRouter(<ApplicantDocumentsSection applicant={onDocumentStage} tz="America/New_York" />);
+
+      await screen.findByRole('link', { name: /Membership Application\.pdf/ });
+      expect(screen.getByRole('button', { name: /Upload the Background Check document/ })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /Replace the Background Check document/ })).not.toBeInTheDocument();
+    });
+
     it('keeps the single generic control on a stage that names no types', async () => {
       mockGetDocuments.mockResolvedValue([]);
       renderWithRouter(<ApplicantDocumentsSection applicant={applicant} tz="America/New_York" />);
