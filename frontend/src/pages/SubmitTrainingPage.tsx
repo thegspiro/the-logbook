@@ -577,6 +577,17 @@ const SubmissionForm: React.FC<SubmissionFormProps> = ({
     clearTrainingErrors();
   }, [defaultTrainingType, maxDurationMinutes, clearTrainingErrors]);
 
+  // Leaving an edit (Update, Cancel, or deleting the submission being edited)
+  // returns the form to a new submission, emptied. It used to keep the old
+  // submission's values as a fresh form, so the next Submit filed a second
+  // copy of the same class.
+  const wasEditing = useRef(editSubmission !== null && editSubmission !== undefined);
+  useEffect(() => {
+    const editing = editSubmission !== null && editSubmission !== undefined;
+    if (wasEditing.current && !editing) resetForm();
+    wasEditing.current = editing;
+  }, [editSubmission, resetForm]);
+
   const save = async (options: { asDraft: boolean }) => {
     setError('');
     // A draft is a half-finished note, so only the two columns the API cannot
@@ -618,15 +629,17 @@ const SubmissionForm: React.FC<SubmissionFormProps> = ({
     const attachOnCreate = !!attachment && !offline;
     try {
       if (isEdit && editSubmission) {
-        await trainingSubmissionService.updateSubmission(editSubmission.id, buildUpdatePayload());
+        const updated = await trainingSubmissionService.updateSubmission(editSubmission.id, buildUpdatePayload());
         const uploaded = await uploadAttachmentIfAny(editSubmission.id);
         if (options.asDraft) {
           toast.success(`Draft saved.${draftRemainder}`);
           // Stay on the draft: saving again has to update this one, not file
-          // a second copy of the same class. Carry the upload's own metadata,
-          // since the submission in hand predates it.
+          // a second copy of the same class. The saved copy is what the server
+          // returned: the one in hand predates this save, and re-seeding the
+          // form from it put the edit back the way it was. Carry the upload's
+          // own metadata, which the update response predates.
           draftJustSaved.current = editSubmission.id;
-          onSaved(uploaded ? { ...editSubmission, attachments: uploaded.attachments } : editSubmission);
+          onSaved(uploaded ? { ...updated, attachments: uploaded.attachments } : updated);
         } else if (editSubmission.status === 'draft') {
           const submitted = await trainingSubmissionService.submitDraft(editSubmission.id);
           setReceipt(buildReceipt(uploaded?.name ?? null, submitted.status === 'approved'));
