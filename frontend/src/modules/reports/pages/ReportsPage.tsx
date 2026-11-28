@@ -735,8 +735,10 @@ export const ReportsPage: React.FC = () => {
                           source={activeReportExport}
                         />
                       </ReportContentBoundary>
-                      {/* Compare button */}
-                      {activeCard.usesDateRange && !comparisonData && (
+                      {/* Compare button. Not on a saved report's run: the comparison
+                          is built from this page's date picker, not the saved
+                          report's own period, so it compared the wrong span. */}
+                      {activeCard.usesDateRange && !activeReportLabel && !comparisonData && (
                         <button
                           type="button"
                           onClick={handleComparePreviousPeriod}

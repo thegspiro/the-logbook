@@ -2,7 +2,7 @@
 
 **Prefix:** `RPT2` · **Iteration:** B16 · **Reviewed:** 2026-08-06 (pass 1),
 2026-08-08 (pass 2), 2026-08-09 (pass 3), 2026-08-09 (pass 4),
-2026-10-20 (pass 5)
+2026-10-20 (pass 5), 2026-11-26 (pass 6)
 
 **Backend:** `endpoints/reports.py` (7), `analytics.py` (3), `platform_analytics.py`
 (1), `services/reports_service.py` (1,952 L)
@@ -10,6 +10,126 @@
 **Prior audit:** `docs/module-audit/reports-analytics.md` (iteration 16) — RPT-1
 (HIGH cross-org leak) and RPT-2 (500 on bad filter) fixed; RPT-3 (PII at
 `reports.view`), RPT-4 (org-id typing), RPT-5 (aggregate correctness) left open.
+
+---
+
+## Pass 6 (2026-11-26) — the report builders, the reports screens and analytics (13 fixed, 7 flagged)
+
+Pass 5 left the report builders, the export and schedule services, and the
+`modules/reports` frontend unread. This pass read them. Backend candidates were
+reproduced against the real test database first; every fix has a test that
+failed on the unfixed code.
+
+### Flagged (in `docs/KNOWN_LIMITATIONS.md` → "Reports & Analytics — Decisions From App Review B16 Pass 6")
+
+| Id      | Severity | Finding                                                                                                                                             |
+| ------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| RPT2-30 | MEDIUM   | Event Attendance counts cancelled, draft and future events and divides by every RSVP; the events dashboard follows W21-6 (reproduced: 25% vs 100%). |
+| RPT2-31 | MEDIUM   | The Inventory report's low-stock count and value use their own rules, not the inventory module's.                                                   |
+| RPT2-32 | LOW      | Call Volume counts calls on unapproved shift reports.                                                                                               |
+| RPT2-33 | LOW      | `/analytics/track` lets any member post the check-in metrics the server now records itself.                                                         |
+| RPT2-34 | LOW      | A certificate on its expiry day is "expiring soon" in the report and expired in member stats.                                                       |
+| RPT2-35 | LOW-MED  | The Events hub's QR analytics tab is offered to officers without `analytics.view`.                                                                  |
+| RPT2-36 | LOW      | Whether Compare should be offered on a saved report's run (hidden by RPT2-45).                                                                      |
+
+### Fixed — backend
+
+- **RPT2-37 (MED): the Annual Training report listed deleted members.** A soft
+  delete leaves the status alone and this was the one builder without the
+  `deleted_at` filter, so a departed member was listed and lowered the average.
+- **RPT2-38 (MED): Annual Training and Training Summary counted hours from
+  failed, cancelled and scheduled records.** Reproduced: 4 completed hours read
+  as 14. Both now count completed records only, as the department overview and
+  member stats do (Pitfall 29).
+- **RPT2-39 (MED): Annual Training counted draft and flagged shift reports.**
+  Training credit is released with an approved report; the report now counts
+  approved ones only.
+- **RPT2-40 (MED): the Inventory report subtracted issued units twice.**
+  `quantity` is the on-hand count (issuing lowers it), so 6 on hand with 4
+  issued read as 2 available and an empty shelf as one unit (`or 1`); retired
+  items were listed too. Available is now `quantity`, total adds the issued
+  units, and retired items are left out. (The low-stock rule and value: RPT2-31.)
+- **RPT2-41 (LOW): the roster's "Joined" was the account's creation date.** An
+  imported roster showed the import day for everyone. It is now the hire date,
+  falling back to creation, as compliance reads it.
+- **RPT2-42 (LOW): a filter of the wrong shape answered 500.** A list
+  `item_type` or an object `pipeline_id` is now ignored.
+
+### Fixed — frontend
+
+- **RPT2-43 (MED): the analytics dashboard showed zeros when its request
+  failed or was refused.** The service answered empty metrics on any error, so a
+  403 read as "no scans, no errors" and the page's own error and Retry never
+  showed. Failures now reach the page.
+- **RPT2-44 (MED): a failed analytics export saved a stand-in file.** It now
+  says the export failed and saves nothing; a good export is named by the
+  department's date.
+- **RPT2-45 (MED): Compare on a saved report's run compared the wrong period.**
+  It used the page's date picker, not the saved report's period. It is hidden
+  there (RPT2-36).
+- **RPT2-46 (LOW-MED): the date presets used the browser's calendar.** A laptop
+  in another zone, or a tab open across New Year, asked for the wrong year or a
+  quarter shifted by a day. They are now built from the department's date.
+- **RPT2-47 (MED): Saved Reports hid a failed load as "No saved reports yet".**
+  It now says it could not load them, with Retry.
+- **RPT2-48 (MED): the evaluation template builder had no unsaved-changes
+  guard.** It shows "Unsaved changes" and now asks before a refresh or a closed
+  tab discards them.
+- **RPT2-49 (LOW): "Days Left" was coloured by a fixed 30 days.** The badge
+  beside it uses the department's expiring-soon window; both now follow the
+  server's status.
+
+### Open (recorded here only)
+
+- A failed Compare is silent, Compare has no busy state, and a late comparison
+  can land on the next report; previous-period dates overlap the current period
+  in a department east of UTC; a blank custom date sends `start_date: ''`.
+- Saved Reports shows every card as "a report you do not have access to run"
+  when `/reports/available` fails.
+- The member's typed evaluation response, and typing during "Update figures",
+  can be lost without warning; the evaluation list has no stale-response guard;
+  the draft dialog can submit an evaluator the select no longer shows; the goal
+  review fallback prints raw ISO dates.
+- Scheduled report emails show almost no figures for reports that nest them
+  under `summary`, and print the year with a thousands separator; editing a
+  schedule on its send day after the run can send it again the next day.
+- The Pipeline report's cohort year uses the UTC year, and `days_in_pipeline`
+  keeps growing for prospects already transferred or rejected; the Training
+  Summary's course breakdown counts records the per-member rows leave out.
+- Some member-level PDFs (Event Attendance) carry no confidentiality banner;
+  worth an owner look.
+
+### Verified good ✅ (this pass)
+
+- `ACTIVE_ACCOUNT_STATUSES` throughout, no `== ACTIVE`; timestamp ranges are
+  bounded at the department's midnights with the end day included; every
+  division guards zero.
+- The CSV goes through `SafeCsvWriter`; the export re-runs the report under the
+  PII gate; every by-id read is org-scoped.
+- The scheduler re-checks the owner and PII recipients, uses the department's
+  date, is email-only, and rolls back one report's failure alone.
+- Frontend: wire casing matches; a second Generate is refused; exports use the
+  snapshot that produced the report; tables carry the reflow tiers and labels;
+  no `window.confirm`; dialogs do not close on an outside click; the evaluation
+  page guards edits across saves.
+
+### Not read (scope, stated plainly)
+
+The call-volume helpers inside `CallTrackingService`; the PDF layout;
+`platform_analytics.py`; several report renderers checked only for dates and
+derived numbers; the evaluation editors (sections, items, workflow) and the
+rest of `EvaluationsPage.tsx` from line 330; the co-located tests.
+
+### Completion gate (pass 6)
+
+| Check                                                   | Result                                                     |
+| ------------------------------------------------------- | ---------------------------------------------------------- |
+| `flake8` / `black` / `isort` (changed files)            | ✅ clean                                                   |
+| mypy ratchet                                            | ✅ 0 errors, matching the baseline                         |
+| new backend tests                                       | ✅ 6, each failed on the unfixed code                      |
+| report, analytics, roster and inventory backend tests   | ✅ 1,970 passed, 1 skipped                                 |
+| `npm run typecheck` / ESLint (changed files) / Prettier | ✅ clean                                                   |
+| reports and analytics frontend tests                    | ✅ 319 passed in 39 files; 16 new tests, each failed first |
 
 ---
 
