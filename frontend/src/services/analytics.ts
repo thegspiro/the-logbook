@@ -138,24 +138,18 @@ class AnalyticsService {
    * Get metrics for a specific event (from backend)
    */
   async getEventMetrics(eventId: string): Promise<QRCodeMetrics> {
-    try {
-      const data = await analyticsApiService.getMetrics(eventId);
-      return mapApiMetrics(data);
-    } catch {
-      return this.emptyMetrics();
-    }
+    // A failure is the caller's to show. Answering zeros made a refused or
+    // failed load read as "no scans, no errors" with nothing to say otherwise.
+    const data = await analyticsApiService.getMetrics(eventId);
+    return mapApiMetrics(data);
   }
 
   /**
    * Get overall platform metrics (from backend)
    */
   async getOverallMetrics(): Promise<QRCodeMetrics> {
-    try {
-      const data = await analyticsApiService.getMetrics();
-      return mapApiMetrics(data);
-    } catch {
-      return this.emptyMetrics();
-    }
+    const data = await analyticsApiService.getMetrics();
+    return mapApiMetrics(data);
   }
 
   /**
@@ -187,11 +181,8 @@ class AnalyticsService {
    * Export analytics data (from backend)
    */
   async exportAnalytics(eventId?: string): Promise<string> {
-    try {
-      return await analyticsApiService.exportAnalytics(eventId);
-    } catch {
-      return JSON.stringify({ events: [], error: 'Failed to export' }, null, 2);
-    }
+    // Rethrown: a stand-in body was saved as if it were the export.
+    return analyticsApiService.exportAnalytics(eventId);
   }
 
   /**
@@ -199,20 +190,6 @@ class AnalyticsService {
    */
   clearAnalytics(): void {
     // No-op for backend-persisted analytics
-  }
-
-  private emptyMetrics(): QRCodeMetrics {
-    return {
-      totalScans: 0,
-      successfulCheckIns: 0,
-      failedCheckIns: 0,
-      successRate: 0,
-      avgTimeToCheckIn: 0,
-      deviceBreakdown: { mobile: 0, desktop: 0, tablet: 0, unknown: 0 },
-      errorBreakdown: {},
-      hourlyActivity: Array.from({ length: 24 }, (_, hour) => ({ hour, count: 0 })),
-      checkInTrends: [],
-    };
   }
 }
 

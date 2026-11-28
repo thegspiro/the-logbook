@@ -13261,6 +13261,76 @@ accepts it.
 
 **The decision:** add a Reactivate action, or keep retirement one-way.
 
+## Reports & Analytics — Decisions From App Review B16 Pass 6 (2026-11-26)
+
+Details in `docs/app-review/reports-analytics.md` → Pass 6.
+
+### RPT2-30 — The Event Attendance report and the events dashboard disagree
+
+The report counts cancelled, draft and future events, divides check-ins by
+every RSVP (Not going, Maybe and Waitlisted included), and averages in a 0 for
+an event nobody RSVPed to. The events dashboard follows owner decision W21-6:
+checked-in ÷ Going, over ended events that were not cancelled or drafts and had
+someone Going. Reproduced: a held event (2 Going, both checked in, 2 Not going)
+and a cancelled one read 2 events at 25% in the report and 1 event at 100% on
+the dashboard.
+
+**The decision:** confirm the report should use the W21-6 definition (the
+change alters printed numbers, so it was left for confirmation).
+
+### RPT2-31 — The Inventory report's low-stock count and value use their own rules
+
+After this pass's quantity fix, the report still tests each item against its
+category's threshold with `<`, while the inventory module sums the category
+with `<=` and counts lot-tracked stock from its lots; and its total value adds
+each item's unit value once, where the module multiplies by quantity.
+
+**The decision:** take low stock and value from the inventory service, so both
+screens give one answer.
+
+### RPT2-32 — Calls on unapproved shift reports in Call Volume
+
+This pass limited the Annual Training report to approved shift reports, as
+training credit is. Call Volume still counts calls from draft, pending and
+flagged reports.
+
+**The decision:** whether calls count before the report is approved.
+
+### RPT2-33 — Any member can post check-in metrics
+
+`/analytics/track` still accepts the scan and check-in event types the server
+now records itself, with any event id, so a member can inflate or skew the QR
+dashboard.
+
+**The decision:** refuse the server-owned types on `/track`, or retire the
+route.
+
+### RPT2-34 — A certificate on its expiry day
+
+The certification report treats a certificate as valid through its expiration
+day ("expiring soon"); training member stats count it as expired on that day.
+
+**The decision:** which one, for both.
+
+### RPT2-35 — The QR analytics tab is shown to officers who cannot open it
+
+The Events administration hub shows a "QR Code Analytics" tab to anyone with
+`events.manage`, but the data needs `analytics.view`, which few roles hold.
+This pass makes the refusal visible (it read as zero scans); the tab is still
+offered.
+
+**The decision:** hide the tab without `analytics.view`, or grant it with
+`events.manage`.
+
+### RPT2-36 — Comparing a saved report with its previous period
+
+Compare built the previous period from the Reports page's date picker, which
+knows nothing of a saved report's own period, so it compared the wrong span.
+This pass hides Compare on a saved report's run.
+
+**The decision:** whether to offer it there, computed from the period the
+server reports for the run.
+
 ## Documents — Decisions From App Review B8 Pass 6 (2026-11-26)
 
 Recorded rather than changed. Details in `docs/app-review/documents.md` →
