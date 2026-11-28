@@ -13080,6 +13080,62 @@ time, so the new holder reads as having confirmed.
 **The decision:** whether a moved seat should be unconfirmed until its new
 holder confirms.
 
+## Training — Decisions From App Review B18 Pass 6 (2026-11-26)
+
+Details in `docs/app-review/training.md` → Pass 6.
+
+### TR2-5 — A month entirely on leave still owes a month's share
+
+Prorating a requirement for leave floors the active months at one, so a
+monthly requirement for a member on leave all month is never reduced, and a
+fully excused annual window still owes 1/12 of its target. The training guide
+promises that a month the leave covers entirely is always excused.
+
+**The decision:** remove the floor (an hours requirement then also needs a
+"nothing required means met" rule, which shifts and calls already have), or
+change the documented promise.
+
+### TR2-6 — "Exempt from training requirements" on a membership tier is read by one report
+
+Only the per-member training report honours the tier setting. The compliance
+matrix, dashboard tally, profile card, My Training and requirement progress
+grade the member as usual, so the setting's promise ("not graded for training
+compliance at all") does not hold. The report's check also swallows any error.
+
+**The decision:** apply the exemption where members are graded, or remove it
+from the report and the settings screen.
+
+### TR2-7 — Auto-approved self-reports can satisfy requirements
+
+A self-report counts as needing review only when it names a certification, a
+credential or a category. Graders also credit by training type, so with
+approval off (or under the auto-approve hours) a member can file 24 hours of
+continuing education and an hour of skills practice and read compliant with no
+reviewer involved (reproduced).
+
+**The decision:** route a submission to review when any active requirement
+would credit it, or accept and document that auto-approval credits.
+
+### TR2-8 — An officer can record their own completed training
+
+Creating, bulk-creating, importing and editing training records do not refuse
+the officer's own records, though waivers, leave and submission approval all
+refuse the self case.
+
+**The decision:** whether recording one's own completed training needs a
+second officer, as approving a submission does.
+
+### TR2-9 — My Training's Certifications section and Upcoming disagree
+
+Upcoming keeps only the newest certificate per course, so a renewed credential
+reads current; the Certifications section lists every record with an expiry,
+expired ones first, so the same member sees "Expired" at the top. The
+`/my-training` payload also lists voided certificates, with no status the page
+could filter on.
+
+**The decision:** show the newest per course in the section too, and leave
+voided records out on the server.
+
 ## Documents — Decisions From App Review B8 Pass 6 (2026-11-26)
 
 Recorded rather than changed. Details in `docs/app-review/documents.md` →

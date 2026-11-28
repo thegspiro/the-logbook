@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../test/utils';
 import type { TrainingRecord } from '../types/training';
 
@@ -72,5 +73,18 @@ describe('MemberTrainingHistoryPage certificate expiry', () => {
 
     expect(await screen.findByText('Cert 2026-09-29')).toBeInTheDocument();
     expect(screen.getByText('expired')).toBeInTheDocument();
+  });
+
+  it('does not count a voided certificate as expired', async () => {
+    // Voiding keeps the expiry date; the server counts expirations on
+    // completed records only.
+    getRecords.mockResolvedValue([{ ...record('2026-06-01'), status: 'cancelled', voided_at: '2026-07-01T00:00:00Z' }]);
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+
+    renderWithRouter(<MemberTrainingHistoryPage />);
+    expect(await screen.findByText('Cert 2026-06-01')).toBeInTheDocument();
+    await user.selectOptions(screen.getByLabelText('Filter training records by status'), 'expired');
+
+    expect(screen.queryByText('Cert 2026-06-01')).not.toBeInTheDocument();
   });
 });
