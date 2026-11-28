@@ -12998,6 +12998,88 @@ viewer sees department totals beside a list of their own dues.
 **The decision:** limit the summary to what the viewer's list shows, or accept
 department totals as visible to `finance.view`.
 
+## Scheduling — Decisions From App Review B19 Pass 6 (2026-11-26)
+
+Details in `docs/app-review/scheduling.md` → Pass 6.
+
+### SCH2-5 — A self check-out has no cap
+
+A member who checks out late is credited every hour since check-in. Checking out
+five days after a 12-hour shift recorded 120 hours (reproduced). Officers correct
+hours at finalize, but an unfinalized shift reports the inflated figure.
+
+**The decision:** cap a self check-out at the shift's end plus a grace period
+(and say so to the member), or keep the raw figure for the officer to correct.
+
+### SCH2-6 — Time off cancels seats on past, unfinalized shifts
+
+Approving time off now leaves finalized shifts alone, but a past shift that is
+not yet finalized still loses the member's seat, though they may have worked it.
+
+**The decision:** whether approval should touch only shifts that have not
+started, or leave this to the officer.
+
+### SCH2-7 — Two claims at once can double-book a member
+
+Each signup locks its own shift, so two requests for overlapping shifts at the
+same moment each pass the overlap check. Closing it means locking the member
+(or a per-member advisory lock) as well, which every signup path would take.
+
+**The decision:** whether the rare double booking is worth a member lock on
+every signup.
+
+### SCH2-8 — A failed template load offers the built-in templates
+
+When the template list fails to load, Create Shift marks it loaded and offers
+the built-in Day/Night/24hr templates, which carry no `template_id`, seats or
+checklists. A failure reads as "no templates configured".
+
+**The decision:** show the failure and block Create Shift until templates
+load, or keep the fallback and label it.
+
+### SCH2-9 — A supervisor's time-off list disagrees with its count
+
+For a supervisor the server returns and counts the crew's requests in every
+status, but the client lists only the ones the supervisor may review, so
+"Time Off (N)" exceeds the rows shown and "load more" fetches rows that never
+appear (pitfall 29).
+
+**The decision:** show supervisors their crew's history (drop the client
+filter), or have the server return and count only the reviewable ones.
+
+### SCH2-10 — The coverage report counts outreach shifts
+
+The coverage report includes outreach shifts that the other duty figures
+exclude with `duty_shifts_only`.
+
+**The decision:** whether coverage means duty shifts only.
+
+### SCH2-11 — Call Volume's average response is unweighted
+
+"Avg Response" averages each period's average, so a day with one slow call
+weighs the same as a day with forty. The page cannot weight it without
+per-period counts.
+
+**The decision:** have the backend return an overall per-call average, or
+relabel the figure.
+
+### SCH2-12 — The reports page and its endpoints ask for different grants
+
+`/scheduling/admin/reports` requires `scheduling.manage`; the report endpoints
+require `scheduling.report`, and Availability `scheduling.assign`. Every seeded
+position grants all three, but a custom position with only `manage` opens the
+page to a 403.
+
+**The decision:** which permission the reports belong to.
+
+### SCH2-13 — A moved seat keeps `confirmed_at`
+
+A swap rewrites the seat's member but keeps the previous holder's confirmation
+time, so the new holder reads as having confirmed.
+
+**The decision:** whether a moved seat should be unconfirmed until its new
+holder confirms.
+
 ## Department Messages — Decisions From App Review B10 Pass 6 (2026-11-26)
 
 Recorded rather than changed. Details in `docs/app-review/messaging.md` →

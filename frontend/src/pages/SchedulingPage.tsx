@@ -21,7 +21,7 @@ import {
 import { useNavigate, useSearchParams } from 'react-router';
 import { useAuthStore } from '../stores/authStore';
 import { useTimezone } from '../hooks/useTimezone';
-import { formatTimeOfDay, localToUTC } from '../utils/dateFormatting';
+import { formatTimeOfDay, localToUTC, toLocalDateString } from '../utils/dateFormatting';
 import { enumLabel } from '../utils/displayValue';
 import { schedulingService, useSchedulingStore } from '../modules/scheduling';
 import type { ShiftRecord, ShiftTemplateRecord } from '../modules/scheduling';
@@ -98,19 +98,39 @@ const formatDateISO = (date: Date): string => {
   return `${year}-${month}-${day}`;
 };
 
-/** Compute the end date for a shift given its start date and template times. */
-const computeEndDate = (startDate: string, template: ShiftTemplateRecord | undefined): string => {
-  if (!startDate || !template) return '';
-  const [startHour = 0] = template.start_time_of_day.split(':').map(Number);
-  const [endHour = 0] = template.end_time_of_day.split(':').map(Number);
-  // Same-day shift: end time is after start time and not a 24-hour shift
-  if (endHour > startHour && template.duration_hours < 24) {
-    return startDate;
-  }
-  // Overnight or 24-hour shift: end date is the next day
-  const nextDay = new Date(startDate + 'T12:00:00'); // noon to avoid DST edge cases
+/** The calendar day after a YYYY-MM-DD date. */
+const nextCalendarDay = (isoDate: string): string => {
+  const nextDay = new Date(isoDate + 'T12:00:00'); // noon to avoid DST edge cases
   nextDay.setDate(nextDay.getDate() + 1);
   return formatDateISO(nextDay);
+};
+
+const minutesOfDay = (time: string): number => {
+  const [hours = 0, minutes = 0] = time.split(':').map(Number);
+  return hours * 60 + minutes;
+};
+
+/**
+ * The end date for a shift, from the times it will actually be sent with: a
+ * custom start or end time replaces the template's, so an 08:00-16:00 shift
+ * made from the Night template ends the day it starts. Hours and minutes are
+ * compared, as the server compares them.
+ */
+const computeEndDate = (
+  startDate: string,
+  template: ShiftTemplateRecord | undefined,
+  customStartTime = '',
+  customEndTime = ''
+): string => {
+  if (!startDate || !template) return '';
+  const startTime = customStartTime || template.start_time_of_day;
+  const endTime = customEndTime || template.end_time_of_day;
+  const custom = Boolean(customStartTime || customEndTime);
+  const fullDay = !custom && template.duration_hours >= 24;
+  if (minutesOfDay(endTime) > minutesOfDay(startTime) && !fullDay) {
+    return startDate;
+  }
+  return nextCalendarDay(startDate);
 };
 
 const TAB_CONFIG: {
@@ -258,7 +278,11 @@ const SchedulingPage: React.FC = () => {
   // Calendar state
   const initialViewParam = searchParams.get('view');
   const [viewMode, setViewMode] = useState<ViewMode>(isViewMode(initialViewParam) ? initialViewParam : 'week');
-  const [currentDate, setCurrentDate] = useState(() => parseCalendarDate(searchParams.get('date')) ?? new Date());
+  // With no date in the link, open on the department's day, not the device's.
+  const [currentDate, setCurrentDate] = useState(
+    () =>
+      parseCalendarDate(searchParams.get('date')) ?? parseCalendarDate(toLocalDateString(new Date(), tz)) ?? new Date()
+  );
   const [showCreateShift, setShowCreateShift] = useState(false);
 
   // `?create=shift` is Scheduling Administration's Create Shift: the dialog
@@ -368,6 +392,18 @@ const SchedulingPage: React.FC = () => {
     customEndTime: '',
   });
 
+  // A custom time can move the end across midnight, so the end date follows it.
+  const setCustomTimes = (times: { customStartTime?: string; customEndTime?: string }) => {
+    setShiftForm((prev) => {
+      const next = { ...prev, ...times };
+      const tmpl = effectiveTemplates.find((t) => t.id === next.shiftTemplate) || defaultTemplate;
+      return {
+        ...next,
+        endDate: computeEndDate(next.startDate, tmpl, next.customStartTime, next.customEndTime) || next.endDate,
+      };
+    });
+  };
+
   // Load shared reference data once via the Zustand store
   useEffect(() => {
     void loadInitialData();
@@ -440,13 +476,12 @@ const SchedulingPage: React.FC = () => {
       // Convert local times to UTC so the backend stores correct values
       const startDateTime = localToUTC(`${shiftForm.startDate}T${startTime}`, tz);
       let endDateTime = localToUTC(`${endDate}T${endTime}`, tz);
-      // Overnight guard: if custom times make the end fall on/before the start
-      // (e.g. 19:00 → 07:00 on the same date), roll the end to the next day so
-      // the backend doesn't reject it (end_time must be after start_time).
+      // Overnight guard: if the end falls on/before the start (e.g. 19:00 →
+      // 07:00 on the same date), move it to the same wall-clock time on the
+      // next day. Adding 24 UTC hours instead ends the shift an hour off on
+      // the night the clocks change.
       if (new Date(endDateTime) <= new Date(startDateTime)) {
-        const rolled = new Date(endDateTime);
-        rolled.setUTCDate(rolled.getUTCDate() + 1);
-        endDateTime = rolled.toISOString();
+        endDateTime = localToUTC(`${nextCalendarDay(endDate)}T${endTime}`, tz);
       }
 
       const selectedApparatus = apparatusList.find((a) => a.id === shiftForm.apparatus_id);
@@ -752,7 +787,7 @@ const SchedulingPage: React.FC = () => {
                             setShiftForm((prev) => ({
                               ...prev,
                               shiftTemplate: e.target.value,
-                              endDate: computeEndDate(prev.startDate, tmpl),
+                              endDate: computeEndDate(prev.startDate, tmpl, prev.customStartTime, prev.customEndTime),
                               apparatus_id:
                                 tmpl?.apparatus_id && apparatusList.some((a) => a.id === tmpl.apparatus_id)
                                   ? tmpl.apparatus_id
@@ -928,7 +963,7 @@ const SchedulingPage: React.FC = () => {
                                 setShiftForm((prev) => ({
                                   ...prev,
                                   startDate: newStart,
-                                  endDate: computeEndDate(newStart, tmpl),
+                                  endDate: computeEndDate(newStart, tmpl, prev.customStartTime, prev.customEndTime),
                                 }));
                               }}
                               className="form-input focus:ring-violet-500"
@@ -966,8 +1001,9 @@ const SchedulingPage: React.FC = () => {
                               const sameDay = shiftForm.startDate === shiftForm.endDate;
                               return (
                                 <p className="text-theme-text-muted mt-1 text-xs">
-                                  {formatTimeOfDay(tmpl.start_time_of_day)} &rarr;{' '}
-                                  {formatTimeOfDay(tmpl.end_time_of_day)} ({sameDay ? 'same day' : 'next day'})
+                                  {formatTimeOfDay(shiftForm.customStartTime || tmpl.start_time_of_day)} &rarr;{' '}
+                                  {formatTimeOfDay(shiftForm.customEndTime || tmpl.end_time_of_day)} (
+                                  {sameDay ? 'same day' : 'next day'})
                                 </p>
                               );
                             })()}
@@ -1113,7 +1149,7 @@ const SchedulingPage: React.FC = () => {
                                     id="create-shift-start-time"
                                     aria-label="Start Time"
                                     value={shiftForm.customStartTime}
-                                    onChange={(e) => setShiftForm({ ...shiftForm, customStartTime: e.target.value })}
+                                    onChange={(e) => setCustomTimes({ customStartTime: e.target.value })}
                                     className="form-input"
                                   />
                                 </div>
@@ -1128,7 +1164,7 @@ const SchedulingPage: React.FC = () => {
                                     id="create-shift-end-time"
                                     aria-label="End Time"
                                     value={shiftForm.customEndTime}
-                                    onChange={(e) => setShiftForm({ ...shiftForm, customEndTime: e.target.value })}
+                                    onChange={(e) => setCustomTimes({ customEndTime: e.target.value })}
                                     className="form-input"
                                   />
                                 </div>
@@ -1136,7 +1172,7 @@ const SchedulingPage: React.FC = () => {
                               {(shiftForm.customStartTime || shiftForm.customEndTime) && (
                                 <button
                                   type="button"
-                                  onClick={() => setShiftForm({ ...shiftForm, customStartTime: '', customEndTime: '' })}
+                                  onClick={() => setCustomTimes({ customStartTime: '', customEndTime: '' })}
                                   className="text-theme-text-muted mt-1 text-xs hover:text-violet-500"
                                 >
                                   Reset to template times
