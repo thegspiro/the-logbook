@@ -2,7 +2,114 @@
 
 **Prefix:** `TR2` · **Iteration:** B18 · **Reviewed:** 2026-08-06 (pass 1),
 2026-08-08 (pass 2), 2026-08-09 (pass 3), 2026-08-09 (pass 4),
-2026-10-23 (pass 5)
+2026-10-23 (pass 5), 2026-11-26 (pass 6)
+
+---
+
+## Pass 6 (2026-11-26) — compliance grading, member stats, self-reports and the training screens (8 fixed, 5 flagged)
+
+Earlier passes read schemas and update paths. This pass read the grader
+(`training_compliance.py`), member stats (`training_service.py`), waivers and
+self-reported training, and the member and officer training screens.
+Backend candidates were reproduced against the real test database first; every
+fix has a test that failed on the unfixed code.
+
+### Flagged (in `docs/KNOWN_LIMITATIONS.md` → "Training — Decisions From App Review B18 Pass 6")
+
+| Id    | Severity | Finding                                                                                                                     |
+| ----- | -------- | --------------------------------------------------------------------------------------------------------------------------- |
+| TR2-5 | MEDIUM   | A month entirely on leave still owes a month's share (the active-month floor), against the documented promise (reproduced). |
+| TR2-6 | MEDIUM   | A tier's "Exempt from training requirements" is honoured by the per-member report only (reproduced).                        |
+| TR2-7 | MEDIUM   | Auto-approved self-reports can satisfy requirements that credit by training type, with no reviewer (reproduced).            |
+| TR2-8 | MEDIUM   | An officer can create or edit their own completed records; every other grant refuses the self case (reproduced).            |
+| TR2-9 | LOW      | My Training's Certifications section and Upcoming disagree on renewed certificates; `/my-training` lists voided ones.       |
+
+### Fixed — backend
+
+- **TR2-10 (HIGH): an impossible period day took every grade in the
+  department down.** A period of "March 1 to June 31", or an unset end day on a
+  November–February window in a leap year, raised `ValueError` in the window
+  helper every grade goes through: the matrix, the dashboard tally, My
+  Training, the profile card and the notices answered 500 (reproduced). Each
+  date is now built with its day held to that month's length in its own year.
+  The schemas still accept the impossible pair (see Open).
+- **TR2-11 (LOW): a certificate read expired on its expiration day on the
+  member's stats card** while the grader and the evaluation data treat it as in
+  force that day. The card now agrees. (This also settles the stats half of
+  RPT2-34.)
+
+### Fixed — frontend
+
+- **TR2-12 (HIGH): re-editing a draft with a new attachment put the edit
+  back.** After Save Draft the form re-seeded from the copy it had before the
+  save, so "Course B" became "Course A" again and the next save sent A. It now
+  re-seeds from the saved copy the server returns.
+- **TR2-13 (MED): leaving an edit kept the old values as a new submission.**
+  After Update, Cancel or deleting the submission being edited, the form became
+  a fresh submission still filled in, so the next Submit filed a second copy of
+  the same class. It is now emptied.
+- **TR2-14 (MED): a refused save of the member-visibility settings said
+  nothing.** It now says why.
+- **TR2-15 (MED): duplicating a session-attendance requirement always failed**,
+  and Duplicate dropped the chief-override setting. Both fields are now copied,
+  and the overlap warning runs for the copy.
+- **TR2-16 (MED): a failed load of the requirements page looked like an empty
+  department**, inviting the officer to re-create requirements that exist. It
+  now shows the error with Retry.
+- **TR2-17 (LOW-MED): voided and cancelled certificates counted as Expired** on
+  the history page (tile and filter) while their own rows hid the badge; the
+  server counts completed records only. Only held certificates count now.
+
+### Open (recorded here only)
+
+- The requirement schemas and form accept a month/day pair that does not
+  exist; the grader now copes, but the stored value still reads oddly.
+  `scheduling_service`'s Shift Compliance copy of the period logic was not
+  checked for the same crash.
+- Monthly Status has no stale guard between months and keeps the previous
+  month's rows (and exports them under the new month's name) after a failed
+  load; the history page has no stale guard between members; the Files dialog
+  on a voided record offers an upload the server refuses.
+- The per-member training report lists catch-up and not-yet-held attendance
+  requirements as pending, unlike the card's tally, and grades non-current and
+  exempt members.
+- Editing a pending self-report does not re-check the department's hour limit
+  and allowed types; editing a waiver does not re-check end after start;
+  reversing an approval skips the submitter lock the documented order takes.
+
+### Verified good ✅ (this pass)
+
+- Approving a submission runs once (row lock and status check); auto-approval
+  resends are idempotent by `client_request_id`; the submitter and the crew
+  recorder cannot approve their own entry.
+- Every by-id read in the submission and waiver routes is org-scoped; waiver
+  members and requirements are checked against the organization and self-grant
+  is refused.
+- Org graders use current account statuses; the detail and progress views take
+  met and expired from the shared grader; waiver arithmetic and rolling windows
+  use whole calendar months.
+- Frontend: snake_case throughout; date-only values are pinned to UTC; My
+  Training's percentages and hours come from the server; the approval page
+  guards stale loads and double submits.
+
+### Not read (scope, stated plainly)
+
+`training_program_service.py` and `training_session_service.py`; most of
+`endpoints/training.py` beyond record CRUD, stats, reports and progress;
+`cert_alert_service`; ReviewSubmissionsPage and the record and requirement
+modals' internals; ExternalTrainingPage, TrainingEnhancementsTab,
+TrainingProgramsPage and the training-event wizard.
+
+### Completion gate (pass 6)
+
+| Check                                                   | Result                                                    |
+| ------------------------------------------------------- | --------------------------------------------------------- |
+| `flake8` / `black` / `isort` (changed files)            | ✅ clean                                                  |
+| mypy ratchet                                            | ✅ 0 errors, matching the baseline                        |
+| new backend tests                                       | ✅ 5, each failed on the unfixed code; 2 in the unit job  |
+| training, compliance, waiver and submission tests       | ✅ 5,249 passed, 1 skipped                                |
+| `npm run typecheck` / ESLint (changed files) / Prettier | ✅ clean                                                  |
+| training page tests                                     | ✅ 506 passed in 44 files; 6 new tests, each failed first |
 
 ---
 
