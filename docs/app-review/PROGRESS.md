@@ -48,7 +48,7 @@ from its open list.
 | B7  | equipment-check            | EC2    | ✅     |
 | B8  | documents                  | DOC2   | ✅     |
 | B9  | membership pipeline        | MP2    | ⬜     |
-| B10 | messaging & communications | MSG2   | ⬜     |
+| B10 | messaging & communications | MSG2   | ✅     |
 | B11 | notifications              | NOTIF2 | ✅     |
 | B12 | integrations               | INT2   | ✅     |
 | B13 | forms                      | FORM2  | ✅     |
@@ -4085,3 +4085,21 @@ secrets redacted for non-admins. See
   a double-publish race, the roster count, untracked file deletes, the same
   stale-settings write in three other digests, and six frontend LOWs. Gate
   clean. See documents.md → Pass 6. Next: B9 membership pipeline.
+
+- **B10 messaging & communications ✅ (pass 6).** Read the business logic of
+  44 commits no pass had (audience and recipient rows, scheduled publishing,
+  delivery and retries, acknowledgments) and the message screens. **5 fixes**,
+  each test red first.
+  - MSG2-7: an expired message could not be edited.
+  - MSG2-8: scheduling was offered on a published message.
+  - MSG2-9: the Dashboard's clear took a message down for everyone on one tap,
+    and was offered to members the endpoint refuses.
+  - MSG2-10: every edit re-resolved a published audience.
+  - MSG2-11: a failed scheduled publish went live for nobody and was never
+    retried.
+
+  **5 flagged** to KNOWN_LIMITATIONS: MSG2-12 (HIGH-MED defect, open: stuck
+  retries drain the email limit), MSG2-13 (statuses the picker cannot reach),
+  MSG2-14 (frozen or live audiences), MSG2-15 (the author counted), MSG2-16
+  (acknowledgments after an edit). See messaging.md → Pass 6. Next: B11
+  notifications.

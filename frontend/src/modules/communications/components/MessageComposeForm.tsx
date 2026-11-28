@@ -91,10 +91,13 @@ const MessageComposeForm: React.FC<MessageComposeFormProps> = ({ message, onSave
   const [isPinned, setIsPinned] = useState(message?.is_pinned ?? false);
   const [isPersistent, setIsPersistent] = useState(message?.is_persistent ?? false);
   const [requiresAck, setRequiresAck] = useState(message?.requires_acknowledgment ?? false);
-  const [expiresAt, setExpiresAt] = useState(message?.expires_at ? formatForDateTimeInput(message.expires_at, tz) : '');
-  const [scheduledAt, setScheduledAt] = useState(
-    message?.scheduled_at ? formatForDateTimeInput(message.scheduled_at, tz) : ''
-  );
+  // As loaded, to tell a changed expiry or schedule from one merely re-sent.
+  const loadedExpiresAt = message?.expires_at ? formatForDateTimeInput(message.expires_at, tz) : '';
+  const loadedScheduledAt = message?.scheduled_at ? formatForDateTimeInput(message.scheduled_at, tz) : '';
+  const [expiresAt, setExpiresAt] = useState(loadedExpiresAt);
+  const [scheduledAt, setScheduledAt] = useState(loadedScheduledAt);
+  // A published message cannot be rescheduled; the server refuses it (MSG2-8).
+  const canSchedule = !isEditing || Boolean(message?.scheduled_at);
 
   const [roles, setRoles] = useState<RoleOption[]>([]);
   const [members, setMembers] = useState<User[]>([]);
@@ -184,8 +187,13 @@ const MessageComposeForm: React.FC<MessageComposeFormProps> = ({ message, onSave
           is_pinned: isPinned,
           is_persistent: isPersistent,
           requires_acknowledgment: requiresAck,
-          expires_at: expiresAt ? localToUTC(expiresAt, tz) : null,
-          scheduled_at: scheduledAt ? localToUTC(scheduledAt, tz) : null,
+          // Sent only when changed (null when cleared). The server checks the
+          // expiry whenever it is present, so re-sending a past one refused
+          // every edit of an expired message, even a typo fix (MSG2-7).
+          ...(expiresAt !== loadedExpiresAt ? { expires_at: expiresAt ? localToUTC(expiresAt, tz) : null } : {}),
+          ...(scheduledAt !== loadedScheduledAt
+            ? { scheduled_at: scheduledAt ? localToUTC(scheduledAt, tz) : null }
+            : {}),
         };
         await saveEdit(message.id, update, refused);
         return;
@@ -508,25 +516,27 @@ const MessageComposeForm: React.FC<MessageComposeFormProps> = ({ message, onSave
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <FormField
-          label="Schedule for later (optional)"
-          error={fieldErrors.scheduled_at}
-          id="msg-schedule"
-          hint="Leave blank to publish immediately."
-        >
-          {(field) => (
-            <input
-              {...field}
-              type="datetime-local"
-              className={inputClass}
-              value={scheduledAt}
-              onChange={(e) => {
-                setScheduledAt(e.target.value);
-                clearError('scheduled_at');
-              }}
-            />
-          )}
-        </FormField>
+        {canSchedule && (
+          <FormField
+            label="Schedule for later (optional)"
+            error={fieldErrors.scheduled_at}
+            id="msg-schedule"
+            hint="Leave blank to publish immediately."
+          >
+            {(field) => (
+              <input
+                {...field}
+                type="datetime-local"
+                className={inputClass}
+                value={scheduledAt}
+                onChange={(e) => {
+                  setScheduledAt(e.target.value);
+                  clearError('scheduled_at');
+                }}
+              />
+            )}
+          </FormField>
+        )}
         <FormField label="Expires (optional)" error={fieldErrors.expires_at} id="msg-expires">
           {(field) => (
             <input
