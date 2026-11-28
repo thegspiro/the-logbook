@@ -107,7 +107,12 @@ const EventRSVPModal: React.FC<EventRSVPModalProps> = ({
               min="0"
               max="10"
               value={guestCount}
-              onChange={(e) => onGuestCountChange(parseInt(e.target.value))}
+              onChange={(e) => {
+                // A cleared box is no guests, not NaN: NaN is sent as null,
+                // which the server refuses.
+                const count = parseInt(e.target.value, 10);
+                onGuestCountChange(Number.isNaN(count) ? 0 : count);
+              }}
               className="form-input mt-1 shadow-xs sm:text-sm"
             />
           </div>
