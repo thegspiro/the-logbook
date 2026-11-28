@@ -45,6 +45,12 @@ import MyEntryEditForm from '../components/MyEntryEditForm';
 type ManualField = 'category_id' | 'clock_in_at' | 'clock_out_at' | 'description';
 
 /** The manual entry's fields as a 422 names them; `AdminHoursEntryCreate` is snake_case with no max_length. */
+
+// A compliance period's end arrives as the exclusive bound, the department's
+// midnight that opens the next period; the last day of this one is the
+// instant before it. Formatting the bound itself named January 1.
+const lastInstantBefore = (exclusiveEnd: string): string => new Date(Date.parse(exclusiveEnd) - 1).toISOString();
+
 const MANUAL_SERVER_FIELDS: Record<ManualField, ServerFieldSpec> = {
   category_id: { label: 'Category' },
   clock_in_at: { label: 'Start Time' },
@@ -269,11 +275,21 @@ const AdminHoursPage: React.FC = () => {
       setLocalElapsed(null);
       return;
     }
-    setLocalElapsed(activeSession.elapsedMinutes);
-    const interval = setInterval(() => {
-      setLocalElapsed((prev) => (prev !== null ? prev + 1 : null));
-    }, 60000);
-    return () => clearInterval(interval);
+    // Anchored to the wall clock rather than counted in ticks: a phone
+    // suspends timers while locked or in the background, so a member back
+    // after two hours saw minutes, and the session-limit warning fired late.
+    // The server's elapsed figure at fetch time is the base, not the device's
+    // reading of clockInAt, so a skewed device clock does not shift it.
+    const fetchedAt = Date.now();
+    const base = activeSession.elapsedMinutes;
+    const recompute = () => setLocalElapsed(base + Math.floor((Date.now() - fetchedAt) / 60000));
+    recompute();
+    const interval = setInterval(recompute, 60000);
+    document.addEventListener('visibilitychange', recompute);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', recompute);
+    };
   }, [activeSession]);
 
   useEffect(() => {
@@ -588,11 +604,12 @@ const AdminHoursPage: React.FC = () => {
               const exactProgress =
                 item.requiredHours > 0 ? Math.min(100, (item.loggedHours / item.requiredHours) * 100) : 100;
               const progress = Math.round(exactProgress);
-              // Whether the requirement is met is decided on the raw hours, never
-              // on the rounded display. At 7.9 of 8, rounding first would print
-              // "Requirement met" beside a status badge that still reads behind,
-              // which is how a member stops logging while short.
-              const met = item.loggedHours >= item.requiredHours;
+              // Whether the requirement is met is the server's decision, made on
+              // the raw minutes: loggedHours arrives already rounded to the
+              // quarter, so 7h53m of 8 reads 8 and comparing it here printed
+              // "Requirement met" beside a badge that still reads behind, which
+              // is how a member stops logging while short.
+              const met = item.status === 'compliant';
               // So an unmet requirement never *looks* met: the shown figure is
               // held an increment below the target until the raw hours reach it,
               // and the shortfall is then the difference of the two as shown.
@@ -634,7 +651,7 @@ const AdminHoursPage: React.FC = () => {
                   </div>
                   <p className="text-theme-text-muted mt-1 text-xs">
                     {met ? 'Requirement met' : `${formatHoursExact(remaining)} hrs still needed`} · period ends{' '}
-                    {formatDate(item.periodEnd, tz)}
+                    {formatDate(lastInstantBefore(item.periodEnd), tz)}
                   </p>
                 </div>
               );
