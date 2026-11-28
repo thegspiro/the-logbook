@@ -702,6 +702,44 @@ describe('SchedulingPage', () => {
       expect(payload).toMatchObject({ shift_date: '2099-03-04', template_id: 'tmpl-engine-day' });
     });
 
+    // App-review SCH3-F1: the end date was worked out from the template's
+    // times alone, so custom 08:00-16:00 on the Night template ended the next
+    // afternoon, a 32-hour shift.
+    it('ends a custom daytime shift on the day it starts, whatever the template', async () => {
+      useSchedulingStore.setState({
+        templates: [
+          {
+            id: 'tmpl-night',
+            name: 'Night',
+            is_active: true,
+            is_default: true,
+            start_time_of_day: '19:00',
+            end_time_of_day: '07:00',
+            duration_hours: 12,
+          },
+        ] as never,
+        templatesLoaded: true,
+      });
+      const user = userEvent.setup();
+      renderWithRouter(<SchedulingPage />);
+      await user.click(await screen.findByRole('button', { name: /Create Shift/ }));
+      const dialog = await screen.findByRole('dialog', { name: 'Create Shift' });
+      fireEvent.change(within(dialog).getByLabelText(/Start Date/), { target: { value: '2099-03-04' } });
+      expect(within(dialog).getByLabelText('End Date')).toHaveValue('2099-03-05');
+      await user.click(within(dialog).getByRole('button', { name: /Additional Options/ }));
+      await user.selectOptions(within(dialog).getByRole('combobox', { name: 'Start Time hour' }), '8');
+      await user.selectOptions(within(dialog).getByRole('combobox', { name: 'End Time hour' }), '4');
+      await user.selectOptions(within(dialog).getByRole('combobox', { name: 'End Time AM/PM' }), 'PM');
+
+      expect(within(dialog).getByLabelText('End Date')).toHaveValue('2099-03-04');
+      await user.click(within(dialog).getByRole('button', { name: 'Create Shift' }));
+      await waitFor(() => expect(mockCreateShift).toHaveBeenCalledTimes(1));
+      const payload = mockCreateShift.mock.calls[0]?.[0];
+      const hours =
+        (new Date(String(payload?.end_time)).getTime() - new Date(String(payload?.start_time)).getTime()) / 3_600_000;
+      expect(hours).toBe(8);
+    });
+
     it('sends no template id for a built-in fallback template', async () => {
       useSchedulingStore.setState({ templates: [], templatesLoaded: true });
 

@@ -230,6 +230,7 @@ export const RequestsTab: React.FC = () => {
   // and the second review then fails with "no longer pending" beside the
   // success toast of the first.
   const quickReviewingRef = useRef<Set<string>>(new Set());
+  const cancellingRef = useRef<Set<string>>(new Set());
   const [quickReviewing, setQuickReviewing] = useState<string | null>(null);
   const handleQuickReview = async (type: 'swap' | 'timeoff', id: string, action: 'approved' | 'denied') => {
     if (quickReviewingRef.current.has(id)) return;
@@ -252,6 +253,10 @@ export const RequestsTab: React.FC = () => {
   };
 
   const handleCancel = async (type: 'swap' | 'timeoff', id: string) => {
+    // Same guard as quick review: a double tap sent two cancels, and the
+    // second answered with an error after the success toast.
+    if (cancellingRef.current.has(id)) return;
+    cancellingRef.current.add(id);
     try {
       if (type === 'swap') {
         await schedulingService.cancelSwapRequest(id);
@@ -263,6 +268,8 @@ export const RequestsTab: React.FC = () => {
       void loadData();
     } catch (err) {
       toast.error(getErrorMessage(err, 'Failed to cancel request'));
+    } finally {
+      cancellingRef.current.delete(id);
     }
   };
 
