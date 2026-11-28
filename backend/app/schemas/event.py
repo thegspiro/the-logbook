@@ -1790,6 +1790,10 @@ class RecurringEventCreate(BaseModel):
 
     @model_validator(mode="after")
     def validate_recurrence_fields(self):
+        # The same check a single event has: every occurrence copies this
+        # duration, so an end before the start was stored on the whole series.
+        if self.end_datetime <= self.start_datetime:
+            raise ValueError("end_datetime must be after start_datetime")
         if not self.rolling_recurrence and not self.recurrence_end_date:
             raise ValueError(
                 "recurrence_end_date is required unless rolling_recurrence is true"

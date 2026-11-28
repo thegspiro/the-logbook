@@ -28,7 +28,8 @@ def _db(side_effect):
 
 
 def _event(cancelled=False):
-    return SimpleNamespace(is_cancelled=cancelled)
+    # is_draft as every event has it: reminders are refused for a draft.
+    return SimpleNamespace(is_cancelled=cancelled, is_draft=False)
 
 
 class TestSendEventReminders:
