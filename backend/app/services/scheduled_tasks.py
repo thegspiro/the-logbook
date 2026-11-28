@@ -1925,13 +1925,14 @@ async def run_event_reminders(db: AsyncSession) -> Dict[str, Any]:
                         if rsvp.status in (RSVPStatus.GOING, RSVPStatus.MAYBE)
                     ]
                     if going_user_ids:
+                        # Current members of this department only, as the
+                        # "all" audience above: a member who left still holds
+                        # their RSVP, and was still being reminded.
                         users_result = await db.execute(
-                            select(User).where(
-                                User.id.in_(going_user_ids),
-                                # Leaving never removes an RSVP; the "all" audience
-                                # already filters to current members (NOTIF2-11).
-                                User.is_active,
-                            )
+                            select(User)
+                            .where(User.id.in_(going_user_ids))
+                            .where(User.organization_id == str(org.id))
+                            .where(User.is_active.is_(True))
                         )
                         recipients = list(users_result.scalars().all())
 
@@ -1970,8 +1971,11 @@ async def run_event_reminders(db: AsyncSession) -> Dict[str, Any]:
                 # Notifications expire 24 hours after the event ends
                 expires_at = event.end_datetime + timedelta(hours=24)
 
-                # Send one notification per due interval
-                for hours in due_intervals:
+                # One reminder per run, however many intervals fell due in it:
+                # an event made an hour before it starts, or moved closer,
+                # used to send every member one identical copy per interval.
+                # Every due interval is still marked sent below.
+                for _ in due_intervals[:1]:
                     for user in recipients:
                         prefs = user.notification_preferences or {}
                         user_name = user.display_name
@@ -7257,6 +7261,8 @@ async def run_rolling_recurrence_extend(db: AsyncSession) -> Dict[str, Any]:
     """
     from datetime import timezone as dt_timezone
 
+    from dateutil.relativedelta import relativedelta
+
     from app.models.event import Event, EventType, RecurrencePattern
     from app.services.event_service import (
         EventService,
@@ -7276,7 +7282,9 @@ async def run_rolling_recurrence_extend(db: AsyncSession) -> Dict[str, Any]:
     # (CRON2-31-14, flagged-not-fixed by the prior review pending exactly
     # this verification).
     now = datetime.now(dt_timezone.utc).replace(tzinfo=None)
-    twelve_months = now.replace(year=now.year + 1)
+    # relativedelta: on Feb 29, `replace(year + 1)` raised before any series
+    # was looked at, and the whole task failed that day.
+    twelve_months = now + relativedelta(years=1)
 
     # Find all rolling parent events (not cancelled). Joined to Organization
     # and filtered the same way every other org-scoped loop in this file is
@@ -7385,8 +7393,18 @@ async def run_rolling_recurrence_extend(db: AsyncSession) -> Dict[str, Any]:
             org_key = str(parent.organization_id)
             if org_key not in org_zones:
                 org_zones[org_key] = await resolve_scheduling_timezone(db, org_key)
+            # The series' own day of the month, from its first occurrence in
+            # the department's zone. Stepping from the latest occurrence alone
+            # carried a short month's clamp forward for good (Jan 31, Feb 28,
+            # then the 28th every month after).
+            parent_local = (
+                _as_naive_utc(parent.start_datetime)
+                .replace(tzinfo=dt_timezone.utc)
+                .astimezone(org_zones[org_key])
+            )
             new_occurrences = service._generate_recurrence_dates(
                 timezone_=org_zones[org_key],
+                anchor_day=parent_local.day,
                 start_datetime=latest_start,
                 end_datetime=latest_end,
                 pattern=pattern,
