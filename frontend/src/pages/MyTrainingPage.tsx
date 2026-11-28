@@ -57,6 +57,7 @@ import type {
   RequirementDetail,
 } from '../types/training';
 import { getErrorMessage } from '../utils/errorHandling';
+import toast from 'react-hot-toast';
 import { SkeletonPage } from '../components/ux/Skeleton';
 import { MySkillTestsList } from '../components/training/MySkillTestsList';
 import { useAuthStore } from '../stores/authStore';
@@ -290,6 +291,10 @@ const ConfigEditor: React.FC<ConfigEditorProps> = ({ config, onSave, canManageTr
     try {
       await onSave(draft);
       setDraft({});
+    } catch (err: unknown) {
+      // A refused save used to return the button to "Save N Changes" with
+      // nothing said.
+      toast.error(getErrorMessage(err, 'Could not save the visibility settings.'));
     } finally {
       setSaving(false);
     }

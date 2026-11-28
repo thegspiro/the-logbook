@@ -56,7 +56,7 @@ from its open list.
 | B15 | admin-hours                | AH2    | ⬜     |
 | B16 | reports & analytics        | RPT2   | ✅     |
 | B17 | events                     | EV2    | ⬜     |
-| B18 | training                   | TR2    | ⬜     |
+| B18 | training                   | TR2    | ✅     |
 | B19 | scheduling                 | SCH2   | ✅     |
 | B20 | finance                    | FIN2   | ✅     |
 | B21 | orgs, roles & users        | ORU2   | ✅     |
@@ -3980,6 +3980,26 @@ secrets redacted for non-admins. See
   `confirmed_at`). Three LOW items are recorded as open. Gate clean; 3,064
   backend and 1,670 frontend scheduling tests pass. See scheduling.md → Pass 6.
   Next: B20 finance.
+
+- **B18 training ✅ (pass 6).** Read the compliance grader, member stats,
+  waivers and self-reported training, and the training screens. **8 fixes**,
+  each test red first:
+  - Backend: TR2-10 (HIGH) an impossible period day (June 31, or a leap-year
+    winter window) took every grade in the department down; TR2-11 a
+    certificate read expired on its expiry day on the stats card.
+  - Frontend: TR2-12 (HIGH) re-editing a draft with a file put the edit back;
+    TR2-13 (MED) leaving an edit kept the old values, so the next Submit
+    duplicated; TR2-14 (MED) a refused visibility save said nothing; TR2-15
+    (MED) duplicating an attendance requirement always failed; TR2-16 (MED) a
+    failed requirements load looked empty; TR2-17 voided certificates counted as
+    expired.
+
+  **5 flagged** to KNOWN_LIMITATIONS: TR2-5 (MED) a month fully on leave still
+  owes a share; TR2-6 (MED) tier exemption read by one report; TR2-7 (MED)
+  auto-approved self-reports credit requirements; TR2-8 (MED) officers record
+  their own training; TR2-9 certifications versus Upcoming. Several LOW items
+  are recorded as open. Gate clean. See training.md → Pass 6. Next: B19
+  scheduling.
 
 - **B16 reports & analytics ✅ (pass 6).** Read the report builders, the export
   and schedule services, the reports screens and the analytics dashboard. **13

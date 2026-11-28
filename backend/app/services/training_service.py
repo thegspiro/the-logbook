@@ -132,20 +132,23 @@ class TrainingService:
         # Count active, expiring soon, and expired
         ninety_days = today + timedelta(days=CERTIFICATION_EXPIRING_SOON_DAYS)
 
+        # A certificate is in force through its expiration day, as the
+        # compliance grader and the evaluation data read it; this card used to
+        # call it expired on that day while the matrix called it complete.
         active_certifications = sum(
-            1 for r in certifications if r.expiration_date and r.expiration_date > today
+            1
+            for r in certifications
+            if r.expiration_date and r.expiration_date >= today
         )
 
         expiring_soon = sum(
             1
             for r in certifications
-            if r.expiration_date and today < r.expiration_date <= ninety_days
+            if r.expiration_date and today <= r.expiration_date <= ninety_days
         )
 
         expired = sum(
-            1
-            for r in certifications
-            if r.expiration_date and r.expiration_date <= today
+            1 for r in certifications if r.expiration_date and r.expiration_date < today
         )
 
         return UserTrainingStats(
