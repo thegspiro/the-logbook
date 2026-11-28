@@ -180,6 +180,7 @@ export const SavedReportsPage: React.FC = () => {
     availableReports,
     savedReports,
     savedReportsLoading,
+    savedReportsError,
     generatingReportType,
     fetchAvailableReports,
     fetchSavedReports,
@@ -395,6 +396,15 @@ export const SavedReportsPage: React.FC = () => {
 
         {savedReportsLoading && savedReports.length === 0 ? (
           <p className="text-theme-text-secondary text-sm">Loading saved reports…</p>
+        ) : savedReportsError && savedReports.length === 0 ? (
+          // A failed load is not an empty list: "No saved reports yet" told a
+          // department its reports were gone.
+          <div className="alert-danger flex flex-wrap items-center justify-between gap-3" role="alert">
+            <p className="text-theme-alert-danger-text text-sm">Could not load saved reports: {savedReportsError}</p>
+            <button type="button" className="btn-secondary text-sm" onClick={() => void fetchSavedReports()}>
+              Retry
+            </button>
+          </div>
         ) : savedReports.length === 0 ? (
           <EmptyState
             title="No saved reports yet"

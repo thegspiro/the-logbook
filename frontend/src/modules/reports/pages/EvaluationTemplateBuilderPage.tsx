@@ -16,6 +16,7 @@ import toast from 'react-hot-toast';
 import { EVALUATION_SETUP_LABEL } from '../../../components/layout/evaluationsNavigation';
 import { useConfirm } from '../../../contexts/ConfirmContext';
 import { useTimezone } from '../../../hooks/useTimezone';
+import { useUnsavedChanges } from '../../../hooks/useUnsavedChanges';
 import { formatDateTime } from '../../../utils/dateFormatting';
 import { blankToNull } from '../../../utils/formValues';
 import { getErrorMessage } from '../../../utils/errorHandling';
@@ -73,6 +74,9 @@ const EvaluationTemplateBuilderPage: React.FC = () => {
   const [workflow, setWorkflow] = useState<TemplateWorkflow | null>(null);
   const [details, setDetails] = useState<DetailsForm | null>(null);
   const [dirty, setDirty] = useState(false);
+  // The page tracks unsaved edits and says so, so a refresh or a closed tab
+  // must ask before throwing them away, as the evaluation page already does.
+  useUnsavedChanges({ hasChanges: dirty });
   const [tab, setTab] = useState<Tab>('sections');
   const [busy, setBusy] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
