@@ -13331,6 +13331,53 @@ This pass hides Compare on a saved report's run.
 **The decision:** whether to offer it there, computed from the period the
 server reports for the run.
 
+## Documents — Decisions From App Review B8 Pass 6 (2026-11-26)
+
+Recorded rather than changed. Details in `docs/app-review/documents.md` →
+Pass 6.
+
+### DOC2-13 — Who may read a document that has no folder?
+
+`can_access_document` and the document list treat a document with no folder as
+readable by every member who can see Documents. The code calls such rows
+impossible, but deleting a folder at the database level sets its documents'
+folder to empty rather than refusing. DOC2-11 closed the race that produced
+them through the app. Any that exist, or that a future path produces, are open
+to the whole department, whatever folder they used to sit in.
+
+**The decision:** fail closed (only full administrators read them), or treat
+them as General Documents. Either way, find and refile any that exist.
+
+### DOC2-14 — Minutes deleted after being published
+
+Minutes that were approved and published can be reopened, which returns them
+to draft, and then deleted. Their published copy in Meeting Minutes stays:
+readable, marked "under correction" for good, with its attachments link
+returning nothing.
+
+**The decision:** refuse to delete minutes that were ever approved or
+published, or remove or mark the published copy when they are deleted.
+
+### DOC2-15 — Which folders may an upload go to?
+
+The upload dialog offers the default folder, the current folder and the current
+page of its subfolders; the default is listed twice at the top level. It also
+offers History folders and folders the member can only read, which the server
+then refuses.
+
+**The decision:** whether the picker offers every folder the member may write
+to (a searchable tree), or only where they are.
+
+### DOC2-16 — An owner-only folder nobody can reopen
+
+A folder visible only to its owner can never have its access changed, even by a
+full administrator. If the owner leaves and their account is deleted, the
+folder can be opened only by full administrators, permanently. The screen does
+not offer owner-only folders, but the API creates them.
+
+**The decision:** whether a full administrator may change an owner-only
+folder's access, or reassign its owner.
+
 ## Elections — Five Counting and Ballot Decisions From App Review B5 Pass 7 (2026-11-24)
 
 Recorded rather than changed. Details in `docs/app-review/elections.md` →

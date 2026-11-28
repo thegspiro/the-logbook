@@ -18,6 +18,7 @@ from datetime import date
 from typing import Optional
 
 from loguru import logger
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings as app_settings
@@ -51,7 +52,19 @@ def _last_digest_day(organization: Organization) -> Optional[date]:
         return None
 
 
-def _record_digest(organization: Organization, today: date) -> None:
+async def _record_digest(
+    db: AsyncSession, organization: Organization, today: date
+) -> None:
+    # The task loaded the organization when it started and its session keeps
+    # it past each commit, so its settings may predate a change an
+    # administrator has saved since. Re-read the row under a lock first, or
+    # writing the whole column back undoes that change (DOC2-12).
+    await db.execute(
+        select(Organization)
+        .where(Organization.id == organization.id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
     # A deep copy reassigned whole: a nested mutation of a JSON column is not
     # seen by SQLAlchemy (CLAUDE.md pitfall #12).
     current = copy.deepcopy(organization.settings or {})
@@ -135,6 +148,6 @@ async def send_admin_only_folder_digest(
                 "Admin-only folder digest to member {} failed: {}", member.id, exc
             )
     if sent_total:
-        _record_digest(organization, today)
+        await _record_digest(db, organization, today)
         await db.commit()
     return sent_total

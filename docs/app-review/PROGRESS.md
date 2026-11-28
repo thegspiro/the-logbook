@@ -46,7 +46,7 @@ from its open list.
 | B5  | elections                  | ELEC2  | ✅     |
 | B6  | meetings & minutes         | MM2    | ✅     |
 | B7  | equipment-check            | EC2    | ✅     |
-| B8  | documents                  | DOC2   | ⬜     |
+| B8  | documents                  | DOC2   | ✅     |
 | B9  | membership pipeline        | MP2    | ⬜     |
 | B10 | messaging & communications | MSG2   | ⬜     |
 | B11 | notifications              | NOTIF2 | ✅     |
@@ -4064,3 +4064,24 @@ secrets redacted for non-admins. See
   a certificate's expiry day; RPT2-35 the QR analytics tab; RPT2-36 Compare on
   saved reports. Several LOW items are recorded as open. Gate clean. See
   reports-analytics.md → Pass 6. Next: B17 events.
+
+- **B8 documents ✅ (pass 6).** Read the folder tree's lifecycle (deletes,
+  moves, files, republished minutes, the admin-only digest, printed station
+  documents) and the Documents screen beyond its upload path. **5 fixes**, each
+  test red first.
+  - DOC2-8 (MED): a keystroke could leave the list loading forever.
+  - DOC2-9 (MED-LOW): a refused delete showed behind the dialog.
+  - DOC2-10 (MED): an emptied folder page left "No folders yet" with no way
+    back.
+  - DOC2-11 (MED): a folder moved in mid-delete left its documents folder-less
+    and open to every member. Reproduced with two real sessions; the walk is
+    now a locking read.
+  - DOC2-12 (LOW-MED): the digest stamp undid settings saved meanwhile.
+    Reproduced with two real sessions.
+
+  **4 flagged** to KNOWN_LIMITATIONS: DOC2-13 (folder-less documents are open
+  to all), DOC2-14 (deleted minutes leave their published copy), DOC2-15 (the
+  upload folder picker), DOC2-16 (owner-only folders nobody can reopen). Open:
+  a double-publish race, the roster count, untracked file deletes, the same
+  stale-settings write in three other digests, and six frontend LOWs. Gate
+  clean. See documents.md → Pass 6. Next: B9 membership pipeline.
