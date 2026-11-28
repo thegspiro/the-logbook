@@ -89,3 +89,73 @@ test.describe('Assigned inventory on the member profile fits its card', () => {
     });
   }
 });
+
+const ROSTER_NAMES: [string, string][] = [
+  ['Alexandra', 'Ayala-Montgomery'],
+  ['Christopher', 'Vanderbilt-Okonkwo'],
+  ['Maximiliano', 'Fitzgerald-Hernandez'],
+];
+
+const PHONE_ROSTER = ROSTER_NAMES.map(([firstName, lastName], i) => ({
+  id: `member-${i}`,
+  organization_id: 'org-1',
+  username: `${firstName.toLowerCase()}.${lastName.toLowerCase()}`,
+  email: `admin.department+${firstName.toLowerCase()}.${lastName.toLowerCase()}@northfield-oakville-fire.gov`,
+  first_name: firstName,
+  last_name: lastName,
+  rank: 'lieutenant',
+  membership_number: `NOFR-2019-00${i + 41}`,
+  phone: `(555) 867-53${i}9`,
+  status: i === 2 ? 'probationary' : 'active',
+  roles: [],
+  positions: [],
+}));
+
+const PHONES = [
+  { name: 'iPhone SE 320x568', width: 320, height: 568 },
+  { name: 'Android 360x780', width: 360, height: 780 },
+  { name: 'iPhone 390x844', width: 390, height: 844 },
+];
+
+// The roster's phone cards, as an officer sees them: an email that cannot
+// break sits on the same row as the edit and delete buttons. Without a
+// `min-w-0` on the contact column the email keeps its full width, pushes the
+// buttons out through the card's right edge and widens the page with them, so
+// the fixed bottom bar no longer fits the screen either.
+test.describe('Member roster cards fit a phone', () => {
+  for (const viewport of PHONES) {
+    test(`/members — ${viewport.name}`, async ({ page }) => {
+      await page.setViewportSize(viewport);
+      await signIn(page, { permissions: [...TEST_USER.permissions, 'members.manage'] });
+      await page.route(
+        (url) => url.pathname === '/api/v1/users',
+        (route) => void route.fulfill(json(PHONE_ROSTER))
+      );
+      await page.route(
+        '**/api/v1/users/contact-info-enabled**',
+        (route) => void route.fulfill(json({ enabled: true, show_email: true, show_phone: true, show_mobile: true }))
+      );
+      await page.goto('/members');
+
+      const cards = page.getByRole('list', { name: 'Members' }).getByRole('listitem');
+      await expect(cards).toHaveCount(PHONE_ROSTER.length);
+      await expect(cards.first().getByRole('button', { name: /^Delete / })).toBeVisible();
+
+      const overhang = await cards.evaluateAll((items) =>
+        items.map((card) => {
+          const edge = card.getBoundingClientRect().right;
+          return Math.max(
+            0,
+            ...Array.from(card.querySelectorAll('*')).map((el) => Math.round(el.getBoundingClientRect().right - edge))
+          );
+        })
+      );
+      expect(overhang, 'content past the right edge of each member card, in px').toEqual(PHONE_ROSTER.map(() => 0));
+
+      const pageWider = await page.evaluate(
+        () => document.documentElement.scrollWidth - document.documentElement.clientWidth
+      );
+      expect(pageWider, 'the page scrolls sideways').toBeLessThanOrEqual(0);
+    });
+  }
+});
