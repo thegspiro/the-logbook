@@ -55,7 +55,7 @@ from its open list.
 | B14 | grants & fundraising       | GF2    | ✅     |
 | B15 | admin-hours                | AH2    | ⬜     |
 | B16 | reports & analytics        | RPT2   | ⬜     |
-| B17 | events                     | EV2    | ⬜     |
+| B17 | events                     | EV2    | ✅     |
 | B18 | training                   | TR2    | ✅     |
 | B19 | scheduling                 | SCH2   | ✅     |
 | B20 | finance                    | FIN2   | ✅     |
@@ -4000,6 +4000,27 @@ secrets redacted for non-admins. See
   their own training; TR2-9 certifications versus Upcoming. Several LOW items
   are recorded as open. Gate clean. See training.md → Pass 6. Next: B19
   scheduling.
+
+- **B17 events ✅ (pass 6).** Read creation and recurrence, the waitlist,
+  check-in and finalization, the reminder tasks and the event screens. **14
+  fixes**, each test red first:
+  - Backend: EV2-15 (MED) "Send reminders" sent nothing; EV2-16 (MED) rolling
+    monthly series on the 29th–31st drifted; EV2-17 "5th weekday" series cut
+    short; EV2-18 recurring series could end before starting; EV2-19 rolling
+    Feb 29 and daily edges; EV2-20 skipped dates counted against the cap;
+    EV2-21 removing a party promoted one; EV2-22 reminders to departed members
+    and one per interval.
+  - Frontend: EV2-23 (MED) series navigation searched only 200 old events;
+    EV2-24 (MED) quick Going wiped guests; EV2-25 the kiosk kept a dead code;
+    EV2-26 one failed poll replaced the dashboard; EV2-27 a cleared guest box;
+    EV2-28 calendar and CSV location.
+
+  **8 flagged** to KNOWN_LIMITATIONS, led by EV2-7 (MED, open defect):
+  re-finalizing leaves admin hours nobody earns. Also EV2-8 capacity changes and
+  the waitlist, EV2-9 late self check-out, EV2-10 (MED) self check-in needs no
+  presence, EV2-11 bulk add, EV2-12 (MED) the Past view, EV2-13 Record Times,
+  EV2-14 cancelled-event actions. Several LOW items are recorded as open. Gate
+  clean. See events.md → Pass 6. Next: B18 training.
 
 - **B9 membership pipeline ✅ (pass 6).** Read the lifecycle pass 5 left
   unread (gates, auto-advance, conversion, the inactivity sweep, the status

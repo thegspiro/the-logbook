@@ -4974,7 +4974,7 @@ async def send_event_reminders(
 
     service = EventService(db)
     try:
-        user_ids, error = await service.send_event_reminders(
+        _due_ids, error = await service.send_event_reminders(
             event_id=event_id,
             organization_id=current_user.organization_id,
             reminder_type=body.reminder_type,
@@ -4987,6 +4987,23 @@ async def send_event_reminders(
     if error:
         raise HTTPException(status_code=400, detail=error)
 
+    # send_event_reminders only works out who is due one. The notice and the
+    # email go through the organizer-notification path, whose audiences are
+    # the same: "Send reminders" used to answer "sent" and send nothing.
+    try:
+        delivered, _summary = await service.send_event_notification(
+            event_id=event_id,
+            organization_id=current_user.organization_id,
+            notification_type="reminder",
+            target=(
+                "not_responded" if body.reminder_type == "non_respondents" else "all"
+            ),
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=safe_error_detail(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=safe_error_detail(e))
+
     await log_audit_event(
         db=db,
         event_type="event.send_reminders",
@@ -4995,7 +5012,7 @@ async def send_event_reminders(
         event_data={
             "event_id": str(event_id),
             "reminder_type": body.reminder_type,
-            "sent_count": len(user_ids),
+            "sent_count": delivered,
         },
         user_id=str(current_user.id),
         organization_id=str(current_user.organization_id),
@@ -5004,13 +5021,13 @@ async def send_event_reminders(
     logger.info(
         "User {} sent {} reminders ({}) for event {}",
         current_user.id,
-        len(user_ids),
+        delivered,
         body.reminder_type,
         event_id,
     )
 
     return SendRemindersResponse(
-        message="Reminders sent successfully", sent_count=len(user_ids)
+        message="Reminders sent successfully", sent_count=delivered
     )
 
 

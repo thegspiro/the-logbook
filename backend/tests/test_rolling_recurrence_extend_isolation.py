@@ -45,6 +45,9 @@ def _parent(id_, pattern="weekly"):
         id=id_,
         organization_id="org1",
         created_by="creator",
+        # Every event has one; the runner reads the series' day of the month
+        # from it.
+        start_datetime=datetime(2026, 1, 5, 10, 28),
         recurrence_pattern=SimpleNamespace(value=pattern),
         recurrence_custom_days=None,
         recurrence_weekday=None,

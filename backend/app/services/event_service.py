@@ -4460,9 +4460,13 @@ class EventService:
                 session_ref, organization_id, user_ids={str(user_id)}
             )
 
-        # Auto-promote from waitlist if a "going" attendee was removed
+        # Auto-promote from waitlist if a "going" attendee was removed. Looped
+        # as on the RSVP path: removing a party of four frees four seats, and
+        # one promotion left three idle.
         if was_going and event.max_attendees:
-            await self.promote_from_waitlist(event_id, organization_id)
+            for _ in range(MAX_WAITLIST_PROMOTIONS_PER_RELEASE):
+                if not await self.promote_from_waitlist(event_id, organization_id):
+                    break
 
         return None
 
@@ -6647,6 +6651,7 @@ class EventService:
         month: Optional[int] = None,
         exceptions: Optional[List[str]] = None,
         timezone_: Optional[ZoneInfo] = None,
+        anchor_day: Optional[int] = None,
     ) -> List[Tuple[datetime, datetime]]:
         """
         Generate all occurrence dates for a recurring event.
@@ -6684,6 +6689,7 @@ class EventService:
                 week_ordinal=week_ordinal,
                 month=month,
                 exceptions=exceptions,
+                anchor_day=anchor_day,
             )
             return [(_utc(s), _utc(e)) for s, e in local_occurrences]
 
@@ -6693,11 +6699,19 @@ class EventService:
         # Anchor day-of-month for monthly/annual patterns: each step clamps to
         # the target month's length using this original day, so a series never
         # drifts down permanently after a short month (e.g. the 31st must not
-        # become the 28th from March onward once February clamps it).
-        anchor_day = start_datetime.day
+        # become the 28th from March onward once February clamps it). A caller
+        # extending a series from a later, possibly clamped, occurrence passes
+        # the series' own day, or the extension carried the clamp forward.
+        if anchor_day is None:
+            anchor_day = start_datetime.day
+        # Skipped dates are left out as the series is built, not afterwards,
+        # so they do not count against the cap: filtering after it ended a
+        # series early while its stored end date said otherwise.
+        exception_dates = set(exceptions or [])
 
         while current <= recurrence_end_date:
-            occurrences.append((current, current + duration))
+            if current.strftime("%Y-%m-%d") not in exception_dates:
+                occurrences.append((current, current + duration))
 
             # Stop materializing once past the cap the caller enforces (>365),
             # so a far-future end date can't build tens of thousands of tuples.
@@ -6738,16 +6752,21 @@ class EventService:
                 candidate = self._nth_weekday_of_month(
                     y, m, weekday, week_ordinal, current
                 )
-                if candidate is None:
-                    # Skip months where the ordinal doesn't exist
-                    # Try next month
+                # Months without the ordinal are skipped, however many in a
+                # row: a "5th Monday" can be absent for two months running, and
+                # trying only one more month ended the series there.
+                skipped = 0
+                while candidate is None and skipped < 12:
                     m += 1
                     if m > 12:
                         m = 1
                         y += 1
+                    if date(y, m, 1) > recurrence_end_date.date():
+                        break
                     candidate = self._nth_weekday_of_month(
                         y, m, weekday, week_ordinal, current
                     )
+                    skipped += 1
                 if candidate is None:
                     break
                 current = candidate
@@ -6785,15 +6804,6 @@ class EventService:
                     break
             else:
                 break
-
-        # Filter out exception dates (compare date parts only)
-        if exceptions:
-            exception_dates = set(exceptions)
-            occurrences = [
-                (s, e)
-                for s, e in occurrences
-                if s.strftime("%Y-%m-%d") not in exception_dates
-            ]
 
         return occurrences
 
@@ -6848,8 +6858,11 @@ class EventService:
 
         # Rolling recurrence: auto-set end date to 12 months from start
         if rolling_recurrence and not recurrence_end_date:
+            # 365 days counting the start: a calendar year on, inclusive, was
+            # 366 occurrences of a daily series (367 across a leap day) and
+            # always over the cap; and `replace(year + 1)` raised on Feb 29.
             start = event_data["start_datetime"]
-            recurrence_end_date = start.replace(year=start.year + 1)
+            recurrence_end_date = start + timedelta(days=364)
 
         # Validate the client-supplied location belongs to the caller's org
         # (same guard as create_event): without it a foreign location_id is
@@ -7184,6 +7197,9 @@ class EventService:
 
         if event.is_cancelled:
             return [], "Cannot send reminders for a cancelled event"
+        if event.is_draft:
+            # The scheduled reminders skip drafts; members cannot see one yet.
+            return [], "Cannot send reminders for an unpublished event"
 
         # Get all active members in the organization
         members_result = await self.db.execute(

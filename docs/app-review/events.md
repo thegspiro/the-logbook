@@ -2,7 +2,7 @@
 
 **Prefix:** `EV2` · **Iteration:** B17 · **Reviewed:** 2026-08-06 (pass 1),
 2026-08-08 (pass 2), 2026-08-09 (pass 3), 2026-08-09 (pass 4),
-2026-10-22 (pass 5)
+2026-10-22 (pass 5), 2026-11-26 (pass 6)
 
 **Backend:** `endpoints/events.py` (2,931 L, 53 endpoints), `endpoints/event_requests.py`
 (1,658 L, 18), `services/event_service.py` (3,097 L), model `models/event.py`
@@ -11,6 +11,134 @@
 location), EV-2 (email XSS), EV-3 (org-scope oracle), EV-4 (dead code) fixed;
 EV-5 (public-intake opt-in), EV-6 (RSVP to draft/past), EV-7 (rate-limit +
 TypeError) left open.
+
+---
+
+## Pass 6 (2026-11-26) — recurrence, the waitlist, reminders and the event screens (14 fixed, 8 flagged)
+
+Pass 5 read the update, series and template paths. This pass read creation and
+recurrence expansion, waitlist promotion, check-in and finalization, the
+reminder tasks, and the event screens (detail, list, kiosk, monitoring).
+Backend candidates were reproduced against the real test database first; every
+fix has a test that failed on the unfixed code.
+
+### Flagged (in `docs/KNOWN_LIMITATIONS.md` → "Events — Decisions and Open Defects From App Review B17 Pass 6")
+
+| Id     | Severity | Finding                                                                                                                             |
+| ------ | -------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| EV2-7  | MEDIUM   | **Open defect.** Re-finalizing with zero credit, or after a re-type to an unmapped type, leaves the admin-hours entry (reproduced). |
+| EV2-8  | LOW-MED  | Raising or clearing the cap promotes nobody; lowering it waitlists a going member on their next RSVP save (reproduced).             |
+| EV2-9  | LOW      | Self check-out after the end: measured time is not capped on window events, and refused on the others (reproduced).                 |
+| EV2-10 | MEDIUM   | Self check-in needs no presence and makes a going RSVP past capacity.                                                               |
+| EV2-11 | LOW      | Bulk add overwrites existing responses, contrary to its docstring.                                                                  |
+| EV2-12 | MEDIUM   | The Past view and its calendar show the oldest 100 past events.                                                                     |
+| EV2-13 | LOW-MED  | Record Times pre-fills the scheduled end, so fixing a late start finalizes the event.                                               |
+| EV2-14 | LOW      | A cancelled event has no header actions (no edit, duplicate or delete).                                                             |
+
+### Fixed — backend
+
+- **EV2-15 (MED): "Send reminders" sent nothing.** The endpoint worked out the
+  recipients, audited it and answered "Reminders sent successfully"; no notice
+  or email was made (reproduced: 4 "sent", 0 notifications). It now delivers
+  through the organizer-notification path (notice and email, same audiences)
+  and refuses an unpublished event.
+- **EV2-16 (MED): a rolling monthly series on the 29th–31st drifted.** The
+  nightly extension stepped from the latest, clamped occurrence, so Jan 31 and
+  Feb 28 became the 28th every month after. It now passes the series' own day.
+- **EV2-17 (MED-LOW): a "5th weekday" series stopped at the first two-month
+  gap.** Months without the ordinal are now skipped however many in a row
+  (reproduced: 2 occurrences instead of 5).
+- **EV2-18 (LOW-MED): a recurring series could end before it started.** The
+  recurring schema now has the end-after-start check single events have.
+- **EV2-19 (LOW): rolling-series edges.** A rolling series starting on Feb 29
+  answered 500, the nightly task failed every Feb 29, and a daily rolling series
+  was always 366 occurrences and refused. The horizon is now 365 days counting
+  the start, without `replace(year + 1)`.
+- **EV2-20 (LOW): skipped dates counted against the 365 cap.** They were
+  removed after it, so a series silently ended early. They are now left out as
+  the series is built.
+- **EV2-21 (LOW-MED): removing a party promoted one waitlisted member.** It now
+  promotes as the RSVP path does, as many as fit.
+- **EV2-22 (LOW-MED): the reminder task reminded departed members and sent one
+  copy per due interval.** The "going" audience now holds current members of
+  the department only, and a run sends one reminder however many intervals fell
+  due (all are still marked sent).
+
+### Fixed — frontend
+
+- **EV2-23 (MED): series Prev/Next only searched the department's 200 oldest
+  events.** A recent series lost its position and links. It now asks for the
+  series itself (`recurrence_series_id`).
+- **EV2-24 (MED): quick "Going" on a list card wiped the member's guests.** It
+  sent `guest_count: 0`, releasing their seats to the waitlist; it now leaves the
+  key out, which keeps the stored count.
+- **EV2-25 (LOW-MED): the door kiosk kept a valid code after the event was
+  cancelled, ended or finalized.** A refusal now takes it down; a dropped
+  connection still leaves it up.
+- **EV2-26 (LOW-MED): one failed poll replaced the monitoring dashboard.** It
+  now stays up with a "Not updating" note.
+- **EV2-27 (LOW): clearing the guest box sent `null`.** It now means 0.
+- **EV2-28 (LOW): "Add to Calendar" and the CSV left out a listed location**,
+  and the calendar file had no `DTSTAMP`. Both now use the location's name, and
+  the file carries the stamp.
+
+Changed existing tests, each because the code under it changed shape:
+`EventQRCodePage.test.tsx` modelled a dropped connection as an HTTP 400, which
+now means the server refused the event, and now uses a network error;
+`test_event_reminders.py` and `test_rolling_recurrence_extend_isolation.py`
+stubbed events without `is_draft` and the parent's `start_datetime`, columns
+every event has and the fixed code now reads.
+
+### Open (recorded here only)
+
+- The detail page keeps the previous event's attendee list, statistics and
+  training details when navigating to another event (no key on the route, no
+  stale guard on its fetch), and every post-action refresh reloads the whole
+  page.
+- The officer Check In buttons have no in-flight guard (a double tap toasts
+  success then an error).
+- Quick RSVP on a phase-gated session shows the refusal with no way to proceed.
+- The list has no stale guard when toggling Upcoming and Past.
+- A multi-day event shows only its end time, without the date.
+- `recurrence_week_ordinal` accepts any integer (0, 6, -2 make a one-occurrence
+  series).
+- The reminder task commits once per department after sending, so a later
+  failure there resends the earlier events' reminders next run (at-least-once).
+
+### Verified good ✅ (this pass)
+
+- Recurrence steps in the department's wall-clock time; cancelled occurrences
+  are never recreated by the extension; organization checks on recurring
+  creation hold.
+- Waitlist promotion locks the event and counts seats with a locking read, in
+  queue order, and never promotes twice.
+- Check-in refuses drafts, cancelled and finalized events and duplicates;
+  finalize, reopen and End Event lock, credit in one transaction and resync
+  admin hours in place.
+- Every route read is gated and org-scoped; organizers cannot write their own
+  attendance.
+- Frontend: snake_case throughout; create and edit payloads omit or null as they
+  should; capacity and waitlist counts come from the server; dialogs use
+  `useConfirm` and inert scrims.
+
+### Not read (scope, stated plainly)
+
+`list_events` and its annotations, the update/series/cancel/delete paths (pass
+5's scope), analytics, CSV import and templates; the event-request intake; the
+staffing, attachment, guest-link, transfer and postpone routes; most
+event-detail cards and the event composer form.
+
+### Completion gate (pass 6)
+
+| Check                                                   | Result                                                    |
+| ------------------------------------------------------- | --------------------------------------------------------- |
+| `flake8` / `black` / `isort` (changed files)            | ✅ clean                                                  |
+| mypy ratchet                                            | ✅ 0 errors, matching the baseline                        |
+| endpoint docstring permissions check                    | ✅ 0 warnings                                             |
+| new backend tests                                       | ✅ 10, each failed on the unfixed code; 4 in the unit job |
+| event, RSVP, recurrence, reminder and check-in tests    | ✅ 3,473 passed, 1 skipped                                |
+| `npm run typecheck` / ESLint (changed files) / Prettier | ✅ clean                                                  |
+| event frontend tests                                    | ✅ 794 passed in 59 files; 8 new tests, each failed first |
 
 ---
 
