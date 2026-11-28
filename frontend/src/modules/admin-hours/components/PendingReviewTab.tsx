@@ -44,6 +44,11 @@ const PendingReviewTab: React.FC = () => {
   // by a duration preset or a start-date shift rather than typed directly —
   // see the identical field in AdminHoursPage.tsx and `resolveEndUtc`.
   const [editEndPin, setEditEndPin] = useState<DerivedEndTime | null>(null);
+  // The category the entry had when Edit opened: re-sending it unchanged is
+  // refused once the department has retired it, which made such an entry
+  // impossible to correct (members' own edit form already sends it only when
+  // changed).
+  const [editOriginalCategory, setEditOriginalCategory] = useState<string | null>(null);
 
   // Fetch pending entries when page changes
   useEffect(() => {
@@ -107,6 +112,7 @@ const PendingReviewTab: React.FC = () => {
       description: entry.description ?? '',
       category_id: entry.categoryId,
     });
+    setEditOriginalCategory(entry.categoryId);
     setEditEndPin(null);
   };
 
@@ -138,8 +144,10 @@ const PendingReviewTab: React.FC = () => {
       // `resolveEndUtc` prefers `editEndPin`'s exact instant over re-parsing
       // the string, so a duration selected across a DST fall-back fold
       // submits at its real length instead of being silently shortened.
+      const { category_id: categoryId, ...unchangedCategoryOmitted } = editData;
       await editEntry(editingEntryId, {
-        ...editData,
+        ...unchangedCategoryOmitted,
+        ...(categoryId && categoryId !== editOriginalCategory ? { category_id: categoryId } : {}),
         clock_in_at: editData.clock_in_at ? localToUTC(editData.clock_in_at, tz) : undefined,
         clock_out_at: editData.clock_out_at ? resolveEndUtc(editData.clock_out_at, editEndPin, tz) : undefined,
       });

@@ -13215,6 +13215,52 @@ hidden from the list by default.
 **The decision:** whether Delete and Duplicate should stay available on a
 cancelled event.
 
+## Admin Hours — Decisions From App Review B15 Pass 6 (2026-11-26)
+
+Details in `docs/app-review/admin-hours.md` → Pass 6.
+
+### AH2-2 — A member can rewrite a machine-timed or system-closed entry
+
+When the stale-session sweep or an officer's force clock-out closes a session,
+the entry goes to Pending with a note ("Auto-closed: exceeded 2.0h session
+limit", "Session ended by admin"). The member can then edit it: stretch the end
+time up to the 24-hour cap and blank the description, which removes the note.
+The entry still reads as QR- or NFC-timed, so the officer reviewing it sees what
+looks like a machine-recorded session with nothing to flag it. Reproduced: a
+session capped at 120 minutes became 1,379 with no note. The edit is audited,
+but the review screen does not show the audit.
+
+**The decision:** refuse member time edits on entries not entered by hand,
+mark such an edit as manual, or keep system notes out of the description the
+member can edit.
+
+### AH2-3 — A category with no session limit approves a session of any length
+
+A category may have no session limit. If it also needs no approval, a session
+left clocked in for three days is approved in full at clock-out. Manual entries
+are capped at 24 hours.
+
+**The decision:** whether a session over 24 hours (or another length) on a
+category with no limit should go to Pending.
+
+### AH2-4 — Approving one's own entries from Pending Review
+
+Pending Review offers Approve and selection on the officer's own entries. A
+single approval is refused with a clear message unless self-approval is
+allowed, but a bulk approval skips them silently: five selected, "Approved 3
+entries", and nothing says why two are left.
+
+**The decision:** hide or disable the controls on one's own entries when
+self-approval is off, and have the bulk result say how many were left for
+another approver (the response does not report it today).
+
+### AH2-5 — A retired category cannot be brought back from the screen
+
+Deactivating a category is offered; reactivating is not, although the API
+accepts it.
+
+**The decision:** add a Reactivate action, or keep retirement one-way.
+
 ## Membership Pipeline — Decisions From App Review B9 Pass 6 (2026-11-26)
 
 Recorded rather than changed. Details in

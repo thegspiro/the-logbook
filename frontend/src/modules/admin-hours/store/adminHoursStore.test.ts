@@ -319,6 +319,19 @@ describe('adminHoursStore', () => {
 
       expect(getState().error).toBeTypeOf('string');
     });
+
+    // The session may already have been ended elsewhere (force clock-out, the
+    // stale-session sweep, another device): the server answers 400 and the
+    // card must not stay up counting a session that no longer exists.
+    it('re-reads the session after a refused clock-out', async () => {
+      useAdminHoursStore.setState({ activeSession: makeActiveSession() });
+      mockClockOut.mockRejectedValue(new Error('No active session found'));
+      mockGetActiveSession.mockResolvedValue(null);
+
+      await expect(getState().clockOut('entry1')).rejects.toThrow('No active session found');
+
+      await vi.waitFor(() => expect(getState().activeSession).toBeNull());
+    });
   });
 
   describe('clockOutByCategory', () => {

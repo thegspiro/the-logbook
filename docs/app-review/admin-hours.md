@@ -2,7 +2,7 @@
 
 **Prefix:** `AH2` · **Iteration:** B15 · **Reviewed:** 2026-08-06 (pass 1),
 2026-08-08 (pass 2), 2026-08-09 (pass 3), 2026-08-09 (pass 4),
-2026-10-20 (pass 5)
+2026-10-20 (pass 5), 2026-11-26 (pass 6)
 
 **Backend:** `endpoints/admin_hours.py` (1,042 L, 27 endpoints),
 `services/admin_hours_service.py` (1,545 L), model `models/admin_hours.py`
@@ -10,6 +10,140 @@
 **Prior audit:** `docs/module-audit/admin-hours.md` (iteration 15) — AH-1 (HIGH
 self-credit), AH-2 (cross-tenant stale-session mutation), AH-3, AH-4 (SoD) fixed;
 AH-5 (minor scoping omissions, flagged not-exploitable) left open.
+
+---
+
+## Pass 6 (2026-11-26) — clock-out, overlaps, event credit and the hours screens (12 fixed, 4 flagged)
+
+Pass 5 read the update, edit and mapping paths. This pass read clock-in and
+clock-out, the stale-session sweep, event-attendance crediting, approval, the
+summary and compliance builders, the export, and the whole frontend module.
+Backend candidates were reproduced against the real test database first. Every
+fix has a test that failed on the unfixed code, except AH2-10 (row locks) and
+AH2-12 (an export cell and a log line).
+
+### Flagged (in `docs/KNOWN_LIMITATIONS.md` → "Admin Hours — Decisions From App Review B15 Pass 6")
+
+| Id    | Severity | Finding                                                                                                                                                    |
+| ----- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| AH2-2 | MEDIUM   | A member can stretch an auto-closed or force-closed entry and delete its note; it still reads as machine-timed (reproduced: 120 → 1,379 minutes, no note). |
+| AH2-3 | MEDIUM   | A category with no session limit and no approval approves a session of any length.                                                                         |
+| AH2-4 | LOW      | Pending Review offers Approve on one's own entries; bulk approval skips them without saying so.                                                            |
+| AH2-5 | LOW      | A retired category cannot be reactivated from the screen.                                                                                                  |
+
+### Fixed — backend
+
+- **AH2-6 (MED): clocking out past the session limit kept the whole session.**
+  The limit was applied only by the sweep, every 30 minutes; a member who
+  clocked out first kept the uncapped time and, on a category that needs no
+  approval (most seeded ones), was approved outright. Reproduced: 30 hours on a
+  1-hour category approved at 1,800 minutes. The sweep's rule now lives in one
+  helper, `_cap_over_limit`, used by both: capped at the limit, noted, pending,
+  and audited with `trigger="clock_out"`.
+- **AH2-7 (MED): the overlap check ignored open sessions.** A member clocked in
+  at 09:00 could log 10:00–11:00 by hand and be credited the hour twice at
+  clock-out. An open session now claims everything from its start.
+- **AH2-8 (MED): re-crediting an event re-typed to an unmapped type kept the old
+  credit.** The resync returned before removing entries under categories the
+  event no longer maps to. The cleanup now runs first. (A re-type to Training
+  still returns early, as `test_admin_hours_training_excluded.py` requires; see
+  Open.)
+- **AH2-9 (MED): one oversized session limit stopped the sweep for everyone.**
+  A limit too large for a `timedelta` (the schema allows any float32) raised
+  `OverflowError`, and the single-transaction sweep closed nothing anywhere.
+  Such a limit is now treated as no limit.
+- **AH2-10 (LOW): clock-out, force clock-out and the sweep read the row without
+  a lock** (Pitfall 27), so a clock-out could write the uncapped time and
+  APPROVED over a sweep's capped, pending result. All three now lock. No test:
+  the race needs two committing sessions.
+- **AH2-11 (LOW-MED): approve, reject and bulk approve were not audited.** A
+  resubmission clears `approved_by` and `rejection_reason`, so nothing recorded
+  who rejected an entry. Both endpoints now write an audit event with ids only.
+- **AH2-12 (LOW): a 0-minute entry exported as a blank, and a rejection logged
+  "rejectd".** No test: an export cell and a log line.
+
+### Fixed — frontend
+
+- **AH2-13 (MED): "Requirement met" beside "At risk".** The page compared the
+  server's rounded hours against the target: 7h53m of 8 arrives as 8, so it
+  printed a full bar and "Requirement met" while the badge said behind. It now
+  takes the server's status. The existing test fed 7.9, a value the server never
+  sends.
+- **AH2-14 (LOW-MED): every requirement's "period ends" was a day late.** The
+  server sends the exclusive bound (the midnight opening the next period); the
+  page printed it. It now prints the instant before.
+- **AH2-15 (MED): an officer could not correct an entry in a retired category.**
+  The edit always re-sent the category, which the server refuses once retired.
+  It is now sent only when changed, as the member's form already does.
+- **AH2-16 (LOW-MED): a refused clock-out left the clocked-in card up.** When the
+  session had already been ended elsewhere, every tap failed until a reload. The
+  store now re-reads the session after a refusal.
+- **AH2-17 (LOW-MED): the elapsed timer stopped while the phone slept.** It
+  counted ticks, which a locked phone suspends, and the session-limit warning
+  used the same figure. It now follows the wall clock from the server's figure
+  and catches up when the page is shown again.
+
+### Open (recorded here only)
+
+- After an approve, reject or edit, Pending Review reloads page 1 at the
+  server's default 50 rows while its pager still shows the old page.
+- The member and officer entry lists have no stale-response guard, and Pending
+  Review and All Entries share one list in the store.
+- The clocked-in card disappears and the page jumps on every filter or page
+  change, because the session is re-fetched with the entries.
+- The Org Summary presets use the browser's date, not the department's; a
+  failed summary load shows "Loading summary…" forever.
+- Both edit forms re-send the times on every save at minute precision, so a
+  QR entry's duration can move by a minute on a description fix.
+- Approve, reject and bulk approve have no in-flight guard (a double tap toasts
+  success then an error).
+- The QR clock-in page shows the device's time as "Started At", and a failed
+  session lookup in its 409 branch fails silently.
+- An event re-typed to Training keeps the admin-hours credit its earlier type
+  made; `event_service.credit_admin_hours_for_rsvp` returns before removing the
+  credit when a corrected duration is 0.
+- Deactivating a category skips the active-sessions check deleting one makes;
+  `_parse_optional_date` does not normalize an offset to UTC (the frontend sends
+  `Z`); `compliance_officer_service` bounds an admin-hours range with
+  `<= end_dt`.
+
+### Verified good ✅ (this pass)
+
+- One active session per member under a User-row lock and a locking read
+  (AH-10 holds); the NFC toggle debounces and refuses another category.
+- Single and bulk approval enforce separation of duties and honour the
+  self-approval setting; status moves only out of Pending; a rejection needs a
+  reason.
+- The summary counts approved and pending, compliance counts approved only;
+  both are labelled for what they count. Compliance and the export are bounded
+  in the department's timezone.
+- Event crediting is idempotent under the finalize lock; a withdrawn credit
+  stays withdrawn across a resync.
+- Every route is gated (`admin_hours.manage` for officer routes, the caller for
+  self routes) and every by-id query is org-scoped; the export uses
+  `SafeCsvChunks`.
+- The frontend reads camelCase responses throughout, uses `useConfirm`, converts
+  local to UTC once with the DST fold handled, and gives All Entries the reflow
+  tier and labels.
+
+### Not read (scope, stated plainly)
+
+`nfc_tag_service` beyond the tap path; the event finalize flow beyond its
+crediting calls; other modules' admin-hours aggregates; the historical-import
+and CRR writers; the frontend tests beyond those touched; `CategoryForm.tsx`
+past its first 60 lines.
+
+### Completion gate (pass 6)
+
+| Check                                                         | Result                                                    |
+| ------------------------------------------------------------- | --------------------------------------------------------- |
+| `flake8` / `black` / `isort` (changed files)                  | ✅ clean                                                  |
+| mypy ratchet                                                  | ✅ 0 errors, matching the baseline                        |
+| endpoint docstring permissions check                          | ✅ 0 warnings                                             |
+| new backend tests                                             | ✅ 8 (6 failed on the unfixed code, 2 controls); 2 unit   |
+| admin-hours, hours, attendance-credit and clock backend tests | ✅ 1,175 passed, 1 skipped                                |
+| `npm run typecheck` / ESLint (changed files) / Prettier       | ✅ clean                                                  |
+| admin-hours frontend tests                                    | ✅ 136 passed in 18 files; 5 new tests, each failed first |
 
 ---
 
