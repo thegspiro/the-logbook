@@ -217,6 +217,12 @@ const RecordAttachmentsModal: React.FC<{
   );
 };
 
+// Only a completed, unvoided record is a certificate held. A voided record
+// keeps its expiry date, so it used to count in Expired while its own row
+// hid the badge; the server counts expirations on completed records only.
+const heldCertificate = (t: { status: string; voided_at?: string | null | undefined }): boolean =>
+  t.status === 'completed' && !t.voided_at;
+
 export const MemberTrainingHistoryPage: React.FC = () => {
   const { userId } = useParams<{ userId: string }>();
   const tz = useTimezone();
@@ -368,9 +374,13 @@ export const MemberTrainingHistoryPage: React.FC = () => {
     // Apply status filter
     if (filterStatus !== 'all') {
       result = result.filter((t) => {
-        if (filterStatus === 'expired') return isCertificationExpired(t.expiration_date, tz);
+        if (filterStatus === 'expired') return heldCertificate(t) && isCertificationExpired(t.expiration_date, tz);
         if (filterStatus === 'expiring_soon')
-          return isCertificationExpiringSoon(t.expiration_date, tz) && !isCertificationExpired(t.expiration_date, tz);
+          return (
+            heldCertificate(t) &&
+            isCertificationExpiringSoon(t.expiration_date, tz) &&
+            !isCertificationExpired(t.expiration_date, tz)
+          );
         return t.status === filterStatus;
       });
     }
@@ -409,9 +419,12 @@ export const MemberTrainingHistoryPage: React.FC = () => {
     const completed = periodTrainings.filter((t) => t.status === 'completed');
     const totalHours = sumHoursToQuarter(completed.map((t) => t.hours_completed));
     const expiringSoon = trainings.filter(
-      (t) => isCertificationExpiringSoon(t.expiration_date, tz) && !isCertificationExpired(t.expiration_date, tz)
+      (t) =>
+        heldCertificate(t) &&
+        isCertificationExpiringSoon(t.expiration_date, tz) &&
+        !isCertificationExpired(t.expiration_date, tz)
     );
-    const expired = trainings.filter((t) => isCertificationExpired(t.expiration_date, tz));
+    const expired = trainings.filter((t) => heldCertificate(t) && isCertificationExpired(t.expiration_date, tz));
     const scheduled = trainings.filter((t) => t.status === 'scheduled');
 
     return {

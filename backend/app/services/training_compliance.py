@@ -64,6 +64,18 @@ from app.utils.sql_search import LIKE_ESCAPE_CHAR, like_pattern
 from app.utils.training_match_key import training_match_key
 
 
+def _clamped_date(year: int, month: int, day: Optional[int]) -> date:
+    """The date, with its day held to that month's length in that year.
+
+    A day the month does not have (June 31, a Feb 29 outside a leap year) used
+    to raise, and an unset end day was measured in the wrong year. Either took
+    every grade in the department down, not one member's. No day means the
+    month's last.
+    """
+    last = calendar.monthrange(year, month)[1]
+    return date(year, month, min(day or last, last))
+
+
 def _get_custom_annual_window(req, today: date):
     """Compute a custom annual compliance window from period_start/end fields.
 
@@ -82,8 +94,6 @@ def _get_custom_annual_window(req, today: date):
     start_month = getattr(req, "period_start_month", None) or 1
     start_day = getattr(req, "period_start_day", None) or 1
     end_day = getattr(req, "period_end_day", None)
-    if not end_day:
-        end_day = calendar.monthrange(today.year, end_month)[1]
 
     crosses_year = start_month > end_month
 
@@ -92,10 +102,10 @@ def _get_custom_annual_window(req, today: date):
         # Two candidate cycles:
         #   Cycle A: Nov <year-1> -> Jan <year>
         #   Cycle B: Nov <year>   -> Jan <year+1>
-        cycle_end_a = date(today.year, end_month, end_day)
-        cycle_start_a = date(today.year - 1, start_month, start_day)
-        cycle_end_b = date(today.year + 1, end_month, end_day)
-        cycle_start_b = date(today.year, start_month, start_day)
+        cycle_end_a = _clamped_date(today.year, end_month, end_day)
+        cycle_start_a = _clamped_date(today.year - 1, start_month, start_day)
+        cycle_end_b = _clamped_date(today.year + 1, end_month, end_day)
+        cycle_start_b = _clamped_date(today.year, start_month, start_day)
 
         if cycle_start_a <= today <= cycle_end_a:
             return cycle_start_a, cycle_end_a
@@ -110,7 +120,10 @@ def _get_custom_annual_window(req, today: date):
     else:
         # Same-year window (e.g. Mar 1 -> Jun 30)
         yr = req.year if req.year else today.year
-        return date(yr, start_month, start_day), date(yr, end_month, end_day)
+        return (
+            _clamped_date(yr, start_month, start_day),
+            _clamped_date(yr, end_month, end_day),
+        )
 
 
 def next_window_opens(req, today: date) -> Optional[date]:
@@ -129,13 +142,10 @@ def next_window_opens(req, today: date) -> Optional[date]:
     if start_month <= req.period_end_month:
         return None
     start_day = getattr(req, "period_start_day", None) or 1
-    end_day = (
-        getattr(req, "period_end_day", None)
-        or calendar.monthrange(today.year, req.period_end_month)[1]
-    )
-    if today <= date(today.year, req.period_end_month, end_day):
+    end_day = getattr(req, "period_end_day", None)
+    if today <= _clamped_date(today.year, req.period_end_month, end_day):
         return None
-    opens = date(today.year, start_month, start_day)
+    opens = _clamped_date(today.year, start_month, start_day)
     return opens if today < opens else None
 
 
