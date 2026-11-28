@@ -5,7 +5,7 @@
  * Members can see available positions and volunteer for shifts they're qualified for.
  */
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { DialogPanel } from '../../components/ux/DialogPanel';
 import { Clock, Users, UserPlus, Truck, Loader2, CalendarDays, Filter, Check, MapPin } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -59,6 +59,7 @@ export const OpenShiftsTab: React.FC<OpenShiftsTabProps> = ({ onViewShift, refre
   const [shifts, setShifts] = useState<ShiftRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadFailed, setLoadFailed] = useState(false);
+  const loadSeq = useRef(0);
   const [dateFilter, setDateFilter] = useState('');
   const [signupShiftId, setSignupShiftId] = useState<string | null>(null);
   const [signupPosition, setSignupPosition] = useState('');
@@ -111,6 +112,10 @@ export const OpenShiftsTab: React.FC<OpenShiftsTabProps> = ({ onViewShift, refre
   };
 
   const loadShifts = useCallback(async () => {
+    // Typing a year into the date box fires a load per keystroke; only the
+    // newest may paint the list, or an earlier date's shifts can win.
+    loadSeq.current += 1;
+    const ticket = loadSeq.current;
     setLoading(true);
     try {
       // No fallback to the plain shifts list. This tab used to swap one in
@@ -122,14 +127,16 @@ export const OpenShiftsTab: React.FC<OpenShiftsTabProps> = ({ onViewShift, refre
       const data = await schedulingService.getOpenShifts({
         start_date: dateFilter || undefined,
       });
+      if (ticket !== loadSeq.current) return;
       setShifts(data);
       setLoadFailed(false);
     } catch (err) {
+      if (ticket !== loadSeq.current) return;
       setShifts([]);
       setLoadFailed(true);
       toast.error(getErrorMessage(err, 'Failed to load shifts'));
     } finally {
-      setLoading(false);
+      if (ticket === loadSeq.current) setLoading(false);
     }
   }, [dateFilter]);
 

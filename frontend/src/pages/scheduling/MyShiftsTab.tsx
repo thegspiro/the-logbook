@@ -103,6 +103,7 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift, refreshKe
 
   // Inline confirmation for decline
   const [confirmingDecline, setConfirmingDecline] = useState<string | null>(null);
+  const decliningRef = useRef<Set<string>>(new Set());
 
   // Per-button loading states
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
@@ -155,6 +156,11 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift, refreshKe
   };
 
   const handleDecline = async (assignmentId: string) => {
+    // A ref, not state: a second tap in the same tick sees it, where it would
+    // not yet see a re-render. Without it the success toast was followed by
+    // "Failed to decline shift" from the duplicate request.
+    if (decliningRef.current.has(assignmentId)) return;
+    decliningRef.current.add(assignmentId);
     try {
       await schedulingService.declineAssignment(assignmentId);
       toast.success('Shift declined');
@@ -162,6 +168,8 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift, refreshKe
       void loadData();
     } catch (err) {
       toast.error(getErrorMessage(err, 'Failed to decline shift'));
+    } finally {
+      decliningRef.current.delete(assignmentId);
     }
   };
 

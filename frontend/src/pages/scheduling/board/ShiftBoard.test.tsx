@@ -650,6 +650,22 @@ describe("the board's today", () => {
     expect(todayCell()).toHaveAccessibleName(/Thursday, August 20/);
   });
 
+  // App-review SCH3-F10: the Today button read the browser's clock, so near
+  // midnight it jumped to a different day from the one the board rings.
+  it("takes the Today button to the department's day", async () => {
+    vi.setSystemTime(new Date('2026-08-21T02:00:00Z'));
+    const onVisibleDateChange = vi.fn();
+    const user = userEvent.setup();
+    renderBoard({ onVisibleDateChange });
+    await screen.findByText(/open seats this month/i);
+
+    await user.click(screen.getByRole('button', { name: 'Today' }));
+
+    const calls = onVisibleDateChange.mock.calls;
+    const day = calls[calls.length - 1]?.[0] as Date | undefined;
+    expect(day?.getDate()).toBe(20);
+  });
+
   it('moves on to the next day while the board stays open', async () => {
     // The clock ticks on a shared 30-second interval, so this test fakes it.
     vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'] });
@@ -794,5 +810,45 @@ describe('apparatus outreach on the board', () => {
     await screen.findByText(/open seats this month/i);
 
     expect(mockOutreach).not.toHaveBeenCalled();
+  });
+});
+
+// App-review SCH3-F3: whichever response arrived last was drawn, so two quick
+// steps forward could leave one month's shifts under the next month's header.
+describe('a slow answer for a month already left behind', () => {
+  it('does not replace the month on screen', async () => {
+    let answerAugust: (rows: ShiftRecord[]) => void = () => {};
+    let answerSeptember: (rows: ShiftRecord[]) => void = () => {};
+    mockGetMonth.mockReset();
+    mockGetMonth.mockImplementation(
+      (_year: number, month: number) =>
+        new Promise<ShiftRecord[]>((resolve) => {
+          if (month === 8) answerAugust = resolve;
+          else answerSeptember = resolve;
+        })
+    );
+    const { rerender } = renderBoard();
+    await waitFor(() => expect(mockGetMonth).toHaveBeenCalledWith(2026, 8, undefined));
+    rerender(
+      <ShiftBoard
+        view="month"
+        visibleDate={new Date(2026, 8, 15)}
+        onVisibleDateChange={vi.fn()}
+        onViewChange={vi.fn()}
+      />
+    );
+    await waitFor(() => expect(mockGetMonth).toHaveBeenCalledWith(2026, 9, undefined));
+
+    await act(async () => {
+      answerSeptember([shift({ id: 'sep-10', shift_date: '2026-09-10', attendee_count: 1 })]);
+      await Promise.resolve();
+    });
+    expect(await screen.findByTestId('month-open-seats')).toHaveTextContent('3 open seats this month');
+    await act(async () => {
+      answerAugust([SHORT_DAY, MINE]);
+      await Promise.resolve();
+    });
+
+    expect(screen.getByTestId('month-open-seats')).toHaveTextContent('3 open seats this month');
   });
 });

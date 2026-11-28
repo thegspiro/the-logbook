@@ -2,7 +2,7 @@
 
 **Prefix:** `SCH2` · **Iteration:** B19 · **Reviewed:** 2026-08-06 (pass 1),
 2026-08-08 (pass 2), 2026-08-09 (pass 3), 2026-08-09 (pass 4),
-2026-10-24 (pass 5)
+2026-10-24 (pass 5), 2026-11-26 (pass 6)
 
 **Backend:** `endpoints/scheduling.py` (~1,900 L), `services/scheduling_service.py`
 (~5,000 L)
@@ -11,6 +11,126 @@
 escalation), SCH-2 (self-signup guards), SCH-3 (DoS), SCH-4 (`shift_officer_id` +
 hours-report join) fixed; SCH-5 (swap accept-path), SCH-6 (`manual_hours` + FKs)
 left open.
+
+---
+
+## Pass 6 (2026-11-26) — swaps, check-out, time off, declines and the scheduling screens (15 fixed, 9 flagged)
+
+Pass 5 read the update payloads. This pass read how a seat moves (swaps, pick-ups,
+declines, time off, finalize), member check-in and check-out, pattern generation and
+the swap-expiry task, then the board, Create Shift, templates, requests and report
+screens. Backend candidates were reproduced against the real test database first;
+every fix has a test that failed on the unfixed code.
+
+### Flagged (in `docs/KNOWN_LIMITATIONS.md` → "Scheduling — Decisions From App Review B19 Pass 6")
+
+| Id      | Severity | Finding                                                                                                                      |
+| ------- | -------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| SCH2-5  | MEDIUM   | A self check-out has no cap: checking out days late credits days of hours (reproduced: a 12-hour shift, 120 hours).          |
+| SCH2-6  | MEDIUM   | Approving time off still cancels seats on past shifts that are not yet finalized, retroactively.                             |
+| SCH2-7  | MEDIUM   | Two claims at once on overlapping shifts can double-book a member; each shift's lock covers only its own seats.              |
+| SCH2-8  | LOW/MED  | If the template load fails, Create Shift offers the built-in Day/Night/24hr templates as if none were configured.            |
+| SCH2-9  | LOW/MED  | A supervisor's time-off list hides their crew's decided requests, which the count includes (pitfall 29).                     |
+| SCH2-10 | LOW      | The coverage report counts outreach shifts, which the other duty figures exclude.                                            |
+| SCH2-11 | LOW      | Call Volume's "Avg Response" is a mean of per-period averages, not of calls.                                                 |
+| SCH2-12 | LOW      | The reports page is gated by `scheduling.manage`; its endpoints need `scheduling.report` (Availability `scheduling.assign`). |
+| SCH2-13 | LOW      | A seat moved by a swap keeps the previous holder's `confirmed_at`.                                                           |
+
+### Fixed — backend
+
+- **SCH2-14 (MED): a member who had once declined a shift could not take a seat on it
+  by swap.** A declined or cancelled row stays behind, and the one-row-per-member key
+  refused the seat being rewritten to them, so picking up an open swap, accepting an
+  offer or an officer's approval answered "an unexpected error occurred"
+  (reproduced). The inactive row now goes first, as `create_assignment` already did.
+- **SCH2-15 (MED): check-out read the shift and the attendance row unlocked.** Two
+  check-outs at once both computed and wrote the duration. Both rows are now locked
+  and the attendance re-read under the lock (pitfall 27).
+- **SCH2-16 (MED): approving time off cancelled the member's seat on a shift already
+  finalized**, whose hours were credited (reproduced). Finalized shifts are skipped.
+- **SCH2-17 (MED): a member could decline a seat on a finalized or cancelled shift**
+  (reproduced) and decline a seat that was no longer active. Both are refused; a second
+  decline answers with the declined seat.
+- **SCH2-18 (MED): a pattern accepted negative days on or off**, so "2 on, -2 off"
+  made a zero-day cycle that generation divided by. Both fields are now `ge=0`.
+- **SCH2-19 (LOW/MED): the swap-expiry task read pending offers unlocked**, so a
+  pick-up committing in between had its APPROVED overwritten with "Expired
+  automatically". The read now locks and re-reads (no regression test: the race needs
+  two connections).
+
+### Fixed — frontend
+
+- **SCH2-20 (MED/HIGH): Create Shift built the end time from the template's times,
+  not the ones sent.** Custom 08:00–16:00 on the Night template was saved as a
+  32-hour shift ending the next afternoon, and the preview showed the template's
+  times. The end date now follows the custom times (hours and minutes), the preview
+  shows them, and an overnight end is set to the same wall-clock time on the next day
+  instead of 24 UTC hours later, which was an hour off on the night the clocks change.
+- **SCH2-21 (MED): Create Shift kept a stale template list.** A template created,
+  deactivated or deleted on the templates page stayed missing from, or still offered
+  by, Create Shift until a full reload; the server then refused the stale one. Every
+  change there now drops the store's cached list.
+- **SCH2-22 (MED): the board drew whichever response came last**, so two quick steps
+  forward, or a poll after navigating, could leave one month's shifts under the next
+  month's header. Only the newest request writes the board.
+- **SCH2-23 (LOW/MED): saving call types did not update the pickers.** The labels
+  were mirrored into the store but not the ordered list four pickers read.
+- **SCH2-24 (LOW/MED): Shift Completion Reports showed a failed load as "No reports
+  filed yet"**, and a double tap on Acknowledge reported success then failure. A
+  failure is now shown with Retry (a 403 on the officer's list still reads as empty),
+  Acknowledge is guarded, and the shift date is formatted.
+- **SCH2-25 (LOW): the templates page showed a failed load as "No Templates Yet"**,
+  inviting an admin to recreate them. It shows the error with Retry.
+- **SCH2-26 (LOW): Open Shifts painted whichever date's answer came last** while a
+  year was typed. Only the newest load paints.
+- **SCH2-27 (LOW): the board's first day and its Today button used the device's
+  clock**, not the department's day the board rings. Both now use the department's
+  day, as does the calendar's opening date.
+- **SCH2-28 (LOW): Decline on My Shifts and Cancel on Requests could each be sent
+  twice.** Both are guarded.
+
+### Open (recorded here only)
+
+- Call Volume's type chips print raw incident-type slugs, and week and month periods
+  are printed raw ("2026-11-22", "2026-11").
+- `ShiftTemplatesPage` casts between `ShiftTemplateRecord` and `ShiftTemplate` with
+  `as unknown as` in two places; the two types should be reconciled.
+- The check-out locking (SCH2-15) has no concurrency test, for the same reason as
+  SCH2-19.
+
+### Verified good ✅ (this pass)
+
+- Wire casing: every scheduling response is snake_case and every frontend type read
+  matches.
+- The scheduling store guards in-flight loads by account and settings generation and
+  shares the settings request; a failed settings load does not cache the fallback.
+- Template and pattern forms send null for cleared fields on update, seats as
+  `{position, required}`, and event metadata as a dict (pitfall 20).
+- Shift times go through `localToUTC(tz)`; the reports page formats date-only values
+  in UTC; reflow tables carry `data-label`; no native dialogs or backdrop closes.
+- Swap approval, pick-up and accept-offer lock request then shift and re-validate the
+  candidate; signups lock the shift and count with a locking read.
+
+### Not read (scope, stated plainly)
+
+ShiftDetailPanel, ShiftCloseoutWizard, ShiftReportsTab, ShiftCheckInPage, the shift
+evaluation screens, PositionRosterPage, SchedulingPlatoonsPage, the administration
+hub, planning, closeout and history-import pages, and the External* components. The
+ShiftSettingsPanel body below its general section, the notifications and call-type
+settings cards, and most of the frontend service beyond normalization were skimmed
+only.
+
+### Completion gate (pass 6)
+
+| Check                                                   | Result                                                             |
+| ------------------------------------------------------- | ------------------------------------------------------------------ |
+| `flake8` / `black` / `isort` (changed files)            | ✅ clean                                                           |
+| mypy ratchet                                            | ✅ 0 errors, matching the baseline                                 |
+| `check_endpoint_permissions.py --strict`                | ✅ 0 warnings                                                      |
+| new backend tests                                       | ✅ 8; 7 failed on the unfixed code (the repeat-decline guard held) |
+| scheduling, shift, swap, time-off and pattern tests     | ✅ 3,064 passed, 1 skipped                                         |
+| `npm run typecheck` / ESLint (changed files) / Prettier | ✅ clean                                                           |
+| scheduling frontend tests                               | ✅ 1,670 passed in 127 files; 11 new tests, each failed first      |
 
 ---
 

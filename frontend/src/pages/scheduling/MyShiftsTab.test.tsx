@@ -151,6 +151,27 @@ describe('MyShiftsTab', () => {
       });
       expect(mockUpdateAssignment).not.toHaveBeenCalled();
     });
+
+    // App-review SCH3-F11: a double tap sent two declines, and the second
+    // answered with an error after the success toast.
+    it('declines once however fast "Yes" is tapped', async () => {
+      let finish: () => void = () => {};
+      mockDeclineAssignment.mockImplementation(() => new Promise<void>((resolve) => (finish = resolve)));
+      const user = userEvent.setup();
+      renderWithRouter(<MyShiftsTab onViewShift={mockOnViewShift} />);
+      await user.click(await screen.findByRole('button', { name: /^Decline shift on / }));
+      const yes = await screen.findByRole('button', { name: 'Confirm decline' });
+
+      await user.click(yes);
+      await user.click(yes);
+      finish();
+
+      await waitFor(() => expect(mockDeclineAssignment).toHaveBeenCalledTimes(1));
+      await act(async () => {
+        await Promise.resolve();
+      });
+      expect(mockDeclineAssignment).toHaveBeenCalledTimes(1);
+    });
   });
 
   it('should render and resolve loading state', async () => {
