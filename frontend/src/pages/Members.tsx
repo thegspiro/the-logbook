@@ -724,7 +724,11 @@ const Members: React.FC = () => {
                     </span>
                   </div>
                   <div className="mt-3 flex items-center justify-between text-sm">
-                    <div className="text-theme-text-muted space-y-1">
+                    {/* min-w-0: a flex item will not shrink below its longest
+                        unbreakable word, so without it an email address keeps
+                        its full width and pushes the action buttons out of the
+                        card, widening the whole page on a phone. */}
+                    <div className="text-theme-text-muted min-w-0 space-y-1">
                       {member.membership_number && <div className="font-mono text-xs">#{member.membership_number}</div>}
                       {contactInfoEnabled.enabled && contactInfoEnabled.show_phone && member.phone && (
                         <div className="flex items-center gap-1">
@@ -733,9 +737,9 @@ const Members: React.FC = () => {
                         </div>
                       )}
                       {contactInfoEnabled.enabled && contactInfoEnabled.show_email && member.email && (
-                        <div className="flex items-center gap-1 truncate">
+                        <div className="flex items-center gap-1 break-all">
                           <Mail className="h-3 w-3 shrink-0" />
-                          <span className="truncate">{member.email}</span>
+                          {member.email}
                         </div>
                       )}
                     </div>
