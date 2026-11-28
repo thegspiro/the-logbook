@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../test/utils';
 import type { ShiftTemplateRecord } from '../modules/scheduling/services/api';
 import ShiftTemplatesPage from './ShiftTemplatesPage';
+import { useSchedulingStore } from '../modules/scheduling/store/schedulingStore';
 
 const mockGetTemplates = vi.fn();
 const mockDeleteTemplate = vi.fn();
@@ -264,5 +265,47 @@ describe('ShiftTemplatesPage — an edit saved with a refused field stays open (
     expect(screen.getByLabelText('Description')).toHaveValue('Twelve hours');
     expect(screen.getByLabelText(/^Name/)).toHaveAccessibleDescription('Enter a name for the template.');
     expect(toastSuccess).not.toHaveBeenCalled();
+  });
+});
+
+// App-review SCH3-F2 / SCH3-F9: Create Shift reads the store's cached list,
+// which a change here left stale until a full reload; and a failed load read
+// as "No Templates Yet", inviting the admin to recreate what exists.
+describe('ShiftTemplatesPage and the cached template list', () => {
+  beforeEach(() => {
+    mockGetTemplates.mockReset();
+    mockGetTemplates.mockResolvedValue([buildTemplate(['officer'])]);
+    mockDeleteTemplate.mockReset();
+    mockDeleteTemplate.mockResolvedValue('deleted');
+    toastSuccess.mockReset();
+    toastError.mockReset();
+    act(() => {
+      useSchedulingStore.setState({ templates: [], templatesLoaded: true });
+    });
+  });
+
+  it('drops the cached list after a delete, so Create Shift refetches', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<ShiftTemplatesPage />);
+
+    await user.click(await screen.findByRole('button', { name: 'Delete Day Shift' }));
+    await screen.findByRole('dialog');
+    await user.click(screen.getByRole('button', { name: 'Delete' }));
+
+    await waitFor(() => expect(useSchedulingStore.getState().templatesLoaded).toBe(false));
+  });
+
+  it('shows a failed load as an error with Retry, not as an empty list', async () => {
+    mockGetTemplates.mockRejectedValueOnce(new Error('Network Error'));
+    const user = userEvent.setup();
+    renderWithRouter(<ShiftTemplatesPage />);
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Network Error');
+    expect(screen.queryByText('No Templates Yet')).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Retry' }));
+
+    expect(await screen.findByRole('heading', { name: 'Day Shift' })).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 });
