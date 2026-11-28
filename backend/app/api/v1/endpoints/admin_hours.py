@@ -785,6 +785,25 @@ async def review_entry(
             action=data.action,
             rejection_reason=data.rejection_reason,
         )
+        # Audited like every other change to a member's hours: a resubmitted
+        # entry clears approved_by and rejection_reason, so without this
+        # nothing would record who decided it or why. Ids and the action only;
+        # the reason the member reads is on the entry, not repeated here.
+        await log_audit_event(
+            db=db,
+            event_type="admin_hours.entry_reviewed",
+            event_category="administration",
+            severity="info",
+            event_data={
+                "entry_id": str(entry.id),
+                "member_user_id": str(entry.user_id),
+                "action": data.action,
+                "self_review": str(entry.user_id) == str(current_user.id),
+            },
+            user_id=str(current_user.id),
+            username=current_user.username,
+            organization_id=str(current_user.organization_id),
+        )
         category = await service.get_category(
             entry.category_id, str(current_user.organization_id)
         )
@@ -836,6 +855,19 @@ async def bulk_approve_entries(
             entry_ids=data.entry_ids,
             organization_id=str(current_user.organization_id),
             approver_id=str(current_user.id),
+        )
+        await log_audit_event(
+            db=db,
+            event_type="admin_hours.entries_bulk_approved",
+            event_category="administration",
+            severity="info",
+            event_data={
+                "requested_entry_ids": [str(i) for i in data.entry_ids],
+                "approved_count": count,
+            },
+            user_id=str(current_user.id),
+            username=current_user.username,
+            organization_id=str(current_user.organization_id),
         )
         return {"approved_count": count}
     except ValueError as e:
