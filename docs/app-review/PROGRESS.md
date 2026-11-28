@@ -57,7 +57,7 @@ from its open list.
 | B16 | reports & analytics        | RPT2   | ⬜     |
 | B17 | events                     | EV2    | ⬜     |
 | B18 | training                   | TR2    | ⬜     |
-| B19 | scheduling                 | SCH2   | ⬜     |
+| B19 | scheduling                 | SCH2   | ✅     |
 | B20 | finance                    | FIN2   | ✅     |
 | B21 | orgs, roles & users        | ORU2   | ✅     |
 | B22 | compliance & skills        | CS2    | ⬜     |
@@ -3947,6 +3947,39 @@ secrets redacted for non-admins. See
   Seven items are recorded as open. Gate clean; 2,341 backend and 903
   frontend finance tests pass. See finance.md → Pass 6. Next: B21 orgs, roles &
   users.
+
+- **B19 scheduling ✅ (pass 6).** Read how a seat moves (swaps, pick-ups,
+  declines, time off, finalize), check-in and check-out, pattern generation and
+  swap expiry, then the board, Create Shift, templates, requests and report
+  screens. **15 fixes**, each test red first except where noted.
+  - Backend:
+    - SCH2-14: a member who had declined a shift could not take a seat on it
+      by swap (500).
+    - SCH2-15: check-out was unlocked.
+    - SCH2-16: time off cancelled seats on finalized shifts.
+    - SCH2-17: declines on finalized or cancelled shifts were accepted.
+    - SCH2-18: negative pattern days.
+    - SCH2-19: swap expiry overwrote a concurrent pick-up (no race test).
+  - Frontend:
+    - SCH2-20: Create Shift's end time ignored custom times (a 32-hour shift)
+      and moved 24 UTC hours across DST.
+    - SCH2-21: stale template list in Create Shift.
+    - SCH2-22: the board drew stale responses.
+    - SCH2-23: the call-type pickers kept the old list.
+    - SCH2-24: shift reports hid load failures; Acknowledge double tap.
+    - SCH2-25: templates load failure read as empty.
+    - SCH2-26: Open Shifts stale date answers.
+    - SCH2-27: the board's Today used the device's clock.
+    - SCH2-28: Decline and Cancel double taps.
+
+  **9 flagged** to KNOWN_LIMITATIONS: SCH2-5 (uncapped check-out, 120 hours
+  reproduced), SCH2-6 (time off on past unfinalized shifts), SCH2-7 (concurrent
+  double booking), SCH2-8 (template fallback on failure), SCH2-9 (supervisor
+  time-off count), SCH2-10 (coverage counts outreach), SCH2-11 (unweighted
+  average response), SCH2-12 (reports permission), SCH2-13 (moved seat keeps
+  `confirmed_at`). Three LOW items are recorded as open. Gate clean; 3,064
+  backend and 1,670 frontend scheduling tests pass. See scheduling.md → Pass 6.
+  Next: B20 finance.
 
 - **B9 membership pipeline ✅ (pass 6).** Read the lifecycle pass 5 left
   unread (gates, auto-advance, conversion, the inactivity sweep, the status
